@@ -63,10 +63,16 @@ pub fn selected(raw: &Value, task: Option<&str>, explicit: Option<&str>) -> Valu
     }
     cfg["provider"] = json!(provider);
     let records = raw["providerConfigs"].as_object();
-    let legacy = records.map_or(true, |records| {
-        !all.iter()
-            .any(|id| records.get(id).is_some_and(Value::is_object))
-    });
+    let contributed = raw["customProviders"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|p| p["id"] == provider && p.get("_extensionId").is_some());
+    let legacy = !contributed
+        && records.map_or(true, |records| {
+            !all.iter()
+                .any(|id| records.get(id).is_some_and(Value::is_object))
+        });
     for key in [
         "apiKey",
         "baseURL",
@@ -102,14 +108,17 @@ pub fn selected(raw: &Value, task: Option<&str>, explicit: Option<&str>) -> Valu
         });
     let default_model = match provider {
         "ollama" => "llama3.2",
-        "gemini" => "gemini-2.0-flash",
+        "gemini" => s(&data["RECOMMENDED_AI_MODEL"]["gemini"]),
         "deepseek" => "deepseek-v4-flash",
         "tokenrouter" => "moonshotai/kimi-k3-free",
         _ => s(&data["RECOMMENDED_AI_MODEL"][provider]),
     };
     cfg["model"] = json!(model.unwrap_or(default_model).trim());
     normalize_models(&mut cfg);
-    cfg["_explicitBaseURL"] = json!(cfg["baseURL"].as_str().is_some_and(|v| !v.is_empty()));
+    cfg["_explicitBaseURL"] = json!(cfg["baseURL"].as_str().is_some_and(|v| !v.is_empty()
+        && !(provider == "antigravity"
+            && v.trim_end_matches('/')
+                == s(&data["DEFAULT_BASE_URL"][provider]).trim_end_matches('/'))));
     if !cfg["baseURL"].is_string() {
         cfg["baseURL"] = data["DEFAULT_BASE_URL"][provider].clone();
     }

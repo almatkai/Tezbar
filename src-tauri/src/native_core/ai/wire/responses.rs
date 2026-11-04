@@ -24,7 +24,7 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             input.push(json!({"role":m.role,"content":content}));
         }
     }
-    let mut v = json!({"input":input,"stream":true,"store":false,"include":["reasoning.encrypted_content"]});
+    let mut v = json!({"input":input,"stream":true,"store":false});
     if !tools.is_empty() {
         v["tools"] = json!(tools
             .iter()
@@ -54,7 +54,10 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
             d.blocks.insert(i, v["item"].clone());
         }
         "response.completed" => {
-            if let Some(items) = v["response"]["output"].as_array() {
+            if let Some(items) = v["response"]["output"]
+                .as_array()
+                .filter(|items| !items.is_empty())
+            {
                 d.blocks = items
                     .iter()
                     .enumerate()
@@ -80,7 +83,13 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
             d.terminal = true;
         }
         "response.failed" | "response.incomplete" | "error" => {
-            return Err(failure("Responses turn failed or incomplete"))
+            return Err(
+                if v["response"]["error"].is_null() && v["error"].is_null() {
+                    failure("Responses turn failed or incomplete")
+                } else {
+                    provider_stream_error(&v)
+                },
+            )
         }
         _ => {}
     }

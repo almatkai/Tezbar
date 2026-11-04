@@ -1,9 +1,20 @@
 use super::*;
 pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Value, String> {
     let mut messages = vec![];
+    let mut followups = vec![];
     for m in ms {
+        if m.role != "tool" {
+            messages.append(&mut followups);
+        }
         if let Some(raw) = m.raw_for(o) {
-            messages.push(raw.clone());
+            let mut raw = raw.clone();
+            if o.provider == "deepseek"
+                && m.role == "assistant"
+                && raw["reasoning_content"].is_null()
+            {
+                raw["reasoning_content"] = json!("");
+            }
+            messages.push(raw);
             continue;
         }
         let mut content = vec![];
@@ -17,7 +28,7 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             Block::ToolResult{call:canonical,wire_id:id,name,blocks,..}=>{
                 results.push(json!({"role":"tool","tool_call_id":id_for(o,ms,canonical,id),"content":text_blocks(blocks)}));
                 let mut images=vec![];for b in blocks {if let Block::Image{mime,data}=b{images.push(json!({"type":"image_url","image_url":{"url":image_url(mime,data)}}));}}
-                if !images.is_empty(){images.insert(0,json!({"type":"text","text":format!("Image from tool {name}")}));results.push(json!({"role":"user","content":images}));}
+                if !images.is_empty(){images.insert(0,json!({"type":"text","text":format!("Image from tool {name}")}));followups.push(json!({"role":"user","content":images}));}
             }, _=>{}
         }
         }
@@ -33,6 +44,7 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
         }
         messages.extend(results);
     }
+    messages.append(&mut followups);
     let mut v = json!({"messages":messages,"stream":true});
     if !tools.is_empty() {
         v["tools"] = json!(tools);
@@ -53,10 +65,36 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
         d.delta(t, on)
     }
     for key in ["reasoning_content", "reasoning", "reasoning_details"] {
-        if let Some(v) = delta.get(key) {
+        if let Some(v) = delta.get(key).filter(|v| !v.is_null()) {
             if let Some(t) = v.as_str() {
                 let old = d.raw[key].as_str().unwrap_or("").to_string();
                 d.raw[key] = json!(old + t)
+            } else if key == "reasoning_details" && v.is_array() {
+                let mut details = d.raw[key].as_array().cloned().unwrap_or_default();
+                for entry in v.as_array().unwrap() {
+                    if let Some(previous) = details.iter_mut().find(|p| {
+                        (!entry["index"].is_null() || !entry["id"].is_null())
+                            && p["index"] == entry["index"]
+                            && p["type"] == entry["type"]
+                            && (p["id"] == entry["id"] || entry["id"].is_null())
+                    }) {
+                        for (k, value) in entry
+                            .as_object()
+                            .ok_or_else(|| failure("invalid reasoning detail"))?
+                        {
+                            if matches!(k.as_str(), "text" | "summary" | "data" | "signature")
+                                && value.is_string()
+                            {
+                                previous[k] = json!(format!("{}{}", s(&previous[k]), s(value)));
+                            } else if !value.is_null() {
+                                previous[k] = value.clone();
+                            }
+                        }
+                    } else {
+                        details.push(entry.clone());
+                    }
+                }
+                d.raw[key] = json!(details);
             } else {
                 d.raw[key] = v.clone()
             }

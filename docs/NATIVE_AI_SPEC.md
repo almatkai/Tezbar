@@ -59,8 +59,7 @@ each protocol; only a live credentialed run proves a provider's side (§13).
   require review. Broader Auto/Turbo file behavior must be explicit in the UI help.
 - OpenCode's current official docs restrict free-tier chat to OpenCode itself.
   Native access must use supported credentials/models and report restrictions
-  truthfully; do not impersonate its client or bypass access checks. Optional
-  read-only model discovery cannot be a requirement for a clean installation.
+  truthfully; do not impersonate its client or bypass access checks. Model discovery is native HTTP/static only; opening Settings never executes a PATH program.
 - Complete the requested runtime and extension features, and report upstream-only
   uncertainties separately from verified implementation behavior. No built-in
   provider may retain a Pi/Node execution fallback.
@@ -327,8 +326,8 @@ Sensitive paths: `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.pi/agent`, Tezbar's config 
 `~/.local/share/opencode`, `.env*`, OS credential folders. Paths are checked after
 canonicalization.
 
-Approval events keep the existing shape. `canRemember` is true for shell commands and
-extension tools. "Always" stores an exact command in `agentAlwaysAllowedExactCommands`, as
+Approval events keep the existing shape. `canRemember` is true only for rememberable shell commands and
+extension tools; sensitive, destructive, complex and mutation-option shell operations always require fresh review. "Always" stores an exact command in `agentAlwaysAllowedExactCommands`, as
 Pi did, or a per-tool allowance for extensions. This removes stage 1's "Allow once only".
 
 These checks are a safety prompt, **not an OS sandbox**. Approved commands and extensions
@@ -359,7 +358,7 @@ could do.
 | Provider turns / total tool calls per run | 100 / 256 |
 | Calls per turn | 32 |
 | Active run time (time waiting for approval excluded) | 1,800 s |
-| Header wait / stream silence / single turn | 30 s / 90 s / 600 s |
+| Header wait / stream silence / single turn | remote30s, local/Ollama120s (configurable1–300s) / 90s / 600s total |
 | Stream bytes per turn | 8 MiB (Anthropic, Responses and Gemini carry opaque reasoning) |
 | Tool arguments per call | 1 MiB |
 | Tool result sent to the model | 64 KiB of text. Truncation is stated in the result. |
@@ -803,9 +802,9 @@ required or named `tool_choice`.
 Execution is HTTP only. `opencode run` is removed from every path, because it runs OpenCode's own
 agent and tools outside Tezbar's approvals.
 
-**Models.** Keep the existing source: `opencode models` when the CLI is on `PATH` (read-only, 12 s),
-keeping `opencode/` and `opencode-go/` entries. Add `GET {gateway}/v1/models` when a key exists, then
-the static defaults. A missing CLI is not an error.
+**Models.** Use native `GET {gateway}/v1/models` when a key exists and the static catalog.
+Settings never executes `opencode models` or another PATH program for discovery.
+Uncatalogued models expose an explicit per-model Protocol selector.
 
 **Credentials, first found.**
 
@@ -881,7 +880,7 @@ Channels stay, and the frozen inventory test still passes. None starts a process
 | --- | --- |
 | `pi:check` | `{installed:true, version:"native"}` |
 | `pi:install` | `{ok:true, method:"native", version:"native"}` with no process or download |
-| `pi-extensions:list` | AI Extensions as `PiExtensionItem`, plus discovered Pi packages and scripts with `enabled:false`, description "Not loaded. Tezbar no longer runs Pi extensions." |
+| `pi-extensions:list` | Discovered Pi packages/scripts only, with `enabled:false`, description "Not loaded. Tezbar no longer runs Pi extensions." AI Extensions use `ai-extensions:list`, preventing the Pi-only legacy consumer from mislabelling enabled native extensions. |
 | `core:ai:pi-observe` | Native run state: `cwd`, `isStreaming`, counts, `model` |
 | `core:ai:pi-query` | `get_state` and `get_session_stats` from native state; other commands return an error |
 | `agentRuntime` | `auto`, `native`, `pi` accepted and persisted, ignored at runtime. `pi` logs once. |
@@ -1135,7 +1134,7 @@ Protocol-specific:
 | P16 | Ollama | Native `images`, `tool_name`; `done:true` terminal |
 | P17 | Chat server without `[DONE]`; with `finish_reason:"stop"` on tool calls; JSON body; missing IDs | Runs only when complete and valid |
 | P18 | Copilot vision and initiator headers | Present exactly when required |
-| P19 | `opencode run` | Never spawned; `opencode models` marker allowed only for listing |
+| P19 | `opencode run` | Never spawned; `opencode models` is never spawned |
 
 ### Authentication (A)
 

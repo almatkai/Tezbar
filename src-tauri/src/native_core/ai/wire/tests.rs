@@ -77,7 +77,7 @@ fn anthropic_signed_blocks_are_replayed_in_original_order() {
     );
     let body = encode(&origin(Protocol::Anthropic), &[t.message], &[], 42, false).unwrap();
     assert_eq!(
-        body["messages"][0]["content"],
+        body["messages"][1]["content"],
         json!([{"type":"thinking","thinking":"private","signature":"signed"},{"type":"redacted_thinking","data":"redacted"},{"type":"tool_use","id":"abc","name":"read","input":{"path":"a"}}])
     );
     assert!(body.get("thinking").is_none());
@@ -118,7 +118,7 @@ fn gemini_keeps_signed_part_boundaries_and_foreign_observations() {
         false,
     )
     .unwrap();
-    assert_eq!(body["contents"][0]["parts"], parts);
+    assert_eq!(body["contents"][1]["parts"], parts);
     let result = Message {
         role: "tool".into(),
         blocks: vec![Block::ToolResult {
@@ -284,4 +284,179 @@ fn anthropic_terminal_does_not_complete_an_unclosed_tool_block_but_json_is_compl
     let mut decoder = Decoder::new(origin(Protocol::Anthropic), "complete-json");
     decoder.json(json!({"content":[{"type":"tool_use","id":"call","name":"read","input":{}}],"stop_reason":"tool_use"}),&mut |_|{}).unwrap();
     assert_eq!(decoder.finish().unwrap().calls.len(), 1);
+}
+
+#[test]
+fn empty_tool_json_null_reasoning_and_completed_empty_responses_are_valid() {
+    let chat = stream(
+        Protocol::OpenaiChat,
+        vec![
+            json!({"choices":[{"delta":{"reasoning_content":"one","reasoning_details":[{"type":"reasoning.text","index":0,"text":"one"}]}}]}),
+            json!({"choices":[{"delta":{"reasoning_content":null,"reasoning_details":[{"type":"reasoning.text","index":0,"text":"two"}],"tool_calls":[{"index":0,"id":"empty","function":{"name":"screen_capture","arguments":""}}]},"finish_reason":"tool_calls"}]}),
+        ],
+    );
+    assert_eq!(chat.calls[0]["function"]["arguments"], "{}");
+    let raw = chat.message.opaque.as_ref().unwrap();
+    assert_eq!(raw.value["reasoning_content"], "one");
+    assert_eq!(raw.value["reasoning_details"][0]["text"], "onetwo");
+    let mut deep = origin(Protocol::OpenaiChat);
+    deep.provider = "deepseek".into();
+    let mut msg = chat.message.clone();
+    msg.opaque.as_mut().unwrap().origin = deep.clone();
+    msg.opaque.as_mut().unwrap().value["reasoning_content"] = Value::Null;
+    assert_eq!(
+        encode(&deep, &[msg], &[], 10, false).unwrap()["messages"][0]["reasoning_content"],
+        ""
+    );
+    let anthropic = stream(
+        Protocol::Anthropic,
+        vec![
+            json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"empty","name":"screen_capture","input":{}}}),
+            json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":""}}),
+            json!({"type":"content_block_stop","index":0}),
+            json!({"type":"message_stop"}),
+        ],
+    );
+    assert_eq!(anthropic.calls[0]["function"]["arguments"], "{}");
+    let responses = stream(
+        Protocol::OpenaiResponses,
+        vec![
+            json!({"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","call_id":"empty","name":"screen_capture","arguments":""}}),
+            json!({"type":"response.completed","response":{"output":[]}}),
+        ],
+    );
+    assert_eq!(responses.calls.len(), 1);
+    assert_eq!(responses.calls[0]["function"]["arguments"], "{}");
+    let gemini = stream(
+        Protocol::Gemini,
+        vec![
+            json!({"error":null,"candidates":[{"content":{"parts":[{"functionCall":{"name":"screen_capture"}}]},"finishReason":"STOP"}]}),
+        ],
+    );
+    assert_eq!(gemini.calls[0]["function"]["arguments"], "{}");
+}
+#[test]
+fn chat_tool_results_stay_contiguous_before_image_followups_across_messages() {
+    let assistant = stream(
+        Protocol::OpenaiChat,
+        vec![
+            json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"a","function":{"name":"screen_capture","arguments":"{}"}},{"index":1,"id":"b","function":{"name":"read","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}),
+        ],
+    );
+    let mut messages = vec![Message::text("user", "inspect"), assistant.message];
+    for (i, c) in assistant.calls.iter().enumerate() {
+        messages.push(Message {
+            role: "tool".into(),
+            opaque: None,
+            blocks: vec![Block::ToolResult {
+                call: s(&c["callId"]).into(),
+                wire_id: s(&c["id"]).into(),
+                name: s(&c["function"]["name"]).into(),
+                blocks: if i == 0 {
+                    vec![Block::Image {
+                        mime: "image/png".into(),
+                        data: "fixture".into(),
+                    }]
+                } else {
+                    vec![Block::Text {
+                        text: "result".into(),
+                    }]
+                },
+                is_error: false,
+            }],
+        });
+    }
+    let encoded = encode(&origin(Protocol::OpenaiChat), &messages, &[], 10, false).unwrap();
+    assert_eq!(
+        encoded["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| s(&m["role"]))
+            .collect::<Vec<_>>(),
+        vec!["user", "assistant", "tool", "tool", "user"]
+    );
+}
+#[test]
+fn incomplete_tool_json_is_labelled_before_parsing() {
+    let mut d = Decoder::new(origin(Protocol::OpenaiChat), 0);
+    d.json(json!({"choices":[{"message":{"tool_calls":[{"id":"a","function":{"name":"read","arguments":"{"}}]},"finish_reason":"length"}]}),&mut |_|{}).unwrap();
+    assert!(d.finish().err().unwrap().contains("incomplete turn"));
+}
+
+#[test]
+fn gemini_family_ids_and_error_results_are_correlated_without_synthesized_gemini_ids() {
+    for model in ["claude-fixture", "gpt-oss-fixture", "gemini-2.5-flash"] {
+        let mut o = origin(Protocol::Gemini);
+        o.model = model.into();
+        let mut d = Decoder::new(o.clone(), 1);
+        d.json(json!({"candidates":[{"content":{"parts":[{"functionCall":{"name":"read","args":{}}},{"functionCall":{"name":"read","args":{}}}]},"finishReason":"STOP"}]}),&mut |_|{}).unwrap();
+        let turn = d.finish().unwrap();
+        let mut messages = vec![Message::text("user", "inspect"), turn.message];
+        for call in turn.calls {
+            messages.push(Message {
+                role: "tool".into(),
+                opaque: None,
+                blocks: vec![Block::ToolResult {
+                    call: s(&call["callId"]).into(),
+                    wire_id: s(&call["id"]).into(),
+                    name: "read".into(),
+                    blocks: vec![],
+                    is_error: true,
+                }],
+            });
+        }
+        let body = encode(&o, &messages, &[], 10, false).unwrap();
+        let calls = body["contents"][1]["parts"].as_array().unwrap();
+        let results = body["contents"][2]["parts"].as_array().unwrap();
+        for i in 0..2 {
+            assert_eq!(
+                results[i]["functionResponse"]["response"]["error"],
+                "Tool failed"
+            );
+            if model.starts_with("gemini") {
+                assert!(calls[i]["functionCall"].get("id").is_none());
+                assert!(results[i]["functionResponse"].get("id").is_none());
+            } else {
+                assert_eq!(
+                    calls[i]["functionCall"]["id"],
+                    results[i]["functionResponse"]["id"]
+                );
+                assert_ne!(
+                    calls[0]["functionCall"]["id"],
+                    calls[1]["functionCall"]["id"]
+                );
+            }
+        }
+    }
+}
+#[test]
+fn anthropic_saved_empty_tool_text_is_omitted_and_base64_image_limit_is_current() {
+    let message = Message {
+        role: "tool".into(),
+        opaque: None,
+        blocks: vec![Block::ToolResult {
+            call: "c".into(),
+            wire_id: "c".into(),
+            name: "empty".into(),
+            blocks: vec![Block::Text { text: "".into() }],
+            is_error: false,
+        }],
+    };
+    let body = encode(&origin(Protocol::Anthropic), &[message], &[], 10, false).unwrap();
+    assert_eq!(body["messages"][0]["content"][0]["content"], json!([]));
+    let image = Message {
+        role: "user".into(),
+        opaque: None,
+        blocks: vec![Block::Image {
+            mime: "image/png".into(),
+            data: "a".repeat(10_000_001),
+        }],
+    };
+    assert!(
+        limits::validate_images(&Protocol::Anthropic, &[image.clone()])
+            .unwrap_err()
+            .contains("10 MB base64")
+    );
+    assert!(limits::validate_images(&Protocol::Gemini, &[image]).is_ok());
 }

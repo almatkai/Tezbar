@@ -9,6 +9,7 @@ pub struct Route {
     pub headers: reqwest::header::HeaderMap,
     pub project: Option<String>,
     pub max_tokens: u64,
+    pub official_openai: bool,
     pub thinking: bool,
     pub secrets: Vec<String>,
 }
@@ -92,7 +93,9 @@ impl AiCore {
             s(&cfg["apiKey"]).into()
         };
         if p == "copilot" {
-            if key.trim().is_empty() { return Err("Sign in to Copilot in AI settings.".into()); }
+            if key.trim().is_empty() {
+                return Err("Sign in to Copilot in AI settings.".into());
+            }
             if let Some(session) = self.cached_copilot_session(&key).await {
                 key = session.token;
                 if cfg["_explicitBaseURL"] != true {
@@ -110,6 +113,9 @@ impl AiCore {
             key = s(&a["access"]).into();
             project = Some(s(&a["projectId"]).into());
         }
+        let official_openai = reqwest::Url::parse(&base)
+            .ok()
+            .is_some_and(|u| u.host_str() == Some("api.openai.com"));
         #[cfg(test)]
         if let Some(url) = self.inner.endpoints.lock().unwrap().get(p) {
             base = url.clone();
@@ -151,7 +157,7 @@ impl AiCore {
             }
             if base.is_empty() {
                 base = if model.starts_with("opencode-go/") {
-                    "https://opencode.ai/zen/go"
+                    "https://opencode.ai/inference/go"
                 } else {
                     "https://opencode.ai/inference"
                 }
@@ -238,7 +244,7 @@ impl AiCore {
         if protocol == Protocol::Anthropic {
             if p == "copilot" {
                 header("authorization", &format!("Bearer {key}"))?;
-            } else {
+            } else if !key.is_empty() {
                 header("x-api-key", &key)?;
             }
             header(
@@ -298,10 +304,11 @@ impl AiCore {
             }
         }
         Ok(Route {
+            official_openai,
             origin: Origin {
                 provider: p.into(),
                 model,
-                protocol,
+                protocol: protocol.clone(),
             },
             url,
             headers,
@@ -313,7 +320,11 @@ impl AiCore {
                     8192
                 },
             ),
-            thinking: cfg["thinking"] == true,
+            thinking: cfg["thinking"] == true
+                || protocol == Protocol::OpenaiResponses
+                    && metadata
+                        .and_then(|m| m["capabilities"].as_array())
+                        .is_some_and(|c| c.iter().any(|v| v == "thinking")),
             secrets,
         })
     }

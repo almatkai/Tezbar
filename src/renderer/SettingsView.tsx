@@ -648,6 +648,8 @@ export default function SettingsView({
   const [actionRedactionEnabled, setActionRedactionEnabled] = useState(true)
   const [aiProvider, setAiProvider] = useState<ProviderId>('ollama')
   const [aiApiKey, setAiApiKey] = useState('')
+  const [thinkingEnabled, setThinkingEnabled] = useState(false)
+  const [headerWait, setHeaderWait] = useState('')
   const [nativeCredentials, setNativeCredentials] = useState<
     LlmConfigRecord['nativeProviderCredentials']
   >({})
@@ -668,7 +670,7 @@ export default function SettingsView({
   const [githubDeviceUserCode, setGithubDeviceUserCode] = useState('')
   const [deviceBusy, setDeviceBusy] = useState(false)
   const [newProviderName, setNewProviderName] = useState('')
-  const [newProviderProtocol,setNewProviderProtocol] = useState<AiProtocol>('openai-chat')
+  const [newProviderProtocol, setNewProviderProtocol] = useState<AiProtocol>('openai-chat')
   const [newProviderBaseURL, setNewProviderBaseURL] = useState('')
   const [aiTaskProviderOverrides, setAiTaskProviderOverrides] = useState<
     Partial<Record<LlmTask, ProviderId>>
@@ -845,6 +847,8 @@ export default function SettingsView({
     const providerConfig = readProviderConfig(c, provider)
     setAiProviderConfigs(c.providerConfigs ?? {})
     setCustomProviders(configuredProviders)
+    setThinkingEnabled(c.thinking === true)
+    setHeaderWait(c.headerTimeoutSeconds ? String(c.headerTimeoutSeconds) : '')
     setAiProvider(provider)
     setActiveAiProvider(provider)
     setAiApiKey(
@@ -856,8 +860,7 @@ export default function SettingsView({
     )
     setAiBaseURL(
       provider === 'openai-compatible'
-        ? (providerConfig.openaiCompatibleBaseURL ??
-            defaultBaseUrl(provider))
+        ? (providerConfig.openaiCompatibleBaseURL ?? defaultBaseUrl(provider))
         : isCustomProvider(provider)
           ? (providerConfig.openaiCompatibleBaseURL ?? providerConfig.baseURL ?? '')
           : (providerConfig.baseURL ?? defaultBaseUrl(provider))
@@ -2118,9 +2121,25 @@ export default function SettingsView({
                           className="text-xs font-mono"
                           spellCheck={false}
                         />
-                        <label>Protocol
-                          <SelectField value={newProviderProtocol} onChange={(e)=>setNewProviderProtocol(e.target.value as AiProtocol)}>
-                            {(['openai-chat','openai-responses','anthropic','gemini','ollama'] as const).map((p)=><option key={p} value={p}>{p}</option>)}
+                        <label>
+                          Protocol
+                          <SelectField
+                            value={newProviderProtocol}
+                            onChange={(e) => setNewProviderProtocol(e.target.value as AiProtocol)}
+                          >
+                            {(
+                              [
+                                'openai-chat',
+                                'openai-responses',
+                                'anthropic',
+                                'gemini',
+                                'ollama',
+                              ] as const
+                            ).map((p) => (
+                              <option key={p} value={p}>
+                                {p}
+                              </option>
+                            ))}
                           </SelectField>
                         </label>
                         <Button
@@ -2181,6 +2200,68 @@ export default function SettingsView({
                     {/* Provider-specific config fields */}
                     <div className="space-y-3">
                       {aiProvider === 'antigravity' ? <AiAccountsPanel /> : null}
+                      <label className="flex gap-2 text-[12px]">
+                        <input
+                          type="checkbox"
+                          checked={thinkingEnabled}
+                          onChange={(e) => {
+                            setThinkingEnabled(e.target.checked)
+                            void window.tezbar.setLlmConfig({ thinking: e.target.checked })
+                          }}
+                        />
+                        Enable model thinking
+                      </label>
+                      <label className="block text-[12px]">
+                        Header wait, seconds (blank: 30 remote, 120 local)
+                        <TextField
+                          type="number"
+                          min={1}
+                          max={300}
+                          value={headerWait}
+                          onChange={(e) => setHeaderWait(e.target.value)}
+                          onBlur={() => {
+                            const n = headerWait.trim() ? Number(headerWait) : 0
+                            if (Number.isInteger(n) && n >= 0 && n <= 300)
+                              void window.tezbar.setLlmConfig({ headerTimeoutSeconds: n })
+                          }}
+                        />
+                      </label>
+
+                      {isCustomProvider(aiProvider) ? (
+                        <label>
+                          Protocol
+                          <SelectField
+                            aria-label="Provider protocol"
+                            value={
+                              customProviders.find((p) => p.id === aiProvider)?.protocol ??
+                              'openai-chat'
+                            }
+                            onChange={(e) => {
+                              const next = customProviders.map((p) =>
+                                p.id === aiProvider
+                                  ? { ...p, protocol: e.target.value as AiProtocol }
+                                  : p
+                              )
+                              setCustomProviders(next)
+                              persistAiSettings(true, { customProviders: next })
+                            }}
+                          >
+                            {(
+                              [
+                                'openai-chat',
+                                'openai-responses',
+                                'anthropic',
+                                'gemini',
+                                'ollama',
+                              ] as const
+                            ).map((p) => (
+                              <option key={p} value={p}>
+                                {p}
+                              </option>
+                            ))}
+                          </SelectField>
+                        </label>
+                      ) : null}
 
                       {aiProvider !== 'ollama' && aiProvider !== 'antigravity' ? (
                         <SettingsRow
@@ -2413,6 +2494,41 @@ export default function SettingsView({
                                     Show in picker
                                   </label>
                                   <span className="mx-0.5 h-3 w-px bg-white/10" aria-hidden />
+                                  <label>
+                                    Protocol
+                                    <SelectField
+                                      aria-label={`Protocol for ${model.id}`}
+                                      value={model.protocol ?? ''}
+                                      onChange={(event) => {
+                                        const protocol = event.target.value as AiProtocol
+                                        const next = {
+                                          ...aiProviderModels,
+                                          [aiProvider]: aiProviderModels[aiProvider]?.map((m) =>
+                                            m.id === model.id
+                                              ? { ...m, protocol: protocol || undefined }
+                                              : m
+                                          ),
+                                        }
+                                        setAiProviderModels(next)
+                                        persistAiSettings(true, { providerModels: next })
+                                      }}
+                                    >
+                                      <option value="">Automatic</option>
+                                      {(
+                                        [
+                                          'openai-chat',
+                                          'openai-responses',
+                                          'anthropic',
+                                          'gemini',
+                                          'ollama',
+                                        ] as const
+                                      ).map((p) => (
+                                        <option key={p} value={p}>
+                                          {p}
+                                        </option>
+                                      ))}
+                                    </SelectField>
+                                  </label>
                                   {AI_CAPABILITIES.map((capability) => (
                                     <label
                                       key={capability.id}

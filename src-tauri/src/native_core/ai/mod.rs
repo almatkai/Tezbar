@@ -159,7 +159,10 @@ impl AiCore {
                 pi_override: Mutex::new(None),
                 extensions: ext::Extensions::new(&ctx.paths.config_dir),
                 ctx,
-                http: reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().expect("provider HTTP client"),
+                http: reqwest::Client::builder()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .build()
+                    .expect("provider HTTP client"),
                 state: Mutex::new(State::default()),
                 oauth_flows: Mutex::new(HashMap::new()),
                 oauth_results: Mutex::new(HashMap::new()),
@@ -302,7 +305,7 @@ impl AiCore {
             }
             if take {
                 state.agents.remove(id);
-            state.run_sessions.remove(id);
+                state.run_sessions.remove(id);
                 state.indexed_attempts.remove(id);
             }
             state.approvals.retain(|_, a| a.run_id != id);
@@ -384,8 +387,9 @@ impl AiCore {
         });
         if let Some(session) = options.history["sessionId"].as_str() {
             let data = &self.inner.ctx.paths.data_dir;
-            let user = runtime::store::generation(data,session,s(&options.history["userTurnId"]));
-            let assistant = runtime::store::generation(data,session,s(&options.history["assistantTurnId"]));
+            let user = runtime::store::generation(data, session, s(&options.history["userTurnId"]));
+            let assistant =
+                runtime::store::generation(data, session, s(&options.history["assistantTurnId"]));
             options.history["_userGeneration"] = json!(user);
             options.history["_assistantGeneration"] = json!(assistant);
         }
@@ -409,7 +413,9 @@ impl AiCore {
                     emitted: false,
                 },
             );
-            if let Some(session) = options.history["sessionId"].as_str() { state.run_sessions.insert(id.clone(),session.into()); }
+            if let Some(session) = options.history["sessionId"].as_str() {
+                state.run_sessions.insert(id.clone(), session.into());
+            }
             state.agent = Some(run);
             state.clocks.insert(id.clone(), clock.clone());
         }
@@ -507,7 +513,9 @@ impl AiCore {
                 .unwrap_or(json!({"status":"idle"}))),
             "llm-config-get" => {
                 let cwd = if let Some(cwd) = a.as_str() {
-                    let cwd = tokio::fs::canonicalize(cwd).await.map_err(err)?;
+                    let cwd = tokio::fs::canonicalize(cwd)
+                        .await
+                        .map_err(|_| format!("Directory does not exist: {cwd}"))?;
                     self.revoke_changed_projects(&cwd).await?;
                     Some(cwd)
                 } else {
@@ -583,6 +591,37 @@ impl AiCore {
                 }
                 patch.remove("nativeProviderCredentials");
                 self.filter_extension_patch(&mut patch).await?;
+                let previous = self.read_config().await?;
+                let active = s(&previous["provider"]);
+                let legacy = !previous["providerConfigs"]
+                    .as_object()
+                    .is_some_and(|r| r.values().any(Value::is_object));
+                if legacy
+                    && patch
+                        .get("provider")
+                        .and_then(Value::as_str)
+                        .is_some_and(|next| next != active)
+                    && !active.is_empty()
+                {
+                    let mut records = patch.get("providerConfigs").cloned().unwrap_or(json!({}));
+                    if !records[active].is_object() {
+                        records[active] = json!({});
+                        for field in [
+                            "apiKey",
+                            "baseURL",
+                            "openaiCompatibleBaseURL",
+                            "geminiApiKey",
+                            "copilotGithubToken",
+                            "githubOAuthClientId",
+                            "protocol",
+                        ] {
+                            if let Some(value) = previous.get(field) {
+                                records[active][field] = value.clone();
+                            }
+                        }
+                    }
+                    patch.insert("providerConfigs".into(), records);
+                }
                 let mut result = Value::Null;
                 if let Some(hotkey) = patch.remove("raymesHotkey") {
                     let hotkey = hotkey.as_str().ok_or("raymesHotkey must be a string")?;
@@ -652,6 +691,21 @@ impl AiCore {
                 }
                 if !owned["cwd"].is_null() && !owned["cwd"].is_string() {
                     return Ok(json!({"ok":false,"error":"Invalid agent working directory"}));
+                }
+                if owned["retry"] == true {
+                    if let (Some(session), Some(turn)) = (
+                        owned["sessionId"].as_str(),
+                        owned["assistantTurnId"].as_str(),
+                    ) {
+                        let root = self.inner.ctx.paths.data_dir.clone();
+                        let session = session.to_string();
+                        let turn = turn.to_string();
+                        tokio::task::spawn_blocking(move|| { let generation=runtime::store::generation(&root,&session,&turn); if let Some(mut messages)=runtime::store::load(&root,&session,&turn)? {
+                            runtime::transcript::close_unanswered(&mut messages);
+                            messages.push(runtime::transcript::Message::text("assistant","[A manual retry was requested. The preceding attempt is historical context, not the current final answer. Completed effects and unknown outcomes remain authoritative.]"));
+                            runtime::store::save_at(&root,&session,&turn,&messages,&generation)?;
+                        } Ok::<_,String>(()) }).await.map_err(err)??;
+                    }
                 }
                 let requested = owned["runId"].as_str();
                 if !owned["runId"].is_null()
@@ -763,13 +817,23 @@ impl AiCore {
             }
             "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
             | "chat:delete" | "chat:clear" => {
-                if matches!(channel,"chat:delete"|"chat:clear"|"chat:delete-turn") {
-                    let session = if channel=="chat:delete-turn" { a["sessionId"].as_str() } else { a.as_str() };
-                    let state=self.inner.state.lock().unwrap();
-                    for (id,run) in &state.agents { if channel=="chat:clear" || state.run_sessions.get(id).map(String::as_str)==session { run.cancel.cancel(); } }
+                if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
+                    let session = if channel == "chat:delete-turn" {
+                        a["sessionId"].as_str()
+                    } else {
+                        a.as_str()
+                    };
+                    let state = self.inner.state.lock().unwrap();
+                    for (id, run) in &state.agents {
+                        if channel == "chat:clear"
+                            || state.run_sessions.get(id).map(String::as_str) == session
+                        {
+                            run.cancel.cancel();
+                        }
+                    }
                 }
                 chat::handle(&self.inner.ctx, channel, args).await
-            },
+            }
             "chat:generate-meta" => {
                 let id = a["id"].as_str().ok_or("Session id must be a string")?;
                 let prompt = a["prompt"].as_str().unwrap_or("").trim();

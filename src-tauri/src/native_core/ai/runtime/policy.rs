@@ -8,15 +8,30 @@ fn matches(p: &str, s: &str) -> bool {
         .is_match(s)
 }
 pub fn complex(s: &str) -> bool {
+    let mut quote = None;
+    for ch in s.chars() {
+        if quote == Some(ch) {
+            quote = None;
+        } else if quote.is_none() && matches!(ch, '\'' | '"') {
+            quote = Some(ch);
+        }
+    }
+    if quote.is_some() {
+        return true;
+    }
+
     s.contains([
         ';', '|', '<', '>', '`', '(', ')', '\r', '\n', '$', '&', '{', '}', '*', '?', '[', ']',
-    ]) || matches(r"~[^/\\\s]", s) || (!cfg!(windows) && s.contains('\\')) || matches(
-        r"(?i)^(?:[^\s]+[/\\])?(?:sudo|doas|env|xargs|eval|exec|source|bash|sh|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh|python[0-9.]*|perl|ruby|node|bun|osascript|rundll32|wscript|cscript|invoke-expression|iex|invoke-command)\b",
-        s.trim(),
-    ) || matches(
-        r"(?i)(?:^|\s)(?:-c|-e|--eval|--command|-command|-encodedcommand|--config)(?:[=\s]|$)|\bfind\b.*\s-(?:exec|execdir|ok|okdir)(?:\s|$)",
-        s,
-    )
+    ]) || matches(r"~[^/\\\s]", s)
+        || (!cfg!(windows) && s.contains('\\'))
+        || matches(
+            r"(?i)^(?:[^\s]+[/\\])?(?:sudo|doas|env|xargs|eval|exec|source|bash|sh|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh|python[0-9.]*|perl|ruby|node|bun|osascript|rundll32|wscript|cscript|invoke-expression|iex|invoke-command)\b",
+            s.trim(),
+        )
+        || matches(
+            r"(?i)(?:^|\s)(?:-c|-e|--eval|--command|-command|-encodedcommand|--config)(?:[=\s]|$)|\bfind\b.*\s-(?:exec|execdir|ok|okdir)(?:\s|$)",
+            s,
+        )
 }
 pub fn destructive(s: &str) -> bool {
     matches(
@@ -35,7 +50,7 @@ pub fn destructive(s: &str) -> bool {
         r"(?i)\b(git\s+(reset|clean)|format(-volume)?|clear-disk|stop-computer|restart-computer)\b",
         s,
     ) || matches(
-        r"(?i)\bfind\b.*\s-delete(?:\s|$)|\bgit\s+(?:branch\b.*\s-[dD]\b|push\b.*(?:--force|-f)(?:[=\s]|$))",
+        r"(?i)\bfind\b.*\s-delete(?:\s|$)|\bgit\s+(?:branch\b.*\s(?:-[dD]\b|--delete\b)|tag\b.*\s(?:-[dD]\b|--delete\b)|push\b.*(?:--force|-f)(?:[=\s]|$))",
         s,
     )
 }
@@ -58,6 +73,10 @@ pub fn safe_project(s: &str) -> bool {
     !complex(s)
         && !destructive(s)
         && !mutation_options(s)
+        && !matches(
+            r"(?i)^git\s+(?:remote\s+(?:add|remove|rename|set-url|set-head|update)|tag\s+[^-\s]|branch\s+[^-\s])",
+            s,
+        )
         && (auto(s)
             || matches(
                 r"^(git\s+(status|diff|log|branch|show|remote|tag|rev-parse|describe|stash\s+list)|cargo\s+(check|test|build|clippy|fmt)|go\s+(test|build|vet)|(npm|pnpm|yarn)\s+(test|run\s+[A-Za-z0-9:_-]+|list|outdated|view)|pytest|vitest|jest|tsc|cat|head|tail|wc|echo|printf|date|top|ps|uptime|which|whereis|uname|sw_vers|df|du|free|lsof)\b",
@@ -65,10 +84,18 @@ pub fn safe_project(s: &str) -> bool {
             ))
 }
 pub fn mutation_options(s: &str) -> bool {
-    matches(r"(?i)(?:^|\s)(?:--(?:output|exec-path|git-dir|work-tree|config-env|upload-pack|receive-pack)(?:=|\s|$)|-o(?:\s|=|[^\s])|@|--(?:delete|remove|replace|in-place|write)(?:[=\s]|$))", s)
+    matches(
+        r"(?i)(?:^|\s)(?:--(?:output|exec-path|git-dir|work-tree|config-env|upload-pack|receive-pack)(?:=|\s|$)|-o(?:\s|=|[^\s])|@|--(?:delete|remove|replace|in-place|write)(?:[=\s]|$))",
+        s,
+    )
 }
 pub fn shell_asks(command: &str, mode: &str, cfg: &Value, sensitive: bool) -> bool {
-    if mode == "review" || sensitive || complex(command) || destructive(command) || mutation_options(command) {
+    if mode == "review"
+        || sensitive
+        || complex(command)
+        || destructive(command)
+        || mutation_options(command)
+    {
         return true;
     }
     let remembered = cfg["agentAlwaysAllowedExactCommands"]
@@ -132,10 +159,17 @@ pub fn shell_sensitive(command: &str, cwd: &Path, home: &Path, config: &Path) ->
         tokens.push(token)
     }
     tokens.iter().any(|token| {
-        let token = token.split_once('=').map(|(_,v)|v).unwrap_or(token).trim_start_matches('@');
+        let token = token
+            .split_once('=')
+            .map(|(_, v)| v)
+            .unwrap_or(token)
+            .trim_start_matches('@');
         let path = if token == "~" {
             home.to_path_buf()
-        } else if let Some(rest) = token.strip_prefix("~/") {
+        } else if let Some(rest) = token
+            .strip_prefix("~/")
+            .or_else(|| token.strip_prefix("~\\"))
+        {
             home.join(rest)
         } else {
             let path = std::path::PathBuf::from(token);
@@ -210,8 +244,13 @@ mod tests {
     #[test]
     fn risky_shell_always_precedes_remembered_and_turbo() {
         for command in [
-            "cat ~/.ss?/id_rsa", "head ~/.ss[h]/id_rsa", "cat .e*", "ls ~probeuser/.ssh",
-            "git diff --output=/tmp/mutation", "git show --output=/tmp/.env HEAD", "cat -o /tmp/mutation",
+            "cat ~/.ss?/id_rsa",
+            "head ~/.ss[h]/id_rsa",
+            "cat .e*",
+            "ls ~probeuser/.ssh",
+            "git diff --output=/tmp/mutation",
+            "git show --output=/tmp/.env HEAD",
+            "cat -o /tmp/mutation",
             "rm -rf /",
             "echo $(touch a)",
             "cat .env",

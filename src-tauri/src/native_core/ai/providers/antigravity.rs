@@ -274,6 +274,13 @@ impl AiCore {
         })
         .await
         .map_err(err)??;
+        if s(&account["projectId"]).is_empty() {
+            account["projectId"] = json!(stable_id(if s(&account["email"]).is_empty() {
+                "antigravity-default"
+            } else {
+                s(&account["email"])
+            }));
+        }
         if !s(&account["access"]).is_empty()
             && account["expires"]
                 .as_u64()

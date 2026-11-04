@@ -27,8 +27,48 @@ impl AiCore {
         }
         Ok(turn.text)
     }
+    async fn custom_catalog(&self, cfg: &Value) -> CoreResult {
+        use runtime::transcript::Protocol;
+        let mut cfg = cfg.clone();
+        if s(&cfg["model"]).is_empty() {
+            cfg["model"] = json!("catalog");
+        }
+        let route = self.native_route(&cfg, &[]).await?;
+        let path = route.url.path();
+        let path = match route.origin.protocol {
+            Protocol::Anthropic => format!("{}/models", path.trim_end_matches("/messages")),
+            Protocol::Gemini => format!("{}/models", path.split("/models/").next().unwrap_or(path)),
+            Protocol::Ollama => format!("{}/api/tags", path.trim_end_matches("/api/chat")),
+            Protocol::OpenaiResponses => format!("{}/models", path.trim_end_matches("/responses")),
+            Protocol::OpenaiChat => {
+                format!("{}/models", path.trim_end_matches("/chat/completions"))
+            }
+        };
+        let mut url = route.url;
+        url.set_path(&path);
+        url.set_query(None);
+        let response = self
+            .inner
+            .http
+            .get(url)
+            .headers(route.headers)
+            .timeout(Duration::from_secs(4))
+            .send()
+            .await
+            .map_err(|_| "Custom provider catalog: network failed")?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "Custom provider catalog: HTTP {}",
+                response.status().as_u16()
+            ));
+        }
+        oauth::bounded_json(response).await
+    }
     pub(super) async fn available(&self, cfg: &Value) -> bool {
         let p = s(&cfg["provider"]);
+        if p.starts_with("custom:") {
+            return self.custom_catalog(cfg).await.is_ok();
+        }
         if p == "antigravity" {
             return self
                 .antigravity_accounts()
@@ -130,6 +170,25 @@ impl AiCore {
         }
         if let Some(key) = key_override {
             cfg["apiKey"] = json!(key);
+        }
+        if id.starts_with("custom:") {
+            let v = self.custom_catalog(&cfg).await?;
+            let mut ids = v["data"]
+                .as_array()
+                .or(v["models"].as_array())
+                .into_iter()
+                .flatten()
+                .filter_map(|m| {
+                    m["id"]
+                        .as_str()
+                        .or(m["name"].as_str())
+                        .or(m["model"].as_str())
+                })
+                .map(|id| id.strip_prefix("models/").unwrap_or(id).to_string())
+                .collect::<Vec<_>>();
+            ids.sort();
+            ids.dedup();
+            return Ok(json!(ids));
         }
         if id == "opencode" {
             let mut models: Vec<String> = Vec::new();
@@ -330,7 +389,7 @@ impl AiCore {
             }
         }
         Ok(match id {
-            "gemini" => json!(["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"]),
+            "gemini" => json!(["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-pro"]),
             "deepseek" => json!(["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-reasoner"]),
             "tokenrouter" => json!(["moonshotai/kimi-k3-free"]),
             _ => json!([]),

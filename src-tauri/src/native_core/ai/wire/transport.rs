@@ -13,7 +13,16 @@ impl AiCore {
         cancel: &Cancel,
         mut delta: impl FnMut(&str) + Send,
     ) -> Result<Turn, String> {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(600);
         let mut route = tokio::select! {biased;_=cancel.cancelled()=>return Err("Operation cancelled".into()),r=self.native_route(cfg,messages)=>r?};
+        let mut view = messages.to_vec();
+        if limits::project_images(&route.origin.protocol, &mut view) {
+            if let Some(run) = cfg["runId"].as_str() {
+                self.agent_event(run,json!({"type":"log","source":"native","line":"Earlier images omitted to fit the selected provider limits. Original history images are retained."}));
+            }
+        }
+        let messages = view.as_slice();
+        limits::validate_images(&route.origin.protocol, messages)?;
         let mut encoded = encode(
             &route.origin,
             messages,
@@ -21,6 +30,11 @@ impl AiCore {
             route.max_tokens,
             route.thinking,
         )?;
+        if route.origin.protocol == Protocol::OpenaiChat && route.official_openai {
+            if let Some(tokens) = encoded.as_object_mut().unwrap().remove("max_tokens") {
+                encoded["max_completion_tokens"] = tokens;
+            }
+        }
         if let Some(project) = &route.project {
             let mut options = cfg.clone();
             options["_requestIndex"] =
@@ -28,6 +42,13 @@ impl AiCore {
             encoded = providers::antigravity::envelope(encoded, &options, project)
         }
         let mut body = serde_json::to_vec(&encoded).map_err(err)?;
+        if body.len() > limits::request_bytes(&route.origin.protocol) {
+            return Err(format!(
+                "Native limit: {:?} request exceeds {} bytes including images",
+                route.origin.protocol,
+                limits::request_bytes(&route.origin.protocol)
+            ));
+        }
         let ag = cfg["provider"] == "antigravity";
         let ag_bases = if ag {
             self.antigravity_bases(cfg)?
@@ -50,7 +71,12 @@ impl AiCore {
         }
         let mut visible = false;
         let run = cfg["runId"].as_str();
-        for attempt in 0..=2 {
+        let mut retry_attempt = 0;
+        let mut fallback_attempt = 0;
+        let mut account_attempt = 0;
+        let mut copilot_exchanged = false;
+        for _request in 0..24 {
+            let attempt = retry_attempt;
             if cancel.is_cancelled() {
                 return Err("Operation cancelled".into());
             }
@@ -66,7 +92,7 @@ impl AiCore {
             let mut redactor = super::redact::Redactor::new(secrets);
 
             let result = async {
-                let response = tokio::time::timeout(Duration::from_secs(30), req.send())
+                let response = tokio::time::timeout(header_wait(cfg, &route.url), req.send())
                     .await
                     .map_err(|_| ("Native network: header timeout".to_string(), true, None))?
                     .map_err(|e| {
@@ -106,7 +132,14 @@ impl AiCore {
                     }
                     let detail = serde_json::from_slice::<Value>(&bytes)
                         .ok()
-                        .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
+                        .and_then(|v| {
+                            v["error"]["message"]
+                                .as_str()
+                                .or(v["error"].as_str())
+                                .or(v["message"].as_str())
+                                .or(v["detail"].as_str())
+                                .map(str::to_string)
+                        })
                         .unwrap_or_default();
                     let mut detail = redact_text(&detail);
                     for secret in &route.secrets {
@@ -137,7 +170,7 @@ impl AiCore {
                                 )
                             }
                         ),
-                        matches!(status, 408 | 425 | 429 | 500 | 502 | 503 | 504)
+                        matches!(status, 408 | 425 | 429 | 500 | 502 | 503 | 504 | 529)
                             || ag && matches!(status, 403 | 404),
                         retry_after,
                     ));
@@ -177,9 +210,11 @@ impl AiCore {
                                 }
                                 bytes.extend_from_slice(&b)
                             } else {
-                                parser
-                                    .feed(&b, false, &mut on)
-                                    .map_err(|e| (e, false, None))?;
+                                parser.feed(&b, false, &mut on).map_err(|e| {
+                                    let retry =
+                                        e.starts_with("Native model temporarily unavailable");
+                                    (e, retry, None)
+                                })?;
                                 if parser.has_thinking() && thinking_stage.is_none() {
                                     if let Some(run) = run {
                                         let index = self.stage_index(run);
@@ -193,18 +228,25 @@ impl AiCore {
                             if json_body {
                                 let v = serde_json::from_slice(&bytes)
                                     .map_err(|_| (failure("invalid JSON response"), false, None))?;
-                                parser.json(v, &mut on).map_err(|e| (e, false, None))?;
+                                parser.json(v, &mut on).map_err(|e| {
+                                    let retry =
+                                        e.starts_with("Native model temporarily unavailable");
+                                    (e, retry, None)
+                                })?;
                             } else {
-                                parser
-                                    .feed(&[], true, &mut on)
-                                    .map_err(|e| (e, false, None))?;
+                                parser.feed(&[], true, &mut on).map_err(|e| {
+                                    let retry =
+                                        e.starts_with("Native model temporarily unavailable");
+                                    (e, retry, None)
+                                })?;
                             }
                             break;
                         }
                     }
                 }
                 let mut turn = parser.finish().map_err(|e| {
-                    let retry = e.contains("before terminal signal");
+                    let retry = e.contains("before terminal signal")
+                        || ag && e == "Native model: empty final answer";
                     (e, retry, None)
                 })?;
                 drop(on);
@@ -214,6 +256,14 @@ impl AiCore {
                     .any(|c| redactor.contains_secret(s(&c["function"]["arguments"])))
                 {
                     return Err(("Native validation: tool arguments contained a provider credential; no tools executed".into(),false,None));
+                }
+                if turn
+                    .message
+                    .opaque
+                    .as_ref()
+                    .is_some_and(|o| opaque_has_secret(&o.value, "", &redactor))
+                {
+                    return Err(("Native validation: provider returned credentials in opaque history; the response was not saved or replayed".into(),false,None));
                 }
                 let tail = redactor.push("", true);
                 if !tail.is_empty() {
@@ -226,26 +276,21 @@ impl AiCore {
                         *text = redactor.clean(text)
                     }
                 }
-                if ag && turn.text.trim().is_empty() && turn.calls.is_empty() {
-                    return Err((
-                        "Native protocol: Antigravity returned an empty response".into(),
-                        true,
-                        None,
-                    ));
-                }
                 Ok(turn)
             };
-            let result = tokio::select! {biased;_=cancel.cancelled()=>return Err("Operation cancelled".into()),r=tokio::time::timeout(Duration::from_secs(600),result)=>r.unwrap_or_else(|_|Err(("Native network: turn exceeded 600s".into(),true,None)))};
+            let result = tokio::select! {biased;_=cancel.cancelled()=>return Err("Operation cancelled".into()),r=tokio::time::timeout_at(deadline,result)=>r.unwrap_or_else(|_|Err(("Native network: turn exceeded 600s".into(),true,None)))};
             if let (Some(run), Some(index)) = (run, thinking_stage) {
                 self.agent_event(run,json!({"type":"stage","stage":{"index":index,"label":"Thinking…","status":if result.is_ok(){"done"}else{"failed"}}}));
             }
             match result {
                 Ok(t) => return Ok(t),
                 Err((e, retry, delay)) => {
-                    if ag && !visible && attempt < 2 {
+                    if ag && !visible {
                         if e.starts_with("Native HTTP: status 429")
                             && providers::antigravity::quota_wall(&e)
+                            && account_attempt < 2
                         {
+                            account_attempt += 1;
                             let account = self.antigravity_next_account(&tried_accounts).await?;
                             tried_accounts.insert(s(&account["accountId"]).to_string());
                             route.secrets.push(s(&account["access"]).to_string());
@@ -261,21 +306,9 @@ impl AiCore {
                             body = serde_json::to_vec(&encoded).map_err(err)?;
                             continue;
                         }
-                        if [403, 404, 429, 500, 502, 503, 504]
-                            .iter()
-                            .any(|status| e.starts_with(&format!("Native HTTP: status {status}")))
-                            && ag_endpoint + 1 < ag_bases.len()
-                        {
-                            ag_endpoint += 1;
-                            route.url = reqwest::Url::parse(&format!(
-                                "{}/v1internal:streamGenerateContent?alt=sse",
-                                ag_bases[ag_endpoint]
-                            ))
-                            .map_err(|_| "Invalid Antigravity endpoint")?;
-                            continue;
-                        }
                         if (e.starts_with("Native HTTP: status 404")
                             || e.starts_with("Native HTTP: status 400"))
+                            && fallback_attempt < 2
                             && regex::Regex::new(
                                 "(?i)model.*(?:unavailable|not found|unsupported|not supported)",
                             )
@@ -286,6 +319,13 @@ impl AiCore {
                                 &route.origin.model,
                                 cfg["reasoningEffort"].as_str().unwrap_or("off"),
                             ) {
+                                fallback_attempt += 1;
+                                ag_endpoint = 0;
+                                route.url = reqwest::Url::parse(&format!(
+                                    "{}/v1internal:streamGenerateContent?alt=sse",
+                                    ag_bases[0]
+                                ))
+                                .map_err(|_| "Invalid Antigravity endpoint")?;
                                 route.origin.model = model.clone();
                                 let mut options = cfg.clone();
                                 options["model"] = json!(model);
@@ -308,14 +348,36 @@ impl AiCore {
                                 continue;
                             }
                         }
+                        if [403, 404, 429, 500, 502, 503, 504]
+                            .iter()
+                            .any(|status| e.starts_with(&format!("Native HTTP: status {status}")))
+                            && ag_endpoint + 1 < ag_bases.len()
+                        {
+                            ag_endpoint += 1;
+                            route.url = reqwest::Url::parse(&format!(
+                                "{}/v1internal:streamGenerateContent?alt=sse",
+                                ag_bases[ag_endpoint]
+                            ))
+                            .map_err(|_| "Invalid Antigravity endpoint")?;
+                            continue;
+                        }
                     }
-                    if !visible
-                        && attempt == 0
-                        && cfg["provider"] == "copilot"
+                    if cfg["provider"] == "copilot"
                         && (e.starts_with("Native HTTP: status 401")
                             || e.starts_with("Native HTTP: status 403"))
                     {
                         let github = self.copilot_token().await?;
+                        self.clear_copilot_session(&github).await;
+                    }
+                    if !visible
+                        && !copilot_exchanged
+                        && cfg["provider"] == "copilot"
+                        && (e.starts_with("Native HTTP: status 401")
+                            || e.starts_with("Native HTTP: status 403"))
+                    {
+                        copilot_exchanged = true;
+                        let github = self.copilot_token().await?;
+                        self.clear_copilot_session(&github).await;
                         let session = self.exchange_copilot_session(&github).await?;
                         let mut url = reqwest::Url::parse(if cfg["_explicitBaseURL"] == true {
                             route.url.as_str()
@@ -337,17 +399,79 @@ impl AiCore {
                         );
                         continue;
                     }
-                    if attempt == 2 || !retry || visible {
+                    let mut e = redact_text(&e);
+                    for secret in &route.secrets {
+                        if !secret.is_empty() {
+                            e = e.replace(secret, "[redacted]");
+                        }
+                    }
+                    if retry_attempt == 2 || !retry || visible {
                         return Err(e);
                     }
                     let stage=run.map(|run|{let index=self.stage_index(run);self.agent_event(run,json!({"type":"stage","stage":{"index":index,"label":format!("Retrying ({}/2)",attempt+1),"status":"running"}}));index});
-                    tokio::select! {biased;_=cancel.cancelled()=>return Err("Operation cancelled".into()),_=tokio::time::sleep(Duration::from_secs(delay.unwrap_or(if attempt==0{1}else{3})))=>{}}
+                    retry_attempt += 1;
+                    tokio::select! {biased;_=cancel.cancelled()=>return Err("Operation cancelled".into()),_=tokio::time::sleep_until(deadline)=>return Err("Native network: turn exceeded 600s".into()),_=tokio::time::sleep(Duration::from_secs(delay.unwrap_or(if attempt==0{1}else{3})))=>{}}
                     if let (Some(run), Some(index)) = (run, stage) {
                         self.agent_event(run,json!({"type":"stage","stage":{"index":index,"label":format!("Retrying ({}/2)",attempt+1),"status":"done"}}));
                     }
                 }
             }
         }
-        unreachable!()
+        Err("Native limit: exhausted provider fallback budget".into())
+    }
+}
+
+fn opaque_has_secret(value: &Value, key: &str, redactor: &super::redact::Redactor) -> bool {
+    match value {
+        Value::String(text) => {
+            redactor.contains_secret(text)
+                || !matches!(
+                    key,
+                    "signature" | "thoughtSignature" | "encrypted_content" | "data"
+                ) && redact_text(text) != *text
+        }
+        Value::Array(items) => items.iter().any(|v| opaque_has_secret(v, key, redactor)),
+        Value::Object(fields) => fields
+            .iter()
+            .any(|(key, value)| opaque_has_secret(value, key, redactor)),
+        _ => false,
+    }
+}
+
+fn header_wait(cfg: &Value, url: &reqwest::Url) -> Duration {
+    let local = cfg["provider"] == "ollama"
+        || matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    Duration::from_secs(
+        cfg["headerTimeoutSeconds"]
+            .as_u64()
+            .filter(|n| *n > 0)
+            .unwrap_or(if local { 120 } else { 30 })
+            .min(300),
+    )
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    #[tokio::test(start_paused = true)]
+    async fn local_header_wait_defaults_to_120_seconds_and_is_bounded() {
+        let local = reqwest::Url::parse("http://127.0.0.1:1234/chat").unwrap();
+        let remote = reqwest::Url::parse("https://example.invalid/chat").unwrap();
+        assert_eq!(header_wait(&json!({}), &remote).as_secs(), 30);
+        assert_eq!(
+            header_wait(&json!({"provider":"ollama"}), &remote).as_secs(),
+            120
+        );
+        assert_eq!(
+            header_wait(&json!({"headerTimeoutSeconds":999}), &local).as_secs(),
+            300
+        );
+        let timer =
+            tokio::spawn(async move { tokio::time::sleep(header_wait(&json!({}), &local)).await });
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(119)).await;
+        assert!(!timer.is_finished());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        timer.await.unwrap();
     }
 }

@@ -61,6 +61,9 @@ export type CustomAiProvider = {
 }
 
 export type LlmConfigRecord = {
+  thinking?: boolean
+  reasoningEffort?: 'off' | 'low' | 'medium' | 'high'
+  headerTimeoutSeconds?: number
   /** Read-only native credential availability; values never contain credentials. */
   nativeProviderCredentials?: Partial<Record<ProviderId, { hasValue: boolean; source: string }>>
   provider?: ProviderId

@@ -7,6 +7,7 @@ fn image(mime: &str, data: &str) -> Value {
 pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Value, String> {
     let mut contents: Vec<Value> = vec![];
     let mut system = vec![];
+    let requires_ids = o.model.starts_with("claude-") || o.model.starts_with("gpt-oss-");
     // This is the documented signature capability of Gemini generations, not
     // protocol routing. Never fabricate a signature for older/foreign history.
     let requires_signature = o.model.strip_prefix("gemini-").is_some_and(|model| {
@@ -51,6 +52,7 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             system.push(m.text_content());
             continue;
         }
+        let mut call_index = 0;
         let parts = if let Some(raw) = m.raw_for(o) {
             raw.as_array()
                 .ok_or_else(|| failure("invalid saved Gemini parts"))?
@@ -59,6 +61,16 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
                     !requires_signature || signed_group(raw) || part.get("functionCall").is_none()
                 })
                 .cloned()
+                .map(|mut part| {
+                    if requires_ids && part.get("functionCall").is_some() {
+                        let calls = m.calls();
+                        if let Some(call) = calls.get(call_index) {
+                            part["functionCall"]["id"] = json!(wire_id(s(&call["id"])));
+                        }
+                        call_index += 1;
+                    }
+                    part
+                })
                 .collect()
         } else {
             let mut parts = vec![];
@@ -72,12 +84,27 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
                         wire_id: id,
                         name,
                         blocks,
-                        ..
+                        is_error,
                     } => {
                         if foreign.contains(canonical) {
                             parts.push(json!({"text":format!("[Observation from {name}]\n{}",text_blocks(blocks))}));
                         } else {
-                            parts.push(json!({"functionResponse":{"name":name,"id":id_for(o,ms,canonical,id),"response":{"output":text_blocks(blocks)}}}));
+                            let text = text_blocks(blocks);
+                            let mut response = json!({"functionResponse":{"name":name,"response":if *is_error { json!({"error":if text.trim().is_empty(){"Tool failed"}else{&text}}) } else { json!({"output":text}) }}});
+                            let supplied = ms
+                                .iter()
+                                .filter(|m| m.calls().iter().any(|c| c["callId"] == *canonical))
+                                .filter_map(|m| m.raw_for(o))
+                                .flat_map(|v| v.as_array().into_iter().flatten())
+                                .any(|p| p["functionCall"]["id"].as_str() == Some(id));
+                            if requires_ids || supplied {
+                                response["functionResponse"]["id"] = json!(if requires_ids {
+                                    wire_id(id)
+                                } else {
+                                    id_for(o, ms, canonical, id)
+                                });
+                            }
+                            parts.push(response);
                         }
                         for b in blocks {
                             if let Block::Image { mime, data } = b {
@@ -98,6 +125,17 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
         } else {
             "user"
         };
+        if role == "model"
+            && (contents.is_empty()
+                || parts.iter().any(|p| p.get("functionCall").is_some())
+                    && contents.last().is_some_and(|v| v["role"] == "model"))
+        {
+            contents.push(json!({"role":"user","parts":[{"text":"Continue from the recorded conversation."}]}));
+        }
+        let mut parts = parts;
+        if role == "user" && parts.iter().all(|p| p.get("inlineData").is_some()) {
+            parts.insert(0, json!({"text":"See the attached image."}));
+        }
         if let Some(last) = contents.last_mut().filter(|v| v["role"] == role) {
             last["parts"].as_array_mut().unwrap().extend(parts)
         } else {

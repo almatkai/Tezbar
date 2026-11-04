@@ -18,9 +18,9 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             let mut content = vec![];
             for b in &m.blocks {
                 match b{
-            Block::Text{text}=>content.push(json!({"type":"text","text":text})),Block::Image{mime,data}=>content.push(image(mime,data)),
+            Block::Text{text} if !text.trim().is_empty()=>content.push(json!({"type":"text","text":text})),Block::Image{mime,data}=>content.push(image(mime,data)),
             Block::ToolCall{id:canonical,wire_id:id,name,arguments,..}=>content.push(json!({"type":"tool_use","id":id_for(o,ms,canonical,id),"name":name,"input":object_args(arguments)?})),
-            Block::ToolResult{call:canonical,wire_id:id,blocks,is_error,..}=>{let mut c=vec![];for b in blocks{match b{Block::Text{text}=>c.push(json!({"type":"text","text":text})),Block::Image{mime,data}=>c.push(image(mime,data)),_=>{}}}content.push(json!({"type":"tool_result","tool_use_id":id_for(o,ms,canonical,id),"is_error":is_error,"content":c}));},_=>{}
+            Block::ToolResult{call:canonical,wire_id:id,blocks,is_error,..}=>{let mut c=vec![];for b in blocks{match b{Block::Text{text} if !text.trim().is_empty()=>c.push(json!({"type":"text","text":text})),Block::Image{mime,data}=>c.push(image(mime,data)),_=>{}}}content.push(json!({"type":"tool_result","tool_use_id":id_for(o,ms,canonical,id),"is_error":is_error,"content":c}));},_=>{}
         }
             }
             content
@@ -38,6 +38,9 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
         } else {
             messages.push(json!({"role":role,"content":content}))
         }
+    }
+    if messages.first().is_some_and(|m| m["role"] == "assistant") {
+        messages.insert(0,json!({"role":"user","content":[{"type":"text","text":"[Earlier user message unavailable. Continue from the recorded conversation.]"}]}));
     }
     let tools=tools.iter().map(|t|json!({"name":t["function"]["name"],"description":t["function"]["description"],"input_schema":t["function"]["parameters"]})).collect::<Vec<_>>();
     let mut v = json!({"messages":messages,"system":system.join("\n\n"),"stream":true});

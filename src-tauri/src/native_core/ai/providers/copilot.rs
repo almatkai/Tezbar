@@ -12,6 +12,13 @@ fn hash(token: &str) -> String {
     format!("{:x}", Sha256::digest(token.as_bytes()))
 }
 impl AiCore {
+    pub(in crate::native_core::ai) async fn clear_copilot_session(&self, github: &str) {
+        self.inner
+            .copilot_sessions
+            .lock()
+            .await
+            .remove(&hash(github));
+    }
     pub(in crate::native_core::ai) async fn cached_copilot_session(
         &self,
         github: &str,
@@ -28,7 +35,9 @@ impl AiCore {
         &self,
         github: &str,
     ) -> Result<Session, String> {
-        if github.trim().is_empty() { return Err("Sign in to Copilot in AI settings.".into()); }
+        if github.trim().is_empty() {
+            return Err("Sign in to Copilot in AI settings.".into());
+        }
         let mut sessions = self.inner.copilot_sessions.lock().await;
         let key = hash(github);
         if let Some(s) = sessions
@@ -110,7 +119,9 @@ impl AiCore {
             return Ok(json!([]));
         }
         let token = self.copilot_token().await?;
-        if token.trim().is_empty() { return Err("Sign in to Copilot in AI settings.".into()); }
+        if token.trim().is_empty() {
+            return Err("Sign in to Copilot in AI settings.".into());
+        }
         let catalog_key = format!("copilot:{}", hash(&token));
         if let Some((_, value)) = self
             .inner
@@ -143,7 +154,8 @@ impl AiCore {
         let mut response = fetch(base, key)
             .await
             .map_err(|_| "Copilot model catalog: network failed")?;
-        if session.is_none() && matches!(response.status().as_u16(), 401 | 403) {
+        if matches!(response.status().as_u16(), 401 | 403) {
+            self.clear_copilot_session(&token).await;
             let session = self.exchange_copilot_session(&token).await?;
             response = fetch(&session.base, &session.token)
                 .await

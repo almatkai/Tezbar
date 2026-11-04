@@ -39,6 +39,9 @@ pub fn encode(
             v["max_tokens"] = json!(max_tokens);
         }
         Protocol::OpenaiResponses => {
+            if thinking {
+                v["include"] = json!(["reasoning.encrypted_content"]);
+            }
             v["max_output_tokens"] = json!(max_tokens);
         }
         Protocol::Anthropic => {
@@ -83,12 +86,40 @@ fn image_url(mime: &str, data: &str) -> String {
     format!("data:{mime};base64,{data}")
 }
 fn object_args(args: &str) -> Result<Value, String> {
-    let v: Value =
-        serde_json::from_str(args).map_err(|_| "Native protocol: invalid completed tool JSON")?;
+    let v: Value = serde_json::from_str(if args.trim().is_empty() { "{}" } else { args })
+        .map_err(|_| "Native protocol: invalid completed tool JSON")?;
     if !v.is_object() {
         return Err("Native protocol: tool arguments must be an object".into());
     }
     Ok(v)
+}
+fn provider_stream_error(v: &Value) -> String {
+    let error = if !v["response"]["error"].is_null() {
+        &v["response"]["error"]
+    } else {
+        &v["error"]
+    };
+    let detail = error["message"]
+        .as_str()
+        .or(error.as_str())
+        .or(v["message"].as_str())
+        .unwrap_or("Provider returned a stream error");
+    let retryable = matches!(
+        error["type"].as_str(),
+        Some("overloaded_error" | "server_error" | "api_error" | "rate_limit_error")
+    ) || matches!(
+        error["code"].as_str(),
+        Some("server_error" | "overloaded_error" | "rate_limit_exceeded")
+    ) || error["code"].as_u64().is_some_and(|s| s >= 500);
+    format!(
+        "Native model{}: {}",
+        if retryable {
+            " temporarily unavailable"
+        } else {
+            ""
+        },
+        super::cut(&super::redact_text(detail), 500)
+    )
 }
 fn failure(s: &str) -> String {
     format!("Native protocol: {s}")
@@ -135,7 +166,7 @@ impl Decoder {
             "thinking",
         ]
         .iter()
-        .any(|k| self.raw.get(k).is_some())
+        .any(|k| self.raw.get(k).is_some_and(|v| !v.is_null()))
             || self.blocks.values().any(|b| {
                 matches!(
                     s(&b["type"]),
@@ -220,8 +251,8 @@ impl Decoder {
         )
     }
     fn payload(&mut self, v: Value, on: &mut impl FnMut(&str)) -> Result<(), String> {
-        if v.get("error").is_some() {
-            return Err("Native model: provider returned a stream error".into());
+        if v.get("error").is_some_and(|e| !e.is_null()) {
+            return Err(provider_stream_error(&v));
         }
         match self.origin.protocol.clone() {
             Protocol::OpenaiChat => chat::decode(self, v, on),
@@ -250,6 +281,13 @@ impl Decoder {
                 "stream ended before terminal signal; no tools executed",
             ));
         }
+        if self
+            .stop_reason
+            .as_deref()
+            .is_some_and(|s| matches!(s, "length" | "max_tokens" | "MAX_TOKENS" | "content_filter"))
+        {
+            return Err(failure("provider returned incomplete turn"));
+        }
         let mut canonical = vec![];
         match self.origin.protocol {
             Protocol::OpenaiChat | Protocol::Ollama => {
@@ -266,6 +304,11 @@ impl Decoder {
                             .get(i)
                             .cloned()
                             .unwrap_or_else(|| s(&c["function"]["arguments"]).into())
+                    };
+                    let args = if args.trim().is_empty() {
+                        "{}".into()
+                    } else {
+                        args
                     };
                     object_args(&args)?;
                     canonical.push(Block::ToolCall {
@@ -341,11 +384,16 @@ impl Decoder {
                                     .args
                                     .get(i)
                                     .cloned()
+                                    .filter(|s| !s.trim().is_empty())
                                     .unwrap_or_else(|| a.to_string()),
                             });
                         }
                         (Protocol::OpenaiResponses, "function_call") => {
-                            let a = s(&b["arguments"]);
+                            let a = if s(&b["arguments"]).trim().is_empty() {
+                                "{}"
+                            } else {
+                                s(&b["arguments"])
+                            };
                             object_args(a)?;
                             canonical.push(Block::ToolCall {
                                 id: format!("c{}_{}", self.turn, i),
@@ -371,7 +419,7 @@ impl Decoder {
                                 })
                             }
                             if let Some(f) = b.get("functionCall") {
-                                if !f["args"].is_object() {
+                                if !f["args"].is_null() && !f["args"].is_object() {
                                     return Err(failure("invalid functionCall args"));
                                 }
                                 canonical.push(Block::ToolCall {
@@ -381,7 +429,11 @@ impl Decoder {
                                         .unwrap_or(&format!("tz_{}_{}", self.turn, i))
                                         .into(),
                                     name: s(&f["name"]).into(),
-                                    arguments: f["args"].to_string(),
+                                    arguments: if f["args"].is_null() {
+                                        "{}".into()
+                                    } else {
+                                        f["args"].to_string()
+                                    },
                                 });
                             }
                         }
@@ -423,13 +475,6 @@ impl Decoder {
             {
                 return Err(failure("missing name, duplicate ID or oversized arguments"));
             }
-        }
-        if self
-            .stop_reason
-            .as_deref()
-            .is_some_and(|s| matches!(s, "length" | "max_tokens" | "MAX_TOKENS" | "content_filter"))
-        {
-            return Err(failure("provider returned incomplete turn"));
         }
         if calls.is_empty() && self.text.trim().is_empty() {
             return Err("Native model: empty final answer".into());

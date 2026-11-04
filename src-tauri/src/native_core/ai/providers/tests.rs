@@ -404,16 +404,45 @@ async fn unsigned_copilot_never_borrows_generic_credentials_or_makes_requests() 
         ("copilot".into(), http.url.clone()),
     ]);
     let catalog = server(|_| Reply::json(json!({"data":[]}))).await;
-    for id in config::PROVIDERS.iter().filter(|id| **id != "copilot") { core.inner.endpoints.lock().unwrap().insert(format!("{id}-models"), catalog.url.clone()); }
-    core.patch_config(json!({"provider":"openai","apiKey":"fixture-other-provider-key"})).await.unwrap();
-    let statuses = core.handle("llm-provider-statuses", &[]).await.unwrap().unwrap();
+    for id in config::PROVIDERS.iter().filter(|id| **id != "copilot") {
+        core.inner
+            .endpoints
+            .lock()
+            .unwrap()
+            .insert(format!("{id}-models"), catalog.url.clone());
+    }
+    core.patch_config(json!({"provider":"openai","apiKey":"fixture-other-provider-key"}))
+        .await
+        .unwrap();
+    let statuses = core
+        .handle("llm-provider-statuses", &[])
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(statuses["copilot"], false);
-    assert!(http.requests.try_recv().is_err(), "status leaked another provider's credential");
-    core.patch_config(json!({"provider":"copilot"})).await.unwrap();
-    core.handle("agent:run", &[json!({"runId":"agent-unsigned-copilot","task":"fixture"})]).await.unwrap().unwrap();
-    assert!(next_event(&mut events,"error").await.to_string().contains("Sign in to Copilot"));
-    next_event(&mut events,"done").await;
-    assert!(http.requests.try_recv().is_err(), "unsigned inference contacted Copilot");
+    assert!(
+        http.requests.try_recv().is_err(),
+        "status leaked another provider's credential"
+    );
+    core.patch_config(json!({"provider":"copilot"}))
+        .await
+        .unwrap();
+    core.handle(
+        "agent:run",
+        &[json!({"runId":"agent-unsigned-copilot","task":"fixture"})],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(next_event(&mut events, "error")
+        .await
+        .to_string()
+        .contains("Sign in to Copilot"));
+    next_event(&mut events, "done").await;
+    assert!(
+        http.requests.try_recv().is_err(),
+        "unsigned inference contacted Copilot"
+    );
     core.shutdown().await;
 }
 
@@ -422,14 +451,347 @@ async fn credentialed_catalog_and_inference_refuse_redirects() {
     let (_dir, core, _events) = fixture();
     let mut target = server(|_| Reply::json(json!({"data":[]}))).await;
     let location = target.url.clone();
-    let source = server(move |_| { let mut r = Reply::json(json!({})).status(307); r.headers.push(("Location".into(),location.clone())); r }).await;
-    core.inner.endpoints.lock().unwrap().insert("anthropic-models".into(), source.url.clone());
+    let source = server(move |_| {
+        let mut r = Reply::json(json!({})).status(307);
+        r.headers.push(("Location".into(), location.clone()));
+        r
+    })
+    .await;
+    core.inner
+        .endpoints
+        .lock()
+        .unwrap()
+        .insert("anthropic-models".into(), source.url.clone());
     let cfg = json!({"provider":"anthropic","baseURL":source.url,"apiKey":"fixture-private"});
     assert!(!core.available(&cfg).await);
     assert!(target.requests.try_recv().is_err());
-    let custom=json!({"provider":"custom:redirect","model":"fixture","customProviders":[{"id":"custom:redirect","title":"fixture","baseURL":source.url,"protocol":"anthropic","headers":{"X-Private":"fixture-private"}}]});
-    let result = core.canonical_turn(&custom,&[runtime::transcript::Message::text("user","hello")],&[],0,&Cancel::new(),|_|{}).await;
+    let custom = json!({"provider":"custom:redirect","model":"fixture","customProviders":[{"id":"custom:redirect","title":"fixture","baseURL":source.url,"protocol":"anthropic","headers":{"X-Private":"fixture-private"}}]});
+    let result = core
+        .canonical_turn(
+            &custom,
+            &[runtime::transcript::Message::text("user", "hello")],
+            &[],
+            0,
+            &Cancel::new(),
+            |_| {},
+        )
+        .await;
     assert!(result.is_err());
     assert!(target.requests.try_recv().is_err());
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn custom_catalog_status_uses_protocol_and_headers() {
+    for (protocol, suffix) in [
+        ("anthropic", "/v1/models"),
+        ("gemini", "/models"),
+        ("ollama", "/api/tags"),
+        ("openai-responses", "/models"),
+    ] {
+        let (_dir, core, _events) = fixture();
+        let expected = suffix.to_string();
+        let http = server(move |r| {
+            assert!(s(&r["line"]).contains(&expected), "{r}");
+            assert_eq!(r["headers"]["x-catalog-key"], "fixture-catalog-private");
+            Reply::json(json!({"data":[{"id":"fixture-model"}]}))
+        })
+        .await;
+        core.patch_config(json!({"provider":"custom:catalog","model":"fixture-model","customProviders":[{"id":"custom:catalog","title":"Catalog","baseURL":http.url,"protocol":protocol,"headers":{"X-Catalog-Key":"fixture-catalog-private"}}]})).await.unwrap();
+        let cfg = core.cfg(None, None).await.unwrap();
+        assert!(core.available(&cfg).await);
+        assert_eq!(
+            core.models("custom:catalog", None, None).await.unwrap(),
+            json!(["fixture-model"])
+        );
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn antigravity_empty_reply_retries_and_model_fallback_has_its_own_budget() {
+    let (_dir, core, _events) = fixture();
+    let pi = core.pi_dir();
+    std::fs::create_dir_all(&pi).unwrap();
+    common::write_json_atomic(&pi.join("auth.json"),&json!({"antigravity":{"access":"fixture-ag","refresh":"fixture-ag-refresh","expires":now_ms()+3600000,"email":"fixture@example.invalid","projectId":"fixture-project"}})).unwrap();
+    let count = Arc::new(AtomicUsize::new(0));
+    let counter = count.clone();
+    let http=server(move |r| {let n=counter.fetch_add(1,Ordering::SeqCst);if n<2 {Reply::json(json!({"response":{"candidates":[{"content":{"parts":[]},"finishReason":"STOP"}]}}))}else{assert!(r["body"]["project"].as_str().is_some_and(|p|!p.is_empty()));Reply::json(json!({"response":{"candidates":[{"content":{"parts":[{"text":"recovered"}]},"finishReason":"STOP"}]}}))}}).await;
+    core.inner
+        .endpoints
+        .lock()
+        .unwrap()
+        .insert("antigravity".into(), http.url.clone());
+    let cfg = config::selected(
+        &json!({"provider":"antigravity","model":"gemini-3.8-flash"}),
+        None,
+        None,
+    );
+    let turn = core
+        .canonical_turn(
+            &cfg,
+            &[runtime::transcript::Message::text("user", "fixture")],
+            &[],
+            0,
+            &Cancel::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    assert_eq!(turn.text, "recovered");
+    assert_eq!(count.load(Ordering::SeqCst), 3);
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn provider_errors_keep_messages_retry_before_text_and_never_persist_opaque_secrets() {
+    let (_dir, core, _events) = fixture();
+    let count = Arc::new(AtomicUsize::new(0));
+    let counter = count.clone();
+    let http=server(move|_| {let n=counter.fetch_add(1,Ordering::SeqCst);let mut reply=Reply::json(json!({}));reply.content_type="text/event-stream".into();reply.body=if n==0 {format!("data: {}\n\n",json!({"error":{"type":"overloaded_error","message":"fixture temporarily overloaded"}}))}else{format!("data: {}\n\n",json!({"choices":[{"delta":{"content":"recovered"},"finish_reason":"stop"}]}))};reply}).await;
+    let cfg = json!({"provider":"openai-compatible","model":"fixture","baseURL":http.url,"apiKey":"fixture-wire-private"});
+    let turn = core
+        .canonical_turn(
+            &cfg,
+            &[runtime::transcript::Message::text("user", "fixture")],
+            &[],
+            0,
+            &Cancel::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    assert_eq!(turn.text, "recovered");
+    assert_eq!(count.load(Ordering::SeqCst), 2);
+    let http =
+        server(|_| Reply::json(json!({"error":"model does not support tools"})).status(400)).await;
+    let mut cfg = cfg;
+    cfg["baseURL"] = json!(http.url);
+    assert!(core
+        .canonical_turn(&cfg, &[], &[], 0, &Cancel::new(), |_| {})
+        .await
+        .err()
+        .unwrap()
+        .contains("model does not support tools"));
+    let http=server(|_|Reply::json(json!({"choices":[{"message":{"reasoning_content":"fixture-wire-private","content":"answer"},"finish_reason":"stop"}]}))).await;
+    cfg["baseURL"] = json!(http.url);
+    let error = core
+        .canonical_turn(&cfg, &[], &[], 0, &Cancel::new(), |_| {})
+        .await
+        .err()
+        .unwrap();
+    assert!(error.contains("opaque history"));
+    assert!(!error.contains("fixture-wire-private"));
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn model_switch_migrates_legacy_credentials_to_their_original_owner() {
+    let (_dir, core, _events) = fixture();
+    core.patch_config(json!({"provider":"openai","apiKey":"fixture-original-openai","baseURL":"https://original.example/v1"})).await.unwrap();
+    core.handle("llm-config-set",&[json!({"provider":"opencode","model":"opencode/fixture","providerModels":{"opencode":[{"id":"opencode/fixture"}]}})]).await.unwrap().unwrap();
+    let raw = core.read_config().await.unwrap();
+    assert_eq!(
+        raw["providerConfigs"]["openai"]["apiKey"],
+        "fixture-original-openai"
+    );
+    let selected = config::selected(&raw, None, Some("opencode"));
+    assert!(s(&selected["apiKey"]).is_empty());
+    assert_ne!(selected["baseURL"], "https://original.example/v1");
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn antigravity_model_fallback_is_reached_with_all_three_endpoints_configured() {
+    let (_dir, core, _events) = fixture();
+    let pi = core.pi_dir();
+    std::fs::create_dir_all(&pi).unwrap();
+    common::write_json_atomic(&pi.join("auth.json"),&json!({"antigravity":{"access":"fixture-ag-fallback","refresh":"fixture-ag-refresh","expires":now_ms()+3600000,"email":"fallback@example.invalid"}})).unwrap();
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    let models = seen.clone();
+    let http=server(move|r| {let model=s(&r["body"]["model"]);models.lock().unwrap().push(model.into());assert!(r["body"]["project"].as_str().is_some_and(|s|!s.is_empty()));if model.starts_with("gemini-3.8") {Reply::json(json!({"error":{"message":"Model not found"}})).status(404)}else{Reply::json(json!({"response":{"candidates":[{"content":{"parts":[{"text":"model fallback"}]},"finishReason":"STOP"}]}}))}}).await;
+    let fallback1 = server(|_| {
+        panic!("recognized missing-model errors must try model fallback before endpoint walking")
+    })
+    .await;
+    let fallback2 = server(|_| panic!("fallback budget was exhausted by endpoint walking")).await;
+    core.inner.endpoints.lock().unwrap().extend([
+        ("antigravity".into(), http.url.clone()),
+        ("antigravity-fallback-1".into(), fallback1.url.clone()),
+        ("antigravity-fallback-2".into(), fallback2.url.clone()),
+    ]);
+    let implicit = config::selected(
+        &json!({"provider":"antigravity","baseURL":"https://cloudcode-pa.googleapis.com"}),
+        None,
+        None,
+    );
+    assert_eq!(implicit["_explicitBaseURL"], false);
+    let cfg = config::selected(
+        &json!({"provider":"antigravity","model":"gemini-3.8-flash"}),
+        None,
+        None,
+    );
+    assert_eq!(core.antigravity_bases(&cfg).unwrap().len(), 3);
+    let result = core
+        .canonical_turn(
+            &cfg,
+            &[runtime::transcript::Message::text("user", "fixture")],
+            &[],
+            0,
+            &Cancel::new(),
+            |_| {},
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.text, "model fallback");
+    assert_eq!(seen.lock().unwrap().len(), 2);
+    assert!(seen.lock().unwrap()[1].starts_with("gemini-3.7"));
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn opencode_go_default_and_explicit_uncatalogued_protocol_are_native_routes() {
+    let (_dir, core, _events) = fixture();
+    let catalog: Value = serde_json::from_str(include_str!("opencode_catalog.json")).unwrap();
+    let model = catalog
+        .as_object()
+        .unwrap()
+        .keys()
+        .find(|id| id.starts_with("opencode-go/"))
+        .unwrap();
+    let cfg = config::selected(
+        &json!({"provider":"opencode","model":model,"apiKey":"fixture-go-key"}),
+        None,
+        None,
+    );
+    let route = core.native_route(&cfg, &[]).await.unwrap();
+    assert!(
+        route
+            .url
+            .as_str()
+            .starts_with("https://opencode.ai/inference/go/"),
+        "{}",
+        route.url
+    );
+    let cfg = config::selected(
+        &json!({"provider":"opencode","model":"opencode/uncatalogued","apiKey":"fixture-go-key","providerModels":{"opencode":[{"id":"opencode/uncatalogued","protocol":"gemini"}]}}),
+        None,
+        None,
+    );
+    let route = core.native_route(&cfg, &[]).await.unwrap();
+    assert_eq!(route.origin.protocol, runtime::transcript::Protocol::Gemini);
+    assert!(route.headers.contains_key("authorization"));
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn revoked_unexpired_copilot_session_is_exchanged_again_once() {
+    use std::sync::atomic::AtomicBool;
+    let (_dir, core, _events) = fixture();
+    let exchanges = Arc::new(AtomicUsize::new(0));
+    let count = exchanges.clone();
+    let revoked = Arc::new(AtomicBool::new(false));
+    let reject = revoked.clone();
+    let http=server(move|r|{if s(&r["line"]).contains("/exchange") {let n=count.fetch_add(1,Ordering::SeqCst)+1;return Reply::json(json!({"token":format!("fixture-session-{n};proxy-ep=proxy.individual.githubcopilot.com;"),"expires_at":now_ms()/1000+3600}));}let auth=s(&r["headers"]["authorization"]);if auth=="Bearer fixture-github" || reject.load(Ordering::SeqCst) && auth.contains("fixture-session-1;"){Reply::json(json!({"error":{"message":"revoked"}})).status(401)}else{Reply::json(json!({"choices":[{"message":{"content":"signed in"},"finish_reason":"stop"}]}))}}).await;
+    core.inner.endpoints.lock().unwrap().extend([
+        ("copilot".into(), http.url.clone()),
+        ("copilot-proxy".into(), http.url.clone()),
+        ("copilot-session".into(), format!("{}/exchange", http.url)),
+    ]);
+    core.patch_config(json!({"provider":"copilot","model":"fixture","providerConfigs":{"copilot":{"copilotGithubToken":"fixture-github","protocol":"openai-chat"}}})).await.unwrap();
+    let cfg = core.cfg(None, None).await.unwrap();
+    for _ in 0..2 {
+        assert_eq!(
+            core.canonical_turn(
+                &cfg,
+                &[runtime::transcript::Message::text("user", "fixture")],
+                &[],
+                0,
+                &Cancel::new(),
+                |_| {}
+            )
+            .await
+            .unwrap()
+            .text,
+            "signed in"
+        );
+        revoked.store(true, Ordering::SeqCst);
+    }
+    assert_eq!(exchanges.load(Ordering::SeqCst), 2);
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn oversized_historical_tool_image_is_projected_without_poisoning_or_mutating_history() {
+    use runtime::transcript::{Block, Message};
+    let (_dir, core, _events) = fixture();
+    let image = "A".repeat(10_000_004);
+    let messages = vec![
+        Message::text("user", "continue"),
+        Message {
+            role: "tool".into(),
+            opaque: None,
+            blocks: vec![Block::ToolResult {
+                call: "c".into(),
+                wire_id: "c".into(),
+                name: "screen_capture".into(),
+                blocks: vec![Block::Image {
+                    mime: "image/png".into(),
+                    data: image.clone(),
+                }],
+                is_error: false,
+            }],
+        },
+    ];
+    let http = server(|r| {
+        assert!(!r["body"].to_string().contains(&"A".repeat(100)));
+        assert!(r["body"].to_string().contains("Earlier image omitted"));
+        Reply::json(
+            json!({"content":[{"type":"text","text":"continued"}],"stop_reason":"end_turn"}),
+        )
+    })
+    .await;
+    let cfg = json!({"provider":"anthropic","model":"fixture","baseURL":http.url,"apiKey":"fixture-image-key"});
+    assert_eq!(
+        core.canonical_turn(&cfg, &messages, &[], 0, &Cancel::new(), |_| {})
+            .await
+            .unwrap()
+            .text,
+        "continued"
+    );
+    if let Block::ToolResult { blocks, .. } = &messages[1].blocks[0] {
+        if let Block::Image { data, .. } = &blocks[0] {
+            assert_eq!(data, &image)
+        } else {
+            panic!("canonical image mutated")
+        }
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn official_openai_chat_uses_completion_token_limit_through_real_transport() {
+    let (_dir, core, _events) = fixture();
+    let http=server(|r|{assert!(r["body"].get("max_tokens").is_none());assert!(r["body"]["max_completion_tokens"].as_u64().is_some());Reply::json(json!({"choices":[{"message":{"content":"official compatibility"},"finish_reason":"stop"}]}))}).await;
+    core.inner
+        .endpoints
+        .lock()
+        .unwrap()
+        .insert("openai".into(), http.url.clone());
+    let cfg = json!({"provider":"openai","model":"gpt-5.5","baseURL":"https://api.openai.com/v1","protocol":"openai-chat","apiKey":"fixture-openai-compatible"});
+    assert_eq!(
+        core.canonical_turn(
+            &cfg,
+            &[runtime::transcript::Message::text("user", "fixture")],
+            &[],
+            0,
+            &Cancel::new(),
+            |_| {}
+        )
+        .await
+        .unwrap()
+        .text,
+        "official compatibility"
+    );
     core.shutdown().await;
 }

@@ -229,6 +229,50 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     await act(async () => vi.advanceTimersByTimeAsync(ms))
   }
 
+  it('does not borrow the previous provider key or URL when reloading AI settings', async () => {
+    const save = vi.fn(async () => ({ ok: true }))
+    Object.assign(window.tezbar, {
+      getLlmConfig: async () => ({
+        provider: 'opencode',
+        model: 'opencode/fixture',
+        apiKey: 'fixture-openai-key',
+        baseURL: 'https://old-openai.example/v1',
+        providerConfigs: {
+          openai: { apiKey: 'fixture-openai-key', baseURL: 'https://old-openai.example/v1' },
+        },
+        providerModels: { opencode: [{ id: 'opencode/fixture', capabilities: ['tools'] }] },
+      }),
+      setLlmConfig: save,
+      listPiExtensions: async () => [],
+      aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      listAntigravityAccounts: async () => [],
+    })
+    await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
+    const password = container.querySelector<HTMLInputElement>('input[type="password"]')!
+    expect(password).toBeTruthy()
+    expect(password.value).toBe('')
+    const protocol = container.querySelector<HTMLSelectElement>(
+      '[aria-label="Protocol for opencode/fixture"]'
+    )!
+    await act(async () => {
+      protocol.value = 'anthropic'
+      protocol.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerModels: expect.objectContaining({
+          opencode: expect.arrayContaining([
+            expect.objectContaining({ id: 'opencode/fixture', protocol: 'anthropic' }),
+          ]),
+        }),
+      })
+    )
+    expect(
+      [...container.querySelectorAll('input')].some(
+        (input) => input.value === 'https://old-openai.example/v1'
+      )
+    ).toBe(false)
+  })
   it('shows unknown/loading rather than built-in, empty roots, or a mutation in progress', async () => {
     await mount()
     expect(engine().value).toBe('')
