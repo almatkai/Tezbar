@@ -3,11 +3,10 @@
 Built-in AI execution is owned by Rust. Pi, Node, npm, Bun and `opencode run`
 are not execution fallbacks. React remains the renderer; model servers, speech/
 ML engines, OS helpers and explicitly connected MCP programs remain external.
-The implementation follows [NATIVE_AI_SPEC.md](NATIVE_AI_SPEC.md). The required
-fresh Claude Opus 5.5 closure review is a separate coordinator step. Initial
-reviews and re-review findings are preserved in docs/reviews; the latest fixes
-still require new wire, standards and full runtime closure. This branch is not a
-release approval.
+The implementation follows [NATIVE_AI_SPEC.md](NATIVE_AI_SPEC.md). Review reports,
+repair dispositions, current closure status and platform evidence are recorded in
+[NATIVE_AI_VERIFICATION.md](NATIVE_AI_VERIFICATION.md). This branch has not been
+released.
 
 ## Entry points and providers
 
@@ -38,9 +37,9 @@ encrypted header references when supplied by an AI extension.
   unrelated auth entries and unknown fields survive updates. This integration
   uses an unofficial upstream API and is not endorsed by Google.
 - OpenCode uses supported native HTTP APIs and key precedence: configured key,
-  environment, then its existing auth file. The attributed static catalog makes
-  the CLI optional. `opencode models` is an optional read-only discovery source;
-  no OpenCode agent runs. Current upstream free-tier restrictions produce an
+  environment, then its existing auth file. The attributed static catalog and
+  native discovery run without the OpenCode CLI; no OpenCode program is started.
+  Current upstream free-tier restrictions produce an
   actionable credential/model error; Tezbar does not impersonate OpenCode.
 
 Routing/request ports and the catalog snapshots are attributed to MIT

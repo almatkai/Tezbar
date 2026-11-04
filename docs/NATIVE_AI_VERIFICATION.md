@@ -1,6 +1,34 @@
 # Native AI implementation verification
 
-## Live-write ownership — source `935233a`
+## Copilot sign-in persistence — source `08a50f8`
+
+Validated implementation: `08a50f8a8f3e622ee1ff45b3b2ad123a879c2d73`, tree
+`47ec0cb90f04d56cb40fda4a33a0ec6d4b20c7e3`, on `feat/native-rust-agent`.
+The [latest Opus audit](reviews/native-ai-opus-runtime-8e12f1a.md) closes T-R6
+and all shared provider-save callsites, but identifies T-R7 (P1): Copilot's direct
+device-sign-in write replaces the whole provider-config map with its owned key.
+
+Sign-in now saves through `persistAiSettings` and waits on the ordered owned-key
+merge before starting the device flow. A failed Copilot save stops sign-in and
+retains its retryable error. The optional legacy top-level client-ID write remains
+a scalar patch. No native, queue or bridge source changed.
+
+- `pnpm test`: **951 passed, 9 existing skips, 0 failed**; 125 files passed,
+  2 skipped. `/private/tmp/tezbar-ai-copilot-save-final-ts.log`.
+- `pnpm typecheck`: pass; `/private/tmp/tezbar-ai-copilot-save-final-typecheck.log`.
+- `pnpm build:frontend`: pass; `/private/tmp/tezbar-ai-copilot-save-final-frontend.log`.
+- `git diff --check`: pass. Native Mac **608** / Windows **538**, MSRV and lifecycle
+  evidence remains applicable to byte-identical `756072e` native sources/scripts.
+
+Four permanent component cases verify existing peer credentials, a provider saved
+after mount (including custom client ID), a rejected save and an explicit
+`ok:false` save. OAuth calls use mocks only. Defect/failure expectations were red
+before repair, then all four passed. Logs: `/private/tmp/tezbar-ai-copilot-save-{red,green}.log`.
+**Fresh targeted Opus 5.5 closure of T-R7 is pending.** Other reviewed scopes remain
+closed. No real sign-in, live provider, production credentials, app launch, release,
+PR or Actions were used. Earlier live/desktop verification limits still apply.
+
+## Historical: live-write ownership — source `935233a`
 
 Validated implementation: `935233a0f47d88740c48d1d6f94eb1a8dd0f3179`, tree
 `49cd23e841e8bb2a112c132170c6e79dfd8583a4`, on `feat/native-rust-agent`.

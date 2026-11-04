@@ -535,3 +535,21 @@ was left as a non-gating observation, as reviewed.
 
 **Fresh targeted Opus 5.5 closure of T-R6 remains required.** No other scope is
 reopened and overall migration completion is not yet declared.
+
+## Runtime closure at `8e12f1a` and T-R7 repair
+
+The [original Opus report](native-ai-opus-runtime-8e12f1a.md) closes T-R6 and
+validates all `writeAiPatch` callsites with eleven new probes. It identifies T-R7,
+a P1 branch regression: `startDeviceSignIn` directly writes the narrowed provider
+patch, replacing peer credential/URL records and unowned provider definitions.
+
+Implementation `08a50f8a8f3e622ee1ff45b3b2ad123a879c2d73` routes sign-in's provider
+save through the ordered merge and waits before OAuth. A failed save prevents
+the flow from starting and retains the existing retryable error. Four permanent
+real-component cases verify peer credentials, late-arriving provider records and
+custom client ID, thrown save failures and `ok:false` failures. All pass after
+reproducing the defect/failure expectations before repair. Full tests pass 951 /
+9 existing skips; typecheck, frontend build and diff check pass.
+
+Native, queue and bridge sources are unchanged. Mac 608 / Windows 538 evidence
+still applies. **Fresh targeted Opus 5.5 closure of T-R7 remains pending.**
