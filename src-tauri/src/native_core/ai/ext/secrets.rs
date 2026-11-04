@@ -70,7 +70,7 @@ impl Secrets {
         ));
         std::fs::rename(&self.path, &archived).map_err(err)?;
         let revoked = self.path.with_extension("revoked.json");
-        let archived_revoked = archived.with_extension("revoked.json");
+        let archived_revoked = PathBuf::from(format!("{}.revoked.json", archived.display()));
         let had_revoked = revoked.exists();
         if had_revoked {
             if let Err(error) = std::fs::rename(&revoked, &archived_revoked) {
@@ -393,7 +393,11 @@ fn dpapi(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>, DpapiError> {
         if ok == 0 {
             return Err(DpapiError(GetLastError()));
         }
-        let bytes = std::slice::from_raw_parts(output.data, output.len as usize).to_vec();
+        let bytes = if output.len == 0 {
+            Vec::new()
+        } else {
+            std::slice::from_raw_parts(output.data, output.len as usize).to_vec()
+        };
         LocalFree(output.data as _);
         Ok(bytes)
     }
@@ -516,6 +520,8 @@ fn windows_permanent_dpapi_failure_archives_both_files_and_denied_replacement_ro
     let store = Secrets::with_key(dir.path(), key.clone());
     let ciphertext = b"fixture unreadable ciphertext";
     std::fs::write(&store.path, ciphertext).unwrap();
+    let revoked = store.path.with_extension("revoked.json");
+    std::fs::write(&revoked, b"[\"c\"]").unwrap();
     assert!(store.reset_available().unwrap());
     assert!(store.put("c", "token", Some("must-not-write")).is_err());
     // A real Windows sharing violation prevents renaming/overwriting the key.
@@ -527,6 +533,7 @@ fn windows_permanent_dpapi_failure_archives_both_files_and_denied_replacement_ro
     assert!(store.reset_missing().is_err());
     assert_eq!(std::fs::read(&key.path).unwrap(), protected);
     assert_eq!(std::fs::read(&store.path).unwrap(), ciphertext);
+    assert_eq!(std::fs::read(&revoked).unwrap(), b"[\"c\"]");
     drop(denied);
     store.reset_missing().unwrap();
     assert!(std::fs::read_dir(dir.path())
