@@ -97,7 +97,7 @@ fn text(t: &str) -> String {
     )
 }
 fn call(id: &str, name: &str, args: Value) -> Value {
-    json!({"id":id,"type":"function","function":{"name":name,"arguments":args.to_string()}})
+    json!({"id":id,"type":"function","function":{"name":if cfg!(windows)&&name=="bash"{"powershell"}else{name},"arguments":args.to_string()}})
 }
 fn calls(calls: Vec<Value>) -> String {
     let indexed: Vec<_> = calls

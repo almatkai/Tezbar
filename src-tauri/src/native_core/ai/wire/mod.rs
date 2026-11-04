@@ -269,7 +269,7 @@ impl Decoder {
                             } else {
                                 json!(arguments)
                             };
-                            wire_calls.push(json!({"id":wire_id,"type":"function","function":{"name":name,"arguments":args}}));
+                            wire_calls.push(if self.origin.protocol==Protocol::Ollama{json!({"function":{"name":name,"arguments":args}})}else{json!({"id":wire_id,"type":"function","function":{"name":name,"arguments":args}})});
                         }
                     }
                     self.raw["tool_calls"] = json!(wire_calls);
@@ -310,7 +310,11 @@ impl Decoder {
                                 id: format!("c{}_{}", self.turn, i),
                                 wire_id: s(&b["id"]).into(),
                                 name: s(&b["name"]).into(),
-                                arguments: a.to_string(),
+                                arguments: self
+                                    .args
+                                    .get(i)
+                                    .cloned()
+                                    .unwrap_or_else(|| a.to_string()),
                             });
                         }
                         (Protocol::OpenaiResponses, "function_call") => {

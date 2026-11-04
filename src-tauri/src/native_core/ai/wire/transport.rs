@@ -80,14 +80,15 @@ impl AiCore {
                         .ok()
                         .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
                         .unwrap_or_default();
-                    let detail = redact_text(&detail).replace(
-                        s(&cfg["apiKey"]),
-                        if s(&cfg["apiKey"]).is_empty() {
-                            ""
-                        } else {
-                            "[redacted]"
-                        },
-                    );
+                    let mut detail = redact_text(&detail);
+                    for name in ["authorization", "x-api-key", "x-goog-api-key"] {
+                        if let Some(value) = route.headers.get(name).and_then(|v| v.to_str().ok()) {
+                            let secret = value.strip_prefix("Bearer ").unwrap_or(value);
+                            if !secret.is_empty() {
+                                detail = detail.replace(secret, "[redacted]");
+                            }
+                        }
+                    }
                     return Err((
                         format!(
                             "Native HTTP: status {status}{}",
