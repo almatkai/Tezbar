@@ -1,10 +1,15 @@
 # Native AI implementation verification
 
-Tested implementation: `8f70d2e7cf7beac2129155402587b82fded9c35b` on
+Native validation source: `8f70d2e7cf7beac2129155402587b82fded9c35b` on
 `feat/native-rust-agent`, in the existing
 `/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent` worktree.
-This documentation update is a **docs-only follow-up to that tested ancestor**;
-it does not change the archived implementation. Starting point was clean
+Final renderer validation source: `ae2fe004e61538a33d6b661b4c4712d186a14640`.
+Its only code changes after the native validation source are in three renderer
+files; the Rust code and backend lifecycle script are byte-identical, verified
+with `git diff --quiet 8f70d2e..ae2fe00 -- src-tauri scripts/check-backend-lifecycle.mjs`.
+The Windows archive below proves the native checks for that unchanged Rust code;
+it is not an archive of the later renderer commit. This documentation update is
+a **docs-only follow-up to both tested sources**. Starting point was clean
 `5271fd7`, whose tested implementation ancestor was `a28c564`. This repair addresses
 all six N-R1–N-R6 findings in the unchanged full runtime report.
 
@@ -16,13 +21,12 @@ full runtime review. This is implementation verification, not release approval.
 
 ## macOS Apple Silicon — final source
 
-2026-11-04. The final worktree source equals the archive's code; subsequent edits
-are confined to documentation.
+2026-11-04. Native checks use `8f70d2e`; final renderer checks use `ae2fe00`.
 
 | Check | Observed result |
 | --- | --- |
 | `pnpm typecheck` | Pass, renderer and main TypeScript projects |
-| `pnpm test` | 916 passed, 9 skipped; 124 files passed, 2 skipped; 0 failed |
+| `pnpm test` | 918 passed, 9 skipped; 124 files passed, 2 skipped; 0 failed |
 | `pnpm build:frontend` | Pass |
 | `CARGO_BUILD_JOBS=2 cargo +1.98.0 test --manifest-path src-tauri/Cargo.toml --lib --locked -- --test-threads=2` | 598 passed, 9 ignored, 0 failed; 158.12 s |
 | `CARGO_BUILD_JOBS=2 cargo +1.85.0 check --manifest-path src-tauri/Cargo.toml --lib --locked --offline` | Pass; declared MSRV unchanged |
@@ -31,9 +35,9 @@ are confined to documentation.
 
 Final logs retained locally:
 
-- `/private/tmp/tezbar-nr-typecheck-final.log`
-- `/private/tmp/tezbar-nr-ts-final.log`
-- `/private/tmp/tezbar-nr-frontend-final.log`
+- `/private/tmp/tezbar-parent-final-typecheck.log`
+- `/private/tmp/tezbar-parent-final-ts.log`
+- `/private/tmp/tezbar-parent-final-frontend.log`
 - `/private/tmp/tezbar-nr-macos-final.log`
 - `/private/tmp/tezbar-nr-msrv-final.log`
 - `/private/tmp/tezbar-nr-lifecycle-final.log`
@@ -43,6 +47,15 @@ and test-harness omissions. They were corrected to use a valid canonical PNG and
 the real bridge close adapter. The final full suites include the corrected
 regressions; earlier logs are not substituted for final-source evidence.
 
+The coordinator's renderer follow-up covers closing the native Settings window
+while Permissions is displayed. Navigation now drains pending AI saves first,
+and retains the editor and visible error if a save fails. Once Permissions is
+open, the window owner acknowledges native close requests through the same real
+bridge. Two real-App/bridge regressions cover successful and failed saves; the
+full final renderer suite, typecheck and frontend build passed afterward. A first
+new test exposed that the Permissions tab did not display a save error, which was
+fixed before the final passing run. No native source changed in this follow-up.
+
 ## Windows x64 — exact committed archive
 
 Host `DESKTOP-OB83S8J`, `User@100.77.254.64`, authorized Tailscale SSH fallback.
@@ -50,7 +63,7 @@ Toolchain `1.90.0-x86_64-pc-windows-msvc`, `CARGO_BUILD_JOBS=2`.
 The release checkout at `C:\Users\User\Desktop\Tezbar` was never changed;
 its final status remains clean on `release/0.3.0-beta.7`.
 
-Created with `git archive --format=tar.gz` from the tested commit above, then
+Created with `git archive --format=tar.gz` from native source `8f70d2e`, then
 copied to the task temp root. SHA-256 was checked on Windows before extraction:
 
 ```text

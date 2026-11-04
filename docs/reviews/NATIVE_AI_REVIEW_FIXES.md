@@ -254,7 +254,7 @@ establishes live provider entitlement, desktop visual quality, or upstream behav
 No live credentials/model requests or private-service probes were used to confirm
 these upstream facts. Full runtime closure remains explicitly pending.
 
-## Runtime re-review at a28c564 — pending repairs
+## Runtime re-review at a28c564 — original findings
 
 Claude Opus 5.5 completed the full runtime audit; the unchanged report is
 `native-ai-opus-runtime-a28c564.md`. Original R1–R20 are closed on their reported
@@ -300,3 +300,20 @@ the parent's fresh full Opus 5.5 runtime closure plus its pending wire/standards
 audits against this stable source. No subagents, push, PR, Actions, release,
 application install/launch, real credentials/profiles or paid/live model call was
 used in this repair.
+
+## Coordinator close-path follow-up — `ae2fe00`
+
+While verifying N-R2, the coordinator traced `SettingsWindowApp` switching to
+Permissions, which unmounts `SettingsView` and its native-close callback. The
+prevented native close then had no consumer. Renderer-only source
+`ae2fe004e61538a33d6b661b4c4712d186a14640` drains Settings saves before that
+transition and registers the window owner's close acknowledgement while
+Permissions is displayed. A failed save leaves Settings mounted, displays the
+error on its Permissions tab and retains the provider draft. No Rust source or
+native lifecycle script changed after the dual-platform-tested `8f70d2e`.
+
+The real-App/real-bridge test `drains Settings drafts before Permissions and
+closes through the real window bridge there` runs successful and failed deferred
+saves. Full TypeScript suite: 918 passed, 9 skipped; typecheck and frontend build
+passed. Exact native/renderer sources and logs are in the verification record.
+This follow-up also remains pending fresh Opus 5.5 closure.
