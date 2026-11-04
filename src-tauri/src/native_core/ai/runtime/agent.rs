@@ -152,10 +152,17 @@ impl AiCore {
                 }
             }
         }
-        if cancel.is_cancelled() { return Err("Operation cancelled".into()); }
-        let effective_images = user.blocks.iter().filter_map(|b| match b {
-            Block::Image {mime, data} => Some(json!({"mimeType":mime,"data":data})), _ => None,
-        }).collect::<Vec<_>>();
+        if cancel.is_cancelled() {
+            return Err("Operation cancelled".into());
+        }
+        let effective_images = user
+            .blocks
+            .iter()
+            .filter_map(|b| match b {
+                Block::Image { mime, data } => Some(json!({"mimeType":mime,"data":data})),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let mut current_ocr = None;
         if !vision && !effective_images.is_empty() {
             let text = self.ocr_images(&effective_images, cancel).await?;
@@ -166,10 +173,19 @@ impl AiCore {
         }
         if vision {
             let route = self.native_route(cfg, &[user.clone()]).await?;
-            limits::validate_images(&route.origin.protocol, &[user.clone()])?;
+            limits::validate_images_budget(
+                &route.origin.protocol,
+                &[user.clone()],
+                route.request_budget,
+            )?;
         }
-        if cancel.is_cancelled() { return Err("Operation cancelled".into()); }
-        if let (Some(session), Some(turn)) = (options["sessionId"].as_str(), options["userTurnId"].as_str()) {
+        if cancel.is_cancelled() {
+            return Err("Operation cancelled".into());
+        }
+        if let (Some(session), Some(turn)) = (
+            options["sessionId"].as_str(),
+            options["userTurnId"].as_str(),
+        ) {
             let data = self.inner.ctx.paths.data_dir.clone();
             let session = session.to_string();
             let turn = turn.to_string();

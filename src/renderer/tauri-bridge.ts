@@ -1,3 +1,4 @@
+import { drainSettingsOwners, retryRetiredSettingsOwners } from './settingsLifecycle'
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-function-type */
 // src/renderer/tauri-bridge.ts
 import { invoke } from '@tauri-apps/api/core'
@@ -136,12 +137,54 @@ export function initTauriBridge(): void {
     console.error('[Tauri bridge] Failed to listen for terminal exit events:', error)
   })
 
-  // Subscribe before Settings mounts; retain an early native close request.
-  if (window.__TEZBAR_WINDOW_LABEL__ === 'settings')
-    void ensureEventListener('settings-close-requested')
-
-  // Also drain immediate config writes outside the debounced provider editor.
   const configWrites = new Set<Promise<any>>()
+  const closeConsumers = new Set<() => Promise<void>>()
+  let closing = false
+  const closeSettings = async (generation?: number): Promise<void> => {
+    // Ack immediately, including repeated requests while a long write drains.
+    if (typeof generation === 'number') await invoke('ack_settings_close', { generation })
+    if (closing) return
+    closing = true
+    try {
+      for (;;) {
+        await drainSettingsOwners()
+        for (const consumer of closeConsumers) await consumer()
+        const pending = [...configWrites]
+        if (!pending.length) break
+        await Promise.all(pending)
+      }
+      document.getElementById('settings-close-error')?.remove()
+      await invoke('finish_settings_close')
+    } catch (error) {
+      console.error('[Settings] Close was blocked:', error)
+      // Also visible when React failed or the save belongs to a retired tab.
+      if (!document.getElementById('settings-close-error')) {
+        const alert = document.createElement('div')
+        alert.id = 'settings-close-error'
+        alert.className =
+          'fixed inset-x-4 bottom-4 z-[1000] rounded-lg border border-line bg-surface-1 p-4 text-ink-1 text-sm'
+        alert.setAttribute('role', 'alert')
+        alert.textContent =
+          'Could not save Settings. Retry the edit, or retry saved changes from a previous tab. '
+        const retry = document.createElement('button')
+        retry.textContent = 'Retry saved changes'
+        retry.onclick = () => {
+          void retryRetiredSettingsOwners()
+            .then(() => closeSettings())
+            .catch(console.error)
+        }
+        alert.append(retry)
+        document.body.append(alert)
+      }
+    } finally {
+      closing = false
+    }
+  }
+  if (window.__TEZBAR_WINDOW_LABEL__ === 'settings')
+    setupEventListener('settings-close-requested', (generation?: number) => {
+      void closeSettings(generation)
+    })
+
   const tezbar: TauriRaymesApi = {
     hide: () => invoke('hide_window'),
     show: () => invoke('show_window'),
@@ -149,25 +192,10 @@ export function initTauriBridge(): void {
     hideLauncherForSettings: () => invoke('hide_launcher_for_settings'),
     closeCurrentWindow: () => invoke('close_current_window'),
     onWindowCloseRequested: (beforeClose) => {
-      let closing = false
-      return setupEventListener('settings-close-requested', async () => {
-        if (closing) return
-        closing = true
-        try {
-          for (;;) {
-            await beforeClose()
-            const pending = [...configWrites]
-            if (!pending.length) break
-            await Promise.all(pending)
-          }
-          await invoke('finish_settings_close')
-        } catch (error) {
-          // Keep the renderer and its error/draft visible for recovery.
-          console.error('[Settings] Close was blocked:', error)
-        } finally {
-          closing = false
-        }
-      })
+      closeConsumers.add(beforeClose)
+      return () => {
+        closeConsumers.delete(beforeClose)
+      }
     },
     query: (text: string) => callBackend('query', text),
     cancel: () => callBackend('cancel'),

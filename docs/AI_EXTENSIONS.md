@@ -128,13 +128,17 @@ reliably recognized. Approval and process ownership are not an OS sandbox.
 
 ## Recovering a missing connection key
 
-If the OS-protected connection key is permanently missing, AI Extensions offers
+If the OS-protected credential key is missing, or Windows DPAPI reports a permanent
+invalid-data/key-state failure, AI Extensions offers
 **Reset saved connection secrets**. The action archives the unreadable encrypted
-store, creates a new protected key and asks you to enter connection secrets again
-and test affected connections. It preserves unrelated connection definitions.
+store (and an existing unreadable Windows key file), creates a new protected key
+and asks you to re-enter connection and extension-provider credentials. Affected
+connections require Test again; affected providers show credential re-entry controls.
+Nothing starts or signs in automatically. Unrelated definitions remain unchanged.
 Restoring the old key is the route to recover the archived credentials. A locked
-or inaccessible key store must be made accessible; it cannot use this reset or a
-plaintext fallback.
+or access-denied/transient key-store failure must be made accessible; it cannot use
+this reset or a plaintext fallback. A failed key-file replacement restores the original
+ciphertext/key; unreadable archives are retained for manual recovery.
 
 Providers supplied by an extension show their owner in AI settings. Edit their
 endpoint, protocol and credentials under AI Extensions. Provider/model selection

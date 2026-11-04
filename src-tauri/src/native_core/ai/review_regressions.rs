@@ -612,3 +612,150 @@ async fn streamed_empty_argument_fragments_never_replace_accumulated_arguments()
     }
     core.shutdown().await;
 }
+
+#[tokio::test]
+async fn closure_chat_blank_continuations_and_ollama_missing_arguments() {
+    let (_dir, core, _) = fixture();
+    for later in [
+        json!({"id":null,"type":null,"function":{"name":null}}),
+        json!({"id":"","type":" ","function":{"name":" "}}),
+    ] {
+        let http = server(move |_| {
+            let mut later = later.clone(); later["index"] = json!(0); later["function"]["arguments"] = json!("{\"path\":\"a\"}");
+            sse(vec![json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":""}}]}}]}), json!({"choices":[{"delta":{"tool_calls":[later]},"finish_reason":"tool_calls"}]})])
+        }).await;
+        let turn = core.canonical_turn(&json!({"provider":"custom:x","model":"m","protocol":"openai-chat","baseURL":http.url}), &user(), &[],0,&Cancel::new(), |_|{}).await.unwrap();
+        let raw = &turn.message.opaque.as_ref().unwrap().value["tool_calls"][0];
+        assert_eq!(raw["id"], "call_1");
+        assert_eq!(raw["type"], "function");
+        assert_eq!(raw["function"]["name"], "read");
+        assert_eq!(turn.calls[0]["function"]["arguments"], "{\"path\":\"a\"}");
+    }
+    for later in [
+        json!({"id":"different","function":{"arguments":"{}"}}),
+        json!({"type":"different","function":{"arguments":"{}"}}),
+        json!({"function":{"name":"different","arguments":"{}"}}),
+        json!({"function":{"arguments":"[1]"}}),
+    ] {
+        let http=server(move |_| {
+            let mut later=later.clone();later["index"]=json!(0);
+            sse(vec![json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":""}}]}}]}),json!({"choices":[{"delta":{"tool_calls":[later]},"finish_reason":"tool_calls"}]})])
+        }).await;
+        assert!(core.canonical_turn(&json!({"provider":"custom:x","model":"m","protocol":"openai-chat","baseURL":http.url}),&user(),&[],0,&Cancel::new(),|_|{}).await.is_err());
+    }
+    for args in [None, Some(Value::Null), Some(json!(3)), Some(json!([]))] {
+        let valid = args.as_ref().is_none_or(Value::is_null);
+        let http = server(move |_| {
+            let mut function=json!({"name":"screen_capture"}); if let Some(a)=&args {function["arguments"]=a.clone();}
+            let mut reply=Reply::json(json!({})); reply.content_type="application/x-ndjson".into();reply.body=format!("{}\n",json!({"message":{"role":"assistant","tool_calls":[{"function":function}]},"done":true}));reply
+        }).await;
+        let turn = core
+            .canonical_turn(
+                &json!({"provider":"ollama","model":"m","baseURL":http.url}),
+                &user(),
+                &[],
+                0,
+                &Cancel::new(),
+                |_| {},
+            )
+            .await;
+        if valid {
+            assert_eq!(turn.unwrap().calls[0]["function"]["arguments"], "{}");
+        } else {
+            assert!(turn.err().unwrap().contains("arguments"));
+        }
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn closure_gemini_keyless_headers_and_signature_only_replay() {
+    use runtime::transcript::{Opaque, Origin, Protocol};
+    let (_dir, core, _) = fixture();
+    for explicit in [false, true] {
+        let mut http=server(|_|sse(vec![json!({"candidates":[{"content":{"parts":[{"text":"","thoughtSignature":"c2ln"},{"text":"answer"}]},"finishReason":"STOP"}]})])).await;
+        let mut cfg = json!({"provider":"custom:g","model":"gemini-3.5-flash","protocol":"gemini","baseURL":http.url});
+        if explicit {
+            cfg["customHeaders"] = json!({"x-goog-api-key":"fixture-explicit"});
+        }
+        // Explicit headers are configured on the custom provider record.
+        if explicit {
+            cfg["customProviders"] =
+                json!([{"id":"custom:g","headers":{"x-goog-api-key":"fixture-explicit"}}]);
+        }
+        let turn = core
+            .canonical_turn(&cfg, &user(), &[], 0, &Cancel::new(), |_| {})
+            .await
+            .unwrap();
+        let headers = http.requests.recv().await.unwrap()["headers"].clone();
+        if explicit {
+            assert_eq!(headers["x-goog-api-key"], "fixture-explicit");
+        } else {
+            assert!(headers.get("x-goog-api-key").is_none());
+        }
+        let origin = Origin {
+            protocol: Protocol::Gemini,
+            provider: "custom:g".into(),
+            model: "gemini-3.5-flash".into(),
+        };
+        let mut ms = user();
+        ms.push(turn.message.clone());
+        let same = wire::encode(&origin, &ms, &[], 100, false).unwrap();
+        assert_eq!(
+            same["contents"][1]["parts"][0],
+            json!({"text":"","thoughtSignature":"c2ln"})
+        );
+        let mut foreign = origin.clone();
+        foreign.model = "gemini-other".into();
+        ms.insert(
+            1,
+            Message {
+                role: "assistant".into(),
+                opaque: Some(Opaque {
+                    origin: origin.clone(),
+                    value: json!([]),
+                }),
+                blocks: vec![Block::Text { text: "  ".into() }],
+            },
+        );
+        let encoded = wire::encode(&foreign, &ms, &[], 100, false).unwrap();
+        assert_eq!(encoded["contents"].as_array().unwrap().len(), 2);
+        assert_eq!(encoded["contents"][1]["parts"], json!([{"text":"answer"}]));
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn closure_current_images_use_anthropic_route_budget_before_persistence() {
+    use base64::Engine;
+    let (_dir, core, _) = fixture();
+    let mut pixels = vec![0u8; 1500 * 1500 * 3];
+    let mut state = 123456789u32;
+    for v in &mut pixels {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        *v = state as u8;
+    }
+    let image = image::RgbImage::from_raw(1500, 1500, pixels).unwrap();
+    let mut png = std::io::Cursor::new(Vec::new());
+    image.write_to(&mut png, image::ImageFormat::Png).unwrap();
+    let data = base64::engine::general_purpose::STANDARD.encode(png.into_inner());
+    assert!(data.len() > 9_000_000 && data.len() < 10_000_000);
+    let images = vec![json!({"mimeType":"image/png","data":data}); 3];
+    // Deliberately invalid generation is a persistence barrier *after* current
+    // image validation, before any provider transport can be reached.
+    for (url, first_party) in [
+        ("https://api.anthropic.com", true),
+        ("https://gateway.invalid", false),
+    ] {
+        let cfg = json!({"provider":"anthropic","model":"fixture-vision","apiKey":"fixture-key","baseURL":url,"providerModels":{"anthropic":[{"id":"fixture-vision","capabilities":["vision"]}]}});
+        let error=core.native_run_history("images",&images,None,&cfg,&Cancel::new(),"fixture",None,&json!({"sessionId":"fixture","userTurnId":"user","_userGeneration":"persistence-barrier"})).await.unwrap_err();
+        if first_party {
+            assert!(error.contains("sequence"), "{error}");
+        } else {
+            assert!(error.contains("32000000"), "{error}");
+        }
+    }
+    core.shutdown().await;
+}

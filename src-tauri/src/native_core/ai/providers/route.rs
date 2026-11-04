@@ -264,7 +264,9 @@ impl AiCore {
                 },
             )?;
         } else if protocol == Protocol::Gemini && p != "opencode" && p != "antigravity" {
-            header("x-goog-api-key", &key)?;
+            if !key.is_empty() {
+                header("x-goog-api-key", &key)?;
+            }
         } else if !key.is_empty() {
             header("authorization", &format!("Bearer {key}"))?;
         }

@@ -386,6 +386,7 @@ it('offers missing-key recovery as an explicit action and reloads its status', a
   await act(async () => root.render(createElement(AiExtensionsSection)))
   expect(calls).not.toContain('reset-secrets')
   expect(host.textContent).toContain('archives the unreadable secrets')
+  expect(host.textContent).toContain('connection and extension provider credentials')
   await act(async () =>
     [...host.querySelectorAll('button')]
       .find((b) => b.textContent === 'Reset saved connection secrets')!

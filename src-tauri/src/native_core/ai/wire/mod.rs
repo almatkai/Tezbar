@@ -321,7 +321,7 @@ impl Decoder {
                 }
                 for (i, c) in &self.calls {
                     let args = if self.origin.protocol == Protocol::Ollama {
-                        c["function"]["arguments"].to_string()
+                        argument_text(&c["function"]["arguments"])?
                     } else {
                         self.args
                             .get(i)

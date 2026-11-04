@@ -69,6 +69,15 @@ fn private_address(ip: std::net::IpAddr) -> bool {
                 || (a == 203 && b == 0 && c == 113)
         }
         std::net::IpAddr::V6(v) => {
+            if let Some(ip) = v.to_ipv4_mapped() {
+                return private_address(ip.into());
+            }
+            let octets = v.octets();
+            if octets[..12] == [0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0] {
+                return private_address(
+                    std::net::Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]).into(),
+                );
+            }
             v.is_loopback()
                 || v.is_unspecified()
                 || v.is_unique_local()
@@ -542,7 +551,36 @@ mod resource_policy_tests {
             &secure_url("https://public.example/mcp").unwrap(),
             "93.184.216.34:443",
         );
+        for public_address in ["[64:ff9b::5db8:d822]:443", "[::ffff:93.184.216.34]:443"] {
+            let translated = ResourcePolicy::from_fixture(
+                &secure_url("https://public.example/mcp").unwrap(),
+                public_address,
+            );
+            assert!(!translated.private);
+            assert!(translated
+                .http(&secure_url("http://127.0.0.1/token").unwrap())
+                .await
+                .is_err());
+            assert!(translated
+                .pinned_http(
+                    &secure_url("https://metadata.example/token").unwrap(),
+                    &["10.0.0.1:443".parse().unwrap()]
+                )
+                .is_err());
+            assert!(ResourcePolicy::from_addresses(
+                &named,
+                vec![
+                    public_address.parse().unwrap(),
+                    "10.0.0.1:443".parse().unwrap()
+                ]
+            )
+            .is_err());
+        }
         for address in [
+            "[64:ff9b::a00:1]:443",
+            "[64:ff9b::7f00:1]:443",
+            "[64:ff9b:1::5db8:d822]:443",
+            "[::ffff:10.0.0.1]:443",
             "127.0.0.1:443",
             "10.0.0.1:443",
             "100.77.254.64:443",

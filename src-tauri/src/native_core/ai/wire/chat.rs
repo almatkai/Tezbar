@@ -120,13 +120,21 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
             .or_insert_with(|| json!({"type":"function","function":{}}));
         for (k, v) in t.as_object().ok_or_else(|| failure("invalid call"))? {
             if k != "function" && k != "index" {
-                if k == "id" && call.get(k).is_some_and(|old| old != v) {
+                if matches!(k.as_str(), "id" | "type")
+                    && (v.is_null() || v.as_str().is_some_and(|s| s.trim().is_empty()))
+                {
+                    continue;
+                }
+                if matches!(k.as_str(), "id" | "type") && call.get(k).is_some_and(|old| old != v) {
                     return Err(failure("changed call ID"));
                 }
                 call[k] = v.clone()
             }
         }
-        if let Some(name) = t["function"]["name"].as_str() {
+        if let Some(name) = t["function"]["name"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+        {
             if call["function"].get("name").is_some_and(|n| n != name) {
                 return Err(failure("changed tool name"));
             }

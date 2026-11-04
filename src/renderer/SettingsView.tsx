@@ -1,3 +1,4 @@
+import { registerSettingsOwner } from './settingsLifecycle'
 import { AiAccountsPanel } from './ai/AiAccountsPanel'
 import { AiExtensionsSection } from './ai/AiExtensionsSection'
 import {
@@ -770,6 +771,9 @@ export default function SettingsView({
         aiWrites.current = aiWrites.current
           .catch(() => {})
           .then(() => window.tezbar.setLlmConfig(patch as LlmConfigRecord))
+          .catch(() => {
+            /* Optional discovery owns no user draft. */
+          })
         await aiWrites.current
       } catch {
         /* Model discovery is optional; user-managed models remain available. */
@@ -1023,7 +1027,7 @@ export default function SettingsView({
     providerModels?: Partial<Record<ProviderId, AiProviderModel[]>>
     providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
     removedProvider?: ProviderId
-    removedModel?: { provider: ProviderId; id: string; fallback: string }
+    removedModels?: { provider: ProviderId; id: string }[]
   }
 
   const buildAiProviderPatch = (overrides?: AiPatchOverrides): LlmConfigRecord => {
@@ -1175,7 +1179,7 @@ export default function SettingsView({
       setAiModel(fallback)
       setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: fallback }))
     }
-    persistAiSettings(false, { removedModel: { provider: aiProvider, id, fallback } })
+    persistAiSettings(false, { removedModels: [{ provider: aiProvider, id }] })
   }
 
   const toggleAiModelCapability = (modelId: string, capability: AiModelCapability): void => {
@@ -1400,7 +1404,14 @@ export default function SettingsView({
     if (overrides?.activeProvider) {
       setActiveAiProvider(overrides.activeProvider)
     }
-    pendingAiOverrides.current = { ...pendingAiOverrides.current, ...overrides }
+    pendingAiOverrides.current = {
+      ...pendingAiOverrides.current,
+      ...overrides,
+      removedModels: [
+        ...(pendingAiOverrides.current?.removedModels ?? []),
+        ...(overrides?.removedModels ?? []),
+      ],
+    }
     if (immediate) {
       writeAiPatch(buildAiProviderPatch(pendingAiOverrides.current), pendingAiOverrides.current)
       pendingAiOverrides.current = undefined
@@ -1414,6 +1425,7 @@ export default function SettingsView({
   buildAiPatchRef.current = buildAiProviderPatch
   const aiWrites = useRef<Promise<unknown>>(Promise.resolve())
   const failedAiProviders = useRef(new Set<string>())
+  const failedAiWrites = useRef(new Map<string, () => void>())
   const writeAiPatch = (patch: LlmConfigRecord, scope?: AiPatchOverrides): void => {
     aiWrites.current = aiWrites.current
       .catch(() => {})
@@ -1425,12 +1437,22 @@ export default function SettingsView({
           ...patch,
           providerConfigs: { ...current.providerConfigs, ...patch.providerConfigs },
         }
-        if (scope?.removedModel) {
-          const { provider, id, fallback } = scope.removedModel
+        for (const { provider } of scope?.removedModels ?? []) {
+          const removed = scope!
+            .removedModels!.filter((m) => m.provider === provider)
+            .map((m) => m.id)
           const selected =
             current.providerSelectedModels?.[provider] ??
             (current.provider === provider ? current.model : undefined)
-          if (selected === id) patch.providerSelectedModels = { [provider]: fallback }
+          if (selected && removed.includes(selected)) {
+            const models =
+              patch.providerModels?.[provider] ?? current.providerModels?.[provider] ?? []
+            patch.providerSelectedModels = {
+              ...patch.providerSelectedModels,
+              [provider]:
+                models.find((m) => !removed.includes(m.id))?.id ?? recommendedModel(provider),
+            }
+          }
         }
         if (scope?.removedProvider) {
           const removed = scope.removedProvider
@@ -1470,11 +1492,16 @@ export default function SettingsView({
         }
         const result = await window.tezbar.setLlmConfig(next)
         if (result && result.ok === false) throw new Error('Could not save')
-        for (const id of Object.keys(patch.providerConfigs ?? {}))
+        for (const id of Object.keys(patch.providerConfigs ?? {})) {
           failedAiProviders.current.delete(id)
+          failedAiWrites.current.delete(id)
+        }
       })
       .catch(() => {
-        for (const id of Object.keys(patch.providerConfigs ?? {})) failedAiProviders.current.add(id)
+        for (const id of Object.keys(patch.providerConfigs ?? {})) {
+          failedAiProviders.current.add(id)
+          failedAiWrites.current.set(id, () => writeAiPatch(patch, scope))
+        }
         setMsg({
           tone: 'error',
           text: 'Could not save. Settings remains open; retry the edit before closing.',
@@ -1578,6 +1605,17 @@ export default function SettingsView({
   }
   const settleAiSavesRef = useRef(settleAiSaves)
   settleAiSavesRef.current = settleAiSaves
+  useEffect(
+    () =>
+      registerSettingsOwner(
+        () => settleAiSavesRef.current(),
+        async () => {
+          for (const retry of new Set(failedAiWrites.current.values())) retry()
+          await settleAiSavesRef.current()
+        }
+      ),
+    []
+  )
   useEffect(() => window.tezbar.onWindowCloseRequested?.(() => settleAiSavesRef.current()), [])
   useEffect(() => {
     return () => {

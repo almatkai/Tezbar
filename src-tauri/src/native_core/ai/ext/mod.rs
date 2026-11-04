@@ -48,6 +48,20 @@ impl Drop for NewSecretGuard {
         }
     }
 }
+#[derive(Default)]
+struct Probes {
+    clients: Vec<(String, Arc<Client>)>,
+    committed: bool,
+}
+impl Drop for Probes {
+    fn drop(&mut self) {
+        if !self.committed {
+            for (_, client) in &self.clients {
+                client.shutdown();
+            }
+        }
+    }
+}
 struct Starting {
     result: tokio::sync::watch::Receiver<Option<Result<Arc<Client>, String>>>,
     cancel: Cancel,
@@ -55,6 +69,7 @@ struct Starting {
 pub struct Extensions {
     starting: Mutex<HashMap<String, Starting>>,
     failures: Mutex<HashMap<String, (u8, u64, String)>>,
+    failed_logs: Mutex<HashMap<String, Vec<String>>>,
     lock: Mutex<()>,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     imports: Mutex<HashMap<String, Value>>,
@@ -103,6 +118,7 @@ impl Extensions {
             lock: Mutex::new(()),
             starting: Mutex::new(HashMap::new()),
             failures: Mutex::new(HashMap::new()),
+            failed_logs: Mutex::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
             imports: Mutex::new(HashMap::new()),
             review_cwd: Mutex::new(None),
@@ -303,6 +319,22 @@ impl AiCore {
         }
         Ok(result)
     }
+    fn stop_ext_clients(&self, id: &str) {
+        for (key, start) in self.inner.extensions.starting.lock().unwrap().iter() {
+            if key == id || key.starts_with(&format!("{id}:test:")) {
+                start.cancel.cancel();
+            }
+        }
+        let mut clients = self.inner.extensions.clients.lock().unwrap();
+        clients.retain(|key, client| {
+            if key == id || key.starts_with(&format!("{id}:retired:")) {
+                client.shutdown();
+                false
+            } else {
+                true
+            }
+        });
+    }
     async fn ext_client(&self, extension: &str, connection: &Value) -> Result<Arc<Client>, String> {
         self.ext_client_mode(extension, connection, false).await
     }
@@ -313,22 +345,33 @@ impl AiCore {
         explicit_test: bool,
     ) -> Result<Arc<Client>, String> {
         let id = key(extension, s(&connection["id"]));
-        if let Some((count, at, error)) = self.inner.extensions.failures.lock().unwrap().get(&id) {
-            if *count >= 4 || now_ms() < *at {
-                return Err(format!(
-                    "Connection unavailable: {error}. Test it again in Settings."
-                ));
+        if !explicit_test {
+            if let Some((count, at, error)) =
+                self.inner.extensions.failures.lock().unwrap().get(&id)
+            {
+                if *count >= 4 || now_ms() < *at {
+                    return Err(format!(
+                        "Connection unavailable: {error}. Test it again in Settings."
+                    ));
+                }
             }
         }
+        // Each explicit Test probes independently; it cannot join a normal
+        // cached-era start, or retire a probe still owned by another Test.
+        let start_id = if explicit_test {
+            format!("{id}:test:{}", uuid::Uuid::new_v4())
+        } else {
+            id.clone()
+        };
         let mut receiver = {
             let mut starts = self.inner.extensions.starting.lock().unwrap();
-            if let Some(start) = starts.get(&id) {
+            if let Some(start) = starts.get(&start_id) {
                 start.result.clone()
             } else {
                 let (tx, rx) = tokio::sync::watch::channel(None);
                 let cancel = Cancel::new();
                 starts.insert(
-                    id.clone(),
+                    start_id.clone(),
                     Starting {
                         result: rx.clone(),
                         cancel: cancel.clone(),
@@ -337,16 +380,25 @@ impl AiCore {
                 let core = self.clone();
                 let eid = extension.to_string();
                 let c = connection.clone();
-                self.spawn(async move{let result=tokio::select!{biased;_=cancel.cancelled()=>Err("Connection was disabled".into()),r=core.ext_connect(&eid,&c,explicit_test)=>r};
-                    if let Err(e)=&result {if !cancel.is_cancelled(){let mut failures=core.inner.extensions.failures.lock().unwrap();let count=failures.get(&id).map(|v|v.0+1).unwrap_or(1);let wait=[1,5,30][usize::from(count.saturating_sub(1)).min(2)];failures.insert(id.clone(),(count,now_ms()+wait*1000,cut(e,500)));}}
-                    if result.is_ok() { core.inner.extensions.failures.lock().unwrap().remove(&id); }
-                    let _=tx.send(Some(result));core.inner.extensions.starting.lock().unwrap().remove(&id);
+                self.spawn(async move {
+                    let result = tokio::select! { biased; _ = cancel.cancelled() => Err("Connection was disabled".into()), r = core.ext_connect(&eid, &c, explicit_test) => r };
+                    if let Err(e) = &result { if !cancel.is_cancelled() {
+                        let mut failures = core.inner.extensions.failures.lock().unwrap();
+                        let count = failures.get(&id).map(|v|v.0+1).unwrap_or(1);
+                        let wait = [1,5,30][usize::from(count.saturating_sub(1)).min(2)];
+                        failures.insert(id.clone(), (count, now_ms()+wait*1000, cut(e,500)));
+                    }} else { core.inner.extensions.failures.lock().unwrap().remove(&id); }
+                    core.inner.extensions.starting.lock().unwrap().remove(&start_id);
+                    if let Err(error) = tx.send(Some(result)) {
+                        if let Some(Ok(client)) = error.0 { client.shutdown(); }
+                    }
                 });
                 rx
             }
         };
         loop {
-            if let Some(result) = receiver.borrow().clone() {
+            let result = receiver.borrow().clone();
+            if let Some(result) = result {
                 return result;
             }
             receiver
@@ -385,7 +437,7 @@ impl AiCore {
             let mut clients = self.inner.extensions.clients.lock().unwrap();
             if clients.get(&id).is_some_and(|c| c.is_closed()) {
                 if let Some(client) = clients.remove(&id) {
-                    if client.crashed() {
+                    if client.crashed() && !explicit_test {
                         return Err("The connection process exited. It will restart with backoff; test it again to reset failures.".into());
                     }
                 }
@@ -397,9 +449,6 @@ impl AiCore {
         let mut c = connection.clone();
         if explicit_test {
             c.as_object_mut().unwrap().remove("cachedEra");
-            if let Some(client) = cached.as_ref() {
-                client.shutdown();
-            }
         }
         let cached = if explicit_test { None } else { cached };
         for (k, v) in connection["env"].as_object().into_iter().flatten() {
@@ -475,6 +524,10 @@ impl AiCore {
         }
         c["_extensionId"] = json!(extension);
         let client = Client::connect(self, c, env, scrub_values).await?;
+        let mut connected = Probes {
+            clients: vec![(id.clone(), client.clone())],
+            committed: false,
+        };
         let current = self.ext_read().await?;
         if !current["extensions"]
             .as_array()
@@ -491,12 +544,15 @@ impl AiCore {
             client.shutdown();
             return Err("Connection was disabled or changed".into());
         }
-        self.inner
-            .extensions
-            .clients
-            .lock()
-            .unwrap()
-            .insert(id, client.clone());
+        if !explicit_test {
+            let mut clients = self.inner.extensions.clients.lock().unwrap();
+            if let Some(newer) = clients.get(&id).filter(|c| !c.is_closed()) {
+                client.shutdown();
+                return Ok(newer.clone());
+            }
+            clients.insert(id, client.clone());
+        }
+        connected.committed = true;
         Ok(client)
     }
     async fn ext_discover(&self, id: &str) -> CoreResult {
@@ -514,8 +570,12 @@ impl AiCore {
             return Err("Extension was disabled".into());
         }
         let mut updated = vec![];
+        let mut probes = Probes::default();
         for c in ext["connections"].as_array().into_iter().flatten() {
             let client = self.ext_client_mode(id, c, explicit_test).await?;
+            if explicit_test {
+                probes.clients.push((key(id, s(&c["id"])), client.clone()));
+            }
             let mut catalog =
                 json!({"tools":[],"prompts":[],"resources":[],"templates":[],"warnings":[]});
             let caps = client.capabilities.lock().unwrap().clone();
@@ -647,57 +707,113 @@ impl AiCore {
             ));
         }
         let id = id.to_string();
-        self.ext_edit(move |data| {
-            let record = record_mut(data, &id)?;
-            record.as_object_mut().unwrap().remove("error");
-            for (cid, catalog, version, pin, resources, ttl) in updated {
-                let c = connection_mut(record, &cid)?;
-                let old = c["pins"].clone();
-                let mut pins = json!({});
-                let mut changed = false;
-                for tool in catalog["tools"].as_array().unwrap() {
-                    let name = s(&tool["name"]);
-                    let hash = manifest::hash(tool);
-                    if old.is_object() && old[name] != hash {
-                        changed = true;
+        let result = self
+            .ext_edit(move |data| {
+                let record = record_mut(data, &id)?;
+                record.as_object_mut().unwrap().remove("error");
+                for (cid, catalog, version, pin, resources, ttl) in updated {
+                    let c = connection_mut(record, &cid)?;
+                    let old = c["pins"].clone();
+                    let mut pins = json!({});
+                    let mut changed = false;
+                    for tool in catalog["tools"].as_array().unwrap() {
+                        let name = s(&tool["name"]);
+                        let hash = manifest::hash(tool);
+                        if old.is_object() && old[name] != hash {
+                            changed = true;
+                        }
+                        pins[name] = json!(hash);
                     }
-                    pins[name] = json!(hash);
+                    changed |= old.is_object() && old != pins;
+                    c["pendingPins"] = pins.clone();
+                    if !old.is_object() {
+                        c["pins"] = pins;
+                        c["pinnedCatalog"] = catalog.clone();
+                    }
+                    if changed {
+                        c["previousCatalog"] = c
+                            .get("pinnedCatalog")
+                            .cloned()
+                            .filter(Value::is_object)
+                            .unwrap_or_else(|| c["catalog"].clone());
+                    }
+                    if c["pinnedCatalog"].is_null() {
+                        c["pinnedCatalog"] = c["previousCatalog"].clone();
+                    }
+                    c["catalog"] = catalog;
+                    c.as_object_mut().unwrap().remove("error");
+                    c.as_object_mut().unwrap().remove("needsAuth");
+                    c["hasResources"] = json!(resources);
+                    c["modelNames"] = profile_tool_names(c, resources);
+                    c["catalogAt"] = json!(now_ms());
+                    c["ttlMs"] = json!(ttl);
+                    c["cachedEra"] = json!(version);
+                    c["version"] = json!(version);
+                    c["tested"] = json!(true);
+                    c["trustPin"] = json!(pin);
+                    c["needsReview"] = json!(changed);
+                    if changed {
+                        c["allowances"] = json!({})
+                    }
                 }
-                changed |= old.is_object() && old != pins;
-                c["pendingPins"] = pins.clone();
-                if !old.is_object() {
-                    c["pins"] = pins;
-                    c["pinnedCatalog"] = catalog.clone();
-                }
-                if changed {
-                    c["previousCatalog"] = c
-                        .get("pinnedCatalog")
-                        .cloned()
-                        .filter(Value::is_object)
-                        .unwrap_or_else(|| c["catalog"].clone());
-                }
-                if c["pinnedCatalog"].is_null() {
-                    c["pinnedCatalog"] = c["previousCatalog"].clone();
-                }
-                c["catalog"] = catalog;
-                c.as_object_mut().unwrap().remove("error");
-                c.as_object_mut().unwrap().remove("needsAuth");
-                c["hasResources"] = json!(resources);
-                c["modelNames"] = profile_tool_names(c, resources);
-                c["catalogAt"] = json!(now_ms());
-                c["ttlMs"] = json!(ttl);
-                c["cachedEra"] = json!(version);
-                c["version"] = json!(version);
-                c["tested"] = json!(true);
-                c["trustPin"] = json!(pin);
-                c["needsReview"] = json!(changed);
-                if changed {
-                    c["allowances"] = json!({})
+                Ok(json!({"ok":true,"extension":record}))
+            })
+            .await;
+        if result.is_ok() {
+            let _guard = self.inner.extensions.lock.lock().unwrap();
+            let current = self.inner.extensions.load()?;
+            for c in ext["connections"].as_array().into_iter().flatten() {
+                let valid = current["extensions"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .any(|e| {
+                        e["id"] == ext["id"]
+                            && e["enabled"] == ext["enabled"]
+                            && e["connections"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .any(|actual| {
+                                    actual["id"] == c["id"] && command_pin(actual) == command_pin(c)
+                                })
+                    });
+                if !valid {
+                    return Err("Connection was disabled or changed".into());
                 }
             }
-            Ok(json!({"ok":true,"extension":record}))
-        })
-        .await
+            probes.committed = true;
+            for (id, client) in &probes.clients {
+                let old = self
+                    .inner
+                    .extensions
+                    .clients
+                    .lock()
+                    .unwrap()
+                    .insert(id.clone(), client.clone());
+                if let Some(old) = old {
+                    let retired = format!("{id}:retired:{}", uuid::Uuid::new_v4());
+                    self.inner
+                        .extensions
+                        .clients
+                        .lock()
+                        .unwrap()
+                        .insert(retired.clone(), old.clone());
+                    old.retire();
+                    let core = self.clone();
+                    self.spawn(async move {
+                        old.closed().await;
+                        core.inner
+                            .extensions
+                            .clients
+                            .lock()
+                            .unwrap()
+                            .remove(&retired);
+                    });
+                }
+            }
+        }
+        result
     }
     pub(super) async fn extension_snapshot(
         &self,
@@ -1211,8 +1327,10 @@ impl AiCore {
             "ai-extensions:review-project" => {
                 let cwd = tokio::fs::canonicalize(s(a)).await.map_err(err)?;
                 self.project_status(&cwd).await?;
-                *self.inner.extensions.review_cwd.lock().unwrap() =
-                    Some((cwd.to_string_lossy().into(), uuid::Uuid::new_v4().to_string()));
+                *self.inner.extensions.review_cwd.lock().unwrap() = Some((
+                    cwd.to_string_lossy().into(),
+                    uuid::Uuid::new_v4().to_string(),
+                ));
                 self.inner
                     .ctx
                     .emit("ai-extensions-changed", json!({"projectReview":true}));
@@ -1230,8 +1348,33 @@ impl AiCore {
                 .map_err(err)?
                 .unwrap_or(false));
                 data["defaultWorkingFolder"] = json!(self.inner.ctx.paths.home_dir);
+                let core = self.clone();
+                data = tokio::task::spawn_blocking(move || {
+                    for ext in data["extensions"].as_array_mut().into_iter().flatten() {
+                        let eid = s(&ext["id"]).to_string();
+                        for p in ext["providers"].as_array_mut().into_iter().flatten() {
+                            let values = core
+                                .inner
+                                .extensions
+                                .secrets
+                                .values(&provider_key(&eid, s(&p["id"])))
+                                .unwrap_or_default();
+                            p["missingCredentials"] = json!(p["headers"]
+                                .as_object()
+                                .into_iter()
+                                .flatten()
+                                .filter_map(|(_, v)| v["secret"].as_str())
+                                .any(|name| !values.contains_key(name)));
+                        }
+                    }
+                    data
+                })
+                .await
+                .map_err(err)?;
                 let queued = self.inner.extensions.review_cwd.lock().unwrap().clone();
-                if let Some((_, nonce)) = &queued { data["projectReviewId"] = json!(nonce); }
+                if let Some((_, nonce)) = &queued {
+                    data["projectReviewId"] = json!(nonce);
+                }
                 if let Some(cwd) = a.as_str().or(queued.as_ref().map(|(cwd, _)| cwd.as_str())) {
                     data["project"] = self.project_status(std::path::Path::new(cwd)).await.unwrap_or_else(|_|json!({"folder":cwd,"error":"The project folder is no longer available. Choose an existing folder to review."}));
                 }
@@ -1254,7 +1397,7 @@ impl AiCore {
                             });
                             if secret_refs || matches!(s(&c["auth"]["type"]), "token" | "oauth") {
                                 c["tested"] = json!(false);
-                                c["needsAuth"] = json!(true);
+                                c["needsAuth"] = json!(c["auth"]["type"] == "oauth");
                                 c["error"] =
                                     json!("Enter the secret again, then test this connection.");
                                 let namespace = key(&eid, s(&c["id"]));
@@ -1268,16 +1411,7 @@ impl AiCore {
                                 {
                                     start.cancel.cancel();
                                 }
-                                if let Some(client) = core
-                                    .inner
-                                    .extensions
-                                    .clients
-                                    .lock()
-                                    .unwrap()
-                                    .remove(&namespace)
-                                {
-                                    client.shutdown();
-                                }
+                                core.stop_ext_clients(&namespace);
                             }
                         }
                     }
@@ -1293,7 +1427,7 @@ impl AiCore {
                 let result = self.trust_project(s(a), s(arg(args, 1))).await?;
                 self.finish_project_review(s(arg(args, 2)));
                 Ok(result)
-            },
+            }
             "ai-extensions:clear-allowance" => {
                 let cid = s(arg(args, 1)).to_string();
                 let tool = s(arg(args, 2)).to_string();
@@ -1316,6 +1450,11 @@ impl AiCore {
                     {
                         let _ = k;
                         lines.extend(client.logs.lock().unwrap().iter().cloned());
+                    }
+                }
+                for (key, tail) in self.inner.extensions.failed_logs.lock().unwrap().iter() {
+                    if key.starts_with(&prefix(&id)) {
+                        lines.extend(tail.iter().cloned());
                     }
                 }
                 if lines.is_empty() {
@@ -1680,6 +1819,7 @@ impl AiCore {
                                 continue;
                             }
                             c.as_object_mut().unwrap().remove("cachedEra");
+                            c.as_object_mut().unwrap().remove("requestedScopes");
                             c["tested"] = json!(false);
                             c["allowances"] = json!({});
                             let cid = key(&id, s(&c["id"]));
@@ -1688,11 +1828,7 @@ impl AiCore {
                             {
                                 start.cancel.cancel();
                             }
-                            if let Some(client) =
-                                core.inner.extensions.clients.lock().unwrap().remove(&cid)
-                            {
-                                client.shutdown();
-                            }
+                            core.stop_ext_clients(&cid);
                         }
                     }
                     Ok(r.clone())
@@ -1805,16 +1941,7 @@ impl AiCore {
                     {
                         start.cancel.cancel();
                     }
-                    if let Some(client) = core
-                        .inner
-                        .extensions
-                        .clients
-                        .lock()
-                        .unwrap()
-                        .remove(&namespace)
-                    {
-                        client.shutdown();
-                    }
+                    core.stop_ext_clients(&namespace);
                     core.inner
                         .extensions
                         .secrets

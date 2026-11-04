@@ -563,14 +563,17 @@ pub fn windows_mcp_command(
     path: &std::ffi::OsStr,
     pathext: &str,
     args: &[String],
+    cwd: &std::path::Path,
 ) -> Result<Command, String> {
     use std::os::windows::process::CommandExt;
     use std::path::{Path, PathBuf};
     let input = Path::new(binary);
     let dirs: Vec<PathBuf> = if input.components().count() > 1 {
-        vec![PathBuf::new()]
+        vec![cwd.to_path_buf()]
     } else {
-        std::env::split_paths(path).collect()
+        std::env::split_paths(path)
+            .map(|p| if p.is_absolute() { p } else { cwd.join(p) })
+            .collect()
     };
     let extensions: Vec<String> = if input.extension().is_some() {
         vec![String::new()]
@@ -617,7 +620,12 @@ pub fn windows_mcp_command(
     let invocation = format!(
         "\"\"{}\"{}\"",
         program,
-        args.iter().map(|a| format!(" \"{a}\"")).collect::<String>()
+        args.iter()
+            .map(|a| {
+                let trailing = a.chars().rev().take_while(|c| *c == '\\').count();
+                format!(" \"{a}{}\"", "\\".repeat(trailing))
+            })
+            .collect::<String>()
     );
     cmd.args(["/d", "/s", "/c"]);
     cmd.as_std_mut().raw_arg(invocation);
@@ -627,6 +635,69 @@ pub fn windows_mcp_command(
 #[cfg(all(test, windows))]
 mod windows_repair_tests {
     use super::*;
+    #[tokio::test]
+    async fn relative_windows_exe_and_cmd_preserve_exact_reviewed_argv() {
+        let dir = tempfile::tempdir().unwrap();
+        let tools = dir.path().join("tools with spaces");
+        std::fs::create_dir(&tools).unwrap();
+        let source = tools.join("args.rs");
+        std::fs::write(&source, r#"fn main(){ for a in std::env::args().skip(1) { println!("{}",a.as_bytes().iter().map(|b|format!("{b:02x}")).collect::<String>()); } }"#).unwrap();
+        let exe = tools.join("argv.exe");
+        assert!(std::process::Command::new("rustc")
+            .arg(&source)
+            .arg("-o")
+            .arg(&exe)
+            .status()
+            .unwrap()
+            .success());
+        std::fs::write(
+            tools.join("argv.cmd"),
+            "@echo off\r\n\"%~dp0argv.exe\" %*\r\n",
+        )
+        .unwrap();
+        let args = vec![
+            "plain".into(),
+            "with spaces".into(),
+            "".into(),
+            r"C:\folder with spaces\".into(),
+            "following".into(),
+            r"two\\".into(),
+        ];
+        let expected = args
+            .iter()
+            .map(|a: &String| {
+                a.as_bytes()
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        for binary in [
+            r"tools with spaces\argv.exe",
+            r".\tools with spaces\argv.cmd",
+            "argv",
+            "argv.exe",
+            "argv.cmd",
+        ] {
+            let mut cmd = windows_mcp_command(
+                binary,
+                std::ffi::OsStr::new("tools with spaces"),
+                ".CMD;.EXE",
+                &args,
+                dir.path(),
+            )
+            .unwrap();
+            cmd.current_dir(dir.path());
+            let result = output(&mut cmd, Duration::from_secs(5), &Cancel::new())
+                .await
+                .unwrap();
+            assert_eq!(
+                result.lines().collect::<Vec<_>>(),
+                expected,
+                "{binary}: {result}"
+            );
+        }
+    }
     #[tokio::test]
     async fn pathext_cmd_programs_accept_literal_arguments_and_refuse_injection() {
         let dir = tempfile::tempdir().unwrap();
@@ -638,6 +709,7 @@ mod windows_repair_tests {
             dir.path().as_os_str(),
             ".EXE;.CMD",
             &["literal argument".into()],
+            dir.path(),
         )
         .unwrap();
         assert!(output(&mut cmd, Duration::from_secs(5), &Cancel::new())
@@ -650,10 +722,14 @@ mod windows_repair_tests {
             "x\" & echo injected",
             "!evil!",
         ] {
-            assert!(
-                windows_mcp_command("npx", dir.path().as_os_str(), ".CMD", &[argument.into()])
-                    .is_err()
-            );
+            assert!(windows_mcp_command(
+                "npx",
+                dir.path().as_os_str(),
+                ".CMD",
+                &[argument.into()],
+                dir.path()
+            )
+            .is_err());
         }
     }
 }

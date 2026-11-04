@@ -18,11 +18,14 @@ pub struct Client {
     stop: Cancel,
     pub changed: Arc<std::sync::atomic::AtomicBool>,
     crashed: Arc<std::sync::atomic::AtomicBool>,
+    stderr_done: Cancel,
+    exit_status: Arc<Mutex<Option<String>>>,
     negotiation: Arc<Mutex<Option<Value>>>,
     legacy_expired: std::sync::atomic::AtomicBool,
     legacy_init: tokio::sync::Mutex<()>,
     last_used: std::sync::atomic::AtomicU64,
     active: std::sync::atomic::AtomicUsize,
+    retired: std::sync::atomic::AtomicBool,
     pub version: Mutex<String>,
     pub session: Mutex<Option<String>>,
     pub capabilities: Mutex<Value>,
@@ -41,13 +44,18 @@ impl Client {
         secrets: Vec<String>,
     ) -> Result<Arc<Self>, String> {
         let stop = Cancel::new();
-        let mut startup = StopGuard {
-            cancel: stop.clone(),
-            armed: true,
-        };
+        let stderr_done = Cancel::new();
+        let exit_status = Arc::new(Mutex::new(None));
         let crashed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
         let logs = Arc::new(Mutex::new(VecDeque::new()));
+        let mut startup = StopGuard {
+            cancel: stop.clone(),
+            armed: true,
+            core: core.clone(),
+            logs: logs.clone(),
+            id: super::super::key(s(&c["_extensionId"]), s(&c["id"])),
+        };
         let changed = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let negotiation = Arc::new(Mutex::new(None));
         let mut input = None;
@@ -87,6 +95,11 @@ impl Client {
                         std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into())
                     }),
                     &args,
+                    c["cwd"]
+                        .as_str()
+                        .filter(|s| !s.is_empty())
+                        .map(std::path::Path::new)
+                        .unwrap_or(&core.inner.ctx.paths.home_dir),
                 )?;
             }
             cmd.env_clear();
@@ -152,6 +165,7 @@ impl Client {
             let crash = crashed.clone();
             let change = changed.clone();
             let errors = negotiation.clone();
+            let status = exit_status.clone();
             core.spawn(async move{
                 let mut frame=Lines::default();let mut buffer=[0u8;8192];let mut nonjson=0;
                 loop {let read=tokio::select!{biased;_=killed.cancelled()=>break,r=stdout.read(&mut buffer)=>r};let Ok(n)=read else{break};if n==0{break}
@@ -163,17 +177,25 @@ impl Client {
                 }
                 if !killed.is_cancelled(){crash.store(true,std::sync::atomic::Ordering::SeqCst);}killed.cancel();for(_,reply)in waiters.lock().unwrap().drain(){let _=reply.send(Err("Connection lost. The outcome of this call is unknown.".into()));}
                 writer.lock().await.take();
-                if tokio::time::timeout(Duration::from_secs(2),group.child.wait()).await.is_err(){group.terminate().await;}
+                match tokio::time::timeout(Duration::from_secs(2),group.child.wait()).await {
+                    Ok(Ok(exit)) => *status.lock().unwrap() = Some(exit.to_string()),
+                    _ => group.terminate().await,
+                }
                 // Always terminate the owned tree, even if its root exited first.
                 group.terminate().await;
             });
             let log = logs.clone();
             let scrubs = secrets.clone();
+            let stopped = stop.clone();
+            let done = stderr_done.clone();
             core.spawn(async move {
+                let drain_deadline = async { stopped.cancelled().await; tokio::time::sleep(Duration::from_millis(250)).await; };
+                tokio::pin!(drain_deadline);
                 let mut frame = Lines::default();
                 let mut b = [0; 4096];
                 loop {
-                    let n = match stderr.read(&mut b).await {
+                    let read = tokio::select! { biased; _ = &mut drain_deadline => Ok(0), r = stderr.read(&mut b) => r };
+                    let n = match read {
                         Ok(n) if n > 0 => n,
                         _ => {
                             if let Ok(lines) = frame.feed(&[], true) {
@@ -193,6 +215,7 @@ impl Client {
                         Err(_) => frame = Lines::default(),
                     }
                 }
+                done.cancel();
             });
         }
         let http = reqwest::Client::builder()
@@ -213,11 +236,14 @@ impl Client {
             refreshed_secrets: Mutex::new(Vec::new()),
             changed,
             crashed,
+            stderr_done,
+            exit_status,
             negotiation,
             legacy_expired: std::sync::atomic::AtomicBool::new(false),
             legacy_init: tokio::sync::Mutex::new(()),
             last_used: std::sync::atomic::AtomicU64::new(now_ms()),
             active: std::sync::atomic::AtomicUsize::new(0),
+            retired: std::sync::atomic::AtomicBool::new(false),
             connection: c.clone(),
             core: Arc::downgrade(&core.inner),
             http,
@@ -291,19 +317,7 @@ impl Client {
             tokio::time::sleep(Duration::from_millis(40)).await;
         }
         if client.crashed() {
-            return Err(format!(
-                "The program exited during startup. {}",
-                client
-                    .logs
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .rev()
-                    .take(20)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ));
+            return Err(client.startup_error().await);
         }
         if modern {
             if let Err(error) = &discover {
@@ -320,17 +334,7 @@ impl Client {
                 Err(error) => {
                     tokio::time::sleep(Duration::from_millis(40)).await;
                     if client.crashed() {
-                        return Err(format!(
-                            "The program exited during startup. {}",
-                            client
-                                .logs
-                                .lock()
-                                .unwrap()
-                                .iter()
-                                .cloned()
-                                .collect::<Vec<_>>()
-                                .join("\n")
-                        ));
+                        return Err(client.startup_error().await);
                     }
                     return Err(error);
                 }
@@ -357,14 +361,41 @@ impl Client {
         core.spawn(async move { loop { tokio::select!{_=stopped.cancelled()=>break,_=tokio::time::sleep(Duration::from_secs(30))=>{}} let Some(c)=weak.upgrade() else{break}; if c.stop.is_cancelled(){break} if c.active.load(std::sync::atomic::Ordering::SeqCst)==0&&now_ms().saturating_sub(c.last_used.load(std::sync::atomic::Ordering::SeqCst))>=600_000{c.shutdown();break} } });
         let weak = Arc::downgrade(&client);
         core.spawn(async move { if let Some(c)=weak.upgrade(){if *c.version.lock().unwrap()==MODERN{let _=c.call_prepared("subscriptions/listen",json!({"notifications":{"toolsListChanged":true,"promptsListChanged":true,"resourcesListChanged":true}}),&Cancel::new(),Duration::from_secs(86400),vec![]).await;}else if c.input.is_none(){let _=c.legacy_events().await;}} });
+        core.inner
+            .extensions
+            .failed_logs
+            .lock()
+            .unwrap()
+            .remove(&startup.id);
         startup.armed = false;
         Ok(client)
+    }
+    async fn startup_error(&self) -> String {
+        let _ =
+            tokio::time::timeout(Duration::from_millis(350), self.stderr_done.cancelled()).await;
+        let exit = self
+            .exit_status
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| "status unavailable".into());
+        format!("The program exited during startup ({exit}). Show log for details.")
     }
     pub fn crashed(&self) -> bool {
         self.crashed.load(std::sync::atomic::Ordering::SeqCst)
     }
     pub fn is_closed(&self) -> bool {
         self.stop.is_cancelled()
+    }
+    pub async fn closed(&self) {
+        self.stop.cancelled().await;
+    }
+    pub fn retire(&self) {
+        self.retired
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        if self.active.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+            self.shutdown();
+        }
     }
     pub fn shutdown(&self) {
         self.stop.cancel()
@@ -775,6 +806,11 @@ impl Drop for Activity<'_> {
             self.0
                 .active
                 .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            if self.0.retired.load(std::sync::atomic::Ordering::SeqCst)
+                && self.0.active.load(std::sync::atomic::Ordering::SeqCst) == 0
+            {
+                self.0.shutdown();
+            }
         }
     }
 }
@@ -874,12 +910,34 @@ impl Client {
 }
 
 struct StopGuard {
+    core: AiCore,
+    id: String,
+    logs: Arc<Mutex<VecDeque<String>>>,
     cancel: Cancel,
     armed: bool,
 }
 impl Drop for StopGuard {
     fn drop(&mut self) {
         if self.armed {
+            let tail = self
+                .logs
+                .lock()
+                .unwrap()
+                .iter()
+                .rev()
+                .take(20)
+                .cloned()
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+            self.core
+                .inner
+                .extensions
+                .failed_logs
+                .lock()
+                .unwrap()
+                .insert(self.id.clone(), tail);
             self.cancel.cancel();
         }
     }

@@ -1148,18 +1148,63 @@ async fn project_review_handoff_survives_an_independent_settings_request() {
     let nonce = independent["projectReviewId"].clone();
     assert!(nonce.is_string());
     for _ in 0..3 {
-        assert_eq!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["projectReviewId"], nonce);
+        assert_eq!(
+            core.handle("ai-extensions:list", &[])
+                .await
+                .unwrap()
+                .unwrap()["projectReviewId"],
+            nonce
+        );
     }
-    core.handle("ai-extensions:dismiss-project-review", &[nonce.clone()]).await.unwrap().unwrap();
-    assert!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["project"].is_null());
-    core.handle("ai-extensions:review-project", &[json!(folder)]).await.unwrap().unwrap();
-    let again = core.handle("ai-extensions:list", &[]).await.unwrap().unwrap();
-    assert_ne!(again["projectReviewId"],nonce);
+    core.handle("ai-extensions:dismiss-project-review", &[nonce.clone()])
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(core
+        .handle("ai-extensions:list", &[])
+        .await
+        .unwrap()
+        .unwrap()["project"]
+        .is_null());
+    core.handle("ai-extensions:review-project", &[json!(folder)])
+        .await
+        .unwrap()
+        .unwrap();
+    let again = core
+        .handle("ai-extensions:list", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(again["projectReviewId"], nonce);
     // An old settings reply cannot dismiss a newer request for the same folder.
-    core.handle("ai-extensions:dismiss-project-review", &[nonce]).await.unwrap().unwrap();
-    assert_eq!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["projectReviewId"], again["projectReviewId"]);
-    core.handle("ai-extensions:trust-project", &[json!(folder),again["project"]["entryHash"].clone(),again["projectReviewId"].clone()]).await.unwrap().unwrap();
-    assert!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["project"].is_null());
+    core.handle("ai-extensions:dismiss-project-review", &[nonce])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        core.handle("ai-extensions:list", &[])
+            .await
+            .unwrap()
+            .unwrap()["projectReviewId"],
+        again["projectReviewId"]
+    );
+    core.handle(
+        "ai-extensions:trust-project",
+        &[
+            json!(folder),
+            again["project"]["entryHash"].clone(),
+            again["projectReviewId"].clone(),
+        ],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(core
+        .handle("ai-extensions:list", &[])
+        .await
+        .unwrap()
+        .unwrap()["project"]
+        .is_null());
     // Reusing an already open settings window receives the newly queued folder.
     let other = core.inner.ctx.paths.home_dir.join("other");
     std::fs::create_dir_all(other.join(".tezbar")).unwrap();
@@ -1376,7 +1421,7 @@ async fn silent_legacy_era_is_cached_by_trusted_connection_for_cold_snapshot() {
 async fn failed_start_preserves_reason_and_log_without_call_replay() {
     let (dir, core, _events) = fixture();
     let binary = program(dir.path());
-    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"crashed-start","name":"Crash","connections":[{"id":"stdio","name":"Crash","transport":"stdio","command":binary,"args":["startup-error"]}]})]).await.unwrap();
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"crashed-start","name":"Crash","connections":[{"id":"stdio","name":"Crash","transport":"stdio","command":binary,"args":["startup-error"],"env":{"FIXTURE_TOKEN":"fixture-startup-private-token"}}]})]).await.unwrap();
     let tested = core
         .ext_handle("ai-extensions:test", &[json!("crashed-start")])
         .await
@@ -1394,6 +1439,9 @@ async fn failed_start_preserves_reason_and_log_without_call_replay() {
         logs.to_string().contains("fixture module missing"),
         "{logs}"
     );
+    assert!(logs.as_array().unwrap().len() <= 20);
+    assert!(!logs.to_string().contains("fixture-startup-private-token"));
+    assert!(s(&tested["error"]).len() < 160);
     core.shutdown().await;
 }
 
@@ -1631,7 +1679,7 @@ async fn contributed_provider_cannot_borrow_legacy_keys_or_erase_a_user_owned_co
 #[tokio::test]
 async fn reset_missing_connection_key_archives_ciphertext_and_allows_new_secrets_only_in_fixture() {
     let (_dir, core, _) = fixture();
-    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"reset-fixture","name":"Reset fixture","connections":[{"id":"secret","name":"Secret","transport":"http","url":"https://fixture.invalid/mcp","auth":{"type":"token"}},{"id":"plain","name":"Plain","transport":"http","url":"https://fixture.invalid/plain"}]})]).await.unwrap();
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"reset-fixture","name":"Reset fixture","providers":[{"id":"custom:reset","title":"Reset provider","baseURL":"https://fixture.invalid","protocol":"openai-chat","models":[{"id":"m","capabilities":["tools"]}],"headers":{"Authorization":{"secret":"provider-token","label":"Provider key"}}}],"connections":[{"id":"secret","name":"Secret","transport":"http","url":"https://fixture.invalid/mcp","auth":{"type":"token"}},{"id":"plain","name":"Plain","transport":"http","url":"https://fixture.invalid/plain"}]})]).await.unwrap();
     core.inner
         .extensions
         .secrets
@@ -1659,6 +1707,13 @@ async fn reset_missing_connection_key_archives_ciphertext_and_allows_new_secrets
         .unwrap();
     let data = core.ext_read().await.unwrap();
     assert_eq!(data["extensions"][0]["connections"][0]["tested"], false);
+    assert_eq!(data["extensions"][0]["connections"][0]["needsAuth"], false);
+    assert!(s(&data["extensions"][0]["connections"][0]["error"]).contains("Enter the secret again"));
+    let listed = core.ext_handle("ai-extensions:list", &[]).await.unwrap();
+    assert_eq!(
+        listed["extensions"][0]["providers"][0]["missingCredentials"],
+        true
+    );
     assert_eq!(data["extensions"][0]["connections"][1], before);
     assert!(std::fs::read_dir(path.parent().unwrap())
         .unwrap()
@@ -1707,7 +1762,15 @@ async fn cached_era_startup_crash_retains_stderr_and_explicit_test_reprobes() {
     let c = &data["extensions"][0]["connections"][0];
     let error = core.ext_client("cached-crash", c).await.err().unwrap();
     assert!(error.contains("exited during startup"), "{error}");
-    assert!(error.contains("fixture module missing"), "{error}");
+    assert!(error.len() < 160, "{error}");
+    let logs = core
+        .ext_handle("ai-extensions:logs", &[json!("cached-crash")])
+        .await
+        .unwrap();
+    assert!(
+        logs.to_string().contains("fixture module missing"),
+        "{logs}"
+    );
     // Switch fixture mode without updating the cached era: Test must detect modern.
     core.ext_edit(|data| {
         let c = &mut data["extensions"][0]["connections"][0];
@@ -1727,4 +1790,205 @@ async fn cached_era_startup_crash_retains_stderr_and_explicit_test_reprobes() {
         "2026-07-28"
     );
     core.shutdown().await;
+}
+
+#[tokio::test]
+async fn closure_first_test_after_post_start_crash_reconnects() {
+    let (dir, core, _) = fixture();
+    let binary = program(dir.path());
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"post-crash","name":"Crash","connections":[{"id":"stdio","name":"Crash","transport":"stdio","command":binary,"args":["crash"]}]})]).await.unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("post-crash")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    let old = core.inner.extensions.clients.lock().unwrap()[&key("post-crash", "stdio")].clone();
+    assert!(old
+        .call(
+            "tools/call",
+            json!({"name":"echo","arguments":{"text":"once"}}),
+            &Cancel::new(),
+            Duration::from_secs(2)
+        )
+        .await
+        .is_err());
+    assert!(old.crashed());
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("post-crash")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    core.shutdown().await;
+}
+#[tokio::test]
+async fn closure_test_retires_client_after_long_call_and_disable_stops_retired() {
+    let (dir, core, _) = fixture();
+    let binary = program(dir.path());
+    let marker = dir.path().join("calls");
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"retire","name":"Retire","connections":[{"id":"stdio","name":"Slow","transport":"stdio","command":binary,"args":["slow"],"env":{"FIXTURE_MARKER":marker}}]})]).await.unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("retire")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    core.ext_handle("ai-extensions:set-enabled", &[json!("retire"), json!(true)])
+        .await
+        .unwrap();
+    for disable in [false, true] {
+        let old = core.inner.extensions.clients.lock().unwrap()[&key("retire", "stdio")].clone();
+        let client = old.clone();
+        let call = tokio::spawn(async move {
+            client
+                .call(
+                    "tools/call",
+                    json!({"name":"echo","arguments":{"text":"once"}}),
+                    &Cancel::new(),
+                    Duration::from_secs(3),
+                )
+                .await
+        });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(
+            core.ext_handle("ai-extensions:test", &[json!("retire")])
+                .await
+                .unwrap()["ok"],
+            true
+        );
+        assert!(!old.is_closed());
+        if disable {
+            core.ext_handle(
+                "ai-extensions:set-enabled",
+                &[json!("retire"), json!(false)],
+            )
+            .await
+            .unwrap();
+            assert!(old.is_closed());
+            assert!(call.await.unwrap().is_err());
+        } else {
+            assert!(call.await.unwrap().unwrap().to_string().contains("fixture"));
+            assert!(old.is_closed());
+        }
+    }
+    assert_eq!(std::fs::read_to_string(marker).unwrap().lines().count(), 2);
+    core.shutdown().await;
+}
+#[tokio::test]
+async fn closure_test_does_not_join_normal_cached_era_start() {
+    use super::super::fixture_http::{server, Reply};
+    let (_dir, core, _) = fixture();
+    let init = Arc::new(tokio::sync::Notify::new());
+    let seen = init.clone();
+    let http = server(move |r| {
+        let method = s(&r["body"]["method"]);
+        let value = if method == "initialize" {
+            seen.notify_one();
+            json!({"protocolVersion":"2025-11-25","capabilities":{}})
+        } else {
+            json!({"capabilities":{}})
+        };
+        let mut reply = Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":value}));
+        if method == "initialize" {
+            reply.delay = Duration::from_millis(200);
+        }
+        reply
+    })
+    .await;
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"race","name":"Race","connections":[{"id":"web","name":"Web","transport":"http","url":http.url}]})]).await.unwrap();
+    core.ext_edit(|data| {
+        data["extensions"][0]["enabled"] = json!(true);
+        data["extensions"][0]["connections"][0]["cachedEra"] = json!("2025-11-25");
+        Ok(Value::Null)
+    })
+    .await
+    .unwrap();
+    let c = core.ext_read().await.unwrap()["extensions"][0]["connections"][0].clone();
+    let worker = core.clone();
+    let normal = tokio::spawn(async move { worker.ext_client("race", &c).await });
+    tokio::time::timeout(Duration::from_secs(3), init.notified())
+        .await
+        .unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("race")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    assert!(normal.await.unwrap().is_ok());
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"][0]["connections"][0]["version"],
+        "2026-07-28"
+    );
+    core.shutdown().await;
+}
+#[tokio::test]
+async fn closure_changed_server_clears_requested_scopes_only() {
+    let (_dir, core, _) = fixture();
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"scope-edit","name":"Scope","connections":[{"id":"web","name":"Web","transport":"http","url":"https://fixture.invalid/a","auth":{"type":"oauth","scopes":"intentional"}}]})]).await.unwrap();
+    core.ext_edit(|data| {
+        data["extensions"][0]["connections"][0]["requestedScopes"] = json!("server-a");
+        Ok(Value::Null)
+    })
+    .await
+    .unwrap();
+    let mut record = core.ext_read().await.unwrap()["extensions"][0].clone();
+    record["name"] = json!("renamed");
+    core.ext_handle(
+        "ai-extensions:update",
+        &[json!("scope-edit"), record.clone()],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"][0]["connections"][0]["requestedScopes"],
+        "server-a"
+    );
+    record["connections"][0]["url"] = json!("https://fixture.invalid/b");
+    core.ext_handle("ai-extensions:update", &[json!("scope-edit"), record])
+        .await
+        .unwrap();
+    let data = core.ext_read().await.unwrap();
+    let c = &data["extensions"][0]["connections"][0];
+    assert!(c["requestedScopes"].is_null());
+    assert_eq!(c["auth"]["scopes"], "intentional");
+    core.shutdown().await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn closure_escaped_stderr_pipe_does_not_hold_shutdown_tasks() {
+    struct OwnedPid(i32);
+    impl Drop for OwnedPid {
+        fn drop(&mut self) {
+            unsafe {
+                libc::kill(self.0, libc::SIGKILL);
+            }
+        }
+    }
+    let (dir, core, _) = fixture();
+    let binary = program(dir.path());
+    let marker = dir.path().join("escaped.pid");
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"escape","name":"Escape","connections":[{"id":"stdio","name":"Escape","transport":"stdio","command":binary,"args":["escape-stderr"],"env":{"ESCAPED_PID":marker}}]})]).await.unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("escape")])
+            .await
+            .unwrap()["ok"],
+        false
+    );
+    let owned = OwnedPid(std::fs::read_to_string(marker).unwrap().parse().unwrap());
+    assert_eq!(
+        unsafe { libc::kill(owned.0, 0) },
+        0,
+        "fixture must still hold stderr open"
+    );
+    let start = std::time::Instant::now();
+    core.shutdown().await;
+    assert!(
+        start.elapsed() < Duration::from_secs(2),
+        "shutdown {:?}",
+        start.elapsed()
+    );
+    assert!(core.inner.tasks.lock().unwrap().is_empty());
 }

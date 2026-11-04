@@ -345,3 +345,39 @@ evidence in its report.
 | Runtime | C-R1 | Hide Settings before queued destruction so the launcher can be restored. |
 | Runtime | C-R2 | Optional discovery failures must not poison closing; recover unacknowledged native close requests. |
 | Runtime | C-R3 | Accumulate rapid model removals while preserving conditional selection ownership. |
+
+
+## Repairs for the eighteen 1623d47 closure findings
+
+Implementation dispositions below are **pending the parent's fresh targeted Claude
+Opus 5.5 review of all eighteen repairs and touched-path regressions**. They do not
+close the overall migration or authorize release. The three original completed
+reports remain unchanged. Final committed-source/platform evidence is recorded in
+`docs/NATIVE_AI_VERIFICATION.md` after validation.
+
+| ID | Implemented repair | Permanent regression / evidence |
+| --- | --- | --- |
+| N-W1 | Current-user image validation uses `route.request_budget`. | `closure_current_images_use_anthropic_route_budget_before_persistence`: three actual PNG attachments, first-party 128 MB versus gateway 32 MB through `native_run_history`; a deliberately invalid generation stops at persistence, before any network call. |
+| N-W2 | Blank/null continuation id/type/name leave established raw identities intact; conflicting nonempty fields and malformed terminal arguments still fail. | `closure_chat_blank_continuations_and_ollama_missing_arguments`, real loopback transport, accepted raw identities and rejected conflicts/array args. |
+| N-W3 | Canonical Gemini omits blank text and empty content turns; raw exact-origin signed parts remain untouched. | `closure_gemini_keyless_headers_and_signature_only_replay`, real decoded signed part, exact-origin replay and foreign-model encoding. |
+| N-W4 | Keyless custom Gemini omits x-goog-api-key; explicit headers still replace defaults. | Same loopback header regression; prior OpenCode/Antigravity Bearer regressions retained. |
+| N-W5 | Ollama missing/null args use shared `argument_text`; scalar/array args fail. | Missing, null, scalar and array responses through actual NDJSON transport in the N-W2 regression. No tools execute. |
+| S1 | Well-known public NAT64 /96 and mapped IPv4 inherit embedded IPv4 policy; RFC8215 local NAT64 /48 remains private. | Expanded `private_hostname_resource_is_pinned_and_public_metadata_cannot_rebind`: public translations reject loopback/private endpoints, private translations stay private, mixed DNS refused; original pinning/refresh coverage retained. |
+| S2 | Explicit Test removes a crashed cached client and connects on its first attempt. | `closure_first_test_after_post_start_crash_reconnects`, compiled stdio server crashes on one call, next Test succeeds. |
+| S3 | Short startup reason/status is separate from last 20 scrubbed failed-start stderr lines. | Expanded failed-start and cached-era regressions: >500-character traceback/preamble, final unterminated cause, secret scrubbing, bounded log response; stdout/stop drain has bounded completion. |
+| S4 | Only OAuth resets set needsAuth; token/env/header reset explains re-entry. List surfaces missing extension-provider credentials and reset copy names both owners. | Expanded real reset IPC regression checks token re-entry and provider status; component reset copy regression; provider credentials remain in their own namespace. |
+| S5 | Only DPAPI ERROR_INVALID_DATA / NTE_BAD_KEY_STATE are resettable permanent failures; ciphertext and existing protected key are archived explicitly, with rollback if replacement fails. Access-denied/transient failures stay refused. | `windows_permanent_dpapi_failure_archives_both_files_and_denied_replacement_rolls_back`: real corrupt protected blob and real sharing-denied replacement in a temp fixture. Original unavailable-key-store unchanged-ciphertext regression retained. Real Windows result required in verification record. |
+| S6 | Relative multi-component commands and relative PATH entries resolve against effective connection cwd. | `relative_windows_exe_and_cmd_preserve_exact_reviewed_argv`: compiled owned argv recorder under a temp connection directory; explicit exe/cmd and PATHEXT bare commands. |
+| S7 | Batch argv doubles trailing backslashes before closing CRT quotes while retaining metacharacter rejection. | Same real Windows compiled recorder through .cmd: spaces, empty arg, trailing backslashes, following arg; exact hex argv equality. Prior injection refusal and owned Job tree tests retained. |
+| S8 | Explicit starts cannot join a cached-era normal start. New probe/catalog must succeed before swap; retired clients stop after active calls finish. Failed/cancelled probes are stopped; disable/change/remove/shutdown stop retired clients too. | `closure_test_does_not_join_normal_cached_era_start`, `closure_test_retires_client_after_long_call_and_disable_stops_retired`: independent re-probe, actual result exactly once, cancellation on disable, no call replay. Original immutable snapshot/pin review gates retained. |
+| S9 | Execution/auth/server trust-pin changes clear requestedScopes; unrelated edits preserve it and configured auth.scopes stays intentional. | `closure_changed_server_clears_requested_scopes_only`, actual update IPC; existing step-up regression retained. |
+| S10 | Stderr drains to EOF or 250 ms after stop, flushing the final partial line. | Unix `closure_escaped_stderr_pipe_does_not_hold_shutdown_tasks`: compiled fixture escapes the group with setsid, keeps stderr open, shutdown finishes <2 s with task list empty; RAII kills only the owned escaped PID. Windows Job behavior unchanged. |
+| C-R1 | Hide Settings and restore launcher before queued destroy; invalidate stale native fallback generations. | Direct production ordering derived from pinned Tauri 2.11.2 queue semantics; no desktop launch permitted. Native compile/lifecycle gate required; real window visibility remains source-verified. |
+| C-R2 | Optional discovery terminates its rejection chain. Window-owned drains retain retired queues/failures before set IPC starts. Default bridge close consumer acknowledges immediately and drains without React; native fallback only closes unacknowledged requests after 3 s, never acknowledged busy/error states. | Converted discovery probe; real bridge default-consumer/repeated-close test; real Settings remount tests cover queued get, save success/failure, visible retry and draft recovery. Original Permissions, early-close, pending-write and manual-error tests retained. |
+| C-R3 | Accumulate removals and derive conditional fallback from final model list, preserving external selection ownership. | Converted double-removal probe tests selected A then C and removal of interim fallback B; chat override asserted. Existing external-choice/provider-switch regressions retained. |
+
+DPAPI codes were checked against current primary Microsoft documentation:
+[CryptUnprotectData](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptunprotectdata)
+and [Winerror security codes](https://learn.microsoft.com/en-us/windows/win32/com/com-error-codes-4).
+Only the two explicitly classified permanent codes permit reset; corruption can
+produce other codes, which remain refused rather than being guessed permanent.

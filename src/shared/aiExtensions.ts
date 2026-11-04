@@ -65,6 +65,7 @@ export type AiExtension = {
   providers?: {
     id: string
     title: string
+    missingCredentials?: boolean
     baseURL: string
     protocol?: string
     headers?: Record<string, string | { secret: string; label?: string }>

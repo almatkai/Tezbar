@@ -170,6 +170,7 @@ fn backend_request_timeout(channel: &str) -> Duration {
 #[derive(Default)]
 struct WindowBehaviorState {
     suppress_blur_hide: Mutex<bool>,
+    settings_close: Mutex<(u64, bool)>,
     backend_hidden_windows: Mutex<Vec<String>>,
     // Desktop window managers can position the hidden predeclared launcher and
     // emit Moved before Tezbar has selected its real placement. Ignore those
@@ -2614,8 +2615,19 @@ fn finish_settings_close(window: WebviewWindow) -> Result<(), String> {
     }
     // destroy bypasses CloseRequested; close would recursively request a save.
     let app = window.app_handle().clone();
-    window.destroy().map_err(|e| e.to_string())?;
-    restore_main_window(&app)
+    { let state = window.state::<WindowBehaviorState>(); let mut close = state.settings_close.lock().unwrap(); close.0 += 1; close.1 = true; }
+    window.hide().map_err(|e| e.to_string())?;
+    restore_main_window(&app)?;
+    window.destroy().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn ack_settings_close(window: WebviewWindow, generation: u64) -> Result<(), String> {
+    if window.label() != "settings" { return Err("Not a Settings window".into()); }
+    let state = window.state::<WindowBehaviorState>();
+    let mut close = state.settings_close.lock().unwrap();
+    if close.0 == generation { close.1 = true; }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2865,7 +2877,23 @@ pub fn run() {
                         // Prevent teardown even while a config IPC write is in flight.
                         // The renderer acknowledges only after its save queue drains.
                         api.prevent_close();
-                        let _ = window.emit("settings-close-requested", ());
+                        let generation = {
+                            let state = window.state::<WindowBehaviorState>();
+                            let mut close = state.settings_close.lock().unwrap();
+                            close.0 += 1; close.1 = false; close.0
+                        };
+                        let _ = window.emit("settings-close-requested", generation);
+                        let app = window.app_handle().clone();
+                        tauri::async_runtime::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            let state = app.state::<WindowBehaviorState>();
+                            if *state.settings_close.lock().unwrap() != (generation, false) { return; }
+                            // No renderer acknowledged this request (failed bootstrap or
+                            // content process). Acknowledged drains have no deadline.
+                            if let Some(window) = app.get_webview_window("settings") {
+                                let _ = finish_settings_close(window);
+                            }
+                        });
                     }
                     _ => {}
                 }
@@ -3033,6 +3061,7 @@ pub fn run() {
             show_window,
             close_current_window,
             finish_settings_close,
+            ack_settings_close,
             quit_app,
             start_window_snap_drag,
             end_window_snap_drag,

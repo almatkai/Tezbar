@@ -584,6 +584,192 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     }
   )
 
+  it.each(['fixture-b', 'fixture-c'])(
+    'rapid removals of the selected model then %s within the debounce fall back',
+    async (secondRemoved) => {
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'openai',
+        model: 'fixture-a',
+        providerSelectedModels: { openai: 'fixture-a' },
+        taskModelOverrides: { chat: 'fixture-a' },
+        providerConfigs: { openai: { apiKey: 'key' } },
+        providerModels: {
+          openai: ['fixture-a', 'fixture-b', 'fixture-c'].map((id) => ({
+            id,
+            capabilities: ['tools'],
+          })),
+        },
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        getLlmConfig: async () => config,
+        setLlmConfig: async (patch: typeof config) => {
+          config = { ...config, ...patch }
+          return { ok: true }
+        },
+      })
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      const remove = async (id: string) => {
+        const row = [...container.querySelectorAll('li')].find(
+          (li) => li.querySelector('span')?.textContent === id
+        )!
+        await act(async () =>
+          [...row.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
+        )
+      }
+      await remove('fixture-a')
+      await advance(50)
+      await remove(secondRemoved)
+      await advance(500)
+      const fallback = secondRemoved === 'fixture-b' ? 'fixture-c' : 'fixture-b'
+      expect(config.providerModels?.openai?.map((m) => m.id)).toEqual([fallback])
+      expect(config.providerSelectedModels?.openai).toBe(fallback)
+      expect(config.model).toBe(fallback)
+      expect(config.taskModelOverrides?.chat).toBe(fallback)
+    }
+  )
+
+  it.each([false, true])(
+    'retired Settings drains a queued get before close and recovers a failed save: %s',
+    async (fail) => {
+      const events = new Map<string, (event: { payload: unknown }) => void>()
+      vi.mocked(listen).mockImplementation(async (name, cb) => {
+        events.set(String(name), cb as (event: { payload: unknown }) => void)
+        return () => {}
+      })
+      Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} })
+      const original = window.tezbar
+      Object.defineProperty(window, 'tezbar', {
+        configurable: true,
+        writable: true,
+        value: original,
+      })
+      initTauriBridge()
+      const native = window.tezbar
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'openai',
+        model: 'fixture',
+        providerConfigs: { openai: { apiKey: '' } },
+      }
+      const beforeSet = deferred<typeof config>()
+      let block = false
+      let blocked = false
+      let failNext = fail
+      const save = vi.fn(async (patch: typeof config) => {
+        if (failNext) {
+          failNext = false
+          throw new Error('retired fixture save failed')
+        }
+        config = { ...config, ...patch }
+        return { ok: true, accelerator: '' }
+      })
+      window.tezbar = {
+        ...original,
+        onWindowCloseRequested: native.onWindowCloseRequested,
+        getLlmConfig: async () => {
+          if (block && !blocked) {
+            blocked = true
+            return beforeSet.promise
+          }
+          return config
+        },
+        setLlmConfig: save,
+        listPiExtensions: async () => [],
+        listLlmModels: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      }
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai', key: 'old' }))
+      )
+      await input(
+        container.querySelector<HTMLInputElement>('input[type="password"]')!,
+        'retired-draft'
+      )
+      block = true
+      await advance(310)
+      expect(blocked).toBe(true)
+      expect(save).not.toHaveBeenCalled()
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai', key: 'new' }))
+      )
+      vi.mocked(invoke).mockClear()
+      await act(async () => {
+        events.get('settings-close-requested')!({ payload: 9 })
+      })
+      expect(invoke).toHaveBeenCalledWith('ack_settings_close', { generation: 9 })
+      expect(invoke).not.toHaveBeenCalledWith('finish_settings_close')
+      await act(async () => {
+        beforeSet.resolve(config)
+      })
+      if (fail) {
+        expect(invoke).not.toHaveBeenCalledWith('finish_settings_close')
+        expect(document.getElementById('settings-close-error')?.textContent).toContain(
+          'Could not save Settings'
+        )
+        await act(async () => {
+          document.querySelector<HTMLButtonElement>('#settings-close-error button')!.click()
+        })
+      }
+      expect(config.providerConfigs?.openai?.apiKey).toBe('retired-draft')
+      expect(invoke).toHaveBeenCalledWith('finish_settings_close')
+    }
+  )
+
+  it('a rejected discovery write must not silently block Settings close', async () => {
+    let beforeClose: (() => Promise<void>) | undefined
+    const config = {
+      provider: 'openai',
+      model: 'fixture-a',
+      providerSelectedModels: { openai: 'fixture-a' },
+      providerConfigs: { openai: { apiKey: 'key' } },
+      providerModels: { openai: [{ id: 'fixture-a', capabilities: ['tools'] }] },
+    }
+    const save = vi.fn(async () => {
+      throw new Error('fixture IPC failure')
+    })
+    Object.assign(window.tezbar, {
+      listPiExtensions: async () => [],
+      aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      getLlmConfig: async () => config,
+      setLlmConfig: save,
+      listLlmModels: async () => ['fixture-a', 'fixture-discovered'],
+      onWindowCloseRequested: (cb: () => Promise<void>) => {
+        beforeClose = cb
+        return () => {}
+      },
+    })
+    await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
+    await advance(500)
+    let outcome = 'pending'
+    await act(async () => {
+      await beforeClose!().then(
+        () => {
+          outcome = 'resolved'
+        },
+        (e) => {
+          outcome = 'rejected:' + String(e)
+        }
+      )
+    })
+    let second = 'pending'
+    await act(async () => {
+      await advance(5000)
+      await beforeClose!().then(
+        () => {
+          second = 'resolved'
+        },
+        (e) => {
+          second = 'rejected:' + String(e)
+        }
+      )
+    })
+    expect(outcome).toBe('resolved')
+    expect(second).toBe('resolved')
+  })
+
   it('saves latest typing, provider-scoped edits, model mutations and a pending close without hydration writes', async () => {
     let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
       provider: 'openai',

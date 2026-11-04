@@ -217,8 +217,8 @@ export function AiExtensionsSection(): JSX.Element {
       {state.canResetSecrets && (
         <div role="alert">
           <p>
-            The saved connection key is missing. Reset archives the unreadable secrets; enter
-            connection credentials again afterward.
+            The saved credential key is missing or cannot be decrypted. Reset archives the
+            unreadable secrets; enter connection and extension provider credentials again afterward.
           </p>
           <Button
             variant="danger"
@@ -875,6 +875,9 @@ export function AiExtensionsSection(): JSX.Element {
                     <p>
                       {provider.title} · {provider.baseURL}
                     </p>
+                    {provider.missingCredentials && (
+                      <p role="alert">Enter the provider credentials below, then save each key.</p>
+                    )}
                     <pre className="whitespace-pre-wrap break-all text-[11px]">
                       {describeConnection({
                         id: provider.id,

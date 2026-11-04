@@ -76,7 +76,9 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             let mut parts = vec![];
             for b in &m.blocks {
                 match b {
-                    Block::Text { text } => parts.push(json!({"text":text})),
+                    Block::Text { text } if !text.trim().is_empty() => {
+                        parts.push(json!({"text":text}))
+                    }
                     Block::Image { mime, data } => parts.push(image(mime, data)),
                     Block::ToolCall { .. } => {}
                     Block::ToolResult {

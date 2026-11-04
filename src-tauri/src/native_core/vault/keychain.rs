@@ -3,6 +3,13 @@
 pub type VaultKey = [u8; 32];
 
 pub trait KeyStore: Send + Sync {
+    /// Explicit recovery only; denied/transient access must remain an error.
+    fn resettable(&self) -> Result<bool, String> {
+        self.load().map(|key| key.is_none())
+    }
+    fn reset(&self, key: &VaultKey) -> Result<(), String> {
+        self.save(key)
+    }
     fn load(&self) -> Result<Option<VaultKey>, String>;
     fn save(&self, key: &VaultKey) -> Result<(), String>;
     fn delete(&self) -> Result<(), String>;

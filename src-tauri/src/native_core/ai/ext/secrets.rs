@@ -53,14 +53,14 @@ impl Secrets {
             .lock
             .lock()
             .map_err(|_| "Connection secret store lock failed")?;
-        Ok(self.path.exists() && self.key.load()?.is_none())
+        Ok(self.path.exists() && self.key.resettable()?)
     }
     pub fn reset_missing(&self) -> Result<(), String> {
         let _guard = self
             .lock
             .lock()
             .map_err(|_| "Connection secret store lock failed")?;
-        if !self.path.exists() || self.key.load()?.is_some() {
+        if !self.path.exists() || !self.key.resettable()? {
             return Err("Reset is only available when the saved connection key is missing".into());
         }
         let archived = self.path.with_extension(format!(
@@ -69,14 +69,23 @@ impl Secrets {
             uuid::Uuid::new_v4()
         ));
         std::fs::rename(&self.path, &archived).map_err(err)?;
-        let key = crypto::generate_random_bytes();
-        if let Err(error) = self.key.save(&key) {
-            let _ = std::fs::rename(&archived, &self.path);
-            return Err(error);
-        }
         let revoked = self.path.with_extension("revoked.json");
-        if revoked.exists() {
-            std::fs::remove_file(revoked).map_err(err)?;
+        let archived_revoked = archived.with_extension("revoked.json");
+        let had_revoked = revoked.exists();
+        if had_revoked {
+            if let Err(error) = std::fs::rename(&revoked, &archived_revoked) {
+                std::fs::rename(&archived, &self.path).map_err(err)?;
+                return Err(err(error));
+            }
+        }
+        let key = crypto::generate_random_bytes();
+        if let Err(error) = self.key.reset(&key) {
+            std::fs::rename(&archived, &self.path)
+                .map_err(|e| format!("{error}; ciphertext rollback failed: {e}"))?;
+            if had_revoked {
+                std::fs::rename(archived_revoked, revoked).map_err(err)?;
+            }
+            return Err(error);
         }
         Ok(())
     }
@@ -228,12 +237,48 @@ impl KeyStore for OsKey {
 }
 #[cfg(windows)]
 impl KeyStore for OsKey {
+    fn resettable(&self) -> Result<bool, String> {
+        if !self.path.exists() {
+            return Ok(true);
+        }
+        let bytes = std::fs::read(&self.path).map_err(err)?;
+        match dpapi(&bytes, false) {
+            Ok(mut bytes) => {
+                zeroize::Zeroize::zeroize(&mut bytes);
+                Ok(false)
+            }
+            Err(error) if error.permanent() => Ok(true),
+            Err(error) => Err(error.to_string()),
+        }
+    }
+    fn reset(&self, key: &VaultKey) -> Result<(), String> {
+        if !self.resettable()? {
+            return Err("The saved key is still available".into());
+        }
+        let archive = self.path.with_extension(format!(
+            "bin.unreadable-{}-{}",
+            now_ms(),
+            uuid::Uuid::new_v4()
+        ));
+        let exists = self.path.exists();
+        if exists {
+            std::fs::rename(&self.path, &archive).map_err(err)?;
+        }
+        if let Err(error) = self.save(key) {
+            if exists {
+                std::fs::rename(&archive, &self.path)
+                    .map_err(|e| format!("{error}; key rollback failed: {e}"))?;
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
     fn load(&self) -> Result<Option<VaultKey>, String> {
         if !self.path.exists() {
             return Ok(None);
         }
         let bytes = std::fs::read(&self.path).map_err(err)?;
-        let mut plain = dpapi(&bytes, false)?;
+        let mut plain = dpapi(&bytes, false).map_err(|e| e.to_string())?;
         let key = plain
             .as_slice()
             .try_into()
@@ -242,7 +287,7 @@ impl KeyStore for OsKey {
         key.map(Some).map_err(str::to_string)
     }
     fn save(&self, key: &VaultKey) -> Result<(), String> {
-        let bytes = dpapi(key, true)?;
+        let bytes = dpapi(key, true).map_err(|e| e.to_string())?;
         std::fs::create_dir_all(self.path.parent().ok_or("Invalid connection key path")?)
             .map_err(err)?;
         let mut f = tempfile::NamedTempFile::new_in(self.path.parent().unwrap()).map_err(err)?;
@@ -259,7 +304,31 @@ impl KeyStore for OsKey {
     }
 }
 #[cfg(windows)]
-fn dpapi(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>, String> {
+#[derive(Debug)]
+struct DpapiError(u32);
+#[cfg(windows)]
+impl DpapiError {
+    fn permanent(&self) -> bool {
+        matches!(self.0, 13 | 0x8009000b)
+    }
+}
+#[cfg(windows)]
+impl std::fmt::Display for DpapiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Windows couldn't decrypt connection secrets (0x{:08x}). {}",
+            self.0,
+            if self.permanent() {
+                "Use Reset saved connection secrets to archive them and enter credentials again."
+            } else {
+                "Restore key-store access and retry."
+            }
+        )
+    }
+}
+#[cfg(windows)]
+fn dpapi(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>, DpapiError> {
     #[repr(C)]
     struct Blob {
         len: u32,
@@ -288,6 +357,7 @@ fn dpapi(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>, String> {
     }
     #[link(name = "kernel32")]
     extern "system" {
+        fn GetLastError() -> u32;
         fn LocalFree(memory: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
     }
     let input = Blob {
@@ -321,7 +391,7 @@ fn dpapi(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>, String> {
             )
         };
         if ok == 0 {
-            return Err("Windows couldn't access connection secrets".into());
+            return Err(DpapiError(GetLastError()));
         }
         let bytes = std::slice::from_raw_parts(output.data, output.len as usize).to_vec();
         LocalFree(output.data as _);
@@ -425,4 +495,50 @@ fn windows_dpapi_key_roundtrip_uses_only_an_isolated_temp_profile() {
     assert_eq!(store.load().unwrap(), Some(key));
     store.delete().unwrap();
     assert!(!store.path.exists());
+}
+
+#[cfg(all(test, windows))]
+#[test]
+fn windows_permanent_dpapi_failure_archives_both_files_and_denied_replacement_rolls_back() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let key = Arc::new(OsKey {
+        path: dir.path().join("ai-extension-key.bin"),
+    });
+    key.save(&[17; 32]).unwrap();
+    let mut protected = std::fs::read(&key.path).unwrap();
+    protected.truncate(20);
+    std::fs::write(&key.path, &protected).unwrap();
+    let error = dpapi(&protected, false).unwrap_err();
+    assert!(error.permanent(), "actual DPAPI code: {error}");
+    assert!(!DpapiError(5).permanent());
+    assert!(!DpapiError(0x80090020).permanent());
+    let store = Secrets::with_key(dir.path(), key.clone());
+    let ciphertext = b"fixture unreadable ciphertext";
+    std::fs::write(&store.path, ciphertext).unwrap();
+    assert!(store.reset_available().unwrap());
+    assert!(store.put("c", "token", Some("must-not-write")).is_err());
+    // A real Windows sharing violation prevents renaming/overwriting the key.
+    let denied = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(&key.path)
+        .unwrap();
+    assert!(store.reset_missing().is_err());
+    assert_eq!(std::fs::read(&key.path).unwrap(), protected);
+    assert_eq!(std::fs::read(&store.path).unwrap(), ciphertext);
+    drop(denied);
+    store.reset_missing().unwrap();
+    assert!(std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(Result::ok)
+        .any(|e| e
+            .file_name()
+            .to_string_lossy()
+            .starts_with("ai-extension-key.bin.unreadable-")
+            && std::fs::read(e.path()).unwrap() == protected));
+    store
+        .put("c", "token", Some("fixture-new-private"))
+        .unwrap();
+    assert_eq!(store.values("c").unwrap()["token"], "fixture-new-private");
 }
