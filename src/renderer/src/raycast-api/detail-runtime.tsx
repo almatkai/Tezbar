@@ -328,12 +328,12 @@ export function NativeColorWheel({
   const marker = { left: `${50 + Math.sin(radians) * radius}%`, top: `${50 - Math.cos(radians) * radius}%` }
 
   return (
-    <div className="grid min-h-[420px] max-h-[540px] grid-cols-[minmax(0,1fr)_320px] gap-4">
-      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-6">
-        <div className="relative aspect-square h-full max-h-[380px] w-full max-w-[380px] flex items-center justify-center">
+    <div className="grid h-[420px] grid-rows-[minmax(0,1fr)] grid-cols-[minmax(0,1fr)_min(45%,320px)] gap-4">
+      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/[0.08] bg-black/10 p-6">
+        <div className="relative aspect-square w-full max-w-[360px] shrink-0">
           <button
             type="button"
-            className="relative h-full w-full cursor-crosshair rounded-full bg-center bg-cover outline-none shadow-lg ring-1 ring-white/10"
+            className="absolute inset-0 h-full w-full cursor-crosshair rounded-full bg-center bg-cover outline-none shadow-lg ring-1 ring-white/10"
             style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
             aria-label="Color wheel"
             onPointerDown={(event) => {
@@ -349,9 +349,9 @@ export function NativeColorWheel({
           </button>
         </div>
       </div>
-      <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10">
-        <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
-          <span className="h-8 w-8 shrink-0 rounded-tezbar-chip border border-white/15" style={{ background: data.preview }} />
+      <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.08] bg-black/10">
+        <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3">
+          <span className="h-8 w-8 shrink-0 rounded-tezbar-chip border border-white/[0.15]" style={{ background: data.preview }} />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold text-ink-1">Color Formats</p>
             <p className="truncate font-mono text-[11px] text-ink-3">{data.preview}</p>
@@ -477,12 +477,12 @@ function ColorWheelDetail({
   }
 
   return (
-    <div className="grid h-full min-h-[420px] max-h-[540px] grid-cols-[minmax(0,1fr)_320px] gap-4">
-      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10 p-6">
-        <div className="relative aspect-square h-full max-h-[380px] w-full max-w-[380px] flex items-center justify-center">
+    <div className="grid h-full min-h-[420px] max-h-[540px] grid-rows-[minmax(0,1fr)] grid-cols-[minmax(0,1fr)_min(45%,320px)] gap-4">
+      <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-tezbar-row border border-white/[0.08] bg-black/10 p-6">
+        <div className="relative aspect-square w-full max-w-[360px] shrink-0">
           <button
             type="button"
-            className="relative h-full w-full cursor-crosshair rounded-full bg-center bg-cover outline-none shadow-lg ring-1 ring-white/10"
+            className="absolute inset-0 h-full w-full cursor-crosshair rounded-full bg-center bg-cover outline-none shadow-lg ring-1 ring-white/10"
             style={{ backgroundImage: COLOR_WHEEL_BACKGROUND }}
             aria-label={image.alt}
             onPointerDown={(event) => {
@@ -501,10 +501,10 @@ function ColorWheelDetail({
         </div>
       </div>
 
-      <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/8 bg-black/10">
-        <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3">
+      <aside className="flex min-h-0 flex-col overflow-hidden rounded-tezbar-row border border-white/[0.08] bg-black/10">
+        <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3">
           <span
-            className="h-8 w-8 shrink-0 rounded-tezbar-chip border border-white/15"
+            className="h-8 w-8 shrink-0 rounded-tezbar-chip border border-white/[0.15]"
             style={{ background: formats[0]?.value ?? '#fff' }}
           />
           <div className="min-w-0">
