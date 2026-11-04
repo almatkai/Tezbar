@@ -125,3 +125,17 @@ and result text/images have size/type limits; remote schema references are
 refused. Lost calls can have an unknown outcome and are not automatically
 reissued. Exact secret values are redacted, but transformed secrets cannot be
 reliably recognized. Approval and process ownership are not an OS sandbox.
+
+## Recovering a missing connection key
+
+If the OS-protected connection key is permanently missing, AI Extensions offers
+**Reset saved connection secrets**. The action archives the unreadable encrypted
+store, creates a new protected key and asks you to enter connection secrets again
+and test affected connections. It preserves unrelated connection definitions.
+Restoring the old key is the route to recover the archived credentials. A locked
+or inaccessible key store must be made accessible; it cannot use this reset or a
+plaintext fallback.
+
+Providers supplied by an extension show their owner in AI settings. Edit their
+endpoint, protocol and credentials under AI Extensions. Provider/model selection
+remains available in the provider settings.

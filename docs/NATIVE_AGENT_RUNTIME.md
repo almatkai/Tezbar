@@ -4,8 +4,10 @@ Built-in AI execution is owned by Rust. Pi, Node, npm, Bun and `opencode run`
 are not execution fallbacks. React remains the renderer; model servers, speech/
 ML engines, OS helpers and explicitly connected MCP programs remain external.
 The implementation follows [NATIVE_AI_SPEC.md](NATIVE_AI_SPEC.md). The required
-Claude Opus 5.5 review is a separate coordinator step and has not yet run; this
-branch is not a release approval.
+fresh Claude Opus 5.5 closure review is a separate coordinator step. Initial
+reviews and re-review findings are preserved in docs/reviews; the latest fixes
+still require new wire, standards and full runtime closure. This branch is not a
+release approval.
 
 ## Entry points and providers
 
