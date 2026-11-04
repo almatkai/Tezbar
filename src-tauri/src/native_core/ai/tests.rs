@@ -131,9 +131,12 @@ fn mock_pi(core: &AiCore, scenario: &str) {
     use std::os::unix::fs::PermissionsExt;
     let path = core.inner.ctx.paths.resource_dir.join("pi-mock");
     let script=r#"#!/usr/bin/env python3
-import json,sys,pathlib,time
+import json,sys,pathlib,time,os
 base=pathlib.Path(__file__).parent
 scenario=SCENARIO
+if scenario=='copilot':
+    assert sys.argv[sys.argv.index('--model')+1]=='github-copilot/gpt-5-mini'
+    assert os.environ.get('COPILOT_GITHUB_TOKEN')=='fixture-copilot-token'
 count=1
 # Only retry tests need a counter; observer RPCs intentionally run concurrently.
 if scenario in ('retry','partial'):
@@ -156,6 +159,9 @@ def finish(text):
 for line in sys.stdin:
     request=json.loads(line)
     if request['type']=='set_model':
+        if scenario=='copilot':
+            assert request['provider']=='github-copilot'
+            assert request['modelId']=='gpt-5-mini'
         send({'type':'response','id':'wrong-id','success':False,'error':'ignore stale'})
         send({'type':'response','id':request['id'],'success':True})
     elif request['type']=='get_state':
@@ -258,6 +264,59 @@ async fn subprocess_approval_rpc_response_is_correlated() {
     .unwrap();
     assert_eq!(next_event(&mut events, "answer").await["text"], "denied");
     next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn review_mode_requires_confirmation_for_a_remembered_command() {
+    let (_dir, core, mut events) = fixture();
+    mock_pi(&core, "approval");
+    core.patch_config(json!({"agentApprovalMode":"review","agentAlwaysAllowedExactCommands":["echo exact"]}))
+        .await.unwrap();
+    core.handle("agent:run", &[json!({"task":"test","runId":"agent-review"})])
+        .await.unwrap().unwrap();
+    let event = next_event(&mut events, "approval").await;
+    core.handle("agent:approve", &[json!({"runId":"agent-review","approvalId":event["approvalId"],"decision":"deny"})])
+        .await.unwrap().unwrap();
+    assert_eq!(next_event(&mut events, "answer").await["text"], "denied");
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn copilot_agent_uses_the_apps_token_in_the_pi_child_environment() {
+    let (_dir, core, mut events) = fixture();
+    mock_pi(&core, "copilot");
+    core.patch_config(json!({"provider":"copilot","model":"gpt-5-mini","providerConfigs":{"copilot":{"copilotGithubToken":"fixture-copilot-token"}}}))
+        .await.unwrap();
+    core.handle("agent:run", &[json!({"task":"test","runId":"agent-copilot"})])
+        .await.unwrap().unwrap();
+    assert_eq!(
+        next_event(&mut events, "answer").await["text"],
+        "complete 🦀\u{2028}\u{2029} end"
+    );
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn chat_metadata_handles_multibyte_answer_boundaries_without_panicking() {
+    let (_dir, core, _events) = fixture();
+    // Missing credentials intentionally exercise the local fallback, without a provider request.
+    core.patch_config(json!({"provider":"openai","providerConfigs":{"openai":{"apiKey":""}}}))
+        .await.unwrap();
+    for answer in [
+        format!("A{}", "я".repeat(200)),
+        format!("A{}", "🦀".repeat(100)),
+        "x".repeat(400),
+    ] {
+        let meta = core.handle("chat:generate-meta", &[json!({"id":"unicode-chat","prompt":"Unicode response","answer":answer})])
+            .await.unwrap().unwrap();
+        assert!(!s(&meta["title"]).is_empty());
+        assert!(!s(&meta["icon"]).is_empty());
+    }
     core.shutdown().await;
 }
 #[tokio::test]

@@ -8,7 +8,7 @@ import { installWindowDrag } from './windowDrag'
 import { newItemEventFor } from './newItemShortcut'
 import type { VaultDraftSeed } from '../shared/vault'
 import type { ActiveAgentRunInfo } from '../shared/chat'
-import type { AiChatBoot } from '../shared/aiChatSurface'
+import { createAiChatNavigation, type AiChatBoot } from '../shared/aiChatSurface'
 import type { ExtensionRunCommandResult } from '../shared/extensionRuntime'
 import { DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS } from '../shared/llmConfig'
 import type { TerminalSessionsAction } from '../shared/terminal'
@@ -785,7 +785,7 @@ function LauncherApp(): JSX.Element {
                 initialValue={commandInitialValue}
                 initialSelectedChatId={commandInitialSelectedChatId}
                 onOpenAiChat={(nextBoot) => {
-                  setAiChatBoot(nextBoot)
+                  setAiChatBoot(createAiChatNavigation(nextBoot))
                   setCommandInitialValue('')
                   setCommandInitialSelectedChatId(
                     nextBoot.kind === 'resume' ? nextBoot.sessionId : null

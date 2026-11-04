@@ -117,13 +117,14 @@ impl AiCore {
             Ok(v) => v,
             Err(_) => return false,
         };
-        if raw["agentAlwaysAllowedExactCommands"]
-            .as_array()
-            .is_some_and(|a| a.iter().any(|c| c.as_str() == Some(command.trim())))
+        let mode = raw["agentApprovalMode"].as_str().unwrap_or("default");
+        if mode != "review"
+            && raw["agentAlwaysAllowedExactCommands"]
+                .as_array()
+                .is_some_and(|a| a.iter().any(|c| c.as_str() == Some(command.trim())))
         {
             return true;
         }
-        let mode = raw["agentApprovalMode"].as_str().unwrap_or("default");
         if mode == "turbo" && !title.contains("Destructive") {
             return true;
         }
@@ -246,6 +247,17 @@ impl AiCore {
         let policy = self.policy_path().await?;
         let gateway = self.ensure_gateway().await?;
         let mut cmd = self.command(self.pi_binary().await).await;
+        if s(&cfg["provider"]) == "copilot" {
+            // Pi's built-in provider consumes this token. Keep it scoped to the
+            // child; never serialize the account into Pi's global auth store.
+            let token = self.copilot_token().await?;
+            if token.trim().is_empty() {
+                return Err(
+                    "Copilot is not signed in. Sign in to Copilot in Tezbar settings.".into(),
+                );
+            }
+            cmd.env("COPILOT_GITHUB_TOKEN", token);
+        }
         cmd.args([
             "--mode",
             "rpc",

@@ -106,7 +106,16 @@ function registerRaymesProvider(pi: ExtensionAPI): void {
 }
 
 function hasUnsafeShellSyntax(command: string): boolean {
-  return /[;|<>`\n]/.test(command) || command.includes('$(') || command.includes('||')
+  return /[;|<>`()\r\n]/.test(command) || /(^|[^&])&([^&]|$)/.test(command)
+}
+
+/** Only inspect simple commands joined by && or |. Unknown shell syntax needs review. */
+function inspectableCommands(command: string): string[] | null {
+  if (/[;<>`()\r\n]/.test(command) || /(^|[^&])&([^&]|$)/.test(command) || command.includes('||')) {
+    return null
+  }
+  const commands = command.split(/\s*(?:&&|\|)\s*/).map((part) => part.trim())
+  return commands.every(Boolean) ? commands : null
 }
 
 function persistedAllowedCommands(): Set<string> {
@@ -156,16 +165,8 @@ export function isPersistentlyAllowedBash(
   command: string,
   allowedCommands: ReadonlySet<string>
 ): boolean {
-  const trimmed = command.trim()
-  if (!trimmed || /[;<>`\n]/.test(trimmed) || trimmed.includes('$(') || trimmed.includes('||')) {
-    return false
-  }
-
-  const commands = trimmed
-    .split(/\s*(?:&&|\|)\s*/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-  if (commands.length === 0) return false
+  const commands = inspectableCommands(command.trim())
+  if (!commands) return false
 
   return commands.every((part) => {
     if (isSimpleCd(part)) return true
@@ -351,19 +352,22 @@ export function isDestructiveBash(command: string): boolean {
  */
 export function isSafeProjectBash(command: string): boolean {
   const trimmed = command.trim()
-  if (!trimmed) return false
-  if (isDestructiveBash(trimmed)) return false
+  const commands = inspectableCommands(trimmed)
+  if (!commands || isDestructiveBash(trimmed)) return false
+  return commands.every((part) => isAutoAllowedBash(part) || isSafeProjectCommand(part))
+}
 
+function isSafeProjectCommand(command: string): boolean {
   return (
     /^(?:git\s+(?:status|diff|log|branch|show|remote|tag|rev-parse|describe|stash\s+list))\b/.test(
-      trimmed
+      command
     ) ||
-    /^(?:npm|pnpm|yarn)\s+(?:test|run\s+[a-zA-Z0-9:_-]+|list|outdated|view)\b/.test(trimmed) ||
-    /^(?:cargo\s+(?:check|test|build|clippy|fmt))\b/.test(trimmed) ||
-    /^(?:go\s+(?:test|build|vet))\b/.test(trimmed) ||
-    /^(?:pytest|vitest|jest|tsc)\b/.test(trimmed) ||
+    /^(?:npm|pnpm|yarn)\s+(?:test|run\s+[a-zA-Z0-9:_-]+|list|outdated|view)\b/.test(command) ||
+    /^(?:cargo\s+(?:check|test|build|clippy|fmt))\b/.test(command) ||
+    /^(?:go\s+(?:test|build|vet))\b/.test(command) ||
+    /^(?:pytest|vitest|jest|tsc)\b/.test(command) ||
     /^(?:cat|head|tail|wc|echo|printf|date|top|ps|uptime|which|whereis|uname|sw_vers|df|du|free|lsof|env)\b/.test(
-      trimmed
+      command
     )
   )
 }

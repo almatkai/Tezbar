@@ -157,6 +157,11 @@ pub fn pi_bridge(cfg: &Value) -> (String, Option<String>, bool) {
     let p = s(&cfg["provider"]);
     let model = s(&cfg["model"]);
     let id = model.trim_start_matches(&format!("{p}/"));
+    let id = if p == "copilot" {
+        id.strip_prefix("github-copilot/").unwrap_or(id)
+    } else {
+        id
+    };
     if p == "antigravity" {
         return (format!("antigravity/{id}"), None, true);
     }
@@ -184,6 +189,9 @@ pub fn pi_bridge(cfg: &Value) -> (String, Option<String>, bool) {
         })
         .and_then(|m| m["capabilities"].as_array())
         .is_some_and(|c| c.iter().any(|c| c == "vision"));
+    if p == "copilot" {
+        return (format!("github-copilot/{id}"), None, vision);
+    }
     let mut base = cfg["openaiCompatibleBaseURL"]
         .as_str()
         .filter(|b| !b.is_empty())
@@ -230,6 +238,19 @@ pub fn pi_bridge(cfg: &Value) -> (String, Option<String>, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn copilot_uses_the_native_pi_provider_without_serializing_credentials() {
+        let cfg = selected(
+            &json!({"provider":"copilot","copilotGithubToken":"fixture-token","model":"gpt-5-mini"}),
+            Some("chat"),
+            None,
+        );
+        let (pattern, bridge, vision) = pi_bridge(&cfg);
+        assert_eq!(pattern, "github-copilot/gpt-5-mini");
+        assert!(bridge.is_none());
+        assert!(vision);
+    }
+
     #[test]
     fn credentials_are_not_leaked_to_other_providers() {
         let raw = json!({"provider":"openai","apiKey":"legacy","providerConfigs":{"anthropic":{"apiKey":"claude"}},"taskProviderOverrides":{"chat":"anthropic"},"providerSelectedModels":{"anthropic":"custom-model"}});
