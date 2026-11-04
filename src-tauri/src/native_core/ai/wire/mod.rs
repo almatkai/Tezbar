@@ -3,6 +3,7 @@ mod anthropic;
 mod chat;
 mod gemini;
 mod ollama;
+mod redact;
 mod responses;
 pub(super) mod transport;
 use super::{
@@ -68,14 +69,14 @@ fn text_blocks(blocks: &[Block]) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
-fn id_for(origin: &Origin, messages: &[Message], id: &str) -> String {
+fn id_for(origin: &Origin, messages: &[Message], canonical: &str, id: &str) -> String {
     if messages
         .iter()
-        .any(|m| m.raw_for(origin).is_some() && m.calls().iter().any(|c| c["id"] == id))
+        .any(|m| m.raw_for(origin).is_some() && m.calls().iter().any(|c| c["callId"] == canonical))
     {
         id.into()
     } else {
-        wire_id(id)
+        wire_id(canonical)
     }
 }
 fn image_url(mime: &str, data: &str) -> String {
@@ -101,14 +102,15 @@ pub struct Decoder {
     terminal: bool,
     text: String,
     raw: Value,
+    closed_blocks: HashSet<u64>,
     blocks: BTreeMap<u64, Value>,
     args: BTreeMap<u64, String>,
     calls: BTreeMap<u64, Value>,
-    turn: usize,
+    turn: String,
     stop_reason: Option<String>,
 }
 impl Decoder {
-    pub fn new(origin: Origin, turn: usize) -> Self {
+    pub fn new(origin: Origin, turn: impl ToString) -> Self {
         Self {
             origin,
             lines: Lines::default(),
@@ -118,11 +120,28 @@ impl Decoder {
             text: String::new(),
             raw: json!({}),
             blocks: BTreeMap::new(),
+            closed_blocks: HashSet::new(),
             args: BTreeMap::new(),
             calls: BTreeMap::new(),
-            turn,
+            turn: turn.to_string(),
             stop_reason: None,
         }
+    }
+    fn has_thinking(&self) -> bool {
+        [
+            "reasoning_content",
+            "reasoning",
+            "reasoning_details",
+            "thinking",
+        ]
+        .iter()
+        .any(|k| self.raw.get(k).is_some())
+            || self.blocks.values().any(|b| {
+                matches!(
+                    s(&b["type"]),
+                    "thinking" | "redacted_thinking" | "reasoning"
+                ) || b["thought"] == true
+            })
     }
     pub fn feed(
         &mut self,
@@ -218,6 +237,14 @@ impl Decoder {
         }
     }
     pub fn finish(mut self) -> Result<Turn, String> {
+        if self.origin.protocol == Protocol::Anthropic
+            && !self.closed_blocks.is_empty()
+            && self.blocks.keys().any(|i| !self.closed_blocks.contains(i))
+        {
+            return Err(failure(
+                "Anthropic message stopped with unfinished content blocks",
+            ));
+        }
         if !self.terminal {
             return Err(failure(
                 "stream ended before terminal signal; no tools executed",

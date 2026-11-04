@@ -1008,7 +1008,7 @@ fn watcher_skips_browser_junk_and_pending_work_has_max_wait_and_full_rate_limit(
         assert!(!watcher_reconcile(e.as_ref().unwrap(), &roots), "{path}");
         assert!(
             !watcher_reconcile(
-                &Event::new(EventKind::Any).add_path(PathBuf::from(path)),
+                &Event::new(EventKind::Any).add_path(e.as_ref().unwrap().paths[0].clone()),
                 &roots
             ),
             "{path}"

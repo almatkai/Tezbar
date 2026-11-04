@@ -29,10 +29,31 @@ pub(super) fn fixture() -> (
         let _ = tx.send((channel.to_string(), value));
     }));
     let core = AiCore::new(ctx);
-    core.inner
-        .login_path
-        .set(std::env::var("PATH").unwrap_or_default())
-        .unwrap();
+    let bin = root.join("no-runtime-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for name in ["pi", "node", "npm", "pnpm", "bun", "opencode"] {
+            let path = bin.join(name);
+            std::fs::write(&path,"#!/bin/sh\nif [ \"$(basename \"$0\")\" = opencode ] && [ \"$1\" = models ]; then printf 'opencode/fixture\\n'; exit 0; fi\nprintf forbidden > \"$(dirname \"$0\")/forbidden\"\nexit 91\n").unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    #[cfg(windows)]
+    {
+        let executable = no_runtime_marker();
+        for name in ["pi", "node", "npm", "pnpm", "bun", "opencode"] {
+            std::fs::hard_link(&executable, bin.join(format!("{name}.exe"))).unwrap();
+        }
+    }
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    )))
+    .unwrap()
+    .to_string_lossy()
+    .into_owned();
+    core.inner.login_path.set(path).unwrap();
     (dir, core, rx)
 }
 pub(super) async fn next_event(
@@ -62,7 +83,13 @@ async fn approval_matching_cancellation_and_exact_persistence() {
     let owner = core.clone();
     let pending = tokio::spawn(async move {
         owner
-            .approval("agent-test", "Allow?", "rg needle file | head -5", &cancel)
+            .approval_prompt(
+                "agent-test",
+                "Allow?",
+                "rg needle file | head -5",
+                &cancel,
+                true,
+            )
             .await
     });
     let event = next_event(&mut events, "approval").await;
@@ -99,7 +126,7 @@ async fn approval_matching_cancellation_and_exact_persistence() {
     let owner = core.clone();
     let pending = tokio::spawn(async move {
         owner
-            .approval("agent-new", "Allow?", "rm file", &cancel)
+            .approval_prompt("agent-new", "Allow?", "rm file", &cancel, true)
             .await
     });
     let event = next_event(&mut events, "approval").await;
@@ -331,4 +358,75 @@ async fn superseded_answer_cannot_complete_replacement_stream() {
     assert_eq!(events.recv().await.unwrap().0, "stream-done");
     server.await.unwrap();
     core.shutdown().await;
+}
+
+#[cfg(windows)]
+fn no_runtime_marker() -> std::path::PathBuf {
+    static FIXTURE: std::sync::OnceLock<(tempfile::TempDir, std::path::PathBuf)> =
+        std::sync::OnceLock::new();
+    FIXTURE.get_or_init(||{let dir=tempfile::tempdir().unwrap();let source=dir.path().join("marker.rs");let exe=dir.path().join("marker.exe");std::fs::write(&source,r#"fn main(){let exe=std::env::current_exe().unwrap();if exe.file_stem().unwrap()=="opencode"&&std::env::args().nth(1).as_deref()==Some("models"){println!("opencode/fixture");return}std::fs::write(exe.parent().unwrap().join("forbidden"),b"forbidden").unwrap();std::process::exit(91)}"#).unwrap();let result=std::process::Command::new("rustc").arg("--edition=2021").arg(&source).arg("-o").arg(&exe).output().unwrap();assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));(dir,exe)}).1.clone()
+}
+#[test]
+fn native_source_has_only_reviewed_process_seams_and_never_stages_pi_policy() {
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let ai = root.join("src/native_core/ai");
+    for file in walkdir::WalkDir::new(&ai)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|s| s == "rs"))
+    {
+        let relative = file
+            .path()
+            .strip_prefix(&ai)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
+        if relative.ends_with("tests.rs") || relative == "fixture_http.rs" {
+            continue;
+        }
+        let source = std::fs::read_to_string(file.path()).unwrap();
+        for forbidden in [
+            "pi_binary",
+            "pi_run(",
+            "opencode run",
+            ".command(\"pi\")",
+            ".command(\"npm\")",
+            ".command(\"node\")",
+        ] {
+            assert!(!source.contains(forbidden), "{relative}: {forbidden}")
+        }
+        let production = source.split("#[cfg(test)]").next().unwrap();
+        if production.contains("process::command(")
+            || production.contains(".command(")
+            || production.contains("Command::new(")
+        {
+            assert!(
+                [
+                    "mod.rs",
+                    "process.rs",
+                    "legacy.rs",
+                    "native_tools.rs",
+                    "provider.rs",
+                    "voice.rs",
+                    "ext/mcp/client.rs"
+                ]
+                .contains(&relative.as_str()),
+                "Unreviewed process seam: {relative}"
+            )
+        }
+    }
+    for removed in [
+        "pi.rs",
+        "pi_loop.rs",
+        "native.rs",
+        "native_protocol.rs",
+        "gateway.rs",
+    ] {
+        assert!(!ai.join(removed).exists())
+    }
+    assert!(!std::fs::read_to_string(root.join("tauri.conf.json"))
+        .unwrap()
+        .contains("raymes-pi-policy.ts"));
+    let provider = std::fs::read_to_string(ai.join("provider.rs")).unwrap();
+    assert!(provider.contains("self.command(\"opencode\").await.arg(\"models\")"));
 }

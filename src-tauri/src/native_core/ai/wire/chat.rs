@@ -13,9 +13,9 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             match b {
             Block::Text{text}=>content.push(json!({"type":"text","text":text})),
             Block::Image{mime,data}=>content.push(json!({"type":"image_url","image_url":{"url":image_url(mime,data)}})),
-            Block::ToolCall{wire_id:id,name,arguments,..}=>calls.push(json!({"id":id_for(o,ms,id),"type":"function","function":{"name":name,"arguments":arguments}})),
-            Block::ToolResult{wire_id:id,name,blocks,..}=>{
-                results.push(json!({"role":"tool","tool_call_id":id_for(o,ms,id),"content":text_blocks(blocks)}));
+            Block::ToolCall{id:canonical,wire_id:id,name,arguments,..}=>calls.push(json!({"id":id_for(o,ms,canonical,id),"type":"function","function":{"name":name,"arguments":arguments}})),
+            Block::ToolResult{call:canonical,wire_id:id,name,blocks,..}=>{
+                results.push(json!({"role":"tool","tool_call_id":id_for(o,ms,canonical,id),"content":text_blocks(blocks)}));
                 let mut images=vec![];for b in blocks {if let Block::Image{mime,data}=b{images.push(json!({"type":"image_url","image_url":{"url":image_url(mime,data)}}));}}
                 if !images.is_empty(){images.insert(0,json!({"type":"text","text":format!("Image from tool {name}")}));results.push(json!({"role":"user","content":images}));}
             }, _=>{}

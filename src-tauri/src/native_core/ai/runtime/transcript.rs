@@ -177,3 +177,99 @@ pub fn bound_context(messages: &mut [Message]) -> Result<bool, String> {
     }
     Err("Native limit: text context exceeds 4 MiB".into())
 }
+
+/// Crash recovery closes dangling calls with unknown outcomes. It never executes
+/// them. This runs after loading the selected history window, before encoding.
+pub fn close_unanswered(messages: &mut Vec<Message>) -> bool {
+    use std::collections::HashSet;
+    let answered: HashSet<String> = messages
+        .iter()
+        .flat_map(|m| &m.blocks)
+        .filter_map(|b| {
+            if let Block::ToolResult { call, .. } = b {
+                Some(call.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    let mut repaired = Vec::with_capacity(messages.len());
+    let mut changed = false;
+    for message in std::mem::take(messages) {
+        let calls = message.calls();
+        repaired.push(message);
+        for call in calls {
+            if !answered.contains(s(&call["callId"])) {
+                changed = true;
+                repaired.push(Message {
+                    role: "tool".into(),
+                    opaque: None,
+                    blocks: vec![Block::ToolResult {
+                        call: s(&call["callId"]).into(),
+                        wire_id: s(&call["id"]).into(),
+                        name: s(&call["function"]["name"]).into(),
+                        blocks: vec![Block::Text {
+                            text: "Interrupted. The outcome of this call is unknown.".into(),
+                        }],
+                        is_error: true,
+                    }],
+                });
+            }
+        }
+    }
+    *messages = repaired;
+    changed
+}
+pub fn missing_images(messages: &[Message]) -> bool {
+    fn missing(blocks: &[Block]) -> bool {
+        blocks.iter().any(|b| match b {
+            Block::Text { text } => text.contains("[Earlier image is no longer available]"),
+            Block::ToolResult { blocks, .. } => missing(blocks),
+            _ => false,
+        })
+    }
+    messages.iter().any(|m| missing(&m.blocks))
+}
+
+/// Bound decoded image history independently from text. Eviction is explicit.
+pub fn bound_images(messages: &mut [Message]) {
+    fn size(blocks: &[Block]) -> usize {
+        blocks
+            .iter()
+            .map(|b| match b {
+                Block::Image { data, .. } => data.len().saturating_mul(3) / 4,
+                Block::ToolResult { blocks, .. } => size(blocks),
+                _ => 0,
+            })
+            .sum()
+    }
+    fn evict(blocks: &mut [Block], bytes: &mut usize) {
+        for block in blocks {
+            if *bytes <= super::limits::CONVERSATION_IMAGES {
+                return;
+            }
+            match block {
+                Block::Image { data, .. } => {
+                    *bytes = bytes.saturating_sub(data.len().saturating_mul(3) / 4);
+                    *block = Block::Text {
+                        text: "[Earlier image is no longer available]".into(),
+                    };
+                }
+                Block::ToolResult { blocks, .. } => evict(blocks, bytes),
+                _ => {}
+            }
+        }
+    }
+    let mut bytes = messages.iter().map(|m| size(&m.blocks)).sum();
+    for message in messages {
+        evict(&mut message.blocks, &mut bytes)
+    }
+}
+
+pub fn contains_images(blocks: &[Block]) -> bool {
+    blocks.iter().any(|b| match b {
+        Block::Image { .. } => true,
+        Block::ToolResult { blocks, .. } => contains_images(blocks),
+        _ => false,
+    })
+}

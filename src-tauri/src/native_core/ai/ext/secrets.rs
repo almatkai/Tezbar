@@ -7,10 +7,19 @@ use crate::native_core::vault::{
 };
 use std::path::PathBuf;
 pub struct Secrets {
+    lock: Mutex<()>,
     path: PathBuf,
     key: Arc<dyn KeyStore>,
 }
 impl Secrets {
+    #[cfg(test)]
+    fn with_key(config: &std::path::Path, key: Arc<dyn KeyStore>) -> Self {
+        Self {
+            lock: Mutex::new(()),
+            path: config.join("ai-extension-secrets.bin"),
+            key,
+        }
+    }
     pub fn new(config: &std::path::Path) -> Self {
         #[cfg(test)]
         let key: Arc<dyn KeyStore> = Arc::new(MemoryKey(Mutex::new(None)));
@@ -19,6 +28,7 @@ impl Secrets {
             path: config.join("ai-extension-key.bin"),
         });
         Self {
+            lock: Mutex::new(()),
             path: config.join("ai-extension-secrets.bin"),
             key,
         }
@@ -48,6 +58,10 @@ impl Secrets {
         result
     }
     pub fn values(&self, connection: &str) -> Result<HashMap<String, String>, String> {
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "Connection secret store lock failed")?;
         let value = self.load()?;
         Ok(value[connection]
             .as_object()
@@ -57,6 +71,13 @@ impl Secrets {
             .collect())
     }
     pub fn put(&self, connection: &str, name: &str, value: Option<&str>) -> Result<(), String> {
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "Connection secret store lock failed")?;
+        if value.is_none() && !self.path.exists() {
+            return Ok(());
+        }
         let mut all = self.load()?;
         if !all[connection].is_object() {
             all[connection] = json!({})
@@ -247,5 +268,47 @@ impl KeyStore for MemoryKey {
     fn delete(&self) -> Result<(), String> {
         *self.0.lock().unwrap() = None;
         Ok(())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    struct Unavailable;
+    impl KeyStore for Unavailable {
+        fn load(&self) -> Result<Option<VaultKey>, String> {
+            Err("Fixture key store unavailable".into())
+        }
+        fn save(&self, _: &VaultKey) -> Result<(), String> {
+            Err("Fixture key store unavailable".into())
+        }
+        fn delete(&self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+    #[test]
+    fn reopened_store_uses_the_same_keystore_and_unavailable_keystore_never_writes_plaintext() {
+        let dir = tempfile::tempdir().unwrap();
+        let key: Arc<dyn KeyStore> = Arc::new(MemoryKey(Mutex::new(None)));
+        let store = Secrets::with_key(dir.path(), key.clone());
+        store
+            .put("connection", "token", Some("fixture-persisted-private"))
+            .unwrap();
+        drop(store);
+        let reopened = Secrets::with_key(dir.path(), key);
+        assert_eq!(
+            reopened.values("connection").unwrap()["token"],
+            "fixture-persisted-private"
+        );
+        assert!(
+            !std::fs::read_to_string(dir.path().join("ai-extension-secrets.bin"))
+                .unwrap()
+                .contains("fixture-persisted-private")
+        );
+        let other = tempfile::tempdir().unwrap();
+        let store = Secrets::with_key(other.path(), Arc::new(Unavailable));
+        assert!(store
+            .put("connection", "token", Some("must-not-be-written"))
+            .is_err());
+        assert!(!other.path().join("ai-extension-secrets.bin").exists());
     }
 }

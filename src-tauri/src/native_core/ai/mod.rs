@@ -10,11 +10,14 @@ mod memory;
 #[cfg(test)]
 mod native_tests;
 mod native_tools;
+mod oauth;
 mod providers;
 mod runtime;
 mod search_projection;
 mod wire;
 
+#[cfg(test)]
+mod fixture_http;
 mod process;
 mod provider;
 #[cfg(test)]
@@ -30,6 +33,13 @@ use std::{
 };
 
 pub const CHANNELS: &[&str] = &[
+    "ai-accounts:antigravity:list",
+    "ai-accounts:antigravity:sign-in",
+    "ai-accounts:antigravity:sign-in-paste",
+    "ai-accounts:antigravity:cancel",
+    "ai-accounts:antigravity:switch",
+    "ai-accounts:antigravity:remove",
+    "ai-accounts:antigravity:status",
     "llm-config-get",
     "llm-config-set",
     "llm-provider-statuses",
@@ -84,8 +94,12 @@ struct Inner {
     ctx: CoreContext,
     http: reqwest::Client,
     state: Mutex<State>,
+    oauth_flows: Mutex<HashMap<String, oauth::Handle>>,
+    oauth_results: Mutex<HashMap<String, Value>>,
     token_refresh: tokio::sync::Mutex<()>,
     copilot_sessions: tokio::sync::Mutex<HashMap<String, providers::copilot::Session>>,
+    provider_catalogs: Mutex<HashMap<String, (u64, Value)>>,
+    legacy_runtime_noticed: std::sync::atomic::AtomicBool,
     login_path: tokio::sync::OnceCell<String>,
     voice: voice::Voice,
     stop: Cancel,
@@ -97,7 +111,9 @@ struct State {
     agents: HashMap<String, Run>,
     answer: Option<Run>,
     approvals: HashMap<String, Approval>,
+    stage_indices: HashMap<String, usize>,
     observations: HashMap<String, Value>,
+    clocks: HashMap<String, Arc<runtime::clock::Clock>>,
     indexed_attempts: std::collections::HashSet<String>,
     device: Option<Value>,
     device_generation: u64,
@@ -116,7 +132,7 @@ struct Approval {
     run_id: String,
     command: String,
     remember_command: bool,
-    extension_identity:Option<(String,String,String,String)>,
+    extension_identity: Option<(String, String, String, String)>,
     reply: tokio::sync::oneshot::Sender<bool>,
 }
 fn err(e: impl std::fmt::Display) -> String {
@@ -144,8 +160,12 @@ impl AiCore {
                 ctx,
                 http: reqwest::Client::new(),
                 state: Mutex::new(State::default()),
+                oauth_flows: Mutex::new(HashMap::new()),
+                oauth_results: Mutex::new(HashMap::new()),
                 token_refresh: tokio::sync::Mutex::new(()),
                 copilot_sessions: tokio::sync::Mutex::new(HashMap::new()),
+                provider_catalogs: Mutex::new(HashMap::new()),
+                legacy_runtime_noticed: std::sync::atomic::AtomicBool::new(false),
                 login_path: tokio::sync::OnceCell::new(),
                 voice,
                 stop: Cancel::new(),
@@ -168,6 +188,9 @@ impl AiCore {
     pub async fn shutdown(&self) {
         self.inner.stop.cancel();
         self.inner.extensions.shutdown();
+        for (_, flow) in self.inner.oauth_flows.lock().unwrap().drain() {
+            flow.cancel.cancel();
+        }
         self.cancel_run(None, true);
         {
             let mut state = self.inner.state.lock().unwrap();
@@ -188,6 +211,19 @@ impl AiCore {
                 let _ = task.await;
             }
         }
+        #[cfg(test)]
+        assert!(
+            !self
+                .inner
+                .ctx
+                .paths
+                .home_dir
+                .parent()
+                .unwrap()
+                .join("no-runtime-bin/forbidden")
+                .exists(),
+            "A built-in AI path spawned a forbidden legacy runtime"
+        );
     }
 
     fn spawn(&self, f: impl std::future::Future<Output = ()> + Send + 'static) {
@@ -218,12 +254,27 @@ impl AiCore {
             .await
             .map_err(err)?
     }
+    fn stage_index(&self, run: &str) -> usize {
+        let mut state = self.inner.state.lock().unwrap();
+        let next = state.stage_indices.entry(run.into()).or_default();
+        let index = *next;
+        *next += 1;
+        index
+    }
     fn agent_event(&self, id: &str, mut event: Value) {
         if matches!(
             s(&event["type"]),
             "stage" | "message" | "answer" | "approval"
         ) {
             let mut state = self.inner.state.lock().unwrap();
+            if state
+                .agents
+                .get(id)
+                .or_else(|| state.agent.as_ref().filter(|r| r.id == id))
+                .is_some_and(|r| r.cancel.is_cancelled())
+            {
+                return;
+            }
             if let Some(run) = state.agents.get_mut(id) {
                 run.emitted = true;
             }
@@ -278,7 +329,11 @@ impl AiCore {
         }
         let mut state = self.inner.state.lock().unwrap();
         state.approvals.retain(|_, a| a.run_id != id);
-        state.agents.remove(id);
+        if let Some(run) = state.agents.remove(id) {
+            run.cancel.cancel();
+        }
+        state.clocks.remove(id);
+        state.stage_indices.remove(id);
         state.indexed_attempts.remove(id);
         if state.agent.as_ref().is_some_and(|r| r.id == id) {
             state.agent = None;
@@ -325,6 +380,7 @@ impl AiCore {
             )
         });
         let cancel = Cancel::new();
+        let clock = runtime::clock::Clock::new();
         let run = Run {
             id: id.clone(),
             cancel: cancel.clone(),
@@ -344,14 +400,24 @@ impl AiCore {
                 },
             );
             state.agent = Some(run);
+            state.clocks.insert(id.clone(), clock.clone());
         }
+        let timer_clock = clock.clone();
+        let timer_cancel = cancel.clone();
+        self.spawn(async move{tokio::select!{biased;_=timer_cancel.cancelled()=>{},_=timer_clock.deadline()=>timer_cancel.cancel()}});
         self.agent_event(&id, json!({"type":"start","task":task}));
         let core = self.clone();
         let run = id.clone();
         self.spawn(async move {
             let result = async {
-                let mut cfg = core.cfg(Some("chat"), None).await?;
+                let cwd_path=cwd.as_deref().map(std::path::PathBuf::from).unwrap_or_else(||core.inner.ctx.paths.home_dir.clone());
+                let cwd_path=tokio::fs::canonicalize(cwd_path).await.map_err(err)?;
+                core.revoke_changed_projects(&cwd_path).await?;
+                let raw=core.extension_config(core.read_config().await?,Some(&cwd_path)).await?;
+                let mut cfg = config::selected(&raw,Some("chat"),None);
                 cfg["sessionId"] = options.history["sessionId"].clone();
+                cfg["runId"]=json!(run);
+                if cfg["agentRuntime"]=="pi"&&!core.inner.legacy_runtime_noticed.swap(true,std::sync::atomic::Ordering::SeqCst){core.agent_event(&run,json!({"type":"log","source":"native","line":"The saved runtime preference now uses the native AI runtime."}));}
                 if let Some(mode) = &options.approval_mode {
                     cfg["agentApprovalMode"] = json!(mode);
                 }
@@ -390,9 +456,8 @@ impl AiCore {
             }
             .await;
             if let Err(message) = result {
-                if !cancel.is_cancelled() {
-                    core.agent_event(&run, json!({"type":"error","message":message}));
-                }
+                if clock.expired(){core.agent_event(&run,json!({"type":"error","message":"Native limit: run exceeded 1800 active seconds"}));}
+                else if !cancel.is_cancelled(){core.agent_event(&run,json!({"type":"error","message":message}));}
             }
             core.agent_event(&run, json!({"type":"done"}));
             core.finish_run(&run);
@@ -412,12 +477,65 @@ impl AiCore {
         let a = arg(args, 0);
         match channel {
             c if ext::CHANNELS.contains(&c) => self.ext_handle(c, args).await,
+            "ai-accounts:antigravity:list" => self.antigravity_accounts().await,
+            "ai-accounts:antigravity:sign-in" => self.antigravity_sign_in().await,
+            "ai-accounts:antigravity:sign-in-paste" => {
+                self.paste_oauth_native("antigravity", s(a)).await
+            }
+            "ai-accounts:antigravity:cancel" => Ok(self.cancel_oauth_native("antigravity")),
+            "ai-accounts:antigravity:switch" => self.antigravity_select_account(s(a), false).await,
+            "ai-accounts:antigravity:remove" => self.antigravity_select_account(s(a), true).await,
+            "ai-accounts:antigravity:status" => Ok(self
+                .inner
+                .oauth_results
+                .lock()
+                .unwrap()
+                .get("antigravity")
+                .cloned()
+                .unwrap_or(json!({"status":"idle"}))),
             "llm-config-get" => {
-                let raw = self.read_config().await?;
+                let cwd = if let Some(cwd) = a.as_str() {
+                    let cwd = tokio::fs::canonicalize(cwd).await.map_err(err)?;
+                    self.revoke_changed_projects(&cwd).await?;
+                    Some(cwd)
+                } else {
+                    None
+                };
+                let raw = self
+                    .extension_config(self.read_config().await?, cwd.as_deref())
+                    .await?;
                 let mut value = config::selected(&raw, None, None);
                 for (k, v) in raw.as_object().ok_or("Configuration must be an object")? {
                     value[k] = v.clone();
                 }
+                value.as_object_mut().unwrap().remove("_explicitBaseURL");
+                let opencode = config::selected(&raw, None, Some("opencode"));
+                let mut source = if s(&opencode["apiKey"]).is_empty() {
+                    "none"
+                } else {
+                    "configured"
+                };
+                #[cfg(not(test))]
+                if source == "none"
+                    && std::env::var("OPENCODE_API_KEY").is_ok_and(|key| !key.trim().is_empty())
+                {
+                    source = "environment";
+                }
+                if source == "none"
+                    && self
+                        .opencode_key("", false)
+                        .await
+                        .is_ok_and(|key| !key.is_empty())
+                {
+                    source = "opencode";
+                }
+                let antigravity = self
+                    .antigravity_accounts()
+                    .await
+                    .ok()
+                    .and_then(|a| a.as_array().map(|a| !a.is_empty()))
+                    .unwrap_or(false);
+                value["nativeProviderCredentials"] = json!({"opencode":{"hasValue":source!="none","source":source},"antigravity":{"hasValue":antigravity,"source":if antigravity{"accounts"}else{"none"}}});
                 for (k, default) in [
                     ("uiStateRetentionMs", 60000),
                     ("extensionRuntimeTimeoutMs", 300000),
@@ -451,6 +569,7 @@ impl AiCore {
                 {
                     return Err("agentRuntime must be auto, native or pi".into());
                 }
+                patch.remove("nativeProviderCredentials");
                 let mut result = Value::Null;
                 if let Some(hotkey) = patch.remove("raymesHotkey") {
                     let hotkey = hotkey.as_str().ok_or("raymesHotkey must be a string")?;
@@ -470,7 +589,9 @@ impl AiCore {
                 Ok(result)
             }
             "llm-provider-statuses" => {
-                let raw = self.read_config().await?;
+                let raw = self
+                    .extension_config(self.read_config().await?, None)
+                    .await?;
                 let ids = config::ids(&raw);
                 let requests = ids.iter().map(|id| async {
                     let cfg = config::selected(&raw, None, Some(id));

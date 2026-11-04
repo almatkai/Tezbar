@@ -18,11 +18,20 @@ impl AiCore {
             .timeout(Duration::from_secs(30))
             .send()
             .await
-            .map_err(err)?;
+            .map_err(|_| "GitHub OAuth: network failed")?;
         let status = response.status();
-        let value = response.json::<Value>().await.map_err(err)?;
+        let value = oauth::bounded_json(response).await?;
         if !status.is_success() {
-            return Err(format!("GitHub OAuth failed ({status}): {value}"));
+            let mut detail = redact_text(s(&value["error_description"]));
+            for (_, value) in params {
+                if !value.is_empty() {
+                    detail = detail.replace(value, "[redacted]");
+                }
+            }
+            return Err(format!(
+                "GitHub OAuth failed ({status}): {}",
+                cut(&detail, 500)
+            ));
         }
         Ok(value)
     }
@@ -54,7 +63,9 @@ impl AiCore {
                 json!({"device_code":v["device_code"],"client_id":client,"generation":generation}),
             );
         }
-        Ok(v)
+        Ok(
+            json!({"user_code":v["user_code"],"verification_uri":v["verification_uri"],"expires_in":v["expires_in"],"interval":v["interval"]}),
+        )
     }
     pub(super) async fn device_poll(&self) -> CoreResult {
         let session = self.inner.state.lock().unwrap().device.clone();
@@ -106,10 +117,7 @@ impl AiCore {
         })
         .await
         .map_err(err)??;
-        let mut result = v;
-        result["status"] = json!("success");
-        result["client_id"] = session["client_id"].clone();
-        Ok(result)
+        Ok(json!({"status":"success","client_id":session["client_id"],"hasValue":true}))
     }
     fn persist_tokens(&self, token: &Value, client: &str) -> Result<(), String> {
         self.inner.ctx.config.update(|raw| {
@@ -151,10 +159,14 @@ impl AiCore {
             .as_str()
             .or_else(|| raw["copilotGithubToken"].as_str())
             .unwrap_or(s(&raw["apiKey"]));
-        let refresh = s(&raw["copilotRefreshToken"]);
+        let record = &raw["providerConfigs"]["copilot"];
+        let refresh = record["copilotRefreshToken"]
+            .as_str()
+            .unwrap_or(s(&raw["copilotRefreshToken"]));
         if refresh.is_empty()
-            || raw["copilotExpiresAt"]
+            || record["copilotExpiresAt"]
                 .as_u64()
+                .or_else(|| raw["copilotExpiresAt"].as_u64())
                 .map_or(true, |at| now_ms() < at.saturating_sub(120000))
         {
             return Ok(access.into());

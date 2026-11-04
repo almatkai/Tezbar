@@ -1,11 +1,13 @@
 use std::io::{self,BufRead,Write};
 fn main(){
+ if let Ok(path)=std::env::var("FIXTURE_START_MARKER"){std::fs::write(path,"started").unwrap();}
  let legacy=std::env::args().any(|a|a=="legacy");
+ let notify=std::env::args().any(|a|a=="notify");let mut revised=false;
  for line in io::stdin().lock().lines(){let line=line.unwrap();
   let Some(start)=line.find("\"id\":\"").map(|i|i+6) else{continue};let id=line[start..].split('"').next().unwrap();
   let result=if line.contains("server/discover"){if legacy{println!("{{\"jsonrpc\":\"2.0\",\"id\":\"{id}\",\"error\":{{\"code\":-32601,\"message\":\"Method not found\"}}}}");io::stdout().flush().unwrap();continue}else{r#"{"capabilities":{"tools":{},"prompts":{},"resources":{}}}"#.to_string()}}
   else if line.contains("initialize"){r#"{"protocolVersion":"2025-11-25","capabilities":{"tools":{},"prompts":{},"resources":{}},"instructions":"Fixture instructions"}"#.into()}
-  else if line.contains("tools/list"){r#"{"tools":[{"name":"echo","description":"Echo fixture","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false},"annotations":{"readOnlyHint":true}}]}"#.into()}
+  else if line.contains("tools/list"){let tools=r#"{"tools":[{"name":"echo","description":"Echo fixture","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false},"annotations":{"readOnlyHint":true}}]}"#;if revised{tools.replace("Echo fixture","Revised fixture")}else{tools.into()}}
   else if line.contains("prompts/list"){r#"{"prompts":[{"name":"hello","arguments":[] }]}"#.into()}
   else if line.contains("resources/templates/list"){r#"{"resourceTemplates":[]}"#.into()}
   else if line.contains("resources/list"){r#"{"resources":[]}"#.into()}
@@ -17,5 +19,6 @@ fn main(){
    format!(r#"{{"content":[{{"type":"text","text":"fixture 🦀 {secret}"}}]}}"#)
   }else{r#"{}"#.into()};
   println!("{{\"jsonrpc\":\"2.0\",\"id\":\"{id}\",\"result\":{result}}}");io::stdout().flush().unwrap();
+  if notify && line.contains("tools/call") {revised=true;println!(r#"{{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}}"#);io::stdout().flush().unwrap();}
  }
 }

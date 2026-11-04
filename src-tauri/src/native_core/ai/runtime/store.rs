@@ -45,7 +45,7 @@ pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Res
                     let bytes = base64::engine::general_purpose::STANDARD
                         .decode(&*data)
                         .map_err(err)?;
-                    let hash = key(data);
+                    let hash = format!("{:x}", Sha256::digest(&bytes));
                     private_write(&dir.join(&hash), &bytes)?;
                     *data = format!("blob:{hash}");
                 }
@@ -82,7 +82,13 @@ pub fn load(root: &Path, session: &str, turn: &str) -> Result<Option<Vec<Message
                 Block::Image { data, .. } => {
                     if let Some(hash) = data.strip_prefix("blob:") {
                         if hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()) {
-                            match std::fs::read(dir.join(hash)) {
+                            match std::fs::File::open(dir.join(hash)).and_then(|f| {
+                                use std::io::Read;
+                                let mut bytes = vec![];
+                                f.take(super::limits::IMAGE_BYTES as u64 + 1)
+                                    .read_to_end(&mut bytes)?;
+                                Ok(bytes)
+                            }) {
                                 Ok(bytes) if bytes.len() <= super::limits::IMAGE_BYTES => {
                                     *data = base64::engine::general_purpose::STANDARD.encode(bytes)
                                 }

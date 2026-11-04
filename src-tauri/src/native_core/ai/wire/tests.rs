@@ -224,3 +224,43 @@ fn every_encoder_places_user_and_tool_images_without_flattening() {
         assert_eq!(body.to_string().matches("Zml4dHVyZQ==").count(), 2, "{p:?}");
     }
 }
+
+#[test]
+fn gemini_three_unsigned_same_origin_history_becomes_observation_without_losing_images() {
+    let origin = Origin {
+        protocol: Protocol::Gemini,
+        provider: "gemini".into(),
+        model: "gemini-3.5-flash".into(),
+    };
+    let mut decoder = Decoder::new(origin.clone(), "unsigned");
+    let data = format!(
+        "data: {}\n\n",
+        json!({"candidates":[{"content":{"parts":[{"functionCall":{"name":"read","id":"reused","args":{}}}]},"finishReason":"STOP"}]})
+    );
+    decoder.feed(data.as_bytes(), true, &mut |_| {}).unwrap();
+    let turn = decoder.finish().unwrap();
+    let result = Message {
+        role: "tool".into(),
+        blocks: vec![Block::ToolResult {
+            call: s(&turn.calls[0]["callId"]).into(),
+            wire_id: "reused".into(),
+            name: "read".into(),
+            blocks: vec![
+                Block::Text {
+                    text: "seen".into(),
+                },
+                Block::Image {
+                    mime: "image/png".into(),
+                    data: "fixture".into(),
+                },
+            ],
+            is_error: false,
+        }],
+        opaque: None,
+    };
+    let body = encode(&origin, &[turn.message, result], &[], 42, false).unwrap();
+    assert!(!body.to_string().contains("functionCall"));
+    assert!(!body.to_string().contains("functionResponse"));
+    assert!(body.to_string().contains("Observation from read"));
+    assert!(body.to_string().contains("inlineData"));
+}

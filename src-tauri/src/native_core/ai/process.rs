@@ -8,13 +8,27 @@ use tokio::{
     process::{Child, Command},
 };
 #[derive(Clone)]
-pub struct Cancel(tokio::sync::watch::Sender<bool>);
+pub struct Cancel(tokio::sync::watch::Sender<bool>, Arc<Mutex<()>>);
 impl Cancel {
     pub fn new() -> Self {
-        Self(tokio::sync::watch::channel(false).0)
+        Self(
+            tokio::sync::watch::channel(false).0,
+            Arc::new(Mutex::new(())),
+        )
     }
     pub fn cancel(&self) {
+        let _effect = self.1.lock().unwrap_or_else(|e| e.into_inner());
         self.0.send_replace(true);
+    }
+    pub fn effect<T>(&self, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        let _guard = self
+            .1
+            .lock()
+            .map_err(|_| "Cancellation checkpoint failed")?;
+        if self.is_cancelled() {
+            return Err("Operation cancelled".into());
+        }
+        f()
     }
     pub fn is_cancelled(&self) -> bool {
         *self.0.borrow()
@@ -187,7 +201,7 @@ pub async fn output(
     if cancel.is_cancelled() {
         return Err("Operation cancelled".into());
     }
-    let mut group = GroupChild::spawn(cmd)?;
+    let mut group = cancel.effect(|| GroupChild::spawn(cmd))?;
     let stdout = group
         .child
         .stdout

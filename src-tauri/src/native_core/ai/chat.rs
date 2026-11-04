@@ -164,7 +164,15 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             let tx = db.transaction().map_err(err)?;
             tx.execute("INSERT INTO chat_sessions(id,title,icon,created_at,updated_at,working_directory) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,icon=COALESCE(excluded.icon,chat_sessions.icon),updated_at=excluded.updated_at,working_directory=excluded.working_directory",params![sid,title,icon,created,updated,session["workingDirectory"].as_str()]).map_err(err)?;
             if let Some(profile) = session["agentProfileId"].as_str() {
-                tx.execute("INSERT INTO chat_session_profiles(session_id,profile_id) VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET profile_id=excluded.profile_id",params![sid,profile]).map_err(err)?;
+                if profile.is_empty() {
+                    tx.execute(
+                        "DELETE FROM chat_session_profiles WHERE session_id=?",
+                        params![sid],
+                    )
+                    .map_err(err)?;
+                } else {
+                    tx.execute("INSERT INTO chat_session_profiles(session_id,profile_id) VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET profile_id=excluded.profile_id",params![sid,profile]).map_err(err)?;
+                }
             }
             let owner = tx
                 .query_row("SELECT session_id FROM chat_turns WHERE id=?", [tid], |r| {
@@ -199,6 +207,20 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
                     params![title, now_ms() as i64, id],
                 )
                 .map_err(err)?;
+            }
+            if let Some(profile) = a["agentProfileId"].as_str() {
+                if profile.len() > 512 {
+                    return Err("Profile ID exceeds 512 characters".into());
+                }
+                if profile.is_empty() {
+                    db.execute(
+                        "DELETE FROM chat_session_profiles WHERE session_id=?",
+                        params![id],
+                    )
+                    .map_err(err)?;
+                } else {
+                    db.execute("INSERT INTO chat_session_profiles(session_id,profile_id) VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET profile_id=excluded.profile_id",params![id,profile]).map_err(err)?;
+                }
             }
             Ok(json!({"ok":true}))
         }

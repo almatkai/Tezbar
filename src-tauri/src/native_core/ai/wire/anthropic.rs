@@ -19,8 +19,8 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             for b in &m.blocks {
                 match b{
             Block::Text{text}=>content.push(json!({"type":"text","text":text})),Block::Image{mime,data}=>content.push(image(mime,data)),
-            Block::ToolCall{wire_id:id,name,arguments,..}=>content.push(json!({"type":"tool_use","id":id_for(o,ms,id),"name":name,"input":object_args(arguments)?})),
-            Block::ToolResult{wire_id:id,blocks,is_error,..}=>{let mut c=vec![];for b in blocks{match b{Block::Text{text}=>c.push(json!({"type":"text","text":text})),Block::Image{mime,data}=>c.push(image(mime,data)),_=>{}}}content.push(json!({"type":"tool_result","tool_use_id":id_for(o,ms,id),"is_error":is_error,"content":c}));},_=>{}
+            Block::ToolCall{id:canonical,wire_id:id,name,arguments,..}=>content.push(json!({"type":"tool_use","id":id_for(o,ms,canonical,id),"name":name,"input":object_args(arguments)?})),
+            Block::ToolResult{call:canonical,wire_id:id,blocks,is_error,..}=>{let mut c=vec![];for b in blocks{match b{Block::Text{text}=>c.push(json!({"type":"text","text":text})),Block::Image{mime,data}=>c.push(image(mime,data)),_=>{}}}content.push(json!({"type":"tool_result","tool_use_id":id_for(o,ms,canonical,id),"is_error":is_error,"content":c}));},_=>{}
         }
             }
             content
@@ -50,6 +50,12 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
     let i = v["index"].as_u64().unwrap_or(0);
     match s(&v["type"]) {
         "content_block_start" => {
+            if d.blocks.contains_key(&i) {
+                return Err(failure("duplicate Anthropic block index"));
+            }
+            if i > 4096 {
+                return Err(failure("too many Anthropic content blocks"));
+            }
             let b = v["content_block"].clone();
             if b["type"] == "text" {
                 d.delta(s(&b["text"]), on)
@@ -57,6 +63,9 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
             d.blocks.insert(i, b);
         }
         "content_block_delta" => {
+            if d.closed_blocks.contains(&i) {
+                return Err(failure("delta after content_block_stop"));
+            }
             let delta = &v["delta"];
             if delta["type"] == "text_delta" {
                 d.delta(s(&delta["text"]), on)
@@ -79,6 +88,11 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
                 _ => return Ok(()),
             };
             b[key] = json!(format!("{}{}", s(&b[key]), s(&delta[key])));
+        }
+        "content_block_stop" => {
+            if !d.blocks.contains_key(&i) || !d.closed_blocks.insert(i) {
+                return Err(failure("invalid Anthropic block stop"));
+            }
         }
         "message_delta" => {
             d.stop_reason = v["delta"]["stop_reason"].as_str().map(str::to_string);

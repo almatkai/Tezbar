@@ -11,9 +11,9 @@ pub(super) fn definitions() -> Vec<Value> {
     let string = json!({"type":"string"});
     [
         (if cfg!(windows){"powershell"}else{"bash"},"Execute a shell command in cwd. Complex/unknown/destructive commands require confirmation.",json!({"command":string,"timeoutSeconds":{"type":"integer","minimum":1,"maximum":600}}),vec!["command"]),
-        ("read","Read a UTF-8 regular file inside cwd (maximum 2 MiB).",json!({"path":string,"offset":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1}}),vec!["path"]),
-        ("write","Atomically replace/create a UTF-8 file inside cwd; parent must exist. Always requires approval.",json!({"path":string,"content":string,"createParents":{"type":"boolean"}}),vec!["path","content"]),
-        ("edit","Replace exactly one occurrence of oldText in a UTF-8 file inside cwd. Always requires approval.",json!({"path":string,"oldText":string,"newText":string}),vec!["path","oldText","newText"]),
+        ("read","Read a UTF-8 regular file (maximum 2 MiB). Outside-cwd and sensitive paths follow approval policy.",json!({"path":string,"offset":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1}}),vec!["path"]),
+        ("write","Atomically replace/create a UTF-8 file. Optional createParents. Approval follows the current mode and path policy.",json!({"path":string,"content":string,"createParents":{"type":"boolean"}}),vec!["path","content"]),
+        ("edit","Apply one oldText/newText replacement or an edits array atomically after validation.",json!({"path":string,"oldText":string,"newText":string,"edits":{"type":"array","items":{"type":"object","properties":{"oldText":string,"newText":string},"required":["oldText","newText"]}}}),vec!["path"]),
         ("ls","List a directory. Sensitive entries are omitted unless directly approved.",json!({"path":string}),vec!["path"]),
         ("find","Find names in a bounded directory tree.",json!({"path":string,"query":string}),vec!["path"]),
         ("grep","Bounded literal file-content search.",json!({"query":string,"path":string}),vec!["query"]),
@@ -43,6 +43,13 @@ struct WriteArgs {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct EditArgs {
     path: String,
+    old_text: Option<String>,
+    new_text: Option<String>,
+    edits: Option<Vec<Change>>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct Change {
     old_text: String,
     new_text: String,
 }
@@ -108,7 +115,14 @@ fn read_file(path: &Path) -> Result<String, String> {
     if !path.metadata().map_err(err)?.is_file() {
         return Err("Native file: expected a regular file".into());
     }
-    let file = std::fs::File::open(path).map_err(err)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(err)?;
     if !file.metadata().map_err(err)?.is_file() {
         return Err("Native file: expected a regular file".into());
     }
@@ -121,45 +135,53 @@ fn read_file(path: &Path) -> Result<String, String> {
     }
     String::from_utf8(bytes).map_err(|_| "Native file: not UTF-8".into())
 }
-fn replacement(path: &Path, old: &str, new: &str) -> Result<String, String> {
-    nonempty(old, FILE_LIMIT as usize)?;
-    let text = read_file(path)?;
-    // Count overlapping matches too (e.g. 'aa' in 'aaa').
-    if text
-        .char_indices()
-        .filter(|(i, _)| text[*i..].starts_with(old))
-        .count()
-        != 1
-    {
-        return Err("Native edit: oldText must occur exactly once (ambiguous or missing)".into());
-    }
-    let text = text.replacen(old, new, 1);
-    if text.len() as u64 > FILE_LIMIT {
-        return Err("Native edit: result exceeds 2 MiB".into());
+fn replacements(path: &Path, changes: &[(String, String)]) -> Result<String, String> {
+    let mut text = read_file(path)?;
+    for (old, new) in changes {
+        nonempty(old, FILE_LIMIT as usize)?;
+        if text
+            .char_indices()
+            .filter(|(i, _)| text[*i..].starts_with(old))
+            .count()
+            != 1
+        {
+            return Err(
+                "Native edit: oldText must occur exactly once (ambiguous or missing)".into(),
+            );
+        }
+        text = text.replacen(old, new, 1);
+        if text.len() as u64 > FILE_LIMIT {
+            return Err("Native edit: result exceeds 2 MiB".into());
+        }
     }
     Ok(text)
 }
 pub(super) enum Tool {
     Extension(String, Value),
+    Antigravity(String, Value),
     Bash(String, PathBuf, u64),
     Read(PathBuf, usize, usize),
     Write(PathBuf, String, bool),
     Directory(PathBuf, Option<String>, bool),
     Screen,
-    Edit(PathBuf, String, String),
+    Edit(PathBuf, Vec<(String, String)>),
     Search(PathBuf, String),
     Route(&'static str, String),
 }
 impl Tool {
     pub fn label(&self) -> String {
         match self {
-            Self::Extension(name, _) => name.clone(),
+            Self::Extension(name, _) | Self::Antigravity(name, _) => name.clone(),
             Self::Directory(p, _, _) => format!("list {}", p.display()),
             Self::Screen => "Capture screen".into(),
-            Self::Bash(c, ..) => format!("bash: {}", cut(c, 60)),
+            Self::Bash(c, ..) => format!(
+                "{}: {}",
+                if cfg!(windows) { "powershell" } else { "bash" },
+                cut(c, 60)
+            ),
             Self::Read(p, ..) => format!("read {}", p.display()),
             Self::Write(p, ..) => format!("write {}", p.display()),
-            Self::Edit(p, _, _) => format!("edit {} (1 change)", p.display()),
+            Self::Edit(p, changes) => format!("edit {} ({} changes)", p.display(), changes.len()),
             Self::Search(_, q) => format!("project search: {}", cut(q, 60)),
             Self::Route(r, q) => format!("{r}: {}", cut(q, 60)),
         }
@@ -207,8 +229,31 @@ pub(super) fn prepare(call: &Value, root: &Path) -> Result<Tool, String> {
         "edit" => {
             let a: EditArgs = parse(a)?;
             let p = path(root, &a.path, false)?;
-            replacement(&p, &a.old_text, &a.new_text)?;
-            Tool::Edit(p, a.old_text, a.new_text)
+            let changes = match (a.old_text, a.new_text, a.edits) {
+                (Some(old), Some(new), None) => vec![(old, new)],
+                (None, None, Some(edits)) if !edits.is_empty() && edits.len() <= 256 => edits
+                    .into_iter()
+                    .map(|e| (e.old_text, e.new_text))
+                    .collect(),
+                _ => {
+                    return Err(
+                        "Use oldText/newText or a nonempty edits array, at most 256 changes".into(),
+                    )
+                }
+            };
+            replacements(&p, &changes)?;
+            Tool::Edit(p, changes)
+        }
+        "generate_image" | "google_search" => {
+            let name = s(&call["function"]["name"]);
+            providers::antigravity_tools::validate(name, &a)?;
+            if name == "generate_image" {
+                let directory = create_path(root, "generated-images")?;
+                if !runtime::policy::within(&directory, root) {
+                    return Err("Generated images directory points outside cwd".into());
+                }
+            }
+            Tool::Antigravity(name.into(), a)
         }
         "screen_capture" => {
             if a != json!({}) {
@@ -261,6 +306,7 @@ impl AiCore {
     pub(super) async fn native_tool(
         &self,
         tool: Tool,
+        original_path: Option<&str>,
         root: &Path,
         approval_mode: Option<&str>,
         run: &str,
@@ -299,17 +345,27 @@ impl AiCore {
                 c,
                 mode,
                 &raw,
-                c.contains(".env")
-                    || c.contains(".ssh")
-                    || c.contains(".aws")
-                    || c.contains(".pi/agent"),
+                runtime::policy::shell_sensitive(
+                    c,
+                    root,
+                    &self.inner.ctx.paths.home_dir,
+                    &self.inner.ctx.paths.config_dir,
+                ),
             ),
             Tool::Read(p, ..) | Tool::Search(p, _) | Tool::Directory(p, ..) => {
-                runtime::policy::file_asks(false, !p.starts_with(root), sensitive(p), mode)
+                runtime::policy::file_asks(
+                    false,
+                    !runtime::policy::within(p, root),
+                    sensitive(p),
+                    mode,
+                )
             }
-            Tool::Write(p, ..) | Tool::Edit(p, ..) => {
-                runtime::policy::file_asks(true, !p.starts_with(root), sensitive(p), mode)
-            }
+            Tool::Write(p, ..) | Tool::Edit(p, ..) => runtime::policy::file_asks(
+                true,
+                !runtime::policy::within(p, root),
+                sensitive(p),
+                mode,
+            ),
             Tool::Screen => mode != "turbo",
             _ => mode == "review",
         };
@@ -345,11 +401,14 @@ impl AiCore {
             | Tool::Search(p, _)
             | Tool::Directory(p, ..) => {
                 let resolved = if matches!(&tool, Tool::Write(_, _, true)) {
-                    create_path(root, p.to_str().ok_or("Native path: not UTF-8")?)?
+                    create_path(
+                        root,
+                        original_path.unwrap_or(p.to_str().ok_or("Native path: not UTF-8")?),
+                    )?
                 } else {
                     path(
                         root,
-                        p.to_str().ok_or("Native path: not UTF-8")?,
+                        original_path.unwrap_or(p.to_str().ok_or("Native path: not UTF-8")?),
                         matches!(&tool, Tool::Write(..)),
                     )?
                 };
@@ -360,7 +419,9 @@ impl AiCore {
             _ => {}
         }
         match tool {
-            Tool::Extension(..) => Err("Extension call must use its immutable run table".into()),
+            Tool::Antigravity(..) | Tool::Extension(..) => {
+                Err("Extension call must use its immutable run table".into())
+            }
             Tool::Bash(c, root, timeout) => {
                 let mut command = if cfg!(windows) {
                     let mut shell = self.command("powershell.exe").await;
@@ -400,17 +461,19 @@ impl AiCore {
                         return Err("Operation cancelled".into());
                     }
                     if parents {
-                        std::fs::create_dir_all(p.parent().ok_or("No parent")?).map_err(err)?;
+                        cancel.effect(|| {
+                            std::fs::create_dir_all(p.parent().ok_or("No parent")?).map_err(err)
+                        })?;
                     }
                     atomic_write(&p, &text, &cancel)
                 })
                 .await
                 .map_err(err)?
             }
-            Tool::Edit(p, old, new) => {
+            Tool::Edit(p, changes) => {
                 let cancel = cancel.clone();
                 tokio::task::spawn_blocking(move || {
-                    let text = replacement(&p, &old, &new)?;
+                    let text = replacements(&p, &changes)?;
                     atomic_write(&p, &text, &cancel)
                 })
                 .await
@@ -418,15 +481,28 @@ impl AiCore {
             }
             Tool::Search(p, q) => {
                 let cancel = cancel.clone();
-                tokio::task::spawn_blocking(move || project_search(&p, &q, &cancel))
-                    .await
-                    .map_err(err)?
+                let paths = self.inner.ctx.paths.clone();
+                tokio::task::spawn_blocking(move || {
+                    project_search(&p, &q, &cancel, &paths.home_dir, &paths.config_dir)
+                })
+                .await
+                .map_err(err)?
             }
             Tool::Directory(p, q, recursive) => {
                 let cancel = cancel.clone();
-                tokio::task::spawn_blocking(move || directory(&p, q.as_deref(), recursive, &cancel))
-                    .await
-                    .map_err(err)?
+                let paths = self.inner.ctx.paths.clone();
+                tokio::task::spawn_blocking(move || {
+                    directory(
+                        &p,
+                        q.as_deref(),
+                        recursive,
+                        &cancel,
+                        &paths.home_dir,
+                        &paths.config_dir,
+                    )
+                })
+                .await
+                .map_err(err)?
             }
             Tool::Route(route, q) => {
                 if route != "core:knowledge:read" {
@@ -450,16 +526,18 @@ impl AiCore {
 impl Tool {
     fn label_for_approval(&self) -> String {
         match self {
-            Self::Extension(name, _) => name.clone(),
+            Self::Extension(name, _) | Self::Antigravity(name, _) => name.clone(),
             Self::Directory(p, _, _) => format!("list {}", p.display()),
             Self::Screen => "Capture screen".into(),
             Self::Bash(c, ..) => c.clone(),
             Self::Write(p, text, _) => format!("write {}\n{}", p.display(), cut(text, 4000)),
-            Self::Edit(p, old, new) => format!(
-                "edit {}\noldText: {}\nnewText: {}",
+            Self::Edit(p, changes) => format!(
+                "edit {}\n{}",
                 p.display(),
-                cut(old, 2000),
-                cut(new, 2000)
+                cut(
+                    &serde_json::to_string_pretty(changes).unwrap_or_default(),
+                    4000
+                )
             ),
             _ => self.label(),
         }
@@ -478,14 +556,20 @@ fn atomic_write(path: &Path, text: &str, cancel: &Cancel) -> Result<String, Stri
     if cancel.is_cancelled() {
         return Err("Operation cancelled".into());
     }
-    temp.persist(path).map_err(err)?;
+    cancel.effect(|| temp.persist(path).map_err(err).map(|_| ()))?;
     Ok(format!(
         "Wrote {} UTF-8 bytes to {}",
         text.len(),
         path.display()
     ))
 }
-fn project_search(root: &Path, query: &str, cancel: &Cancel) -> Result<String, String> {
+fn project_search(
+    root: &Path,
+    query: &str,
+    cancel: &Cancel,
+    home: &Path,
+    config: &Path,
+) -> Result<String, String> {
     let mut out = String::new();
     let mut files = 0;
     let mut visited = 0;
@@ -495,7 +579,8 @@ fn project_search(root: &Path, query: &str, cancel: &Cancel) -> Result<String, S
         .max_depth(16)
         .into_iter()
         .filter_entry(|e| {
-            !e.file_name().to_string_lossy().starts_with(".env")
+            (e.path() == root || !runtime::policy::sensitive(e.path(), home, config))
+                && !e.file_name().to_string_lossy().starts_with(".env")
                 && !matches!(
                     e.file_name().to_str(),
                     Some(
@@ -551,7 +636,7 @@ fn project_search(root: &Path, query: &str, cancel: &Cancel) -> Result<String, S
     Ok(out)
 }
 
-fn create_path(root: &Path, raw: &str) -> Result<PathBuf, String> {
+pub(super) fn create_path(root: &Path, raw: &str) -> Result<PathBuf, String> {
     nonempty(raw, 4096)?;
     let candidate = root.join(raw);
     let mut current = candidate.as_path();
@@ -575,6 +660,8 @@ fn directory(
     query: Option<&str>,
     recursive: bool,
     cancel: &Cancel,
+    home: &Path,
+    config: &Path,
 ) -> Result<String, String> {
     let mut out = String::new();
     let mut count = 0;
@@ -583,19 +670,21 @@ fn directory(
         .max_depth(if recursive { 16 } else { 1 })
         .into_iter()
         .filter_entry(|e| {
-            !matches!(
-                e.file_name().to_str(),
-                Some(
-                    ".git"
-                        | "node_modules"
-                        | "target"
-                        | "dist"
-                        | ".ssh"
-                        | ".aws"
-                        | ".gnupg"
-                        | ".pi"
+            (e.path() == root || !runtime::policy::sensitive(e.path(), home, config))
+                && !matches!(
+                    e.file_name().to_str(),
+                    Some(
+                        ".git"
+                            | "node_modules"
+                            | "target"
+                            | "dist"
+                            | ".ssh"
+                            | ".aws"
+                            | ".gnupg"
+                            | ".pi"
+                    )
                 )
-            ) && !e.file_name().to_string_lossy().starts_with(".env")
+                && !e.file_name().to_string_lossy().starts_with(".env")
         })
     {
         if cancel.is_cancelled() {

@@ -1,3 +1,5 @@
+//! Gemini signature-group validation follows MIT pi-antigravity 0.11.0,
+//! © Rahul Arya. See licenses/pi-antigravity-MIT.txt.
 use super::*;
 fn image(mime: &str, data: &str) -> Value {
     json!({"inlineData":{"mimeType":mime,"data":data}})
@@ -5,12 +7,44 @@ fn image(mime: &str, data: &str) -> Value {
 pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Value, String> {
     let mut contents: Vec<Value> = vec![];
     let mut system = vec![];
-    // Unsigned foreign calls cannot be fabricated into signed Gemini history.
+    // This is the documented signature capability of Gemini generations, not
+    // protocol routing. Never fabricate a signature for older/foreign history.
+    let requires_signature = o.model.strip_prefix("gemini-").is_some_and(|model| {
+        let major = model
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect::<String>();
+        major.parse::<u32>().map_or(true, |major| major >= 3)
+    });
+    fn signed_group(raw: &Value) -> bool {
+        let calls = raw
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|p| p.get("functionCall").is_some())
+            .collect::<Vec<_>>();
+        fn valid(value: &Value) -> bool {
+            use base64::Engine;
+            value.as_str().is_some_and(|s| {
+                !s.is_empty()
+                    && s.len() % 4 == 0
+                    && base64::engine::general_purpose::STANDARD.decode(s).is_ok()
+            })
+        }
+        calls.first().is_some_and(|p| valid(&p["thoughtSignature"]))
+            && calls
+                .iter()
+                .all(|p| p.get("thoughtSignature").is_none() || valid(&p["thoughtSignature"]))
+    }
     let foreign = ms
         .iter()
-        .filter(|m| m.role == "assistant" && m.raw_for(o).is_none())
+        .filter(|m| {
+            m.role == "assistant"
+                && m.raw_for(o)
+                    .is_none_or(|raw| requires_signature && !signed_group(raw))
+        })
         .flat_map(|m| m.calls())
-        .map(|c| s(&c["id"]).to_string())
+        .map(|c| s(&c["callId"]).to_string())
         .collect::<HashSet<_>>();
     for m in ms {
         if m.role == "system" {
@@ -20,7 +54,12 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
         let parts = if let Some(raw) = m.raw_for(o) {
             raw.as_array()
                 .ok_or_else(|| failure("invalid saved Gemini parts"))?
-                .clone()
+                .iter()
+                .filter(|part| {
+                    !requires_signature || signed_group(raw) || part.get("functionCall").is_none()
+                })
+                .cloned()
+                .collect()
         } else {
             let mut parts = vec![];
             for b in &m.blocks {
@@ -29,15 +68,16 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
                     Block::Image { mime, data } => parts.push(image(mime, data)),
                     Block::ToolCall { .. } => {}
                     Block::ToolResult {
+                        call: canonical,
                         wire_id: id,
                         name,
                         blocks,
                         ..
                     } => {
-                        if foreign.contains(id) {
+                        if foreign.contains(canonical) {
                             parts.push(json!({"text":format!("[Observation from {name}]\n{}",text_blocks(blocks))}));
                         } else {
-                            parts.push(json!({"functionResponse":{"name":name,"id":id_for(o,ms,id),"response":{"output":text_blocks(blocks)}}}));
+                            parts.push(json!({"functionResponse":{"name":name,"id":id_for(o,ms,canonical,id),"response":{"output":text_blocks(blocks)}}}));
                         }
                         for b in blocks {
                             if let Block::Image { mime, data } = b {

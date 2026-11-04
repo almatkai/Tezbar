@@ -1,4 +1,6 @@
 //! Endpoint/protocol selection. Explicit model/provider settings take precedence.
+//! OpenCode/Copilot routing metadata follows MIT pi-ai (© Mario Zechner);
+//! see licenses/pi-ai-MIT.txt. Antigravity routing is attributed in its module.
 use super::super::*;
 use runtime::transcript::{Origin, Protocol};
 pub struct Route {
@@ -8,6 +10,7 @@ pub struct Route {
     pub project: Option<String>,
     pub max_tokens: u64,
     pub thinking: bool,
+    pub secrets: Vec<String>,
 }
 fn endpoint(base: &str, suffix: &str) -> String {
     if base.ends_with(suffix) {
@@ -60,11 +63,17 @@ impl AiCore {
                 Protocol::Gemini
             }
             "copilot" => {
-                base = "https://api.individual.githubcopilot.com".into();
+                if cfg["_explicitBaseURL"] != true {
+                    base = "https://api.individual.githubcopilot.com".into();
+                }
                 Protocol::OpenaiChat
             }
             "antigravity" => {
-                base = "https://daily-cloudcode-pa.googleapis.com".into();
+                base = self
+                    .antigravity_bases(cfg)?
+                    .into_iter()
+                    .next()
+                    .ok_or("No Antigravity endpoint")?;
                 Protocol::Gemini
             }
             _ => Protocol::OpenaiChat,
@@ -85,11 +94,17 @@ impl AiCore {
         if p == "copilot" {
             if let Some(session) = self.cached_copilot_session(&key).await {
                 key = session.token;
-                base = session.base;
+                if cfg["_explicitBaseURL"] != true {
+                    base = session.base;
+                }
             }
         }
         let mut model = model.to_string();
         if p == "antigravity" {
+            model = super::antigravity::runtime_model(
+                &model,
+                cfg["reasoningEffort"].as_str().unwrap_or("off"),
+            );
             let a = self.antigravity_account().await?;
             key = s(&a["access"]).into();
             project = Some(s(&a["projectId"]).into());
@@ -99,15 +114,27 @@ impl AiCore {
             base = url.clone();
         }
 
+        if p == "gemini" && protocol == Protocol::Gemini {
+            model = model.strip_prefix("models/").unwrap_or(&model).to_string();
+        }
         let mut opencode_route = false;
         if p == "copilot" && explicit.is_none() {
-            protocol = if model.starts_with("claude-") {
-                Protocol::Anthropic
-            } else if model.starts_with("gpt-") {
-                Protocol::OpenaiResponses
-            } else {
-                Protocol::OpenaiChat
-            };
+            let models = self.copilot_models().await.unwrap_or(json!([]));
+            let authoritative = models
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|m| m["id"] == model)
+                .and_then(super::copilot::model_protocol);
+            protocol = authoritative.unwrap_or_else(|| {
+                if model.starts_with("claude-") {
+                    Protocol::Anthropic
+                } else if model.starts_with("gpt-") {
+                    Protocol::OpenaiResponses
+                } else {
+                    Protocol::OpenaiChat
+                }
+            });
         }
         if p == "opencode" {
             let catalog: Value = serde_json::from_str(include_str!("opencode_catalog.json"))
@@ -131,32 +158,13 @@ impl AiCore {
             }
             opencode_route = true;
 
+            let opencode_go = model.starts_with("opencode-go/");
             model = model
                 .strip_prefix("opencode/")
                 .or_else(|| model.strip_prefix("opencode-go/"))
                 .unwrap_or(&model)
                 .to_string();
-            if key.is_empty() {
-                key = std::env::var("OPENCODE_API_KEY").unwrap_or_default();
-            }
-            if key.is_empty() {
-                let path = self
-                    .inner
-                    .ctx
-                    .paths
-                    .home_dir
-                    .join(".local/share/opencode/auth.json");
-                key = tokio::task::spawn_blocking(move || {
-                    let v = common::read_json(&path).unwrap_or(Value::Null);
-                    v["opencode"]["key"]
-                        .as_str()
-                        .or_else(|| v["opencode-go"]["key"].as_str())
-                        .unwrap_or("")
-                        .to_string()
-                })
-                .await
-                .map_err(err)?;
-            }
+            key = self.opencode_key(&key, opencode_go).await?;
             if base.is_empty() {
                 base = "https://opencode.ai/inference".into()
             }
@@ -212,6 +220,11 @@ impl AiCore {
         if !matches!(url.scheme(), "http" | "https") {
             return Err("Native configuration: provider URL must use http or https".into());
         }
+        let mut secrets = if key.is_empty() {
+            vec![]
+        } else {
+            vec![key.clone()]
+        };
         let mut headers = reqwest::header::HeaderMap::new();
         let mut header = |name: &str, value: &str| -> Result<(), String> {
             headers.insert(
@@ -254,11 +267,10 @@ impl AiCore {
                     "agent"
                 },
             )?;
-            if messages.iter().any(|m| {
-                m.blocks
-                    .iter()
-                    .any(|b| matches!(b, runtime::transcript::Block::Image { .. }))
-            }) {
+            if messages
+                .iter()
+                .any(|m| runtime::transcript::contains_images(&m.blocks))
+            {
                 header("copilot-vision-request", "true")?;
             }
         }
@@ -271,16 +283,17 @@ impl AiCore {
             header("user-agent", super::antigravity::USER_AGENT)?;
         }
         if let Some(custom) = custom {
-            if let Some(hs) = custom["headers"].as_object() {
-                for (k, v) in hs {
-                    if let Some(v) = v.as_str() {
-                        header(k, v)?
-                    } else {
-                        return Err(
-                            "Native configuration: header secret reference is unresolved".into(),
-                        );
-                    }
+            for (k, v) in self.extension_provider_headers(custom).await? {
+                if custom["headers"][&k].is_object()
+                    || regex::Regex::new(
+                        "(?i)token|secret|password|api.?key|authorization|credential",
+                    )
+                    .unwrap()
+                    .is_match(&k)
+                {
+                    secrets.push(s(&v).strip_prefix("Bearer ").unwrap_or(s(&v)).into());
                 }
+                header(&k, s(&v))?;
             }
         }
         Ok(Route {
@@ -300,6 +313,7 @@ impl AiCore {
                 },
             ),
             thinking: cfg["thinking"] == true,
+            secrets,
         })
     }
 }

@@ -95,3 +95,113 @@ impl AiCore {
         Ok(session)
     }
 }
+
+impl AiCore {
+    pub(in crate::native_core::ai) async fn copilot_models(&self) -> CoreResult {
+        #[cfg(test)]
+        if !self
+            .inner
+            .endpoints
+            .lock()
+            .unwrap()
+            .contains_key("copilot-models")
+        {
+            return Ok(json!([]));
+        }
+        let token = self.copilot_token().await?;
+        let catalog_key = format!("copilot:{}", hash(&token));
+        if let Some((_, value)) = self
+            .inner
+            .provider_catalogs
+            .lock()
+            .unwrap()
+            .get(&catalog_key)
+            .filter(|(at, _)| now_ms().saturating_sub(*at) < 300_000)
+        {
+            return Ok(value.clone());
+        }
+        let session = self.cached_copilot_session(&token).await;
+        let base = session
+            .as_ref()
+            .map(|s| s.base.as_str())
+            .unwrap_or("https://api.individual.githubcopilot.com");
+        let key = session.as_ref().map(|s| s.token.as_str()).unwrap_or(&token);
+        let fetch = |base: &str, key: &str| {
+            self.inner
+                .http
+                .get(self.endpoint("copilot-models", &format!("{base}/models")))
+                .bearer_auth(key)
+                .header("User-Agent", "GitHubCopilotChat/0.35.0")
+                .header("Editor-Version", "vscode/1.107.0")
+                .header("Editor-Plugin-Version", "copilot-chat/0.35.0")
+                .header("Copilot-Integration-Id", "vscode-chat")
+                .timeout(Duration::from_secs(8))
+                .send()
+        };
+        let mut response = fetch(base, key)
+            .await
+            .map_err(|_| "Copilot model catalog: network failed")?;
+        if session.is_none() && matches!(response.status().as_u16(), 401 | 403) {
+            let session = self.exchange_copilot_session(&token).await?;
+            response = fetch(&session.base, &session.token)
+                .await
+                .map_err(|_| "Copilot model catalog: network failed")?;
+        }
+        if !response.status().is_success() {
+            return Err(format!(
+                "Copilot model catalog: HTTP {}",
+                response.status().as_u16()
+            ));
+        }
+        let value = oauth::bounded_json(response).await?;
+        let models = value["data"]
+            .as_array()
+            .ok_or("Copilot catalog has no model list")?
+            .iter()
+            .filter(|m| {
+                m["id"].is_string()
+                    && m["capabilities"]["type"]
+                        .as_str()
+                        .is_none_or(|t| t == "chat")
+                    && !matches!(
+                        s(&m["capabilities"]["family"]),
+                        "search-agent" | "exec-agent" | "trajectory-compaction"
+                    )
+                    && !regex::Regex::new("(?i)(^|[-_/])(exec-)?agent[-_]?[a-z0-9]*$")
+                        .unwrap()
+                        .is_match(s(&m["id"]))
+            })
+            .take(512)
+            .cloned()
+            .collect::<Vec<_>>();
+        let models = json!(models);
+        self.inner
+            .provider_catalogs
+            .lock()
+            .unwrap()
+            .insert(catalog_key, (now_ms(), models.clone()));
+        Ok(models)
+    }
+}
+pub fn model_protocol(model: &Value) -> Option<runtime::transcript::Protocol> {
+    use runtime::transcript::Protocol;
+    let endpoints = model["supported_endpoints"]
+        .as_array()
+        .or_else(|| model["capabilities"]["supported_endpoints"].as_array())?;
+    for (endpoint, protocol) in [
+        ("/v1/messages", Protocol::Anthropic),
+        ("/responses", Protocol::OpenaiResponses),
+        ("/chat/completions", Protocol::OpenaiChat),
+    ] {
+        if endpoints.iter().any(|e| {
+            e.as_str().is_some_and(|e| {
+                e == endpoint
+                    || e.trim_start_matches('/').trim_start_matches("v1/")
+                        == endpoint.trim_start_matches('/').trim_start_matches("v1/")
+            })
+        }) {
+            return Some(protocol);
+        }
+    }
+    None
+}

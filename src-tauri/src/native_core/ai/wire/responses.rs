@@ -16,8 +16,8 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
             match b{
             Block::Text{text}=>content.push(json!({"type":if m.role=="assistant"{"output_text"}else{"input_text"},"text":text})),
             Block::Image{mime,data}=>content.push(json!({"type":"input_image","image_url":image_url(mime,data)})),
-            Block::ToolCall{wire_id:id,name,arguments,..}=>input.push(json!({"type":"function_call","call_id":id_for(o,ms,id),"name":name,"arguments":arguments})),
-            Block::ToolResult{wire_id:id,name,blocks,..}=>{input.push(json!({"type":"function_call_output","call_id":id_for(o,ms,id),"output":text_blocks(blocks)}));let mut images=vec![];for b in blocks{if let Block::Image{mime,data}=b{images.push(json!({"type":"input_image","image_url":image_url(mime,data)}));}}if !images.is_empty(){images.insert(0,json!({"type":"input_text","text":format!("Image from tool {name}")}));input.push(json!({"role":"user","content":images}));}},_=>{}
+            Block::ToolCall{id:canonical,wire_id:id,name,arguments,..}=>input.push(json!({"type":"function_call","call_id":id_for(o,ms,canonical,id),"name":name,"arguments":arguments})),
+            Block::ToolResult{call:canonical,wire_id:id,name,blocks,..}=>{input.push(json!({"type":"function_call_output","call_id":id_for(o,ms,canonical,id),"output":text_blocks(blocks)}));let mut images=vec![];for b in blocks{if let Block::Image{mime,data}=b{images.push(json!({"type":"input_image","image_url":image_url(mime,data)}));}}if !images.is_empty(){images.insert(0,json!({"type":"input_text","text":format!("Image from tool {name}")}));input.push(json!({"role":"user","content":images}));}},_=>{}
         }
         }
         if !content.is_empty() {

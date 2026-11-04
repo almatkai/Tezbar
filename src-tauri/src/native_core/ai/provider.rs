@@ -2,6 +2,8 @@ use super::*;
 impl AiCore {
     pub(super) async fn cfg(&self, task: Option<&str>, provider: Option<&str>) -> CoreResult {
         let raw = self.read_config().await?;
+        let raw = self.extension_config(raw, None).await?;
+        config::validate_selection(&raw, task, provider)?;
         Ok(config::selected(&raw, task, provider))
     }
     pub(super) async fn stream(
@@ -20,6 +22,9 @@ impl AiCore {
                 on_delta(json!({"text":text}))
             })
             .await?;
+        if !turn.calls.is_empty() {
+            return Err("Native protocol: model requested tools in a tool-free completion".into());
+        }
         Ok(turn.text)
     }
     pub(super) async fn available(&self, cfg: &Value) -> bool {
@@ -33,26 +38,16 @@ impl AiCore {
                 .unwrap_or(false);
         }
         if p == "opencode" {
-            if !s(&cfg["apiKey"]).is_empty() {
-                return true;
-            }
-            #[cfg(not(test))]
-            if std::env::var("OPENCODE_API_KEY").is_ok_and(|s| !s.is_empty()) {
-                return true;
-            }
-            let path = self
-                .inner
-                .ctx
-                .paths
-                .home_dir
-                .join(".local/share/opencode/auth.json");
-            return tokio::task::spawn_blocking(move || {
-                common::read_json(&path)
-                    .ok()
-                    .is_some_and(|v| !s(&v["opencode"]["key"]).is_empty())
-            })
-            .await
-            .unwrap_or(false);
+            return self
+                .opencode_key(s(&cfg["apiKey"]), false)
+                .await
+                .is_ok_and(|key| !key.is_empty());
+        }
+        if p == "copilot" {
+            return self
+                .copilot_models()
+                .await
+                .is_ok_and(|m| m.as_array().is_some_and(|m| !m.is_empty()));
         }
         let base = cfg["openaiCompatibleBaseURL"]
             .as_str()
@@ -68,7 +63,10 @@ impl AiCore {
         } else {
             s(&cfg["apiKey"])
         };
-        if matches!(p, "anthropic" | "copilot") && key.trim().is_empty() {
+        if !matches!(p, "ollama" | "openai-compatible")
+            && !p.starts_with("custom:")
+            && key.trim().is_empty()
+        {
             return false;
         }
         if p != "copilot" && base.trim().is_empty() {
@@ -85,13 +83,25 @@ impl AiCore {
                     format!("{base}/v1")
                 }
             ),
+            "gemini"
+                if base == "https://generativelanguage.googleapis.com/v1beta/openai"
+                    || base == "https://generativelanguage.googleapis.com/v1beta" =>
+            {
+                "https://generativelanguage.googleapis.com/v1beta/models".into()
+            }
             _ => format!("{base}/models"),
         };
+        let url = self.endpoint(&format!("{p}-models"), &url);
         let mut request = self.inner.http.get(url).timeout(Duration::from_secs(4));
         if p == "anthropic" {
             request = request
                 .header("x-api-key", key)
                 .header("anthropic-version", "2023-06-01");
+        } else if p == "gemini"
+            && (base == "https://generativelanguage.googleapis.com/v1beta/openai"
+                || base == "https://generativelanguage.googleapis.com/v1beta")
+        {
+            request = request.header("x-goog-api-key", key);
         } else if !key.trim().is_empty() {
             request = request.bearer_auth(key.trim());
         }
@@ -137,39 +147,82 @@ impl AiCore {
                 .filter(|m| m.starts_with("opencode/") || m.starts_with("opencode-go/"))
                 .map(str::to_string)
                 .collect();
-            if models.is_empty() {
-                models.push("opencode/big-pickle".into());
+            let key = self.opencode_key(s(&cfg["apiKey"]), false).await?;
+            if !key.is_empty() {
+                let base = cfg["baseURL"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("https://opencode.ai/inference");
+                let url = self.endpoint(
+                    "opencode-models",
+                    &format!("{}/v1/models", base.trim_end_matches('/')),
+                );
+                #[cfg(test)]
+                let probe = self
+                    .inner
+                    .endpoints
+                    .lock()
+                    .unwrap()
+                    .contains_key("opencode-models");
+                #[cfg(not(test))]
+                let probe = true;
+                if probe {
+                    if let Ok(response) = self
+                        .inner
+                        .http
+                        .get(url)
+                        .bearer_auth(&key)
+                        .timeout(Duration::from_secs(8))
+                        .send()
+                        .await
+                    {
+                        if response.status().is_success() {
+                            if let Ok(v) = oauth::bounded_json(response).await {
+                                for model in v["data"].as_array().into_iter().flatten().take(512) {
+                                    if let Some(id) = model["id"].as_str() {
+                                        if !id.starts_with("jev-") {
+                                            models.push(if id.contains('/') {
+                                                id.into()
+                                            } else {
+                                                format!("opencode/{id}")
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
+            if models.is_empty() {
+                let catalog: Value =
+                    serde_json::from_str(include_str!("providers/opencode_catalog.json"))
+                        .expect("static catalog");
+                models.extend(
+                    catalog
+                        .as_object()
+                        .unwrap()
+                        .keys()
+                        .filter(|id| !id.contains("/jev-"))
+                        .cloned(),
+                );
+            }
+            models.sort();
+            models.dedup();
             return Ok(json!(models));
         }
         if id == "antigravity" {
-            let path = self.pi_dir().join("models-store.json");
-            let raw = tokio::task::spawn_blocking(move || common::read_json(&path))
-                .await
-                .map_err(err)?
-                .unwrap_or(Value::Null);
-            if let Some(models) = raw["antigravity"]["models"].as_array() {
-                let ids: Vec<_> = models.iter().filter_map(|m| m["id"].as_str()).collect();
-                if !ids.is_empty() {
-                    return Ok(json!(ids));
-                }
-            }
-            return Ok(json!([
-                "gemini-3.8-flash",
-                "gemini-3.7-flash",
-                "gemini-3.6-flash",
-                "gemini-3.5-flash",
-                "gemini-3.5-flash-lite",
-                "gemini-3.1-flash-lite",
-                "gemini-3-flash",
-                "gemini-2.5-flash",
-                "gemini-2.5-flash-lite",
-                "gemini-3.1-pro",
-                "gemini-2.5-pro",
-                "claude-opus-4-6",
-                "claude-sonnet-4-6",
-                "gpt-oss-120b"
-            ]));
+            return self.antigravity_catalog().await;
+        }
+        if id == "copilot" {
+            return self.copilot_models().await.map(|models| {
+                json!(models
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|m| m["id"].as_str())
+                    .collect::<Vec<_>>())
+            });
         }
         let base = cfg["openaiCompatibleBaseURL"]
             .as_str()
@@ -188,7 +241,12 @@ impl AiCore {
         } else {
             s(&cfg["apiKey"]).to_string()
         };
-        let urls = if id == "ollama" {
+        let native_gemini = id == "gemini"
+            && (base == "https://generativelanguage.googleapis.com/v1beta/openai"
+                || base == "https://generativelanguage.googleapis.com/v1beta");
+        let urls = if native_gemini {
+            vec!["https://generativelanguage.googleapis.com/v1beta/models".into()]
+        } else if id == "ollama" {
             vec![format!("{}/api/tags", base.trim_end_matches("/v1"))]
         } else if id == "copilot" {
             vec!["https://api.githubcopilot.com/models".into()]
@@ -212,11 +270,14 @@ impl AiCore {
             ]
         };
         for url in urls {
+            let url = self.endpoint(&format!("{id}-models"), &url);
             let mut req = self.inner.http.get(url).timeout(Duration::from_secs(12));
             if id == "anthropic" {
                 req = req
                     .header("x-api-key", &key)
                     .header("anthropic-version", "2023-06-01");
+            } else if native_gemini {
+                req = req.header("x-goog-api-key", &key);
             } else if !key.is_empty() {
                 req = req.bearer_auth(&key);
             }
@@ -227,7 +288,7 @@ impl AiCore {
             }
             if let Ok(response) = req.send().await {
                 if response.status().is_success() {
-                    if let Ok(v) = response.json::<Value>().await {
+                    if let Ok(v) = oauth::bounded_json(response).await {
                         let mut ids = Vec::new();
                         if let Some(list) = v["data"].as_array().or_else(|| v["models"].as_array())
                         {
@@ -256,7 +317,21 @@ impl AiCore {
                                         continue;
                                     }
                                 }
-                                ids.push(id_value.to_string());
+                                if native_gemini
+                                    && model["supportedGenerationMethods"]
+                                        .as_array()
+                                        .is_some_and(|a| !a.iter().any(|m| m == "generateContent"))
+                                {
+                                    continue;
+                                }
+                                ids.push(
+                                    if native_gemini {
+                                        id_value.strip_prefix("models/").unwrap_or(id_value)
+                                    } else {
+                                        id_value
+                                    }
+                                    .to_string(),
+                                );
                             }
                         }
                         ids.sort();
@@ -276,8 +351,7 @@ impl AiCore {
         })
     }
 }
-#[cfg(test)]
-fn format_error(raw: &str, label: &str) -> String {
+pub(super) fn format_error(raw: &str, label: &str) -> String {
     let detail = raw
         .find('{')
         .and_then(|at| serde_json::from_str::<Value>(&raw[at..]).ok())
@@ -328,5 +402,41 @@ mod error_tests {
             ),
             "OpenAI request failed (429): Try later"
         );
+    }
+}
+
+impl AiCore {
+    pub(in crate::native_core::ai) async fn opencode_key(
+        &self,
+        configured: &str,
+        go: bool,
+    ) -> Result<String, String> {
+        if !configured.is_empty() {
+            return Ok(configured.into());
+        }
+        #[cfg(not(test))]
+        if let Ok(key) = std::env::var("OPENCODE_API_KEY") {
+            if !key.is_empty() {
+                return Ok(key);
+            }
+        }
+        let path = self
+            .inner
+            .ctx
+            .paths
+            .home_dir
+            .join(".local/share/opencode/auth.json");
+        tokio::task::spawn_blocking(move || {
+            if !path.exists() {
+                return Ok(String::new());
+            }
+            let v = common::read_json(&path)?;
+            Ok(v[if go { "opencode-go" } else { "opencode" }]["key"]
+                .as_str()
+                .unwrap_or("")
+                .to_string())
+        })
+        .await
+        .map_err(err)?
     }
 }

@@ -29,6 +29,19 @@ pub fn ids(raw: &Value) -> Vec<String> {
     }
     ids
 }
+pub fn validate_selection(
+    raw: &Value,
+    task: Option<&str>,
+    explicit: Option<&str>,
+) -> Result<(), String> {
+    let selected = explicit
+        .or_else(|| task.and_then(|t| raw["taskProviderOverrides"][t].as_str()))
+        .unwrap_or(s(&raw["provider"]));
+    if selected.starts_with("custom:") && !ids(raw).iter().any(|id| id == selected) {
+        return Err("Native configuration: the selected custom provider is disabled or unavailable in this folder. Choose a provider in AI settings.".into());
+    }
+    Ok(())
+}
 pub fn selected(raw: &Value, task: Option<&str>, explicit: Option<&str>) -> Value {
     let all = ids(raw);
     let active = raw["provider"]
@@ -96,11 +109,15 @@ pub fn selected(raw: &Value, task: Option<&str>, explicit: Option<&str>) -> Valu
     };
     cfg["model"] = json!(model.unwrap_or(default_model).trim());
     normalize_models(&mut cfg);
+    cfg["_explicitBaseURL"] = json!(cfg["baseURL"].as_str().is_some_and(|v| !v.is_empty()));
     if !cfg["baseURL"].is_string() {
         cfg["baseURL"] = data["DEFAULT_BASE_URL"][provider].clone();
     }
     if provider == "tokenrouter" && s(&cfg["apiKey"]).trim().is_empty() {
-        cfg["apiKey"] = json!(std::env::var("TOKENROUTER_API_KEY").unwrap_or_default());
+        #[cfg(not(test))]
+        {
+            cfg["apiKey"] = json!(std::env::var("TOKENROUTER_API_KEY").unwrap_or_default());
+        }
     }
     cfg
 }

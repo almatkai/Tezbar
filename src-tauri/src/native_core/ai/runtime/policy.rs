@@ -8,7 +8,12 @@ fn matches(p: &str, s: &str) -> bool {
         .is_match(s)
 }
 pub fn complex(s: &str) -> bool {
-    s.contains([';', '|', '<', '>', '`', '(', ')', '\r', '\n', '$', '&'])
+    s.contains([
+        ';', '|', '<', '>', '`', '(', ')', '\r', '\n', '$', '&', '\\', '{', '}',
+    ]) || matches(
+        r"(?i)^(?:sudo|doas|env|xargs|eval|exec|source|bash|sh|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh|python[0-9.]*|perl|ruby|node|bun|osascript|rundll32|wscript|cscript|invoke-expression|iex|invoke-command)\b",
+        s.trim(),
+    )
 }
 pub fn destructive(s: &str) -> bool {
     matches(r"(?i)\b(rm|srm|unlink|remove-item|rd|rmdir)\b", s)
@@ -68,23 +73,101 @@ pub fn shell_asks(command: &str, mode: &str, cfg: &Value, sensitive: bool) -> bo
             });
     !(remembered || auto(command) || mode == "turbo" || mode == "auto" && safe_project(command))
 }
+pub fn within(path: &Path, base: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        fn key(path: &Path) -> String {
+            let text = path.to_string_lossy().replace('/', "\\");
+            let text = if let Some(t) = text.strip_prefix("\\\\?\\UNC\\") {
+                format!("\\\\{t}")
+            } else {
+                text.strip_prefix("\\\\?\\").unwrap_or(&text).to_string()
+            };
+            text.trim_end_matches('\\').to_lowercase()
+        }
+        let path = key(path);
+        let base = key(base);
+        path == base
+            || path
+                .strip_prefix(&base)
+                .is_some_and(|rest| rest.starts_with('\\'))
+    }
+    #[cfg(not(windows))]
+    {
+        path.starts_with(base)
+    }
+}
+pub fn shell_sensitive(command: &str, cwd: &Path, home: &Path, config: &Path) -> bool {
+    // Complex expansion/interpreter syntax is independently reviewed. For simple
+    // commands inspect every literal path after resolving aliases and symlinks.
+    if sensitive(cwd, home, config) {
+        return true;
+    }
+    let mut token = String::new();
+    let mut quote = None;
+    let mut tokens = vec![];
+    for c in command.chars() {
+        if Some(c) == quote {
+            quote = None
+        } else if quote.is_none() && matches!(c, '\'' | '"') {
+            quote = Some(c)
+        } else if c.is_whitespace() && quote.is_none() {
+            if !token.is_empty() {
+                tokens.push(std::mem::take(&mut token));
+            }
+        } else {
+            token.push(c)
+        }
+    }
+    if !token.is_empty() {
+        tokens.push(token)
+    }
+    tokens.iter().any(|token| {
+        let path = if token == "~" {
+            home.to_path_buf()
+        } else if let Some(rest) = token.strip_prefix("~/") {
+            home.join(rest)
+        } else {
+            let path = std::path::PathBuf::from(token);
+            if path.is_absolute() {
+                path
+            } else {
+                cwd.join(path)
+            }
+        };
+        let canonical = path.canonicalize().unwrap_or(path);
+        sensitive(&canonical, home, config)
+    })
+}
 pub fn sensitive(path: &Path, home: &Path, config: &Path) -> bool {
-    path.starts_with(config)
+    within(path, config)
         || [
             ".ssh",
             ".aws",
             ".gnupg",
             ".pi/agent",
             ".local/share/opencode",
+            ".local/share/keyrings",
+            ".kube",
+            ".azure",
+            ".config/gcloud",
+            ".config/gh",
+            ".docker/config.json",
             "Library/Keychains",
+            "Library/Accounts",
             "AppData/Roaming/Microsoft/Credentials",
             "AppData/Local/Microsoft/Credentials",
+            "AppData/Local/Microsoft/Vault",
+            "AppData/Roaming/Microsoft/Protect",
         ]
         .iter()
-        .any(|p| path.starts_with(home.join(p)))
-        || path
-            .components()
-            .any(|c| c.as_os_str().to_string_lossy().starts_with(".env"))
+        .any(|p| within(path, &home.join(p)))
+        || path.components().any(|c| {
+            c.as_os_str()
+                .to_string_lossy()
+                .to_lowercase()
+                .starts_with(".env")
+        })
 }
 pub fn file_asks(write: bool, outside: bool, sensitive: bool, mode: &str) -> bool {
     if mode == "review" || sensitive {
@@ -106,7 +189,8 @@ pub fn broad_search(command: &str, home: &Path) -> bool {
         command,
     );
     search
-        && (command.contains('~')
+        && (matches(r"(?i)\b(find|rg|grep|get-childitem)\s+/?(?:\s|$)", command)
+            || command.contains('~')
             || command.contains("$HOME")
             || command.contains(&home.to_string_lossy().into_owned()))
 }

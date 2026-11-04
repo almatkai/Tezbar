@@ -57,37 +57,17 @@ impl AiCore {
             json!({"cwd":cwd.map(str::to_string).unwrap_or_else(||self.inner.ctx.paths.home_dir.to_string_lossy().into_owned()),"isStreaming":false,"messageCount":0,"pendingMessageCount":0,"toolCalls":0,"model":{"id":cfg["model"],"provider":cfg["provider"]}}),
         )
     }
-    pub(super) async fn approval(
+    // Raw prompt seam shared with native tools: no policy shortcuts.
+    pub(super) async fn approval_prompt(
         &self,
         run_id: &str,
         title: &str,
         command: &str,
         cancel: &Cancel,
+        remember_command: bool,
     ) -> bool {
-        if cancel.is_cancelled() {
-            return false;
-        }
-        let raw = match self.read_config().await {
-            Ok(v) => v,
-            Err(_) => return false,
-        };
-        let mode = raw["agentApprovalMode"].as_str().unwrap_or("default");
-        if mode != "review"
-            && raw["agentAlwaysAllowedExactCommands"]
-                .as_array()
-                .is_some_and(|a| a.iter().any(|c| c.as_str() == Some(command.trim())))
-        {
-            return true;
-        }
-        if mode == "turbo" && !title.contains("Destructive") {
-            return true;
-        }
-        self.approval_prompt(run_id, title, command, cancel, true)
+        self.approval_prompt_identity(run_id, title, command, cancel, remember_command, None)
             .await
-    }
-    // Raw prompt seam shared with native tools: no policy shortcuts.
-    pub(super) async fn approval_prompt(&self,run_id:&str,title:&str,command:&str,cancel:&Cancel,remember_command:bool)->bool{
-        self.approval_prompt_identity(run_id,title,command,cancel,remember_command,None).await
     }
     pub(super) async fn approval_prompt_identity(
         &self,
@@ -96,7 +76,7 @@ impl AiCore {
         command: &str,
         cancel: &Cancel,
         remember_command: bool,
-        extension_identity:Option<(String,String,String,String)>,
+        extension_identity: Option<(String, String, String, String)>,
     ) -> bool {
         if cancel.is_cancelled() {
             return false;
@@ -122,18 +102,26 @@ impl AiCore {
                     run_id: run_id.into(),
                     command: command.into(),
                     remember_command,
-                    extension_identity:extension_identity.clone(),
+                    extension_identity: extension_identity.clone(),
                     reply: tx,
                 },
             );
         }
-        let mut event = json!({"type":"approval","approvalId":id,"title":title,"command":command,"canRemember":remember_command||extension_identity.is_some()});
+        let mut event = json!({"type":"approval","approvalId":id,"title":title,"command":command,"canRemember":remember_command||extension_identity.is_some(),"rememberKind":if extension_identity.is_some(){"tool"}else{"command"}});
         if remember_command {
             if let Some(rule) = suggested_rule(command) {
                 event["suggestedRule"] = json!(rule);
             }
         }
         self.agent_event(run_id, event);
+        let _pause = self
+            .inner
+            .state
+            .lock()
+            .unwrap()
+            .clocks
+            .get(run_id)
+            .map(|clock| clock.pause());
         let answer = tokio::select! {r=rx=>r.unwrap_or(false),_=cancel.cancelled()=>false,_=tokio::time::sleep(Duration::from_secs(300))=>false};
         self.inner.state.lock().unwrap().approvals.remove(&id);
         answer && !cancel.is_cancelled()
@@ -152,9 +140,17 @@ impl AiCore {
             }
             state.approvals.remove(id).unwrap()
         };
-        if decision=="always" {if let Some((extension,connection,tool,hash))=approval.extension_identity.clone(){
-            if let Err(error)=self.remember_extension_tool(extension,connection,tool,hash).await {let _=approval.reply.send(false);return Err(error)}
-        }}
+        if decision == "always" {
+            if let Some((extension, connection, tool, hash)) = approval.extension_identity.clone() {
+                if let Err(error) = self
+                    .remember_extension_tool(extension, connection, tool, hash)
+                    .await
+                {
+                    let _ = approval.reply.send(false);
+                    return Err(error);
+                }
+            }
+        }
         if decision == "always" && approval.remember_command {
             let ctx = self.inner.ctx.clone();
             let command = approval.command.trim().to_string();
