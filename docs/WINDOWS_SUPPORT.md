@@ -1,6 +1,6 @@
 # Windows support
 
-Tezbar uses the same React interface and Rust core on macOS and Windows. Platform-specific behavior lives behind native adapters. JavaScript is confined to the on-demand extension compatibility worker; see [Rust core architecture](RUST_CORE.md). The port has been exercised locally on macOS; Windows runtime and installer validation remain required before release.
+Tezbar uses the same React interface and Rust core on macOS and Windows. Platform-specific behavior lives behind native adapters. JavaScript is confined to the on-demand extension compatibility worker; see [Rust core architecture](RUST_CORE.md). The native core has been exercised on macOS and a real Windows x64 host. Installer and desktop UI smoke validation remain separate release checks.
 
 ## Launcher and Launchpad
 
@@ -48,7 +48,7 @@ These areas still need Windows-native implementations before Windows can be call
 3. Validate native clipboard text/image/file restoration, shortcuts, mixed-monitor capture and process cleanup on Windows. The CF_HDROP implementation is present; macOS fixture tests cannot establish Win32 behavior.
 4. Extract icons for packaged Microsoft Store applications. Classic shortcut/executable icons are supported.
 5. Add Windows-specific automatic installation guidance for local Whisper/Moonshine runtimes.
-6. Produce and smoke-test signed x64 and ARM64 installers in Windows CI. The Tauri config now targets MSI and per-user NSIS packages, but installer behavior must be validated on an actual Windows host.
+6. Produce and smoke-test signed x64 and ARM64 installers on actual Windows hosts using the project's Tailscale release workflow; do not use GitHub Actions. The Tauri config now targets MSI and per-user NSIS packages, but installer behavior must be validated on an actual Windows host.
 
 ## Build behavior
 
@@ -60,9 +60,26 @@ Cross-compilation from macOS can type-check Rust code, but a complete Windows Ta
 
 ## Native AI branch verification
 
-The native AI work uses a shared Windows Job Object helper and PowerShell with
-UTF-8 output. Its Windows runtime tests must run from an immutable committed-source
-archive in an isolated temporary staging directory. The release checkout is read
-only. At this point no Windows result is claimed; see
-[NATIVE_AGENT_RUNTIME.md](NATIVE_AGENT_RUNTIME.md) for the unfinished acceptance
-matrix.
+The native AI implementation uses PowerShell with an explicit UTF-8 preamble and
+Windows Job Objects. Child processes start suspended, are attached to the job,
+then resume; cancellation owns descendants rather than only the immediate shell.
+Canonical path comparisons account for case and extended `\\?\`/UNC prefixes.
+Regular-file writes and edits use atomic replacement; extensions use the same
+owned process helper. Connection keys use Windows DPAPI; the encrypted secret
+payload uses the existing AES-GCM/KeyStore abstraction with no plaintext fallback.
+
+Verification runs on `DESKTOP-OB83S8J` through Tailscale, under Rust
+`1.90.0-x86_64-pc-windows-msvc`. Source comes from a SHA-256-verified `git archive`
+of the committed branch into a task-specific temporary staging directory. The
+release checkout `C:\Users\User\Desktop\Tezbar` is read-only and stays clean.
+No app is installed or launched, and no real profile or provider credential is
+used. The backend resource build checks existing pins; Cargo uses a separate task
+target directory. See [NATIVE_AI_VERIFICATION.md](NATIVE_AI_VERIFICATION.md) for
+exact source, counts and test evidence.
+
+The Windows tests exercise native provider HTTP/SSE/NDJSON dispatch, compiled
+MCP stdio fixtures, modern/legacy HTTP/OAuth, file paths and atomic writes,
+PowerShell Unicode, real process-tree termination, and isolated DPAPI key
+round-trips. `cargo check --lib --locked` also compiles non-test platform code.
+This does not establish installer behavior, Windows OCR, mixed-monitor capture,
+accessibility integration or production Keychain/DPAPI migration behavior.

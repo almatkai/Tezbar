@@ -1,100 +1,179 @@
 # Native AI runtime
 
-Implementation is in progress against [NATIVE_AI_SPEC.md](NATIVE_AI_SPEC.md).
-The full specification and its acceptance matrix are **not yet complete**. The
-mandatory Claude Opus 5.5 review has not run. Do not treat this branch as ready
-for release.
+Built-in AI execution is owned by Rust. Pi, Node, npm, Bun and `opencode run`
+are not execution fallbacks. React remains the renderer; model servers, speech/
+ML engines, OS helpers and explicitly connected MCP programs remain external.
+The implementation follows [NATIVE_AI_SPEC.md](NATIVE_AI_SPEC.md). The required
+Claude Opus 5.5 review is a separate coordinator step and has not yet run; this
+branch is not a release approval.
 
-All owned agent and completion execution now uses Rust HTTP adapters. Pi, npm,
-Node, Bun and `opencode run` are not execution fallbacks. React remains the
-renderer. Optional external MCP programs and model servers remain external.
-Legacy `agentRuntime` values are preserved in configuration and ignored when
-routing. `pi:check` and `pi:install` report the native runtime without probing or
-installing a CLI. Existing Pi packages are listed as not loaded.
+## Entry points and providers
 
-## Implemented paths
+`agent:run`, `chat:run`, query answers, actions, chat metadata and extension AI
+all use the same native provider seam. `provider.rs` handles tool-free callers;
+`runtime/agent.rs` owns the agent loop. `wire/` contains five terminal-validated
+adapters: OpenAI Chat, Responses, Anthropic Messages, Gemini/Cloud Code and
+Ollama. Protocol adapters perform no network I/O. `wire/transport.rs` owns HTTP,
+stream deadlines, redaction and retries.
 
-- Canonical text, images, thinking, tool calls and correlated results, with opaque
-  replay limited to the original provider, protocol and model.
-- OpenAI Chat and Responses, Anthropic Messages, native Gemini/Cloud Code and
-  Ollama encoders and terminal-validated streaming decoders. DeepSeek uses Chat.
-- Native `agent:run`, `chat:run`, query answers, actions, metadata and extension AI.
-- Current-turn retries before visible text, with one encoded request body and no
-  replay of the agent loop. A completed tool remains recorded if a later turn fails.
-- Private atomic conversation turn files, content-addressed image storage and a
-  128 MiB image budget. Interrupted outstanding calls receive unknown-outcome
-  results. Renderer history IDs and legacy text fallback remain compatible.
-- Live Review/default/Auto/Turbo policy, remembered exact shell commands, sensitive
-  file checks and conservative review for unknown shell syntax before shortcuts.
-- Native file read/write/edit, directory listing/name/content search, indexed
-  launcher/Knowledge routes, shell execution and screen capture/OCR.
-- POSIX process groups and a shared Windows Job Object helper. Windows children
-  start suspended and are attached to their job before being resumed.
-- Explicit per-model and custom-provider protocols. OpenCode uses a documented
-  HTTP route and an attributed catalog snapshot, with an actionable missing-key
-  error rather than impersonating its CLI. Copilot can exchange a rejected GitHub
-  token for an in-memory session token.
-- Antigravity existing-account selection, refresh/store preservation, native
-  Cloud Code envelopes and attributed model routing from pi-antigravity 0.11.0.
-- AI extension imports, encrypted secrets, explicit Test then Enable, native stdio
-  and HTTP JSON-RPC, modern/legacy initialization, bounded schema validation,
-  discovery, pinned tool definitions and immutable per-run lookup tables.
-- Instructions, local prompts/commands, profile tool narrowing and AGENTS.md.
-  Settings has an inline single-column extension list; the composer can insert
-  resolved prompt text without sending it.
+Supported built-in routes are OpenAI, OpenAI-compatible/custom providers,
+Anthropic, Ollama, Copilot, Gemini, DeepSeek, TokenRouter, Antigravity and
+OpenCode. Configured endpoints and explicit provider/model protocols take
+precedence. Unknown OpenCode models need an explicit protocol, rather than a
+model-name guess. Custom providers may select any of the five protocols and use
+encrypted header references when supplied by an AI extension.
 
-## Permissions and limits
+- Copilot reuses native GitHub device/refresh credentials. Rejected direct tokens
+  can be exchanged once for an in-memory session token. Model endpoint metadata
+  and credential-scoped catalogs determine model routes. No account policy is
+  changed.
+- Gemini uses its native API on the default host; a custom compatibility base
+  retains Chat unless explicitly configured otherwise. DeepSeek retains its
+  required Chat reasoning fields.
+- Antigravity account refresh, PKCE sign-in, selection/removal, catalog merging,
+  Cloud Code envelopes, bounded account/endpoint failover, grounded search and
+  image generation run natively. Existing account stores remain in place;
+  unrelated auth entries and unknown fields survive updates. This integration
+  uses an unofficial upstream API and is not endorsed by Google.
+- OpenCode uses supported native HTTP APIs and key precedence: configured key,
+  environment, then its existing auth file. The attributed static catalog makes
+  the CLI optional. `opencode models` is an optional read-only discovery source;
+  no OpenCode agent runs. Current upstream free-tier restrictions produce an
+  actionable credential/model error; Tezbar does not impersonate OpenCode.
 
-Approval prompts and process ownership are not an OS sandbox. Approved commands
-and extension programs run with the person's OS permissions. Auto can mutate
-files inside cwd; Turbo can also mutate files outside cwd. Sensitive file paths,
-destructive commands and complex shell syntax still require review.
+Routing/request ports and the catalog snapshots are attributed to MIT
+pi-antigravity 0.11.0 (Rahul Arya) and pi-ai (Mario Zechner), with license copies
+in `licenses/`. Their JavaScript is read-only reference material, never loaded.
 
-The shared limits are in `runtime/limits.rs`: 100 provider turns, 256 tool calls,
-32 calls per turn, 8 MiB streamed bytes per turn, 1 MiB tool arguments, 64 KiB
-model-facing result text, 4 MiB text context and 2 MiB editable files. The UI
-receives at most 8,000 characters of stage output. Old tool results may be elided
-under context pressure; opaque blocks are retained.
+## Durable history and execution boundaries
 
-Connection secrets use AES-GCM and a separate OS-protected key. No plaintext
-fallback is used. Tests inject an in-memory KeyStore and temporary profiles.
-Scrubbing matches exact secret values and known patterns; transformed secrets
-cannot be reliably detected.
+`runtime/transcript.rs` stores canonical text, images, thinking, tool calls and
+correlated results. Unique call IDs survive a bounded history window and repeated
+provider wire IDs. Opaque signed/encrypted blocks replay only to their exact
+provider, protocol and model. Foreign thinking is dropped. Gemini generations
+requiring signatures receive observations for unsigned history; signed parts
+remain separate.
 
-## Outstanding implementation and verification
+Per-conversation turns are private atomic JSON files under
+`data_dir/llm/transcripts`, with content-addressed image blobs. Renderer prior IDs
+select the ordered history window; old text-only conversations still load.
+Missing image bytes become an explicit placeholder. Interrupted unanswered calls
+receive an unknown-outcome result. Deleting chats/turns removes their native
+history and unreferenced blobs. Image storage is bounded to 128 MiB per
+conversation.
 
-These are unfinished product requirements, not upstream restrictions:
+A provider turn must reach its protocol terminal signal before any tool batch
+runs. The complete batch is validated before its first effect. Retry is below
+the agent loop, bounded to two retries and the current encoded request only,
+before visible text. Safe retries reuse identical request bytes. A later timeout,
+rate limit or disconnect cannot replay earlier tools. Partial visible text is
+retained with an error marker. MCP tool effects are never automatically replayed.
 
-- Native Antigravity PKCE/account-management UI, live catalog merging, account and
-  endpoint failover, project discovery, image generation and Google search tools.
-- Copilot authoritative model endpoint metadata, complete refresh/device/session
-  fixture matrix, and native OpenCode catalog/key-source fixtures.
-- MCP OAuth, complete modern-error/version negotiation, legacy session restart and
-  stream resume, subscriptions/catalog refresh and idle restart/backoff.
-- Project extension review/trust UI and byte-change revocation, resource templates,
-  image-bearing prompt/resource insertion and all remaining result/schema limits.
-- Full extension edit/variable/secret/policy/log/review UI, local prompt authoring,
-  profile selection before the first conversation turn, both-theme accessibility
-  verification and the complete renderer acceptance matrix.
-- The complete shell-policy port, multiple-edit batches, exact original-path
-  revalidation, Windows path normalization and the active-time budget excluding
-  approval waits.
-- The exhaustive NoPi marker, auth/secret, persistence, cancellation/concurrency and
-  protocol-image acceptance matrix, real Windows results and the required review.
+The shared limits in `runtime/limits.rs` include 100 provider turns, 256 calls,
+32 calls per turn, 8 MiB streamed bytes per turn, 1 MiB arguments, 64 KiB
+model-facing result text, 4 MiB text context and 2 MiB editable files. Active run
+time is 30 minutes, excluding approval waits. Stage output is at most 8,000
+characters with its tool source. Old tool results may be elided under context
+pressure; opaque blocks remain intact. Blocking file/schema operations run off
+the async executor and schema validation has a bounded worker pool/deadline.
 
-Fixture coverage proves the application's side of the exercised protocols. No
-live paid-provider calls, production profiles, desktop launches or installations
-are used for this work. Live provider compatibility and performance are unverified.
+## Tools and permission policy
 
-## Verification
+Native tools cover regular file read/write/edit (including atomic edit batches
+and optional parent creation), bounded list/find/grep/project search, indexed
+Knowledge and launcher search, shell execution, screen capture/images and macOS
+OCR. Antigravity adds `google_search` and `generate_image` when linked.
+Generated images stay in `cwd/generated-images`; paths are checked again before
+writing. The tool registry reflects the platform: bash on macOS, PowerShell on
+Windows with explicit UTF-8 output.
 
-Use `pnpm typecheck`, `pnpm test`, `pnpm build:frontend`,
-`node scripts/check-backend-lifecycle.mjs` and:
+Review always asks. Per-request mode overrides stay pinned; otherwise the next
+tool reads live settings. Exact remembered shell commands and tool descriptor
+allowances are checked only after destructive, sensitive and unknown/complex
+shell cases. Auto can mutate ordinary files inside cwd; Turbo can also operate
+outside cwd. Sensitive files and destructive/complex shell syntax still ask.
+Outside-cwd operations follow the explicit file policy in `runtime/policy.rs`.
+Search traversal omits sensitive/dependency paths, and direct paths are
+canonicalized and revalidated after approval. The native shell policy is
+intentionally stricter than the old permissive TypeScript regex shortcuts.
+
+Approvals are not an OS sandbox. Approved commands and extension programs run
+with the person's OS permissions. POSIX process groups and Windows Job Objects
+own descendants; Windows processes start suspended, join the job, then resume.
+Cancellation fences process starts and final file mutations, kills owned process
+trees, cancels pending approvals/calls, and ignores late progress/results.
+
+## AI Extensions
+
+`ext/` owns manifests, encrypted secrets, project trust, native MCP, resources,
+prompts, instructions, profiles and declarative providers. Settings uses the
+existing primitives and a single-column list. Add/import/paste does not run a
+program. The person sees the literal command/arguments or URL, tests it, then
+enables it. Project `.tezbar/ai-extension.json` files are review notices only;
+location and raw bytes are pinned, and any byte change revokes trust.
+
+The Rust MCP host supports stdio and Streamable HTTP, current `2026-07-28`
+stateless metadata plus common legacy handshakes, bounded discovery and local-only
+JSON Schema validation. OAuth supports protected-resource/authorization-server
+discovery, preregistered clients or DCR, PKCE S256, issuer/resource checking and
+refresh. No hosted CIMD document is invented. Unsupported server requests such
+as roots, sampling and elicitation return an explicit error.
+
+Each run has an immutable collision-safe name-to-connection/descriptor table.
+Changed descriptors revoke remembered allowances and need review. Catalog
+notifications refresh the next snapshot, never mutate a running one. Calls and
+cancellation on shared connections are correlated independently; disabling a
+connection cancels in-flight/startup work and refuses later calls. Idle clients
+stop after ten minutes; failed startups/crashes have bounded backoff.
+
+Only declared variables plus a small OS allowlist reach child processes. Secrets
+use AES-GCM and a separate OS-protected key through the existing KeyStore seam
+(Keychain on macOS, DPAPI on Windows); failure has no plaintext fallback. Tokens
+are scrubbed from progress, discovery, results and errors and never returned in
+account IPC. Exact-value scrubbing cannot identify arbitrary transformed secrets.
+Tests use temporary profiles and an injected in-memory key store.
+
+Global/extension/profile/project/request instructions have a defined bounded
+order. `AGENTS.md` from cwd is optional and cannot override permissions. Prompts,
+resource text/images and slash commands resolve to editable drafts, never send
+automatically. Profiles narrow tools and persist with the conversation. See
+[AI_EXTENSIONS.md](AI_EXTENSIONS.md) and the example manifest for authoring.
+
+## Compatibility
+
+Existing settings, credentials, conversations and database locations remain.
+Legacy `agentRuntime` values are accepted/persisted but ignored for routing.
+`pi:check`/`pi:install` report native availability and do not probe/install a CLI;
+legacy observation aliases report native run state. Existing Pi JavaScript
+packages are listed as not loaded, with MCP as the replacement seam. The
+Raycast-compatible extension worker is a separate feature and remains unchanged.
+The Pi policy resource is absent from packaging/build staging.
+
+## Verification and limits
+
+Final verification results are recorded in [NATIVE_AI_VERIFICATION.md](NATIVE_AI_VERIFICATION.md).
+The suite uses real `AiCore::handle` dispatch, loopback HTTP/SSE/NDJSON providers,
+compiled Rust MCP stdio fixtures, fake OAuth servers, temporary profiles and
+NoPi marker executables. It covers every built-in provider/protocol, signed and
+image-bearing multi-turn history, auth, permissions, retries, cancellation,
+secret/trust boundaries and renderer interactions in both theme settings.
+
+Commands:
 
 ```sh
+pnpm typecheck
+pnpm test
+pnpm build:frontend
 CARGO_BUILD_JOBS=2 cargo +1.98.0 test --manifest-path src-tauri/Cargo.toml --lib --locked
+RUSTUP_TOOLCHAIN=1.98.0 CARGO_BUILD_JOBS=2 node scripts/check-backend-lifecycle.mjs
 ```
 
-The declared MSRV remains 1.85. The added jsonschema 0.29.1 uses no remote-resolution
-features and declares Rust 1.71.1. Running the project suite on Rust 1.98 does not
-establish that the existing locked dependency graph supports 1.85.
+No live paid-provider calls, production profiles, desktop launches, app installs,
+installer/release builds or performance benchmarks were used. Official-SDK server
+interop and credentialed upstream behavior remain manual release checks; fixture
+success establishes Tezbar's side of the protocols. Copilot/Antigravity internal
+APIs and upstream OpenCode restrictions can change independently.
+
+The declared MSRV remains 1.85. Added jsonschema 0.29.1 disables remote-resolution
+features and declares Rust 1.71.1. The locked macOS library also passes `cargo +1.85.0 check --lib --locked
+--offline`; tests run with 1.98 on macOS and 1.90 on Windows. The mandatory full Claude Opus 5.5 review remains with the coordinator.

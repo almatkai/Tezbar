@@ -7,9 +7,11 @@ shows the available tools. Choose Enable to make them available to later AI runs
 Adding or importing alone never starts a program or opens a connection.
 
 Programs use MCP over newline-delimited stdio. Web connections use Streamable
-HTTP. Modern 2026-07-28 and legacy initialization are supported in the currently
-exercised fixtures. OAuth and the rest of the acceptance matrix remain unfinished;
-see [the runtime status](NATIVE_AGENT_RUNTIME.md).
+HTTP. The host supports current 2026-07-28 stateless metadata and common legacy
+initialization. Browser sign-in uses OAuth discovery, PKCE and either your
+pre-registered Client ID or a service's dynamic registration endpoint. If the
+service supports neither, use an access token or ask its administrator to register
+Tezbar. There is no invented Tezbar-hosted client metadata document.
 
 Extensions run with your OS permissions. Review always asks. Other modes follow
 the connection policy: ask every time, allow tools marked read-only by the server,
@@ -65,3 +67,61 @@ worker is a separate feature and is unchanged.
 
 Provider routing facts and Antigravity ports are attributed to their MIT sources
 in `licenses/`. No external reference package is executed by the native runtime.
+
+## Connections and trust
+
+Use Edit connection to change a command, variables, URL, token or policy. Secret
+inputs show Saved, never a token fragment. Changes require another test; Test does
+not enable a connection. Changing a saved secret also disables the extension
+until it has been tested again. Remove deletes its encrypted saved secrets.
+Review always asks for each tool. An exact tool allowance is bound to its
+connection and descriptor hash; a changed definition revokes it.
+
+Only explicitly declared environment variables plus basic OS startup variables
+reach a program. Use `{ "secret": "NOTES_TOKEN", "label": "Notes token" }` as an
+`env` or header value, then enter it in Settings. Secret-looking literal values in
+imports are moved into encrypted storage before the manifest is saved. Exported
+configurations should contain references, not credentials. Secrets need the OS key
+store; Tezbar refuses to save them if it is unavailable.
+
+A project can put the same manifest in `.tezbar/ai-extension.json`. Tezbar shows a
+review notice in that folder; it never automatically starts it. Review and add it,
+then test and enable. The exact location and bytes are pinned. Any change,
+including whitespace, revokes trust and tool allowances. Project contributions
+are available only within that folder.
+
+## Prompts, profiles and custom providers
+
+Settings includes local prompt, command alias and profile editors. Prompt
+arguments marked required must be supplied before insertion. Remote prompts and
+resources are discovered from the connection and resolve only through that same
+server; Tezbar does not fetch arbitrary resource links itself. Image content is
+inserted as a composer attachment, text as an editable draft. Supported resource
+templates are also available to the model through the connection's resource tools.
+
+A profile's `tools` list narrows the existing registry and grants no permissions.
+Built-ins use names such as `read`, `grep` and `project_search`. For extension
+tools, copy the **Profile tool name** shown in connection Details; do not construct
+it from a display label. Omitting `tools` keeps available tools; `[]` allows none.
+Profiles can be chosen before the first turn and remain with that conversation.
+
+An enabled manifest can contribute `providers` with a `custom:` ID, `baseURL`, an
+explicit `protocol`, model metadata and headers. Protocol choices are
+`openai-chat`, `openai-responses`, `anthropic`, `gemini` and `ollama`. Header secret
+references use the same encrypted store as connection secrets. Enter referenced
+provider keys under the extension's Details and choose Save key, then enable the
+extension. Disabling the
+extension removes its provider; a conversation using it gets a clear unavailable
+provider error rather than silently selecting another model.
+
+See [the complete example](examples/tezbar-ai-extension.json). Its program and
+URLs are placeholders; replace them with software/services you have chosen.
+Import is a preview, not installation or startup. No remote-manifest importer,
+marketplace, package auto-install, sampling, elicitation or roots capability is
+advertised. Unsupported requests receive explicit errors.
+
+Tools, resource contents and server instructions are untrusted input. Catalogs
+and result text/images have size/type limits; remote schema references are
+refused. Lost calls can have an unknown outcome and are not automatically
+reissued. Exact secret values are redacted, but transformed secrets cannot be
+reliably recognized. Approval and process ownership are not an OS sandbox.

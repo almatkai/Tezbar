@@ -71,9 +71,13 @@ reported rather than silently replacing the profile with defaults.
 
 Agent and completion execution now uses native Rust protocol adapters, with no
 Pi/Node/OpenCode execution fallback. Canonical conversation history and AI
-Extensions are owned by `native_core/ai`. The full requested feature set remains
-in progress; [Native agent runtime](NATIVE_AGENT_RUNTIME.md) lists implemented
-behavior, outstanding requirements and verification limits.
+Extensions are owned by `native_core/ai`. Five wire protocols retain signed and
+image-bearing history; all built-in providers, tools, catalogs/auth and explicitly
+connected MCP extensions execute through Rust. React owns presentation. Community
+Pi JavaScript packages no longer load; MCP is the language-independent replacement
+seam. [Native agent runtime](NATIVE_AGENT_RUNTIME.md) describes the modules,
+permissions, compatibility and verification limits. The coordinator's required
+Claude Opus 5.5 review remains a separate step before acceptance.
 
 ## Build and checks
 
