@@ -43,7 +43,7 @@ fn main() {
 }
 "#);
         fs::write(directory.path().join("src/main.rs"), source).unwrap();
-        let output = Command::new("cargo").args(["build", "--offline", "--quiet", "-j2", "--manifest-path"])
+        let output = Command::new("cargo").env("CARGO_TARGET_DIR",directory.path().join("target")).args(["build", "--offline", "--quiet", "-j2", "--manifest-path"])
             .arg(directory.path().join("Cargo.toml")).output().unwrap();
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let binary = directory.path().join("target/debug").join(format!("tezbar-supervisor-fixture{}", std::env::consts::EXE_SUFFIX));

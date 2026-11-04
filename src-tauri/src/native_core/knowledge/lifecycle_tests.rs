@@ -980,10 +980,17 @@ async fn chrome_profiles_are_skipped_cached_and_previously_indexed_sources_prune
 #[test]
 fn watcher_skips_browser_junk_and_pending_work_has_max_wait_and_full_rate_limit() {
     use notify::{event::ModifyKind, Event, EventKind};
-    let roots = vec![PathBuf::from("/docs")];
+    let root = PathBuf::from(if cfg!(windows) { "C:/docs" } else { "/docs" });
+    let roots = vec![root.clone()];
     let profiles = HashSet::new();
-    let event =
-        |p: &str| Ok(Event::new(EventKind::Modify(ModifyKind::Any)).add_path(PathBuf::from(p)));
+    let event = |p: &str| {
+        let path = if let Some(p) = p.strip_prefix("/docs/") {
+            root.join(p)
+        } else {
+            PathBuf::from(p)
+        };
+        Ok(Event::new(EventKind::Modify(ModifyKind::Any)).add_path(path))
+    };
     let mut pending = PendingReconcile::default();
     for path in [
         "/docs/leveldb/000003.log",
@@ -1011,10 +1018,7 @@ fn watcher_skips_browser_junk_and_pending_work_has_max_wait_and_full_rate_limit(
     assert!(!pending.record(&event("/elsewhere/a.txt"), &roots, &profiles, 100));
     let mut lexical = PendingReconcile::default();
     assert!(lexical.record(&event("/docs/.git/../eligible"), &roots, &profiles, 100));
-    assert_eq!(
-        lexical.paths,
-        HashSet::from([PathBuf::from("/docs/eligible")])
-    );
+    assert_eq!(lexical.paths, HashSet::from([root.join("eligible")]));
     assert!(!lexical.full);
     for now in (100..=30_100).step_by(1000) {
         assert!(pending.record(&event("/docs/user.log"), &roots, &profiles, now));
