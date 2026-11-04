@@ -1,6 +1,85 @@
 # Native AI implementation verification
 
-## Eighteen closure-audit repairs — final source `21d3e91`
+## Four targeted-review variants — source `756072e`
+
+Validated implementation: `756072ee682eae773626b3d1b78d807217014580`, tree
+`0147dc5caa1e3dfbe94ab2214c5f7e8b808994a0`, in the same clean task worktree
+and branch `feat/native-rust-agent`. The following evidence/ledger update is a
+documentation-only successor to that tested source. No implementation edits
+occurred during its final checks.
+
+The completed full Opus reviews at `1623d47` and targeted reviews at `847ea62`
+remain unchanged under `docs/reviews`. Wire closed with no actionable findings;
+the four remaining variants (T-R1, S8-R1, S8-R2, S5-V1) now have implementation
+repairs and permanent regressions. **Fresh Opus closure of those four repairs is
+still pending.** No overall migration or release sign-off is claimed here.
+The wire/protocol/provider/agent code reviewed at `847ea62` is byte-identical;
+the changes are confined to extension lifecycle/secrets and Settings selection.
+
+| Required check | Final observed result |
+| --- | --- |
+| `pnpm typecheck` | Pass |
+| `pnpm test` | 928 passed, 9 existing skips, 0 failed; 125 files passed, 2 skipped |
+| `pnpm build:frontend` | Pass |
+| macOS Rust 1.98 full library suite, locked, two test threads | 608 passed, 9 existing ignores, 0 failed; 155.29 s |
+| Rust 1.85 offline locked library check | Pass |
+| Backend lifecycle fixture | 1 passed, 0 failed |
+| Windows Rust 1.90 non-test library check | Pass |
+| Windows full locked library suite, two test threads | 538 passed, 8 existing ignores, 0 failed; 102.53 s |
+| `git diff --check` | Pass |
+
+The two new real-component selection regressions and all 40 extension Rust tests
+also passed before the complete suites. The Windows DPAPI fixture now exercises
+a second permanent key failure with no ciphertext, an explicit reset and another
+encrypted roundtrip. Access-denied/unavailable states remain refused with and
+without ciphertext. The catalog-stop regression waits for a real fixture request
+before Remove/shutdown and checks completion under one second, no successful
+adoption and empty client/start registries. No skips or ignores were added.
+
+### Exact-source Windows staging
+
+Authorized Tailscale SSH: `User@100.77.254.64`, `DESKTOP-OB83S8J`. Isolated stage:
+`C:\Users\User\AppData\Local\Temp\tezbar-native-c7271bc-20261104\rev-756072e-closure4`.
+The release checkout remains clean on `release/0.3.0-beta.7` and was not edited.
+The cached immutable `8f70d2e` archive plus a committed 34-file overlay were used,
+with no deleted paths. Windows verified **all 1,784 tracked files** against the
+final commit before building and **1,778 non-generated tracked inputs** afterward;
+only the six regenerated `dist-backend/` files are excluded after the build.
+This is full-file snapshot verification, not a newly transferred full archive.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `overlay-756072e.tar.gz` | `06e859fd46faae52f0f7b491c08f555ef91d50f89f28283f087e7baeaacabc28` |
+| `manifest-756072e.json` | `176aca5c2746193d8f14e33008abf29fc5652a04bbac9bd9b1bd14afdc5f9018` |
+
+The local manifest and overlay are in `/private/tmp/tezbar-four-stage-756072e`.
+Recipe: `/private/tmp/tezbar-four-windows-756072e.ps1`. The script was copied and
+executed with `powershell.exe -File` after the encoded SSH command exceeded the
+transport command-line limit; no source or validation was changed. It uses frozen
+offline dependencies, backend resource staging and the same full native commands
+as the earlier verified recipes. Execution-policy bypass applies to that process
+only; no persistent Windows policy or profile was changed.
+
+### Retained final logs
+
+- `/private/tmp/tezbar-four-typecheck.log`
+- `/private/tmp/tezbar-four-final-ts.log`
+- `/private/tmp/tezbar-four-final-frontend.log`
+- `/private/tmp/tezbar-four-final-macos.log`
+- `/private/tmp/tezbar-four-final-msrv.log`
+- `/private/tmp/tezbar-four-final-lifecycle.log`
+- `/private/tmp/tezbar-four-final-windows.log`
+- `/private/tmp/tezbar-four-windows-rust-check.log`
+- `/private/tmp/tezbar-four-windows-rust-full.log`
+
+Tests used fixture profiles, keys, owned processes and loopback providers only.
+No production credentials, live Tezbar provider calls, app install/launch,
+Actions, push, PR or release were used. Live upstream interoperability and actual
+desktop window/event delivery remain untested; the previous documented Windows
+OCR/semantic UI Automation limits are unchanged. The source-reviewed window
+ordering and five-wire closure from the completed Opus audits remain applicable.
+
+## Historical: eighteen closure-audit repairs — source `21d3e91`
 
 Validated implementation: `21d3e911a03bbea64ffb39324d6822ca343f9ad7`, tree
 `ef522242f9f06e69ae7b501b0dae2c8727d32461`, on existing

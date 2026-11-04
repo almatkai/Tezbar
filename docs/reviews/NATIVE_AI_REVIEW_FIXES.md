@@ -401,3 +401,32 @@ parent's fresh targeted Claude Opus 5.5 re-review**, including regressions on th
 touched wire/redaction, MCP/security/process and Settings/runtime paths. None of
 the original completed audit reports was changed. Overall migration completion
 is not declared.
+
+## Targeted Opus follow-up at `847ea62`
+
+The unchanged `native-ai-opus-{wire,runtime,standards}-847ea62.md` reports are
+retained separately. Wire closed all five N-W findings with six independent
+probes and no actionable regressions. Runtime closed C-R1 and C-R2; standards
+closed nine of ten S findings. Four P3 variants remained in C-R3/S8/S5.
+
+Implementation `756072ee682eae773626b3d1b78d807217014580` addresses those variants:
+
+| ID | Repair | Regression |
+| --- | --- | --- |
+| T-R1 | Compute the effective explicit choice before applying removal fallback, in a fresh result map instead of mutating the captured retry patch. | Real Settings cases for removing A then choosing D, and adding Z then removing Z within the debounce; selected/model/chat all agree with the remaining list. |
+| S8-R1 | Remove uses the same stop helper for normal, retired, Test-start and uncommitted probe clients. | `removing_an_extension_stops_retired_clients_and_their_pending_call` checks immediate stop, empty registry, refused result and exactly one effect. |
+| S8-R2 | Register uncommitted clients before catalog awaits; every cleanup sweep sees them. Catalog calls use core cancellation, commit refuses stopped runtime, and shutdown serializes its final drain with registration/adoption. Probe guards clean temporary registrations. | `stopping_during_a_test_catalog_cancels_the_probe_and_prevents_adoption` waits for actual catalog entry, then tests Remove and shutdown: completion under one second, Test fails, no clients/starts or successful catalog adoption. |
+| S5-V1 | Explicit reset is available for a permanently unreadable protected key even without ciphertext. Optional ciphertext/revocation archives still roll back on failure; denied/transient stores stay refused. | Extended real Windows DPAPI fixture removes ciphertext, recreates permanent failure, resets again and round-trips a new secret. Unavailable-store tests cover refusal with and without ciphertext. |
+
+Focused checks passed: two renderer interleavings, typecheck, all 40 extension
+Rust tests; full renderer suite passed 928 tests with the same 9 existing skips,
+and frontend build passed. Final macOS suite passed 608 tests / 9 existing ignores;
+the real Windows suite passed 538 / 8, including the extended permanent DPAPI
+fixture and both new lifecycle regressions. Rust 1.85 offline check and backend
+lifecycle check passed. Windows verified all 1,784 tracked snapshot files before
+building and all 1,778 non-generated inputs afterward. Exact source/tree/manifest
+identities and retained logs are in `NATIVE_AI_VERIFICATION.md`.
+
+Fresh targeted Opus closure for these four variants remains pending. No new skip,
+ignore, credential read, live Tezbar provider call, app launch, push or release was
+used. The already closed wire scope is byte-identical to its reviewed source.
