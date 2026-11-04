@@ -4,6 +4,11 @@ mod chat;
 mod config;
 mod gateway;
 mod memory;
+mod native;
+mod native_protocol;
+#[cfg(test)]
+mod native_tests;
+mod native_tools;
 mod pi;
 mod pi_loop;
 mod process;
@@ -93,9 +98,15 @@ struct Run {
     cancel: Cancel,
     emitted: bool,
 }
+#[derive(Default)]
+struct AgentOptions {
+    approval_mode: Option<String>,
+    history_has_images: bool,
+}
 struct Approval {
     run_id: String,
     command: String,
+    remember_command: bool,
     reply: tokio::sync::oneshot::Sender<bool>,
 }
 fn err(e: impl std::fmt::Display) -> String {
@@ -301,6 +312,7 @@ impl AiCore {
         images: Vec<Value>,
         cwd: Option<String>,
         requested: Option<String>,
+        options: AgentOptions,
     ) -> CoreResult {
         let id = requested.unwrap_or_else(|| {
             format!(
@@ -317,6 +329,9 @@ impl AiCore {
         };
         {
             let mut state = self.inner.state.lock().unwrap();
+            if state.agents.contains_key(&id) {
+                return Err("Agent runId is already active".into());
+            }
             state.agents.insert(
                 id.clone(),
                 Run {
@@ -330,8 +345,52 @@ impl AiCore {
         self.agent_event(&id, json!({"type":"start","task":task}));
         let core = self.clone();
         let run = id.clone();
-        self.spawn(async move{let result=async{let cfg=core.cfg(Some("chat"),None).await?;let mut attempts=0;loop{let result=if let Some(turns)=&turns{let mut messages=vec![json!({"role":"system","content":"You are Tezbar, a helpful assistant. Answer clearly and concisely unless the user asks for more detail."})];messages.extend(turns.iter().skip(turns.len().saturating_sub(16)).map(|t|json!({"role":t["role"],"content":t["text"]})));core.stream(&cfg,messages,&cancel,|delta|{if let Some(text)=delta["text"].as_str(){if !text.is_empty(){core.agent_event(&run,json!({"type":"message","delta":text}));}}}).await.and_then(|text|if text.trim().is_empty(){Err("The model returned an empty response. Please try again.".into())}else{core.agent_event(&run,json!({"type":"answer","text":text}));Ok(text)})}else{core.pi_run(&task,&images,cwd.as_deref(),&cfg,&cancel,Some(&run)).await};match result{Ok(_)=>return Ok::<(),String>(()),Err(error) if attempts==0&&core.retry_allowed(&run,&error,&cancel)=>{attempts+=1;core.agent_event(&run,json!({"type":"log","source":"stderr","line":"Provider did not start cleanly. Retrying once..."}));tokio::select!{_=cancel.cancelled()=>return Err("Agent run aborted".into()),_=tokio::time::sleep(Duration::from_millis(350))=>{}}},Err(error)=>return Err(error)}}}.await;
-            if let Err(message)=result{if !cancel.is_cancelled(){core.agent_event(&run,json!({"type":"error","message":message}));}}core.agent_event(&run,json!({"type":"done"}));core.finish_run(&run);
+        self.spawn(async move {
+            let result = async {
+                let mut cfg = core.cfg(Some("chat"), None).await?;
+                if let Some(mode) = options.approval_mode { cfg["agentApprovalMode"] = json!(mode); }
+                if turns.is_none() && native::selected(&cfg)? {
+                    if options.history_has_images { return Err("Native configuration: image history is unsupported in stage 1; select agentRuntime=pi or start a text-only conversation".into()); }
+                    // Native errors never enter the compatibility adapter's launch retry.
+                    return tokio::time::timeout(Duration::from_secs(900),
+                        core.native_run(&task, &images, cwd.as_deref(), &cfg, &cancel, &run)
+                    ).await.map_err(|_| "Native limit: run exceeded 900s".to_string())?.map(|_| ());
+                }
+                let mut attempts = 0;
+                loop {
+                    let result = if let Some(turns) = &turns {
+                        let mut messages = vec![json!({"role":"system","content":"You are Tezbar, a helpful assistant. Answer clearly and concisely unless the user asks for more detail."})];
+                        messages.extend(turns.iter().skip(turns.len().saturating_sub(16)).map(|t| json!({"role":t["role"],"content":t["text"]})));
+                        core.stream(&cfg, messages, &cancel, |delta| {
+                            if let Some(text) = delta["text"].as_str().filter(|t| !t.is_empty()) {
+                                core.agent_event(&run, json!({"type":"message","delta":text}));
+                            }
+                        }).await.and_then(|text| {
+                            if text.trim().is_empty() { Err("The model returned an empty response. Please try again.".into()) }
+                            else { core.agent_event(&run, json!({"type":"answer","text":text})); Ok(text) }
+                        })
+                    } else {
+                        core.pi_run(&task, &images, cwd.as_deref(), &cfg, &cancel, Some(&run)).await
+                    };
+                    match result {
+                        Ok(_) => return Ok::<(), String>(()),
+                        Err(error) if attempts == 0 && core.retry_allowed(&run, &error, &cancel) => {
+                            attempts += 1;
+                            core.agent_event(&run, json!({"type":"log","source":"stderr","line":"Provider did not start cleanly. Retrying once..."}));
+                            tokio::select! {
+                                _ = cancel.cancelled() => return Err("Agent run aborted".into()),
+                                _ = tokio::time::sleep(Duration::from_millis(350)) => {}
+                            }
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
+            }.await;
+            if let Err(message) = result {
+                if !cancel.is_cancelled() { core.agent_event(&run, json!({"type":"error","message":message})); }
+            }
+            core.agent_event(&run, json!({"type":"done"}));
+            core.finish_run(&run);
         });
         Ok(json!({"ok":true,"runId":id}))
     }
@@ -380,6 +439,12 @@ impl AiCore {
                     .as_object()
                     .ok_or("LLM configuration patch must be an object")?
                     .clone();
+                if patch
+                    .get("agentRuntime")
+                    .is_some_and(|v| !matches!(v.as_str(), Some("auto" | "native" | "pi")))
+                {
+                    return Err("agentRuntime must be auto, native or pi".into());
+                }
                 let mut result = Value::Null;
                 if let Some(hotkey) = patch.remove("raymesHotkey") {
                     let hotkey = hotkey.as_str().ok_or("raymesHotkey must be a string")?;
@@ -482,6 +547,20 @@ impl AiCore {
                 } else {
                     None
                 };
+                if !owned["approvalMode"].is_null()
+                    && !matches!(
+                        owned["approvalMode"].as_str(),
+                        Some("review" | "default" | "auto" | "turbo")
+                    )
+                {
+                    return Err("Invalid agent approvalMode".into());
+                }
+                if !owned["historyHasImages"].is_null() && !owned["historyHasImages"].is_boolean() {
+                    return Err("Invalid historyHasImages".into());
+                }
+                if !owned["images"].is_null() && !owned["images"].is_array() {
+                    return Err("Invalid agent images".into());
+                }
                 let images = owned["images"].as_array().cloned().unwrap_or_default();
                 if let Err(error) = pi::normalize_images(&images) {
                     return Ok(json!({"ok":false,"error":error}));
@@ -492,6 +571,10 @@ impl AiCore {
                     images,
                     cwd,
                     requested.map(str::to_string),
+                    AgentOptions {
+                        approval_mode: owned["approvalMode"].as_str().map(str::to_string),
+                        history_has_images: owned["historyHasImages"] == true,
+                    },
                 )
                 .await
             }
@@ -534,6 +617,7 @@ impl AiCore {
                     Vec::new(),
                     None,
                     None,
+                    AgentOptions::default(),
                 )
                 .await
             }
@@ -557,8 +641,15 @@ impl AiCore {
                 let intent = classify(text);
                 match s(&intent["type"]) {
                     "agent" => {
-                        self.launch(text.into(), None, Vec::new(), None, None)
-                            .await?;
+                        self.launch(
+                            text.into(),
+                            None,
+                            Vec::new(),
+                            None,
+                            None,
+                            AgentOptions::default(),
+                        )
+                        .await?;
                     }
                     "ai" | "answer" => self.answer(text.to_string()),
                     _ => {}

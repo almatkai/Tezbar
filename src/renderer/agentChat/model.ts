@@ -26,7 +26,7 @@ export function buildAgentPromptFromChat(session: ChatSession, nextUserText: str
   }
   const priorTurns = turns.slice(-CHAT_CONTEXT_MAX_TURNS)
   const lines: string[] = [
-    'You are running inside Tezbar on the user machine through the Pi agent harness.',
+    'You are running inside Tezbar on the user machine through the configured agent runtime.',
     'You have tool access. You can run commands and inspect local files, folders, apps, and live system state on this computer.',
     'For performance diagnostics, gather live evidence with read-only commands before answering. Do not kill processes or change settings just to inspect them.',
     'Report only observed data, with units and context. Never invent CPU, memory, temperature, or tool results; clearly say when a metric is unavailable.',

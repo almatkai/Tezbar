@@ -67,6 +67,13 @@ reported rather than silently replacing the profile with defaults.
 - Extension preferences, notes, chat events/provider metadata, search learning,
   clipboard pins and knowledge progress have persistence fixtures.
 
+## Native agent runtime
+
+Stage 1 can run text/function-tool agent requests inside Rust for OpenAI-compatible
+providers, with Pi retained as a selectable compatibility adapter. See
+[Native agent runtime](NATIVE_AGENT_RUNTIME.md) for configuration, permissions,
+protocol limits and local validation.
+
 ## Build and checks
 
 Use Node.js 22+, the repository's pnpm version, and Rust 1.85+. Bun 1.2.5 is the

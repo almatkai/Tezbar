@@ -220,3 +220,20 @@ describe('shadcn AI SDK helper scenarios', () => {
     expect(chat.error?.message).toBe('Provider unavailable')
   })
 })
+
+it('marks prior images for text-only runtimes instead of silently losing attachment history', async () => {
+  const h = harness(async ({ runId, task, historyHasImages }, emit) => {
+    expect(historyHasImages).toBe(true)
+    expect(task).toContain('prior image')
+    emit({ type: 'start', runId: runId!, task })
+    emit({ type: 'answer', runId: runId!, text: 'Handled' })
+    emit({ type: 'done', runId: runId! })
+    return { ok: true, runId }
+  })
+  h.chat.messages = [{ id: 'prior', role: 'user', parts: [
+    { type: 'text', text: 'prior image' },
+    { type: 'file', mediaType: 'image/png', url: 'data:image/png;base64,aGVsbG8=' },
+  ] }, { id: 'answer', role: 'assistant', parts: [{ type: 'text', text: 'Earlier answer' }] }]
+  await h.chat.sendMessage({ text: 'Continue' })
+  expect(h.chat.status).toBe('ready')
+})

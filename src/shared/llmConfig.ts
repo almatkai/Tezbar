@@ -14,6 +14,8 @@ export type BuiltInProviderId =
   | 'deepseek'
   | 'antigravity'
 
+export type AgentRuntime = 'auto' | 'native' | 'pi'
+
 export type AgentApprovalMode = 'review' | 'default' | 'auto' | 'turbo'
 
 export type ProviderId = BuiltInProviderId | `custom:${string}`
@@ -74,6 +76,8 @@ export type LlmConfigRecord = {
   aiActionRedactionEnabled?: boolean
   /** Execution permission mode for the AI agent: review (always ask), default (ask sensitive), auto, turbo (never ask, guarded against destructive operations). */
   agentApprovalMode?: AgentApprovalMode
+  /** auto uses native text/tool runtime for OpenAI-compatible providers; pi forces compatibility mode. */
+  agentRuntime?: AgentRuntime
   voiceSttModelId?: VoiceModelId
   raymesHotkey?: string
   /** Milliseconds to remember palette UI (e.g. Providers) after hide. Default 60000. Use 0 to always reset. */

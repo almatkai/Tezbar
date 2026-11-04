@@ -1,14 +1,12 @@
 /**
  * Shared agent types exchanged between the main process (which speaks to
- * the pi coding agent over JSONL RPC) and the renderer HUD.
+ * a native Rust runtime or Pi compatibility adapter) and the renderer HUD.
  *
  * The Stage shape is the one the acceptance spec pins down:
  *   { index, label, status: "running" | "done" | "failed" }
  *
- * Stages are derived by `src/main/agent/loop.ts` from pi's
- * `tool_execution_start` / `tool_execution_end` events (one stage per tool
- * call), plus a final "answered" stage when the agent emits its last
- * assistant message.
+ * Native Rust tools and the Pi compatibility adapter emit one stage per tool
+ * call. Both runtimes share the same renderer event contract.
  */
 
 export type StageStatus = 'running' | 'done' | 'failed'
@@ -47,7 +45,9 @@ export interface AgentRunRequest {
   runId?: string
   task: string
   images?: AgentInputImage[]
-  /** Existing directory used as the Pi subprocess cwd. */
+  /** Allows text-only runtimes to reject history whose images cannot be represented. */
+  historyHasImages?: boolean
+  /** Existing working directory for agent tools. */
   cwd?: string
   /** Permission mode for command execution. */
   approvalMode?: AgentApprovalMode

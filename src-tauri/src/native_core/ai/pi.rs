@@ -128,6 +128,21 @@ impl AiCore {
         if mode == "turbo" && !title.contains("Destructive") {
             return true;
         }
+        self.approval_prompt(run_id, title, command, cancel, true)
+            .await
+    }
+    // Raw prompt seam shared with native tools: deliberately no remembered/turbo shortcuts.
+    pub(super) async fn approval_prompt(
+        &self,
+        run_id: &str,
+        title: &str,
+        command: &str,
+        cancel: &Cancel,
+        remember_command: bool,
+    ) -> bool {
+        if cancel.is_cancelled() {
+            return false;
+        }
         let id = format!("approval-{}", uuid::Uuid::new_v4());
         let (tx, rx) = tokio::sync::oneshot::channel();
         {
@@ -148,18 +163,21 @@ impl AiCore {
                 Approval {
                     run_id: run_id.into(),
                     command: command.into(),
+                    remember_command,
                     reply: tx,
                 },
             );
         }
         let mut event = json!({"type":"approval","approvalId":id,"title":title,"command":command});
-        if let Some(rule) = suggested_rule(command) {
-            event["suggestedRule"] = json!(rule);
+        if remember_command {
+            if let Some(rule) = suggested_rule(command) {
+                event["suggestedRule"] = json!(rule);
+            }
         }
         self.agent_event(run_id, event);
         let answer = tokio::select! {r=rx=>r.unwrap_or(false),_=cancel.cancelled()=>false,_=tokio::time::sleep(Duration::from_secs(300))=>false};
         self.inner.state.lock().unwrap().approvals.remove(&id);
-        answer
+        answer && !cancel.is_cancelled()
     }
     pub(super) async fn approve(&self, v: &Value) -> CoreResult {
         let run = s(&v["runId"]);
@@ -175,7 +193,7 @@ impl AiCore {
             }
             state.approvals.remove(id).unwrap()
         };
-        if decision == "always" {
+        if decision == "always" && approval.remember_command {
             let ctx = self.inner.ctx.clone();
             let command = approval.command.trim().to_string();
             if command.is_empty() || command.chars().count() > 16384 || command.contains('\0') {
@@ -203,22 +221,17 @@ impl AiCore {
             }
         }
         // A cancellation that raced with persistence must still deny execution.
-        let active = self
-            .inner
-            .state
-            .lock()
-            .unwrap()
-            .agent
-            .as_ref()
-            .is_some_and(|r| r.id == run && !r.cancel.is_cancelled())
-            || self
-                .inner
-                .state
-                .lock()
-                .unwrap()
-                .agents
-                .get(run)
-                .is_some_and(|r| !r.cancel.is_cancelled());
+        let active = {
+            let state = self.inner.state.lock().unwrap();
+            state
+                .agent
+                .as_ref()
+                .is_some_and(|r| r.id == run && !r.cancel.is_cancelled())
+                || state
+                    .agents
+                    .get(run)
+                    .is_some_and(|r| !r.cancel.is_cancelled())
+        };
         let _ = approval.reply.send(active && decision != "deny");
         Ok(json!({"ok":true}))
     }

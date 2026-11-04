@@ -160,45 +160,7 @@ async fn serve(mut socket: TcpStream, ctx: CoreContext, token: &str) -> Result<(
                     return Err("query is required".into());
                 }
                 let raw = ctx.request("search:all", vec![json!(query)]).await?;
-                let results = raw
-                    .as_array()
-                    .ok_or("Invalid launcher search response")?
-                    .iter()
-                    .filter(|r| {
-                        !s(&r["id"]).starts_with("deep-search:")
-                            && !s(&r["id"]).starts_with("note-add:")
-                    })
-                    .take(v["limit"].as_u64().unwrap_or(10).clamp(1, 20) as usize)
-                    .map(|r| {
-                        let mut result = json!({});
-                        for key in ["id", "title", "subtitle", "category", "score"] {
-                            if let Some(v) = r.get(key) {
-                                result[key] = v.clone();
-                            }
-                        }
-                        let action = &r["action"];
-                        let target = match s(&action["type"]) {
-                            "open-file" | "open-with-app" => action["path"].clone(),
-                            "open-app" => {
-                                action.get("appPath").unwrap_or(&action["appName"]).clone()
-                            }
-                            "open-url" => action["url"].clone(),
-                            "run-extension-command" => json!(format!(
-                                "{}/{}",
-                                s(&action["extensionId"]),
-                                s(&action["commandName"])
-                            )),
-                            "invoke-command" | "run-native-command" => action["commandId"].clone(),
-                            "run-shell" => action["command"].clone(),
-                            _ => Value::Null,
-                        };
-                        if !target.is_null() {
-                            result["target"] = target;
-                        }
-                        result
-                    })
-                    .collect::<Vec<_>>();
-                Ok(json!({"results":results}))
+                launcher_results(&raw, v["limit"].as_u64().unwrap_or(10) as usize)
             }
             _ => Err("Not found".into()),
         }
@@ -230,4 +192,44 @@ async fn reply(socket: &mut TcpStream, status: u16, value: Value) -> Result<(), 
     socket.write_all(header.as_bytes()).await.map_err(err)?;
     socket.write_all(body.as_bytes()).await.map_err(err)?;
     socket.shutdown().await.map_err(err)
+}
+
+pub(super) fn launcher_results(raw: &Value, limit: usize) -> CoreResult {
+    let results = raw
+        .as_array()
+        .ok_or("Invalid launcher search response")?
+        .iter()
+        .filter(|r| {
+            !s(&r["id"]).starts_with("deep-search:") && !s(&r["id"]).starts_with("note-add:")
+        })
+        .take(limit.clamp(1, 20))
+        .map(|r| {
+            let mut result = json!({});
+            for key in ["id", "title", "subtitle", "category", "score"] {
+                if let Some(v) = r.get(key) {
+                    result[key] = v.clone();
+                }
+            }
+            let action = &r["action"];
+            let target = match s(&action["type"]) {
+                "open-file" | "open-with-app" => action["path"].clone(),
+                "open-app" => action.get("appPath").unwrap_or(&action["appName"]).clone(),
+                "open-url" => action["url"].clone(),
+                "run-extension-command" => json!(format!(
+                    "{}/{}",
+                    s(&action["extensionId"]),
+                    s(&action["commandName"])
+                )),
+                "invoke-command" | "run-native-command" => action["commandId"].clone(),
+                "run-shell" => action["command"].clone(),
+                _ => Value::Null,
+            };
+            if !target.is_null() {
+                result["target"] = target;
+            }
+            result
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({"results":results}))
 }

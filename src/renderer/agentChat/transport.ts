@@ -142,6 +142,13 @@ export function createNativeAgentTransport(
           ? [{ type: 'image', mimeType: match[1] as AgentInputImage['mimeType'], data: match[2]! }]
           : []
       })
+      const priorMessages = messages.slice(0, lastUserIndex)
+      const priorIds = new Set(priorMessages.map((message) => message.id))
+      const historyHasImages =
+        priorMessages.some((message) => message.parts.some((part) => part.type === 'file')) ||
+        context.session.turns.some((turn) => priorIds.has(turn.id) && !!turn.attachments?.length)
+      if (lastUser.parts.filter((part) => part.type === 'file').length !== images.length)
+        throw new Error('Unsupported attachment. Attach a PNG, JPEG or WebP image with embedded data.')
       const runId = `agent-${makeChatId()}`
       let cancel = (): void => {}
       const stream = new ReadableStream<UIMessageChunk>({
@@ -281,6 +288,7 @@ export function createNativeAgentTransport(
                 task,
                 cwd: context.session.workingDirectory,
                 images: images.length ? images : undefined,
+                ...(historyHasImages ? { historyHasImages: true } : {}),
               })
             })
             .then((result) => {

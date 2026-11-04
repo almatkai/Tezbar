@@ -1,7 +1,7 @@
 use super::*;
 use common::CorePaths;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-fn fixture() -> (
+pub(super) fn fixture() -> (
     tempfile::TempDir,
     AiCore,
     tokio::sync::mpsc::UnboundedReceiver<(String, Value)>,
@@ -35,7 +35,7 @@ fn fixture() -> (
         .unwrap();
     (dir, core, rx)
 }
-async fn next_event(
+pub(super) async fn next_event(
     rx: &mut tokio::sync::mpsc::UnboundedReceiver<(String, Value)>,
     kind: &str,
 ) -> Value {
@@ -127,7 +127,7 @@ async fn approval_matching_cancellation_and_exact_persistence() {
     core.shutdown().await;
 }
 #[cfg(unix)]
-fn mock_pi(core: &AiCore, scenario: &str) {
+pub(super) fn mock_pi(core: &AiCore, scenario: &str) {
     use std::os::unix::fs::PermissionsExt;
     let path = core.inner.ctx.paths.resource_dir.join("pi-mock");
     let script=r#"#!/usr/bin/env python3
