@@ -188,6 +188,7 @@ impl Decoder {
                     .enumerate()
                     .map(|(i, b)| (i as u64, b.clone()))
                     .collect();
+                self.closed_blocks.extend(self.blocks.keys().copied());
                 self.terminal = true;
                 self.stop_reason = v["stop_reason"].as_str().map(str::to_string);
                 for b in self.blocks.values() {
@@ -238,7 +239,6 @@ impl Decoder {
     }
     pub fn finish(mut self) -> Result<Turn, String> {
         if self.origin.protocol == Protocol::Anthropic
-            && !self.closed_blocks.is_empty()
             && self.blocks.keys().any(|i| !self.closed_blocks.contains(i))
         {
             return Err(failure(

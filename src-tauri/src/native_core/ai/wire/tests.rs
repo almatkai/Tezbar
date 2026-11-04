@@ -264,3 +264,24 @@ fn gemini_three_unsigned_same_origin_history_becomes_observation_without_losing_
     assert!(body.to_string().contains("Observation from read"));
     assert!(body.to_string().contains("inlineData"));
 }
+
+#[test]
+fn anthropic_terminal_does_not_complete_an_unclosed_tool_block_but_json_is_complete() {
+    let mut decoder = Decoder::new(origin(Protocol::Anthropic), "incomplete");
+    for event in [
+        json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call","name":"write","input":{}}}),
+        json!({"type":"message_stop"}),
+    ] {
+        decoder
+            .feed(format!("data: {event}\n\n").as_bytes(), false, &mut |_| {})
+            .unwrap();
+    }
+    assert!(decoder
+        .finish()
+        .err()
+        .unwrap()
+        .contains("unfinished content blocks"));
+    let mut decoder = Decoder::new(origin(Protocol::Anthropic), "complete-json");
+    decoder.json(json!({"content":[{"type":"tool_use","id":"call","name":"read","input":{}}],"stop_reason":"tool_use"}),&mut |_|{}).unwrap();
+    assert_eq!(decoder.finish().unwrap().calls.len(), 1);
+}
