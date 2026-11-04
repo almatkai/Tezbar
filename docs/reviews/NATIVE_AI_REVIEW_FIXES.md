@@ -516,3 +516,22 @@ See verification for exact hashes and retained logs.
 
 **Fresh targeted Opus 5.5 closure remains pending for T-R4/T-R5 and changed shared
 queue semantics.** Wire/security and earlier runtime scopes are not reopened.
+
+## Runtime closure at `a0b3922` and T-R6 repair
+
+The [original Opus report](native-ai-opus-runtime-a0b3922.md) closes T-R4, T-R5,
+cross-owner ordering and the shared queue's logical-revision API. T-R3 remains
+closed. One P3, T-R6, remained: a live first write replaces a retired retry's new
+definition with its stale unowned UI snapshot.
+
+Implementation `935233a0f47d88740c48d1d6f94eb1a8dd0f3179` applies the owned-ID
+merge to all non-removal writes. Retry-only supersession and scoped removal are
+unchanged. Two red-before/green-after permanent component tests cover both N2/N2a
+paths, complete provider records, active/chat identity, close recovery and a later
+retry of the live failed creation. Full tests pass 947 / 9 existing skips;
+typecheck, frontend build and diff check pass. Native sources/scripts remain
+unchanged from Mac/Windows-tested `756072e`. The optional O-B activation cleanup
+was left as a non-gating observation, as reviewed.
+
+**Fresh targeted Opus 5.5 closure of T-R6 remains required.** No other scope is
+reopened and overall migration completion is not yet declared.

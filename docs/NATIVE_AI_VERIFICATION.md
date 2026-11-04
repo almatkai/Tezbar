@@ -1,6 +1,34 @@
 # Native AI implementation verification
 
-## Retry ownership and intent order — source `f5f8cd0`
+## Live-write ownership — source `935233a`
+
+Validated implementation: `935233a0f47d88740c48d1d6f94eb1a8dd0f3179`, tree
+`49cd23e841e8bb2a112c132170c6e79dfd8583a4`, on `feat/native-rust-agent`.
+The [latest Opus audit](reviews/native-ai-opus-runtime-a0b3922.md) closes T-R4,
+T-R5, cross-owner ordering and the shared-queue API. It leaves one P3, T-R6:
+a live first write can overwrite definitions added by a retired owner's Retry.
+
+The owned-ID merge now applies to every non-removal write; supersession checks
+remain retry-only. Two permanent regressions first reproduced T-R6, then passed:
+failed live URL or Create followed by retired Retry and a fresh live URL edit.
+Both preserve the active provider's definition/config/models/selection. The
+creation variant also verifies its own later retry preserves both providers.
+
+- `pnpm test`: **947 passed, 9 existing skips, 0 failed**; 125 files passed,
+  2 skipped. `/private/tmp/tezbar-ai-live-ownership-final-ts.log`.
+- `pnpm typecheck`: pass; `/private/tmp/tezbar-ai-live-ownership-final-typecheck.log`.
+- `pnpm build:frontend`: pass; `/private/tmp/tezbar-ai-live-ownership-final-frontend.log`.
+- `git diff --check`: pass. Native sources/scripts and queue/bridge code are
+  unchanged in this repair. Mac **608** / Windows **538** native evidence below
+  still applies to byte-identical `756072e` native sources.
+
+Focused defect logs: `/private/tmp/tezbar-ai-live-ownership-{red,green}.log`.
+**Fresh targeted Opus 5.5 closure of T-R6 is pending.** Wire/security and previous
+runtime findings remain closed on their reported triggers. Non-gating observations
+from the review were not expanded into unrelated changes. No publishing, app
+launch or live provider validation occurred; existing validation limits below apply.
+
+## Historical: retry ownership and intent order — source `f5f8cd0`
 
 Validated implementation: `f5f8cd0964998231da433d29444bd7036c678ad2`, tree
 `1792f00d77a88e03c59236b99caecd80cd849f30`, on `feat/native-rust-agent`.
