@@ -275,7 +275,7 @@ impl AiCore {
             let cancel = Cancel::new();
             let mut prompt_content = format!("User prompt: {prompt}");
             if !answer.is_empty() {
-                let snippet = if answer.len() > 300 { &answer[..300] } else { answer };
+                let snippet = cut(answer, 300);
                 prompt_content.push_str(&format!("\nAssistant response snippet: {snippet}"));
             }
             let system_prompt = "You are a concise title and icon generator for a launcher chat assistant.\nGenerate a very short, descriptive conversation title (2-5 words, max 35 characters) and a single fitting theme icon identifier.\nRules:\n1. Output strictly valid JSON matching this schema: {\"title\": \"...\", \"icon\": \"...\"}\n2. \"title\" must be concise and descriptive in the language of the prompt (Russian if Russian, English if English). Do not use quotes or boilerplate questions like 'How to' or 'What is'.\n3. \"icon\" must be one of these theme keys: \"snippets\" (coding/dev/MCP), \"key\" (API keys/auth/passwords), \"cpu\" (system/hardware/CPU), \"trophy\" (sports/Messi/achievements), \"edit\" (writing/summaries/notes), \"ai\" (AI/LLM/prompts), \"search\" (research/lookup), \"weather\" (forecast), \"audio\" (music), \"terminal\" (bash/cli), or \"chat\" (general questions).\n4. Return ONLY the raw JSON object, no markdown, no backticks, no explanations.";

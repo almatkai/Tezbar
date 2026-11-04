@@ -4,6 +4,7 @@ import raymesPiPolicy, {
   isAutoAllowedBash,
   isDestructiveBash,
   isPersistentlyAllowedBash,
+  isSafeProjectBash,
   preferredIndexedSearchForBash,
 } from './raymes-pi-policy'
 
@@ -16,6 +17,64 @@ afterEach(() => {
 })
 
 describe('Raymes Pi command policy', () => {
+  it('does not treat background commands as an approved command family', () => {
+    expect(isAutoAllowedBash('ps & touch marker.txt', new Set(), new Set())).toBe(false)
+    expect(
+      isPersistentlyAllowedBash('grep needle file & touch marker.txt', new Set(['grep']))
+    ).toBe(false)
+  })
+
+  it('checks every command before automatically allowing project work', () => {
+    for (const command of [
+      'echo hello; touch marker.txt',
+      'git status && touch marker.txt',
+      'cat file | sh',
+      'echo $(touch marker.txt)',
+      'echo hello\ntouch marker.txt',
+      'echo hello > marker.txt',
+    ])
+      expect(isSafeProjectBash(command)).toBe(false)
+    expect(isSafeProjectBash('git diff && cargo check')).toBe(true)
+    expect(isAutoAllowedBash('cd project && ls', new Set(), new Set())).toBe(true)
+  })
+
+  it('asks for compound commands in Default and Auto modes', async () => {
+    let handler!: (
+      event: { toolName: string; input: { command: string } },
+      ctx: {
+        ui: { confirm: () => Promise<boolean> }
+      }
+    ) => unknown
+    raymesPiPolicy({
+      registerProvider() {},
+      registerTool() {},
+      on(_event, callback) {
+        handler = callback
+      },
+    } as Parameters<typeof raymesPiPolicy>[0])
+    for (const [mode, command] of [
+      ['default', 'ps & touch marker.txt'],
+      ['auto', 'echo hello; touch marker.txt'],
+      ['auto', 'git status && touch marker.txt'],
+    ]) {
+      process.env.RAYMES_PI_APPROVAL_MODE = mode
+      let confirmations = 0
+      const result = await handler(
+        { toolName: 'bash', input: { command } },
+        {
+          ui: {
+            confirm: async () => {
+              confirmations++
+              return false
+            },
+          },
+        }
+      )
+      expect(confirmations).toBe(1)
+      expect(result).toMatchObject({ block: true })
+    }
+  })
+
   it('allows an approved read-only command family in a safe pipeline', () => {
     expect(
       isPersistentlyAllowedBash('ps aux | grep -i "tezbar" | grep -v grep', new Set(['grep']))

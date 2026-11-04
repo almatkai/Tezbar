@@ -10,6 +10,11 @@ export type AiChatBoot =
   | { kind: 'screen'; nonce?: string }
   | { kind: 'resume'; sessionId: string; nonce?: string }
 
+/** Give every launcher invocation an identity, including repeated commands. */
+export function createAiChatNavigation(boot: AiChatBoot): AiChatBoot {
+  return { ...boot, nonce: crypto.randomUUID() }
+}
+
 /** Dispatched from App when ⌘N fires on the command surface (quick note). */
 export const RAYMES_QUICK_NOTE_SHORTCUT_EVENT = 'tezbar:quick-note-shortcut'
 

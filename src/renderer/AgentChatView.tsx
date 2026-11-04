@@ -1,4 +1,4 @@
-import { useChat } from '@ai-sdk/react'
+import { Chat, useChat } from '@ai-sdk/react'
 import {
   useCallback,
   useEffect,
@@ -50,6 +50,24 @@ import {
   type AgentUIMessage,
 } from './agentChat/transport'
 
+// A retained SDK instance owns each conversation, including hidden/native work.
+// Selecting a different conversation only changes the visible subscription.
+type AgentConversation = {
+  chat: Chat<AgentUIMessage>
+  session: ChatSession | null
+  responseMeta: ChatResponseMeta
+  workingDirectory?: string
+  resolvedApproval: string | null
+  approvalBusy: boolean
+  lastError?: string
+  explicitlyStopped: boolean
+  preparing: boolean
+  submission: string | null
+  pendingWrites: number
+  unsavedTurns: Set<string>
+  unsubscribe: () => void
+}
+
 const smallButton =
   'rounded-lg px-2.5 py-1.5 text-[11px] text-ink-3 transition hover:bg-white/[0.06] hover:text-ink-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40'
 function focusInput(): void {
@@ -92,12 +110,8 @@ export default function AgentChatView({
   const [workingDirectory, setWorkingDirectory] = useState<string | undefined>(
     boot.kind === 'submit' || boot.kind === 'newChat' ? boot.workingDirectory : undefined
   )
-  const [history, setHistory] = useState<ChatSessionSummary[]>(
-    () => readCachedChatHistory() ?? []
-  )
-  const [historyLoading, setHistoryLoading] = useState(
-    () => readCachedChatHistory() === null
-  )
+  const [history, setHistory] = useState<ChatSessionSummary[]>(() => readCachedChatHistory() ?? [])
+  const [historyLoading, setHistoryLoading] = useState(() => readCachedChatHistory() === null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [config, setConfig] = useState<LlmConfigRecord>({})
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -109,35 +123,65 @@ export default function AgentChatView({
   const [uiError, setUiError] = useState<string | null>(null)
   const [saveWarning, setSaveWarning] = useState<string | null>(null)
   const [following, setFollowing] = useState(true)
-  const [approvalBusy, setApprovalBusy] = useState(false)
-  const [resolvedApproval, setResolvedApproval] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
 
-  const sessionRef = useRef<ChatSession | null>(null)
   const configRef = useRef<LlmConfigRecord>({})
-  const directoryRef = useRef(workingDirectory)
-  const metaRef = useRef<ChatResponseMeta>(responseMeta({}))
-  const lastErrorRef = useRef<string | undefined>()
   const modelSaveRef = useRef<Promise<void> | null>(null)
-  const submissionRef = useRef<string | null>(null)
   const viewRevision = useRef(0)
   const mounted = useRef(true)
   const threadRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   const submittedBoot = useRef<string | null>(null)
-  const userExplicitlyStoppedRef = useRef(false)
+  const captureRequest = useRef<object | null>(null)
+  const historyRequest = useRef(0)
+  const conversations = useRef(new Set<AgentConversation>())
+  const selectedConversation = useRef<AgentConversation | null>(null)
+  const [conversationRevision, publishConversations] = useState(0)
+  const releaseInactiveConversation = useCallback((owner: AgentConversation): void => {
+    if (
+      selectedConversation.current === owner ||
+      owner.preparing ||
+      owner.submission ||
+      owner.pendingWrites ||
+      owner.unsavedTurns.size > 0 ||
+      owner.chat.status === 'streaming' ||
+      owner.chat.status === 'submitted'
+    )
+      return
+    owner.unsubscribe()
+    conversations.current.delete(owner)
+    void owner.chat.dispose()
+  }, [])
+  const notifyConversation = useCallback(
+    (owner: AgentConversation): void => {
+      if (!mounted.current) return
+      if (selectedConversation.current === owner) {
+        setSession(owner.session)
+        setPreparing(owner.preparing)
+      }
+      releaseInactiveConversation(owner)
+      publishConversations((revision) => revision + 1)
+    },
+    [releaseInactiveConversation]
+  )
 
   const refreshHistory = useCallback(async (): Promise<ChatSessionSummary[]> => {
+    const request = ++historyRequest.current
+    const revision = viewRevision.current
     try {
       const rows = await window.tezbar.chatList(40)
-      writeCachedChatHistory(rows)
-      if (mounted.current) {
+      if (mounted.current && request === historyRequest.current) {
+        writeCachedChatHistory(rows)
         setHistory(rows)
         setHistoryLoading(false)
       }
       return rows
     } catch {
-      if (mounted.current) {
+      if (
+        mounted.current &&
+        request === historyRequest.current &&
+        revision === viewRevision.current
+      ) {
         setHistoryLoading(false)
         setSaveWarning(
           'Chat history could not be loaded. Your current response is still available.'
@@ -148,7 +192,10 @@ export default function AgentChatView({
   }, [])
 
   const persistTurn = useCallback(
-    async (turn: ChatTurn, current: ChatSession): Promise<void> => {
+    async (turn: ChatTurn, owner: AgentConversation): Promise<void> => {
+      const current = owner.session
+      if (!current) return
+      owner.pendingWrites++
       const next: ChatSession = {
         ...current,
         updatedAt: turn.createdAt,
@@ -156,10 +203,8 @@ export default function AgentChatView({
           ? current.turns.map((item) => (item.id === turn.id ? turn : item))
           : [...current.turns, turn],
       }
-      if (sessionRef.current?.id === current.id) {
-        sessionRef.current = next
-        if (mounted.current) setSession(next)
-      }
+      owner.session = next
+      notifyConversation(owner)
       try {
         const result = await window.tezbar.chatAppend({
           session: {
@@ -173,91 +218,123 @@ export default function AgentChatView({
           turn,
         })
         if (!result.ok) throw new Error(result.error || 'Could not save chat')
+        owner.unsavedTurns.delete(turn.id)
         if (mounted.current) void refreshHistory()
       } catch {
-        if (mounted.current)
+        owner.unsavedTurns.add(turn.id)
+        if (mounted.current && selectedConversation.current === owner)
           setSaveWarning(
             'This conversation could not be saved. Copy any response you want to keep before closing it.'
           )
+      } finally {
+        owner.pendingWrites--
+        notifyConversation(owner)
       }
     },
-    [refreshHistory]
+    [notifyConversation, refreshHistory]
   )
 
-  const transport = useMemo(
-    () =>
-      createNativeAgentTransport(window.tezbar, () => {
-        if (!sessionRef.current) throw new Error('No conversation is active.')
-        return { session: sessionRef.current, responseMeta: metaRef.current }
-      }),
-    []
+  const generateMeta = useCallback(
+    (owner: AgentConversation, prompt: string, answer?: string): void => {
+      const current = owner.session
+      if (!mounted.current || !current) return
+      void window.tezbar
+        .chatGenerateMeta({ id: current.id, prompt, answer })
+        .then((meta) => {
+          if (!mounted.current || !meta?.title || !owner.session) return
+          owner.session = {
+            ...owner.session,
+            title: meta.title,
+            icon: meta.icon || owner.session.icon,
+          }
+          notifyConversation(owner)
+          void refreshHistory()
+        })
+        .catch(() => {})
+    },
+    [notifyConversation, refreshHistory]
   )
-  const chat = useChat<AgentUIMessage>({
-    transport,
-    throttle: 32,
-    onError(error) {
-      lastErrorRef.current = error.message
-    },
-    onFinish({ message, isAbort, isError }) {
-      const current = sessionRef.current
-      const sessionId = message.metadata?.sessionId
-      const failure =
-        isAbort && userExplicitlyStoppedRef.current
-          ? 'Stopped by you.'
-          : isError
-            ? agentMessageError(message) || lastErrorRef.current || 'The agent request failed.'
-            : undefined
-      const final = finalizeAgentMessage(message, failure)
-      if (mounted.current && current && current.id === sessionId)
-        chat.setMessages((previous) =>
-          previous.map((item) => (item.id === message.id ? final : item))
-        )
-      if (sessionId) {
-        if (current && current.id === sessionId) {
-          void persistTurn(agentMessageToTurn(final), current)
-        } else {
-          void (async () => {
-            const existing = await window.tezbar.chatGet(sessionId)
-            if (!existing) return
-            await window.tezbar.chatAppend({
-              session: existing,
-              turn: agentMessageToTurn(final),
-            })
-            if (mounted.current) void refreshHistory()
-          })().catch(() => {})
-        }
-      }
 
-      if (!isAbort && !isError && current && current.id === sessionId && current.turns.length <= 2) {
-        const userTurn = current.turns.find((t) => t.role === 'user')
-        if (userTurn?.text) {
-          const answerText = agentMessageText(final)
-          void window.tezbar
-            .chatGenerateMeta({
-              id: current.id,
-              prompt: userTurn.text,
-              answer: answerText || undefined,
-            })
-            .then((meta) => {
-              if (meta?.title && sessionRef.current?.id === current.id) {
-                const updated: ChatSession = {
-                  ...sessionRef.current,
-                  title: meta.title,
-                  icon: meta.icon,
-                }
-                sessionRef.current = updated
-                if (mounted.current) {
-                  setSession(updated)
-                  void refreshHistory()
-                }
-              }
-            })
-            .catch(() => {})
-        }
+  const createConversation = useCallback(
+    (initial: ChatSession | null = null, directory?: string): AgentConversation => {
+      let owner: AgentConversation
+      const transport = createNativeAgentTransport(window.tezbar, () => {
+        if (!owner.session) throw new Error('No conversation is active.')
+        return { session: owner.session, responseMeta: owner.responseMeta }
+      })
+      const chat = new Chat<AgentUIMessage>({
+        transport,
+        messages: initial?.turns.map((turn) => chatTurnToAgentMessage(turn, initial.id)),
+        onError(error) {
+          owner.lastError = error.message
+        },
+        onFinish({ message, isAbort, isError }) {
+          const failure =
+            isAbort && owner.explicitlyStopped
+              ? 'Stopped by you.'
+              : isError
+                ? agentMessageError(message) || owner.lastError || 'The agent request failed.'
+                : undefined
+          const final = finalizeAgentMessage(message, failure)
+          owner.chat.messages = owner.chat.messages.map((item) =>
+            item.id === message.id ? final : item
+          )
+          // Always persist to this owner, never to whichever session is on screen.
+          void persistTurn(agentMessageToTurn(final), owner)
+          const current = owner.session
+          if (
+            !isAbort &&
+            !isError &&
+            current &&
+            current.turns.length <= 2 &&
+            selectedConversation.current === owner
+          ) {
+            const user = current.turns.find((turn) => turn.role === 'user')
+            if (user?.text) generateMeta(owner, user.text, agentMessageText(final) || undefined)
+          }
+        },
+      })
+      owner = {
+        chat,
+        session: initial,
+        workingDirectory: initial?.workingDirectory ?? directory,
+        resolvedApproval: null,
+        approvalBusy: false,
+        responseMeta: responseMeta(configRef.current),
+        explicitlyStopped: false,
+        preparing: false,
+        submission: null,
+        pendingWrites: 0,
+        unsavedTurns: new Set(),
+        unsubscribe: () => {},
       }
+      const unsubscribes = [
+        owner.chat['~registerMessagesCallback'](() => notifyConversation(owner), 32),
+        owner.chat['~registerStatusCallback'](() => notifyConversation(owner)),
+        owner.chat['~registerErrorCallback'](() => notifyConversation(owner)),
+      ]
+      owner.unsubscribe = () => unsubscribes.forEach((unsubscribe) => unsubscribe())
+      conversations.current.add(owner)
+      return owner
     },
-  })
-  const { stop, setMessages, clearError, sendMessage, regenerate, status } = chat
+    [generateMeta, notifyConversation, persistTurn]
+  )
+  const [owner, setOwner] = useState(() => createConversation())
+  if (!selectedConversation.current) selectedConversation.current = owner
+  const chat = useChat<AgentUIMessage>({ chat: owner.chat, throttle: 32 })
+  const { stop, status } = chat
+  const selectConversation = useCallback(
+    (next: AgentConversation): void => {
+      const previous = selectedConversation.current
+      selectedConversation.current = next
+      if (previous && previous !== next) releaseInactiveConversation(previous)
+      setOwner(next)
+      setSession(next.session)
+      setWorkingDirectory(next.workingDirectory)
+      setPreparing(next.preparing)
+    },
+    [releaseInactiveConversation]
+  )
   const fallbackMessages = useMemo(() => {
     if (chat.messages.length > 0 || !session?.turns?.length) return []
     return session.turns.map((turn) => chatTurnToAgentMessage(turn, session.id))
@@ -267,7 +344,9 @@ export default function AgentChatView({
   const lastMessage = activeMessages.at(-1)
   const activeMessage = lastMessage?.role === 'assistant' ? lastMessage : undefined
   const requestedApproval = activeMessage ? agentMessageApproval(activeMessage) : null
-  const approval = requestedApproval?.approvalId !== resolvedApproval ? requestedApproval : null
+  const approval =
+    requestedApproval?.approvalId !== owner.resolvedApproval ? requestedApproval : null
+  const approvalBusy = owner.approvalBusy
   const lastStage = activeMessage ? agentMessageStages(activeMessage).at(-1) : undefined
   const statusLabel = approval
     ? 'Waiting for your approval'
@@ -282,123 +361,97 @@ export default function AgentChatView({
           : 'Ready'
 
   const stopRun = useCallback(async (): Promise<void> => {
-    userExplicitlyStoppedRef.current = true
+    owner.explicitlyStopped = true
     viewRevision.current++
-    submissionRef.current = null
-    setPreparing(false)
+    owner.submission = null
+    owner.preparing = false
+    notifyConversation(owner)
     await stop()
     if (mounted.current) focusInput()
-  }, [stop])
+  }, [stop, owner, notifyConversation])
 
+  const clearView = useCallback((): void => {
+    viewRevision.current++
+    setDraft('')
+    setAttachment(null)
+    setUiError(null)
+    setSaveWarning(null)
+    setHistoryOpen(false)
+    captureRequest.current = null
+    setCapturing(false)
+    followRef.current = true
+    setFollowing(true)
+  }, [])
   const resetChat = useCallback(
-    async (directory?: string): Promise<void> => {
-      viewRevision.current++
-      submissionRef.current = null
-      sessionRef.current = null
-      directoryRef.current = directory
-      setSession(null)
-      setWorkingDirectory(directory)
-      setMessages([])
-      clearError()
-      setDraft('')
-      setAttachment(null)
-      setUiError(null)
-      setSaveWarning(null)
-      setHistoryOpen(false)
-      setResolvedApproval(null)
-      setPreparing(false)
-      followRef.current = true
-      setFollowing(true)
+    (directory?: string): void => {
+      clearView()
+      selectConversation(createConversation(null, directory))
       if (mounted.current) focusInput()
     },
-    [setMessages, clearError]
+    [clearView, selectConversation, createConversation]
   )
 
   const loadSession = useCallback(
-    async (id: string, force = false): Promise<void> => {
-      if (
-        !force &&
-        sessionRef.current?.id === id &&
-        chat.messages.length > 0 &&
-        chat.messages.length >= (sessionRef.current.turns?.length ?? 0)
-      ) {
-        if (mounted.current) {
-          setHistoryOpen(false)
-          followRef.current = true
-          setFollowing(true)
-          focusInput()
-        }
+    async (id: string): Promise<void> => {
+      clearView()
+      // Live owners are authoritative, including pending approvals not in SQLite.
+      const existing = [...conversations.current].find((item) => item.session?.id === id)
+      if (existing) {
+        selectConversation(existing)
+        focusInput()
         return
       }
-      viewRevision.current++
-      submissionRef.current = null
-      setPreparing(false)
-      clearError()
-      setDraft('')
-      setAttachment(null)
-      setUiError(null)
-      setSaveWarning(null)
-      setHistoryOpen(false)
       const revision = viewRevision.current
       try {
         const full = await window.tezbar.chatGet(id)
         if (!mounted.current || viewRevision.current !== revision) return
         if (!full) throw new Error('This conversation no longer exists.')
-        sessionRef.current = full
-        directoryRef.current = full.workingDirectory
-        setSession(full)
-        setWorkingDirectory(full.workingDirectory)
-        setDraft('')
-        setAttachment(null)
-        setMessages(full.turns.map((turn) => chatTurnToAgentMessage(turn, full.id)))
-        setResolvedApproval(null)
-        followRef.current = true
-        setFollowing(true)
+        selectConversation(createConversation(full))
         focusInput()
       } catch (error) {
-        if (mounted.current)
+        if (mounted.current && viewRevision.current === revision)
           setUiError(error instanceof Error ? error.message : 'Could not open conversation.')
       }
     },
-    [clearError, setMessages, chat.messages.length]
+    [clearView, selectConversation, createConversation]
   )
 
   const send = useCallback(
     async (input: string, image?: AgentInputImage | null): Promise<void> => {
+      const owner = selectedConversation.current!
       const text = input.trim()
       if (
         !text ||
-        submissionRef.current ||
-        (sessionRef.current && (status === 'streaming' || status === 'submitted'))
+        owner.submission ||
+        captureRequest.current ||
+        owner.chat.status === 'streaming' ||
+        owner.chat.status === 'submitted'
       )
         return
-      userExplicitlyStoppedRef.current = false
+      owner.explicitlyStopped = false
       const submission = makeChatId()
       const revision = viewRevision.current
-      submissionRef.current = submission
-      setPreparing(true)
+      owner.submission = submission
+      owner.preparing = true
+      notifyConversation(owner)
       setUiError(null)
-      setResolvedApproval(null)
-      lastErrorRef.current = undefined
+      owner.resolvedApproval = null
+      owner.lastError = undefined
       try {
         await modelSaveRef.current
         const fresh = await window.tezbar.getLlmConfig()
-        if (!mounted.current || revision !== viewRevision.current) return
+        if (!mounted.current || owner.submission !== submission) return
         configRef.current = fresh
         setConfig(fresh)
-        metaRef.current = responseMeta(fresh)
+        owner.responseMeta = responseMeta(fresh)
         const now = Date.now()
         const meta = heuristicChatMeta(text)
-        const isNewSession = !sessionRef.current || sessionRef.current.turns.length === 0
-        const current: ChatSession = sessionRef.current
+        const isNewSession = !owner.session || owner.session.turns.length === 0
+        const current: ChatSession = owner.session
           ? {
-              ...sessionRef.current,
-              title:
-                sessionRef.current.turns.length === 0 ? meta.title : sessionRef.current.title,
-              icon:
-                sessionRef.current.turns.length === 0
-                  ? meta.icon
-                  : sessionRef.current.icon || meta.icon,
+              ...owner.session,
+              title: owner.session.turns.length === 0 ? meta.title : owner.session.title,
+              icon: owner.session.turns.length === 0 ? meta.icon : owner.session.icon || meta.icon,
             }
           : {
               id: makeChatId(),
@@ -406,33 +459,12 @@ export default function AgentChatView({
               icon: meta.icon,
               createdAt: now,
               updatedAt: now,
-              workingDirectory: directoryRef.current,
+              workingDirectory: owner.workingDirectory,
               turns: [],
             }
-        sessionRef.current = current
-        setSession(current)
-        if (isNewSession) {
-          void window.tezbar
-            .chatGenerateMeta({
-              id: current.id,
-              prompt: text,
-            })
-            .then((generated) => {
-              if (generated?.title && sessionRef.current?.id === current.id) {
-                const updated: ChatSession = {
-                  ...sessionRef.current,
-                  title: generated.title,
-                  icon: generated.icon || sessionRef.current.icon,
-                }
-                sessionRef.current = updated
-                if (mounted.current) {
-                  setSession(updated)
-                  void refreshHistory()
-                }
-              }
-            })
-            .catch(() => {})
-        }
+        owner.session = current
+        notifyConversation(owner)
+        if (isNewSession) generateMeta(owner, text)
         const userTurn: ChatTurn = {
           id: makeChatId(),
           role: 'user',
@@ -451,14 +483,17 @@ export default function AgentChatView({
               ]
             : undefined,
         }
-        await persistTurn(userTurn, current)
-        if (!mounted.current || revision !== viewRevision.current) return
-        setDraft('')
-        setAttachment(null)
-        setPreparing(false)
-        followRef.current = true
-        setFollowing(true)
-        await sendMessage(chatTurnToAgentMessage(userTurn, current.id))
+        await persistTurn(userTurn, owner)
+        if (!mounted.current || owner.submission !== submission) return
+        if (selectedConversation.current === owner) {
+          setDraft('')
+          setAttachment(null)
+          followRef.current = true
+          setFollowing(true)
+        }
+        owner.preparing = false
+        notifyConversation(owner)
+        await owner.chat.sendMessage(chatTurnToAgentMessage(userTurn, current.id))
       } catch (error) {
         if (mounted.current && revision === viewRevision.current)
           setUiError(
@@ -467,68 +502,94 @@ export default function AgentChatView({
             )
           )
       } finally {
-        if (submissionRef.current === submission) {
-          submissionRef.current = null
-          if (mounted.current) setPreparing(false)
+        if (owner.submission === submission) {
+          owner.submission = null
+          owner.preparing = false
+          notifyConversation(owner)
         }
       }
     },
-    [status, sendMessage, persistTurn]
+    [generateMeta, notifyConversation, persistTurn]
   )
 
   const retry = useCallback(async (): Promise<void> => {
-    if (busy || submissionRef.current) return
+    if (busy || owner.submission) return
     const submission = makeChatId()
     const revision = viewRevision.current
-    submissionRef.current = submission
-    setPreparing(true)
+    owner.submission = submission
+    owner.preparing = true
+    notifyConversation(owner)
     try {
       await modelSaveRef.current
       const fresh = await window.tezbar.getLlmConfig()
-      if (!mounted.current || revision !== viewRevision.current) return
+      if (!mounted.current || owner.submission !== submission) return
       configRef.current = fresh
       setConfig(fresh)
-      metaRef.current = responseMeta(fresh)
-      lastErrorRef.current = undefined
-      setResolvedApproval(null)
-      setUiError(null)
-      setPreparing(false)
-      await regenerate({ messageId: activeMessage?.id })
+      owner.responseMeta = responseMeta(fresh)
+      owner.lastError = undefined
+      owner.resolvedApproval = null
+      if (selectedConversation.current === owner) setUiError(null)
+      owner.preparing = false
+      notifyConversation(owner)
+      await owner.chat.regenerate({ messageId: activeMessage?.id })
     } catch (error) {
-      if (mounted.current)
+      if (mounted.current && revision === viewRevision.current)
         setUiError(
           formatLlmErrorMessage(error instanceof Error ? error.message : 'Could not retry.')
         )
     } finally {
-      if (submissionRef.current === submission) {
-        submissionRef.current = null
-        if (mounted.current) setPreparing(false)
+      if (owner.submission === submission) {
+        owner.submission = null
+        owner.preparing = false
+        notifyConversation(owner)
       }
     }
-  }, [busy, activeMessage?.id, regenerate])
+  }, [busy, owner, activeMessage?.id, notifyConversation])
 
   const attachScreen = useCallback(async (): Promise<void> => {
-    if (busy || capturing) return
+    const owner = selectedConversation.current!
+    if (
+      owner.preparing ||
+      owner.chat.status === 'streaming' ||
+      owner.chat.status === 'submitted' ||
+      captureRequest.current
+    )
+      return
+    const request = {}
+    const revision = viewRevision.current
+    captureRequest.current = request
+    const isCurrent = (): boolean =>
+      mounted.current &&
+      captureRequest.current === request &&
+      revision === viewRevision.current &&
+      selectedConversation.current === owner
     setCapturing(true)
     setUiError(null)
     try {
-      setAttachment(await window.tezbar.captureActiveScreen())
+      const image = await window.tezbar.captureActiveScreen()
+      if (!isCurrent()) return
+      setAttachment(image)
       focusInput()
     } catch (error) {
-      setUiError(
-        error instanceof Error
-          ? error.message
-          : 'Screen capture failed. Check Screen Recording permission.'
-      )
+      if (isCurrent())
+        setUiError(
+          error instanceof Error
+            ? error.message
+            : 'Screen capture failed. Check Screen Recording permission.'
+        )
     } finally {
-      setCapturing(false)
+      if (isCurrent()) {
+        captureRequest.current = null
+        setCapturing(false)
+      }
     }
-  }, [busy, capturing])
+  }, [])
 
   const resolveApproval = useCallback(
     async (decision: AgentApprovalDecision): Promise<void> => {
-      if (!approval || approvalBusy) return
-      setApprovalBusy(true)
+      if (!approval || owner.approvalBusy) return
+      owner.approvalBusy = true
+      notifyConversation(owner)
       setUiError(null)
       try {
         const result = await window.tezbar.agentApprove({
@@ -537,14 +598,16 @@ export default function AgentChatView({
           decision,
         })
         if (!result.ok) throw new Error(result.error || 'Could not resolve this approval.')
-        setResolvedApproval(approval.approvalId)
+        owner.resolvedApproval = approval.approvalId
       } catch (error) {
-        setUiError(error instanceof Error ? error.message : 'Could not resolve this approval.')
+        if (mounted.current && selectedConversation.current === owner)
+          setUiError(error instanceof Error ? error.message : 'Could not resolve this approval.')
       } finally {
-        setApprovalBusy(false)
+        owner.approvalBusy = false
+        notifyConversation(owner)
       }
     },
-    [approval, approvalBusy]
+    [approval, owner, notifyConversation]
   )
 
   const selectModel = useCallback(async (provider: ProviderId, modelId: string): Promise<void> => {
@@ -584,62 +647,41 @@ export default function AgentChatView({
     }
   }, [])
 
-  const bootKey =
-    boot.kind === 'submit'
-      ? `submit:${boot.nonce ?? ''}:${boot.workingDirectory ?? ''}:${boot.prompt}`
-      : boot.kind === 'resume'
-        ? `resume:${boot.sessionId}`
-        : boot.kind === 'newChat'
-          ? `new:${boot.workingDirectory ?? ''}`
-          : boot.kind
+  const bootKey = JSON.stringify([
+    boot.kind,
+    boot.nonce,
+    boot.kind === 'submit' ? boot.prompt : undefined,
+    boot.kind === 'submit' || boot.kind === 'newChat' ? boot.workingDirectory : undefined,
+    boot.kind === 'resume' ? boot.sessionId : undefined,
+  ])
   useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      // Both requests are independent: waiting for the provider config before
-      // asking for history only doubles the time to the first list.
-      const rowsPromise = refreshHistory()
-      try {
-        const fresh = await window.tezbar.getLlmConfig()
-        if (cancelled) return
+    // Navigation is synchronous. History/config hydration never gets to reset
+    // an interactive composer or a conversation submitted while it was loading.
+    if (boot.kind === 'resume') {
+      void loadSession(boot.sessionId)
+    } else {
+      resetChat(
+        boot.kind === 'submit' || boot.kind === 'newChat' ? boot.workingDirectory : undefined
+      )
+      if (boot.kind === 'screen') void attachScreen()
+      if (boot.kind === 'submit' && submittedBoot.current !== bootKey) {
+        submittedBoot.current = bootKey
+        void send(boot.prompt)
+      }
+    }
+    const revision = viewRevision.current
+    void refreshHistory()
+    void window.tezbar
+      .getLlmConfig()
+      .then((fresh) => {
+        if (!mounted.current || revision !== viewRevision.current) return
         configRef.current = fresh
         setConfig(fresh)
-        await rowsPromise
-        if (cancelled) return
-        if (boot.kind === 'resume') {
-          await loadSession(boot.sessionId, true)
-          return
-        }
-        if (boot.kind === 'newChat') {
-          await resetChat(boot.workingDirectory)
-          return
-        }
-        if (boot.kind === 'screen') {
-          await resetChat()
-          await attachScreen()
-          return
-        }
-        if (boot.kind === 'submit') {
-          await resetChat(boot.workingDirectory)
-          if (cancelled) return
-          if (submittedBoot.current !== bootKey) {
-            submittedBoot.current = bootKey
-            if (boot.workingDirectory) {
-              directoryRef.current = boot.workingDirectory
-              setWorkingDirectory(boot.workingDirectory)
-            }
-            await send(boot.prompt)
-          }
-          return
-        }
-        await resetChat()
-      } catch (error) {
-        if (!cancelled)
+      })
+      .catch((error) => {
+        if (mounted.current && revision === viewRevision.current)
           setUiError(error instanceof Error ? error.message : 'Could not initialize the agent.')
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
+      })
     // Boot is an explicit navigation event, not a render-time object identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootKey])
@@ -688,7 +730,12 @@ export default function AgentChatView({
     return () => window.removeEventListener(RAYMES_AI_NEW_CHAT_EVENT, newChat)
   }, [resetChat])
   useEffect(() => {
-    if (active && mounted.current) {
+    if (!active) {
+      // Hiding keeps chat owners alive but invalidates view-only async work.
+      viewRevision.current++
+      captureRequest.current = null
+      setCapturing(false)
+    } else if (mounted.current) {
       focusInput()
     }
   }, [active])
@@ -736,50 +783,89 @@ export default function AgentChatView({
   }, [active, historyOpen])
 
   useEffect(() => {
-    if (busy && sessionRef.current?.id) {
-      const text = activeMessage ? agentMessageText(activeMessage) : undefined
-      onActiveRunChange?.({
-        sessionId: sessionRef.current.id,
-        sessionTitle: sessionRef.current.title,
-        sessionIcon: sessionRef.current.icon,
-        busy: true,
-        statusLabel,
-        streamingText: text || undefined,
-        waitingApproval: Boolean(approval),
-      })
-    } else {
-      onActiveRunChange?.(null)
+    const running = (item: AgentConversation): boolean =>
+      Boolean(item.session) &&
+      (item.preparing || item.chat.status === 'streaming' || item.chat.status === 'submitted')
+    const all = [...conversations.current]
+    const waiting = (item: AgentConversation): boolean => {
+      const message = item.chat.lastMessage
+      const pending = message?.role === 'assistant' ? agentMessageApproval(message) : null
+      return Boolean(pending && pending.approvalId !== item.resolvedApproval)
     }
-  }, [busy, statusLabel, activeMessage, approval, onActiveRunChange])
+    // The launcher has one status slot. Surface pending approvals first, then
+    // the visible run, then another background run so none becomes unreachable.
+    const current =
+      all.find((item) => running(item) && waiting(item)) ??
+      (running(owner) ? owner : all.find(running))
+    if (!current?.session) {
+      onActiveRunChange?.(null)
+      return
+    }
+    const message = current.chat.lastMessage
+    const stage = message ? agentMessageStages(message).at(-1) : undefined
+    onActiveRunChange?.({
+      sessionId: current.session.id,
+      sessionTitle: current.session.title,
+      sessionIcon: current.session.icon,
+      busy: true,
+      statusLabel: waiting(current)
+        ? 'Waiting for your approval'
+        : current.preparing || current.chat.status === 'submitted'
+          ? 'Starting agent…'
+          : stage?.status === 'running'
+            ? stage.label
+            : 'Generating…',
+      streamingText: message ? agentMessageText(message) || undefined : undefined,
+      waitingApproval: waiting(current),
+    })
+  }, [owner, conversationRevision, onActiveRunChange])
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
-      transport.close?.()
+      for (const current of conversations.current) {
+        current.submission = null
+        current.unsubscribe()
+        void current.chat.dispose()
+      }
     }
-  }, [transport])
+  }, [])
 
   const deleteResponse = async (message: AgentUIMessage): Promise<void> => {
-    if (!sessionRef.current || busy) return
-    const result = await window.tezbar.chatDeleteTurn(sessionRef.current.id, message.id)
+    const current = owner.session
+    if (!current || busy) return
+    const result = await window.tezbar.chatDeleteTurn(current.id, message.id)
     if (!result.ok) {
-      setUiError(result.error || 'Could not delete this response.')
+      if (mounted.current && selectedConversation.current === owner)
+        setUiError(result.error || 'Could not delete this response.')
       return
     }
-    chat.setMessages((messages) => messages.filter((item) => item.id !== message.id))
-    const next = {
-      ...sessionRef.current,
-      turns: sessionRef.current.turns.filter((item) => item.id !== message.id),
+    owner.chat.messages = owner.chat.messages.filter((item) => item.id !== message.id)
+    owner.session = {
+      ...owner.session!,
+      turns: owner.session!.turns.filter((item) => item.id !== message.id),
     }
-    sessionRef.current = next
-    setSession(next)
-    void refreshHistory()
+    notifyConversation(owner)
+    if (mounted.current) void refreshHistory()
   }
   const deleteConversation = async (id: string): Promise<void> => {
-    if (sessionRef.current?.id === id) await resetChat()
+    if (selectedConversation.current?.session?.id === id) resetChat()
     const result = await window.tezbar.chatDelete(id)
-    if (!result.ok) setUiError('Could not delete this conversation.')
-    void refreshHistory()
+    if (!result.ok) {
+      if (mounted.current) setUiError('Could not delete this conversation.')
+    } else {
+      const retained = [...conversations.current].find((item) => item.session?.id === id)
+      if (retained) {
+        // Deletion invalidates the retained copy as well as SQLite. Disposal
+        // can finish a live stream, so clear its persistence target first.
+        retained.session = null
+        retained.submission = null
+        retained.unsubscribe()
+        await retained.chat.dispose()
+        conversations.current.delete(retained)
+      }
+    }
+    if (mounted.current) void refreshHistory()
   }
   const submit = (event: FormEvent): void => {
     event.preventDefault()
@@ -875,11 +961,7 @@ export default function AgentChatView({
               <path d="M9 3.5v11M3.5 9h11" />
             </svg>
           </CommandSurfaceAction>
-          <CommandSurfaceAction
-            title="Back (Esc)"
-            aria-label="Back"
-            onClick={onBack}
-          >
+          <CommandSurfaceAction title="Back (Esc)" aria-label="Back" onClick={onBack}>
             <svg
               aria-hidden
               width="16"
@@ -919,14 +1001,16 @@ export default function AgentChatView({
                     <button
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
-                      onClick={() => void loadSession(row.id, true)}
+                      onClick={() => void loadSession(row.id)}
                     >
                       <ChatSquircle icon={row.icon} size={20} />
                       <div className="min-w-0 flex-1">
                         <span className="block truncate text-[12px] text-ink-2">
                           {row.title || 'Untitled chat'}
                         </span>
-                        <span className="block truncate text-[10.5px] text-ink-4">{row.preview}</span>
+                        <span className="block truncate text-[10.5px] text-ink-4">
+                          {row.preview}
+                        </span>
                       </div>
                     </button>
                     <button
