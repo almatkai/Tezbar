@@ -446,3 +446,33 @@ fn parallel_tool_reply(protocol: Protocol) -> (String, String) {
             .collect(),
     )
 }
+
+#[tokio::test]
+async fn retry_reuses_original_image_and_preserves_completed_effect_history() {
+    use runtime::transcript::*;
+    let (_dir,core,mut events)=fixture();
+    let png="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII=";
+    let mut user=Message::text("user","original");
+    user.blocks.push(Block::Image{mime:"image/png".into(),data:png.into()});
+    runtime::store::save(&core.inner.ctx.paths.data_dir,"retry","user",&[user]).unwrap();
+    let completed=Message { role:"assistant".into(),opaque:None,blocks:vec![Block::ToolCall{id:"effect".into(),wire_id:"effect".into(),name:"write".into(),arguments:json!({"path":"effect-marker","content":"once"}).to_string()}] };
+    let result=Message{role:"tool".into(),opaque:None,blocks:vec![Block::ToolResult{call:"effect".into(),wire_id:"effect".into(),name:"write".into(),blocks:vec![Block::Text{text:"completed effect marker once".into()}],is_error:false}]};
+    runtime::store::save(&core.inner.ctx.paths.data_dir,"retry","answer",&[completed,result]).unwrap();
+    let mut fake=server(vec![final_reply(Protocol::OpenaiChat),final_reply(Protocol::OpenaiChat),final_reply(Protocol::OpenaiChat)]).await;
+    core.patch_config(json!({"provider":"openai-compatible","model":"vision","providerConfigs":{"openai-compatible":{"baseURL":fake.url}},"providerModels":{"openai-compatible":[{"id":"vision","capabilities":["tools","vision"]}]},"agentApprovalMode":"turbo"})).await.unwrap();
+    core.handle("agent:run",&[json!({"runId":"agent-reopened-retry","task":"original","sessionId":"retry","userTurnId":"user","assistantTurnId":"answer","retry":true})]).await.unwrap().unwrap();
+    next_event(&mut events,"answer").await; next_event(&mut events,"done").await;
+    let wire=fake.requests.recv().await.unwrap().to_string();
+    assert!(wire.contains(png)); assert!(wire.contains("completed effect marker once"));
+    assert!(!core.inner.ctx.paths.home_dir.join("effect-marker").exists());
+    core.patch_config(json!({"model":"text"})).await.unwrap();
+    core.handle("agent:run",&[json!({"runId":"agent-history-nonvision","task":"continue","sessionId":"retry","priorTurnIds":["user","answer"]})]).await.unwrap().unwrap();
+    next_event(&mut events,"answer").await; next_event(&mut events,"done").await;
+    let wire=fake.requests.recv().await.unwrap().to_string(); assert!(!wire.contains(png)); assert!(wire.contains("Earlier image omitted"));
+    assert!(serde_json::to_string(&runtime::store::load(&core.inner.ctx.paths.data_dir,"retry","user").unwrap()).unwrap().contains(png));
+    core.patch_config(json!({"model":"vision"})).await.unwrap();
+    core.handle("agent:run",&[json!({"runId":"agent-history-vision-again","task":"continue","sessionId":"retry","priorTurnIds":["user","answer"]})]).await.unwrap().unwrap();
+    next_event(&mut events,"answer").await; next_event(&mut events,"done").await;
+    assert!(fake.requests.recv().await.unwrap().to_string().contains(png));
+    core.shutdown().await;
+}

@@ -20,7 +20,8 @@ impl AiCore {
         let turn = turn.to_string();
         let messages = messages.to_vec();
         let root = self.inner.ctx.paths.data_dir.clone();
-        tokio::task::spawn_blocking(move || runtime::store::save(&root, &session, &turn, &messages))
+        let generation: Vec<u64> = serde_json::from_value(options["_assistantGeneration"].clone()).map_err(err)?;
+        tokio::task::spawn_blocking(move || runtime::store::save_at(&root, &session, &turn, &messages, &generation))
             .await
             .map_err(err)?
     }
@@ -104,6 +105,7 @@ impl AiCore {
                 }
                 runtime::transcript::bound_images(&mut messages);
                 // Bound each load so a large selected history cannot accumulate unbounded data.
+                runtime::transcript::bound_images(&mut messages);
                 if runtime::transcript::bound_context(&mut messages)? {
                     self.agent_event(run,json!({"type":"log","source":"stderr","line":"Earlier tool output removed to fit the context limit."}));
                 }
@@ -126,23 +128,14 @@ impl AiCore {
             .and_then(|m| m.iter().find(|m| m["id"] == cfg["model"]))
             .and_then(|m| m["capabilities"].as_array())
             .is_some_and(|c| c.iter().any(|c| c == "vision"));
-        if !images.is_empty() {
-            if vision {
-                for image in images {
-                    user.blocks.push(Block::Image {
-                        mime: s(&image["mimeType"]).into(),
-                        data: s(&image["data"]).into(),
-                    });
-                }
-            } else {
-                let text = self.ocr_images(&images, cancel).await?;
-                if text.trim().is_empty() {
-                    return Err("The selected model cannot read images. Choose a vision model or remove the attachment.".into());
-                }
-                user.blocks.push(Block::Text {
-                    text: format!("[Text extracted from attached images]\n{text}"),
-                });
-            }
+        for image in &images {
+            user.blocks.push(Block::Image { mime: s(&image["mimeType"]).into(), data: s(&image["data"]).into() });
+        }
+        let mut current_ocr = None;
+        if !vision && !images.is_empty() {
+            let text = self.ocr_images(&images,cancel).await?;
+            if text.trim().is_empty() { return Err("The selected model cannot read images. Choose a vision model or remove the attachment.".into()); }
+            current_ocr = Some(text);
         }
         if let (Some(session), Some(turn)) = (
             options["sessionId"].as_str(),
@@ -151,15 +144,28 @@ impl AiCore {
             let data = self.inner.ctx.paths.data_dir.clone();
             let session = session.to_string();
             let turn = turn.to_string();
-            let user = user.clone();
-            tokio::task::spawn_blocking(move || {
-                runtime::store::save(&data, &session, &turn, &[user])
-            })
-            .await
-            .map_err(err)??;
+            if images.is_empty() || options["retry"] == true {
+                if let Some(saved) = runtime::store::load(&data,&session,&turn)? {
+                    if let Some(original) = saved.into_iter().find(|m| m.role == "user") { user = original; }
+                }
+            }
+            let original = user.clone();
+            let generation: Vec<u64> = serde_json::from_value(options["_userGeneration"].clone()).map_err(err)?;
+            tokio::task::spawn_blocking(move || runtime::store::save_at(&data,&session,&turn,&[original],&generation)).await.map_err(err)??;
         }
         messages.push(user);
         let response_start = messages.len();
+        if options["retry"] == true {
+            if let (Some(session),Some(turn)) = (options["sessionId"].as_str(),options["assistantTurnId"].as_str()) {
+                if let Some(mut saved) = runtime::store::load(&self.inner.ctx.paths.data_dir,session,turn)? {
+                    runtime::transcript::close_unanswered(&mut saved);
+                    if saved.iter().any(|m| !m.calls().is_empty()) {
+                        messages.extend(saved);
+                        messages.push(Message::text("user","Continue from the recorded results above. Completed effects must not be repeated. Unknown outcomes require checking state before any new effect."));
+                    }
+                }
+            }
+        }
         let mut tools = native_tools::definitions();
         if self
             .antigravity_accounts()
@@ -183,9 +189,11 @@ impl AiCore {
         let result=async {
             for turn_index in 0..limits::TURNS{
                 if cancel.is_cancelled(){return Err("Operation cancelled".into())}
+                runtime::transcript::bound_images(&mut messages);
                 if runtime::transcript::bound_context(&mut messages)?{self.agent_event(run,json!({"type":"log","source":"stderr","line":"Earlier tool output removed to fit the context limit."}));}
                 {let mut state=self.inner.state.lock().unwrap();if state.observations.len()>64{state.observations.clear();}state.observations.insert(root.to_string_lossy().into_owned(),json!({"runId":run,"cwd":root,"isStreaming":true,"messageCount":messages.len(),"pendingMessageCount":0,"toolCalls":calls,"model":{"provider":cfg["provider"],"id":cfg["model"]}}));}
-                let mut partial=String::new();let completed=self.canonical_turn(cfg,&messages,&tools,history_len+turn_index,cancel,|text|{if !cancel.is_cancelled(){partial.push_str(text);self.agent_event(run,json!({"type":"message","delta":text}));}}).await;
+                let mut partial=String::new();let mut view=runtime::transcript::image_view(&messages,vision); if let Some(text)=&current_ocr { if let Some(user)=view.get_mut(response_start-1) { user.blocks.push(Block::Text{text:format!("[Text extracted from attached images]\n{text}")}); } }
+                let completed=self.canonical_turn(cfg,&view,&tools,history_len+turn_index,cancel,|text|{if !cancel.is_cancelled(){partial.push_str(text);self.agent_event(run,json!({"type":"message","delta":text}));}}).await;
                 let turn=match completed{Ok(turn)=>turn,Err(error)=>{if !partial.is_empty(){messages.push(Message::text("assistant",&format!("{partial}\n[This attempt ended with an error: {error}]")));}return Err(error)}};
                 messages.push(turn.message);
                 self.save_transcript(options,&messages[response_start..]).await?;
@@ -220,10 +228,6 @@ impl AiCore {
                     else{let args:Value=serde_json::from_str(s(&call["function"]["arguments"])).map_err(err)?;self.native_tool(tool,args["path"].as_str(),&root,approval_mode,run,cancel).await.map(|text|(vec![Block::Text{text}],false))};
                     if result.is_err()&&cancel.is_cancelled(){messages.push(tool_result(call,"Interrupted. The outcome of this call is unknown.".into(),true));return Err("Operation cancelled".into())}
                     let (mut blocks,failed)=match result{Ok(output)=>output,Err(e)=>(vec![Block::Text{text:format!("Native tool: {e}")}],true)};
-                    if !vision&&blocks.iter().any(|b|matches!(b,Block::Image{..})){
-                        let images=blocks.iter().filter_map(|b|if let Block::Image{mime,data}=b{Some(json!({"mimeType":mime,"data":data}))}else{None}).collect::<Vec<_>>();
-                        let extracted=self.ocr_images(&images,cancel).await.unwrap_or_default();blocks.retain(|b|!matches!(b,Block::Image{..}));blocks.push(Block::Text{text:if extracted.trim().is_empty(){"The selected model cannot read images. Choose a vision model or remove the attachment.".into()}else{format!("[Text extracted from tool images]\n{extracted}")}});
-                    }
                     let text=blocks.iter().filter_map(|b|if let Block::Text{text}=b{Some(text.as_str())}else{None}).collect::<Vec<_>>().join("\n");
                     let text=redact_text(&text);let output=cut(&text,8000);let truncated=text.chars().count()>8000;
                     if !cancel.is_cancelled(){self.agent_event(run,json!({"type":"stage","stage":{"index":stage,"label":label,"toolName":name,"status":if failed{"failed"}else{"done"},"output":output,"outputTruncated":truncated,"durationMs":started.elapsed().as_millis() as u64}}));}
@@ -266,6 +270,7 @@ impl AiCore {
     }
 }
 fn tool_result(c: &Value, text: String, is_error: bool) -> Message {
+    let text = if text.trim().is_empty() { "(no output)".into() } else { text };
     Message {
         role: "tool".into(),
         blocks: vec![Block::ToolResult {

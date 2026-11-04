@@ -253,6 +253,9 @@ export function createNativeAgentTransport(
                 stages.set(event.stage.index, event.stage)
                 emit({ type: 'data-stage', id: `stage-${event.stage.index}`, data: event.stage })
                 break
+              case 'approval-expired':
+                emit({ type: 'data-approval', id: 'approval', data: null })
+                break
               case 'approval':
                 emit({ type: 'data-approval', id: 'approval', data: event })
                 break
@@ -295,6 +298,7 @@ export function createNativeAgentTransport(
                 agentProfileId: context.session.agentProfileId,
                 userTurnId: lastUser.id,
                 assistantTurnId,
+                retry: trigger === 'regenerate-message',
                 priorTurnIds: turns
                   .slice(0, -1)
                   .slice(-CHAT_CONTEXT_MAX_TURNS)

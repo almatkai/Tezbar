@@ -632,7 +632,7 @@ function LauncherApp(): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (document.querySelector('dialog[open]')) return
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         e.preventDefault()
         if (surface === 'ai-chat') {
           if (tryConsumeCommandSurfaceEscape()) {

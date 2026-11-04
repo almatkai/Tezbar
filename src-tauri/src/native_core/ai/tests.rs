@@ -428,5 +428,5 @@ fn native_source_has_only_reviewed_process_seams_and_never_stages_pi_policy() {
         .unwrap()
         .contains("raymes-pi-policy.ts"));
     let provider = std::fs::read_to_string(ai.join("provider.rs")).unwrap();
-    assert!(provider.contains("self.command(\"opencode\").await.arg(\"models\")"));
+    assert!(!provider.contains("self.command(\"opencode\")"));
 }

@@ -467,14 +467,14 @@ function PracticeStep({
               {mode.aiTask}
             </p>
           ) : (
-            <p className="text-[12.5px] text-ink-2">Ask anything. Pi can read files and run commands, and asks before anything risky.</p>
+            <p className="text-[12.5px] text-ink-2">Ask anything. Tezbar can read files and run commands, and asks before anything risky.</p>
           )}
           <p className="text-[12.5px] text-violet-200">
             {!aiReady
-              ? 'Connect a model in the next step, and Pi answers right here.'
+              ? 'Connect a model in the next step, and Tezbar answers right here.'
               : mode.aiTask
-                ? `Enter, and Pi starts thinking with ${chatModel ?? 'your model'}…`
-                : 'Pi is listening.'}
+                ? `Enter, and Tezbar starts thinking with ${chatModel ?? 'your model'}…`
+                : 'Ready for your question.'}
           </p>
         </div>
       </>
@@ -780,7 +780,7 @@ function AiStep({ onSummary }: { onSummary: (summary: StepSummary) => void }): J
   return (
     <>
       <StepHeading title="Connect an AI model">
-        AI chat runs on Pi, an open-source coding agent that can read files and run commands for you, asking
+        AI chat can read files and run commands for you, asking
         before anything risky. Bring your own key, or use a local model.
       </StepHeading>
 

@@ -24,6 +24,7 @@ import {
 import {
   DEFAULT_EXTENSION_RUNTIME_TIMEOUT_MS,
   type AiModelCapability,
+  type AiProtocol,
   type AiProviderConfig,
   type AiProviderModel,
   type CustomAiProvider,
@@ -45,6 +46,7 @@ import {
   Kbd,
   Message,
   TextArea,
+  SelectField,
   TextField,
 } from './ui/primitives'
 import { CurrencySettings } from './CurrencySettings'
@@ -666,6 +668,7 @@ export default function SettingsView({
   const [githubDeviceUserCode, setGithubDeviceUserCode] = useState('')
   const [deviceBusy, setDeviceBusy] = useState(false)
   const [newProviderName, setNewProviderName] = useState('')
+  const [newProviderProtocol,setNewProviderProtocol] = useState<AiProtocol>('openai-chat')
   const [newProviderBaseURL, setNewProviderBaseURL] = useState('')
   const [aiTaskProviderOverrides, setAiTaskProviderOverrides] = useState<
     Partial<Record<LlmTask, ProviderId>>
@@ -1289,7 +1292,7 @@ export default function SettingsView({
       id,
       title,
       subtitle: 'Custom provider',
-      protocol: 'openai-chat',
+      protocol: newProviderProtocol,
     }
     const nextCustomList = [...customProviders, provider]
     const nextModels = { ...aiProviderModels, [id]: [] }
@@ -2115,6 +2118,11 @@ export default function SettingsView({
                           className="text-xs font-mono"
                           spellCheck={false}
                         />
+                        <label>Protocol
+                          <SelectField value={newProviderProtocol} onChange={(e)=>setNewProviderProtocol(e.target.value as AiProtocol)}>
+                            {(['openai-chat','openai-responses','anthropic','gemini','ollama'] as const).map((p)=><option key={p} value={p}>{p}</option>)}
+                          </SelectField>
+                        </label>
                         <Button
                           variant="primary"
                           className="w-full text-xs py-1"

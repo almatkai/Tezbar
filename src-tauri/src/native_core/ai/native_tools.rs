@@ -373,10 +373,10 @@ impl AiCore {
             && !self
                 .approval_prompt(
                     run,
-                    "Allow native tool?",
+                    "Allow this tool?",
                     &tool.label_for_approval(),
                     cancel,
-                    matches!(&tool, Tool::Bash(..)),
+                    matches!(&tool, Tool::Bash(c,..) if !runtime::policy::complex(c) && !runtime::policy::destructive(c) && !runtime::policy::mutation_options(c) && !runtime::policy::shell_sensitive(c, root, &self.inner.ctx.paths.home_dir, &self.inner.ctx.paths.config_dir)),
                 )
                 .await
         {
@@ -435,12 +435,12 @@ impl AiCore {
                         .env_remove("ENV");
                     shell
                 };
-                process::output(
+                process::shell_capture(
                     command.current_dir(root),
                     Duration::from_secs(timeout),
                     cancel,
                 )
-                .await
+                .await?.result()
             }
             Tool::Screen => Err("Screen capture must use the image result path".into()),
             Tool::Read(p, offset, limit) => tokio::task::spawn_blocking(move || {

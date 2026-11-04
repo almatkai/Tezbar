@@ -230,10 +230,54 @@ pub async fn output(
     group.terminate().await;
     result
 }
+/// Shell outcomes retain both streams even on failure or timeout. Success-only
+/// callers deliberately keep using `output` above.
+#[derive(Debug)]
+pub struct ShellCapture {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: Option<i32>,
+    pub timed_out: bool,
+    pub truncated: bool,
+}
+impl ShellCapture {
+    pub fn result(self) -> Result<String, String> {
+        let text = format!("Exit status: {}{}\nstdout:\n{}\nstderr:\n{}{}",
+            self.exit_code.map(|n| n.to_string()).unwrap_or_else(|| "unavailable".into()),
+            if self.timed_out { " (timed out)" } else { "" }, self.stdout, self.stderr,
+            if self.truncated { "\n[Output truncated]" } else { "" });
+        if self.timed_out || self.exit_code != Some(0) { Err(text) } else { Ok(text) }
+    }
+}
+async fn capture_read(reader: &mut (impl AsyncRead + Unpin), out: &mut Vec<u8>, truncated: &mut bool, limit: usize) -> Result<(), String> {
+    let mut buf = [0; 8192];
+    loop {
+        let n = reader.read(&mut buf).await.map_err(err)?;
+        if n == 0 { return Ok(()) }
+        let keep = n.min(limit.saturating_sub(out.len()));
+        out.extend_from_slice(&buf[..keep]);
+        *truncated |= keep < n;
+    }
+}
+pub async fn shell_capture(cmd: &mut Command, timeout: Duration, cancel: &Cancel) -> Result<ShellCapture, String> {
+    let mut group = cancel.effect(|| GroupChild::spawn(cmd))?;
+    let mut stdout = group.child.stdout.take().ok_or("Missing subprocess stdout")?;
+    let mut stderr = group.child.stderr.take().ok_or("Missing subprocess stderr")?;
+    let (mut out, mut error) = (Vec::new(), Vec::new());
+    let (mut out_cut, mut err_cut) = (false, false);
+    let work = async { tokio::try_join!(async { group.child.wait().await.map_err(err) }, capture_read(&mut stdout, &mut out, &mut out_cut, 48*1024), capture_read(&mut stderr, &mut error, &mut err_cut, 12*1024)).map(|r| r.0) };
+    let status = tokio::select! { biased; _=cancel.cancelled()=>Err("Operation cancelled".to_string()), r=tokio::time::timeout(timeout,work)=>match r { Ok(r)=>r.map(Some), Err(_)=>Ok(None) } };
+    group.terminate().await;
+    let status = status?;
+    // Killing the tree closes pipes; collect bytes already queued before timeout.
+    let _ = tokio::time::timeout(Duration::from_millis(500), async { tokio::join!(capture_read(&mut stdout,&mut out,&mut out_cut, 48*1024), capture_read(&mut stderr,&mut error,&mut err_cut, 12*1024)) }).await;
+    Ok(ShellCapture { stdout: String::from_utf8_lossy(&out).into(), stderr: String::from_utf8_lossy(&error).into(), exit_code: status.and_then(|s| s.code()), timed_out: status.is_none(), truncated: out_cut || err_cut })
+}
 /// Bytes remain bytes until LF arrives: split UTF-8 and U+2028/U+2029 are safe.
 #[derive(Default)]
 pub struct Lines {
     buffer: Vec<u8>,
+    scanned: usize,
 }
 impl Lines {
     pub fn feed(&mut self, bytes: &[u8], eof: bool) -> Result<Vec<String>, String> {
@@ -242,16 +286,19 @@ impl Lines {
             return Err("Protocol line exceeds 16 MiB".into());
         }
         let mut lines = Vec::new();
-        while let Some(i) = self.buffer.iter().position(|b| *b == b'\n') {
+        while let Some(i) = self.buffer[self.scanned..].iter().position(|b| *b == b'\n').map(|i| i + self.scanned) {
             let mut line: Vec<u8> = self.buffer.drain(..=i).collect();
+            self.scanned = 0;
             line.pop();
             if line.last() == Some(&b'\r') {
                 line.pop();
             }
             lines.push(String::from_utf8(line).map_err(err)?);
         }
+        self.scanned = self.buffer.len();
         if eof && !self.buffer.is_empty() {
             lines.push(String::from_utf8(std::mem::take(&mut self.buffer)).map_err(err)?);
+            self.scanned = 0;
         }
         Ok(lines)
     }

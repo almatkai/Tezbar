@@ -17,6 +17,7 @@ pub const CHANNELS: &[&str] = &[
     "ai-extensions:logs",
     "ai-extensions:clear-allowance",
     "ai-extensions:list",
+    "ai-extensions:review-project",
     "ai-extensions:parse-import",
     "ai-extensions:add",
     "ai-extensions:update",
@@ -41,6 +42,7 @@ pub struct Extensions {
     lock: Mutex<()>,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     imports: Mutex<HashMap<String, Value>>,
+    review_cwd: Mutex<Option<String>>,
     secrets: secrets::Secrets,
     path: std::path::PathBuf,
 }
@@ -87,6 +89,7 @@ impl Extensions {
             failures: Mutex::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
             imports: Mutex::new(HashMap::new()),
+            review_cwd: Mutex::new(None),
             secrets: secrets::Secrets::new(config),
             path: config.join("ai-extensions.json"),
         }
@@ -1147,9 +1150,17 @@ impl AiCore {
                 ))
                 .cloned()
                 .unwrap_or(json!({"status":"idle"}))),
+            "ai-extensions:review-project" => {
+                let cwd = tokio::fs::canonicalize(s(a)).await.map_err(err)?;
+                self.project_status(&cwd).await?;
+                *self.inner.extensions.review_cwd.lock().unwrap() = Some(cwd.to_string_lossy().into());
+                self.inner.ctx.emit("ai-extensions-changed",json!({"projectReview":true}));
+                Ok(json!({"ok":true}))
+            }
             "ai-extensions:list" => {
                 let mut data = self.ext_read().await?;
-                if let Some(cwd) = a.as_str() {
+                let queued = self.inner.extensions.review_cwd.lock().unwrap().clone();
+                if let Some(cwd) = a.as_str().or(queued.as_deref()) {
                     data["project"] = self.project_status(std::path::Path::new(cwd)).await?;
                 }
                 Ok(data)
@@ -1826,6 +1837,7 @@ impl AiCore {
                 }
             }
         }
+        if options["agentProfileId"].as_str().is_some_and(|id| !id.is_empty()) && profile_text.is_none() { return Err("The selected agent profile is unavailable. Enable its extension or remove the profile from this conversation.".into()); }
         if let Some(text) = profile_text {
             add(&mut instructions, "Active profile", &text);
         }

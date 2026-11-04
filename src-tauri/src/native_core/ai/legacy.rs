@@ -124,6 +124,7 @@ impl AiCore {
             .map(|clock| clock.pause());
         let answer = tokio::select! {r=rx=>r.unwrap_or(false),_=cancel.cancelled()=>false,_=tokio::time::sleep(Duration::from_secs(300))=>false};
         self.inner.state.lock().unwrap().approvals.remove(&id);
+        self.agent_event(run_id,json!({"type":"approval-expired","approvalId":id}));
         answer && !cancel.is_cancelled()
     }
     pub(super) async fn approve(&self, v: &Value) -> CoreResult {
@@ -140,6 +141,10 @@ impl AiCore {
             }
             state.approvals.remove(id).unwrap()
         };
+        if decision == "always" && !approval.remember_command && approval.extension_identity.is_none() {
+            let _ = approval.reply.send(false);
+            return Err("This operation requires review every time.".into());
+        }
         if decision == "always" {
             if let Some((extension, connection, tool, hash)) = approval.extension_identity.clone() {
                 if let Err(error) = self

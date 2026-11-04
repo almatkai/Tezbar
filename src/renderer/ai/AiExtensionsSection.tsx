@@ -49,11 +49,14 @@ export function AiExtensionsSection(): JSX.Element {
       setState(
         await request<AiExtensionsState>(
           'list',
-          sessionStorage.getItem('tezbar-ai-extension-review') || undefined
+          undefined
         )
       ),
     []
   )
+  useEffect(() => {
+    if (state.project) document.getElementById('ai-extensions-section')?.scrollIntoView?.({ block: 'start' })
+  }, [state.project])
   useEffect(() => {
     void load().catch((e) => setError(String(e)))
     void window.tezbar
@@ -175,7 +178,7 @@ export function AiExtensionsSection(): JSX.Element {
   }
 
   return (
-    <section aria-label="AI Extensions" className="space-y-3 py-3 text-[12px] text-ink-2">
+    <section id="ai-extensions-section" aria-label="AI Extensions" className="space-y-3 py-3 text-[12px] text-ink-2">
       <div className="flex items-center justify-between">
         <h3 className="text-[13px] font-semibold text-ink-1">AI Extensions</h3>
         <Button variant="quiet" onClick={() => setPanel(panel ? null : 'menu')}>

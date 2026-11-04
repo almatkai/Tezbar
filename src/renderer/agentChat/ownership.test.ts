@@ -316,13 +316,30 @@ describe('agent conversation ownership', () => {
         )
       )
       await tick()
-      expect(api.agentApprove).toHaveBeenCalledWith({
-        runId,
-        approvalId: 'capability',
-        decision: canRemember === false ? 'once' : 'always',
-      })
+      expect(api.agentApprove).not.toHaveBeenCalled()
+      const deny = [...container.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Deny')!
+      deny.focus()
+      await act(async () => deny.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})))
+      expect(api.agentApprove).not.toHaveBeenCalled()
+      await act(async () => deny.click())
+      expect(api.agentApprove).toHaveBeenCalledWith({runId,approvalId:'capability',decision:'deny'})
     }
   )
+  it('mode changes leave destructive approval pending and expired cards disappear', async () => {
+    await render(); await send('mode fixture'); const runId=runs[0]!.runId!
+    await emit({type:'approval',runId,approvalId:'destructive',title:'Allow?',command:'rm -rf fixture',canRemember:false})
+    const picker=[...container.querySelectorAll('button')].find((b)=>b.textContent?.trim()==='Default')!
+    await act(async()=>picker.click()); await tick()
+    const turbo=[...container.querySelectorAll('button')].find((b)=>b.textContent?.includes('Turbo') && b.getAttribute('role')==='menuitem') || [...container.querySelectorAll('button')].find((b)=>b.textContent?.includes('Turbo'))!
+    await act(async()=>turbo.click()); await tick()
+    expect(api.agentApprove).not.toHaveBeenCalled()
+    expect(container.querySelector('[aria-label="Command approval"]')).toBeTruthy()
+    const input=container.querySelector('textarea')!; input.focus()
+    await act(async()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})))
+    expect(api.agentApprove).not.toHaveBeenCalled()
+    await emit({type:'approval-expired',runId,approvalId:'destructive'})
+    expect(container.querySelector('[aria-label="Command approval"]')).toBeNull()
+  })
   it('starts fresh on every launcher new-chat event, including the real caller nonce contract', async () => {
     const first = createAiChatNavigation({ kind: 'newChat' })
     const second = createAiChatNavigation({ kind: 'newChat' })

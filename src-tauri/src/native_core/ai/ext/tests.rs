@@ -1100,3 +1100,21 @@ async fn stdio_crash_and_stdout_flood_report_unknown_without_replaying_effects()
         }
     }
 }
+
+#[tokio::test]
+async fn project_review_handoff_survives_an_independent_settings_request() {
+    let (_dir,core,_events)=fixture();
+    let folder=core.inner.ctx.paths.home_dir.join("handoff");std::fs::create_dir_all(folder.join(".tezbar")).unwrap();
+    std::fs::write(folder.join(".tezbar/ai-extension.json"),json!({"manifestVersion":1,"id":"handoff","name":"Handoff","connections":[]}).to_string()).unwrap();
+    // Launcher webview queues through native IPC; a settings webview has no cwd or browser storage.
+    core.handle("ai-extensions:review-project",&[json!(folder)]).await.unwrap().unwrap();
+    let independent=core.handle("ai-extensions:list",&[]).await.unwrap().unwrap();
+    assert_eq!(independent["project"]["folder"],json!(folder));
+    assert_eq!(independent["project"]["preview"]["name"],"Handoff");
+    // Reusing an already open settings window receives the newly queued folder.
+    let other=core.inner.ctx.paths.home_dir.join("other");std::fs::create_dir_all(other.join(".tezbar")).unwrap();
+    std::fs::write(other.join(".tezbar/ai-extension.json"),json!({"manifestVersion":1,"id":"other","name":"Other","connections":[]}).to_string()).unwrap();
+    core.handle("ai-extensions:review-project",&[json!(other)]).await.unwrap().unwrap();
+    assert_eq!(core.handle("ai-extensions:list",&[]).await.unwrap().unwrap()["project"]["folder"],json!(other));
+    core.shutdown().await;
+}

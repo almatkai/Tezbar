@@ -774,13 +774,7 @@ export default function AgentChatView({
   useEffect(() => {
     if (!active) return
     const onKey = (event: globalThis.KeyboardEvent): void => {
-      if (approval && event.key === 'Enter') {
-        event.preventDefault()
-        event.stopImmediatePropagation()
-        void resolveApproval(
-          (event.metaKey || event.ctrlKey) && approval.canRemember !== false ? 'always' : 'once'
-        )
-      } else if (
+      if (
         (event.metaKey || event.ctrlKey) &&
         !event.altKey &&
         !event.shiftKey &&
@@ -806,6 +800,7 @@ export default function AgentChatView({
   useEffect(() => {
     if (!active) return
     setCommandSurfaceEscapeConsumer(() => {
+      if (commands.consumeEscape()) return true
       if (historyOpen) {
         setHistoryOpen(false)
         return true
@@ -814,7 +809,7 @@ export default function AgentChatView({
       return false
     })
     return () => setCommandSurfaceEscapeConsumer(null)
-  }, [active, historyOpen])
+  }, [active, historyOpen, commands.consumeEscape])
 
   useEffect(() => {
     const running = (item: AgentConversation): boolean =>
@@ -1182,6 +1177,12 @@ export default function AgentChatView({
           ) : null}
         </div>
 
+        <div className="mx-4 mb-2 flex justify-end">
+          <ApprovalModePicker mode={config.agentApprovalMode ?? 'default'} direction="up" onSelect={async (mode) => {
+            const next = { ...config, agentApprovalMode: mode }; setConfig(next); configRef.current = next;
+            await window.tezbar.setLlmConfig({ agentApprovalMode: mode });
+          }} />
+        </div>
         {approval ? (
           <section
             aria-label="Command approval"
@@ -1200,9 +1201,6 @@ export default function AgentChatView({
                   setConfig(next)
                   configRef.current = next
                   await window.tezbar.setLlmConfig({ agentApprovalMode: mode })
-                  if (mode === 'turbo' || mode === 'auto') {
-                    void resolveApproval('once')
-                  }
                 }}
               />
             </div>
@@ -1326,6 +1324,8 @@ export default function AgentChatView({
                 rows={1}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
+                role="combobox"
+                aria-expanded={!!commands.activeDescendant}
                 aria-activedescendant={commands.activeDescendant}
                 onKeyDown={(event) => {
                   if (!commands.onKeyDown(event)) enterToSubmit(event)

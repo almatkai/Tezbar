@@ -138,18 +138,28 @@ pub fn wire_id(id: &str) -> String {
     use sha2::{Digest, Sha256};
     format!("tz_{:x}", Sha256::digest(id.as_bytes()))[..63].into()
 }
+/// Capability projection is disposable: canonical images survive model changes.
+pub fn image_view(messages: &[Message], vision: bool) -> Vec<Message> {
+    fn project(blocks: &mut [Block]) {
+        for b in blocks { match b {
+            Block::Image{..} => *b=Block::Text{text:"[Earlier image omitted: the selected model cannot read images]".into()},
+            Block::ToolResult{blocks,..} => project(blocks), _=>{}
+        } }
+    }
+    let mut view=messages.to_vec();
+    if !vision { for m in &mut view { project(&mut m.blocks); } }
+    view
+}
+fn text_size(b: &Block) -> usize {
+    match b { Block::Image{..}=>0, Block::ToolResult{blocks,..}=>128+blocks.iter().map(text_size).sum::<usize>(), _=>serde_json::to_vec(b).map(|b|b.len()).unwrap_or(usize::MAX/1024) }
+}
 pub fn bound_context(messages: &mut [Message]) -> Result<bool, String> {
     let size = |ms: &[Message]| -> usize {
         ms.iter()
             .map(|m| {
                 m.blocks
                     .iter()
-                    .map(|b| match b {
-                        Block::Image { .. } => 0,
-                        _ => serde_json::to_vec(b)
-                            .map(|b| b.len())
-                            .unwrap_or(usize::MAX / 1024),
-                    })
+                    .map(text_size)
                     .sum::<usize>()
                     + m.opaque
                         .as_ref()
@@ -272,4 +282,17 @@ pub fn contains_images(blocks: &[Block]) -> bool {
         Block::ToolResult { blocks, .. } => contains_images(blocks),
         _ => false,
     })
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    #[test]
+    fn nested_images_are_excluded_from_text_context_and_projected_recursively() {
+        let image=Block::Image{mime:"image/png".into(),data:"A".repeat(5*1024*1024)};
+        let mut messages=vec![Message{role:"tool".into(),opaque:None,blocks:vec![Block::ToolResult{call:"c".into(),wire_id:"c".into(),name:"screen".into(),blocks:vec![image],is_error:false}]}];
+        assert!(!bound_context(&mut messages).unwrap());
+        assert!(!serde_json::to_string(&image_view(&messages,false)).unwrap().contains(&"A".repeat(100)));
+        assert!(serde_json::to_string(&messages).unwrap().contains(&"A".repeat(100)));
+    }
 }

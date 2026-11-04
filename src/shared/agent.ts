@@ -1,13 +1,4 @@
-/**
- * Shared agent types exchanged between the main process (which speaks to
- * a native Rust runtime or Pi compatibility adapter) and the renderer HUD.
- *
- * The Stage shape is the one the acceptance spec pins down:
- *   { index, label, status: "running" | "done" | "failed" }
- *
- * Native Rust tools and the Pi compatibility adapter emit one stage per tool
- * call. Both runtimes share the same renderer event contract.
- */
+/** Shared native agent events and renderer tool stages. */
 
 export type StageStatus = 'running' | 'done' | 'failed'
 
@@ -47,6 +38,7 @@ export interface AgentRunRequest {
   sessionId?: string
   userTurnId?: string
   assistantTurnId?: string
+  retry?: boolean
   priorTurnIds?: string[]
   priorTurns?: {
     id: string
@@ -90,6 +82,7 @@ export type AgentRunEvent =
       canRemember?: boolean
       rememberKind?: 'tool' | 'command'
     }
+  | { type: 'approval-expired'; runId: string; approvalId: string }
   | { type: 'done'; runId: string }
   | { type: 'error'; runId: string; message: string }
   /** A bounded, source-labelled native diagnostic. */

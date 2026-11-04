@@ -9,8 +9,8 @@ fn matches(p: &str, s: &str) -> bool {
 }
 pub fn complex(s: &str) -> bool {
     s.contains([
-        ';', '|', '<', '>', '`', '(', ')', '\r', '\n', '$', '&', '\\', '{', '}',
-    ]) || matches(
+        ';', '|', '<', '>', '`', '(', ')', '\r', '\n', '$', '&', '{', '}', '*', '?', '[', ']',
+    ]) || matches(r"~[^/\\\s]", s) || (!cfg!(windows) && s.contains('\\')) || matches(
         r"(?i)^(?:[^\s]+[/\\])?(?:sudo|doas|env|xargs|eval|exec|source|bash|sh|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh|python[0-9.]*|perl|ruby|node|bun|osascript|rundll32|wscript|cscript|invoke-expression|iex|invoke-command)\b",
         s.trim(),
     ) || matches(
@@ -57,14 +57,18 @@ pub fn auto(s: &str) -> bool {
 pub fn safe_project(s: &str) -> bool {
     !complex(s)
         && !destructive(s)
+        && !mutation_options(s)
         && (auto(s)
             || matches(
                 r"^(git\s+(status|diff|log|branch|show|remote|tag|rev-parse|describe|stash\s+list)|cargo\s+(check|test|build|clippy|fmt)|go\s+(test|build|vet)|(npm|pnpm|yarn)\s+(test|run\s+[A-Za-z0-9:_-]+|list|outdated|view)|pytest|vitest|jest|tsc|cat|head|tail|wc|echo|printf|date|top|ps|uptime|which|whereis|uname|sw_vers|df|du|free|lsof)\b",
                 s,
             ))
 }
+pub fn mutation_options(s: &str) -> bool {
+    matches(r"(?i)(?:^|\s)(?:--(?:output|exec-path|git-dir|work-tree|config-env|upload-pack|receive-pack)(?:=|\s|$)|-o(?:\s|=|[^\s])|@|--(?:delete|remove|replace|in-place|write)(?:[=\s]|$))", s)
+}
 pub fn shell_asks(command: &str, mode: &str, cfg: &Value, sensitive: bool) -> bool {
-    if mode == "review" || sensitive || complex(command) || destructive(command) {
+    if mode == "review" || sensitive || complex(command) || destructive(command) || mutation_options(command) {
         return true;
     }
     let remembered = cfg["agentAlwaysAllowedExactCommands"]
@@ -128,6 +132,7 @@ pub fn shell_sensitive(command: &str, cwd: &Path, home: &Path, config: &Path) ->
         tokens.push(token)
     }
     tokens.iter().any(|token| {
+        let token = token.split_once('=').map(|(_,v)|v).unwrap_or(token).trim_start_matches('@');
         let path = if token == "~" {
             home.to_path_buf()
         } else if let Some(rest) = token.strip_prefix("~/") {
@@ -205,6 +210,8 @@ mod tests {
     #[test]
     fn risky_shell_always_precedes_remembered_and_turbo() {
         for command in [
+            "cat ~/.ss?/id_rsa", "head ~/.ss[h]/id_rsa", "cat .e*", "ls ~probeuser/.ssh",
+            "git diff --output=/tmp/mutation", "git show --output=/tmp/.env HEAD", "cat -o /tmp/mutation",
             "rm -rf /",
             "echo $(touch a)",
             "cat .env",

@@ -13,6 +13,7 @@ export function useComposerExtensions(
 ): {
   menu: ReactNode
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean
+  consumeEscape: () => boolean
   activeDescendant?: string
 } {
   const [items, setItems] = useState<ComposerItem[]>([])
@@ -95,6 +96,7 @@ export function useComposerExtensions(
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (!filtered.length) return false
     if (event.key === 'Escape') {
+              event.stopPropagation();
       event.preventDefault()
       setDismissed(true)
       generation.current++
@@ -114,6 +116,10 @@ export function useComposerExtensions(
   }
   return {
     onKeyDown,
+    consumeEscape: () => {
+      if (!filtered.length && !prompt) return false
+      setDismissed(true); setPrompt(null); generation.current++; return true
+    },
     activeDescendant: filtered.length ? `ai-command-${index}` : undefined,
     menu: (
       <>
@@ -152,6 +158,7 @@ export function useComposerExtensions(
                   onChange={(e) => setArguments((a) => ({ ...a, [arg.name]: e.target.value }))}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') {
+                      e.stopPropagation()
                       e.preventDefault()
                       generation.current++
                       setPrompt(null)

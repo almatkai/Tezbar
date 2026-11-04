@@ -30,8 +30,7 @@ export function ProjectExtensionNotice({
         type="button"
         className="px-1 text-ink-2"
         onClick={() => {
-          sessionStorage.setItem('tezbar-ai-extension-review', cwd)
-          onReview()
+          void request('review-project', cwd).then(onReview)
         }}
       >
         Review

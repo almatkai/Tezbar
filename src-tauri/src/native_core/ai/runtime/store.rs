@@ -9,6 +9,24 @@ use std::{
     path::{Path, PathBuf},
 };
 static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static REVISIONS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String,u64>>> = std::sync::OnceLock::new();
+fn revisions() -> &'static std::sync::Mutex<std::collections::HashMap<String,u64>> { REVISIONS.get_or_init(Default::default) }
+fn revision_keys(root: &Path, session: &str, turn: &str) -> [String;3] {
+    [root.join("llm/transcripts").to_string_lossy().into_owned(), folder(root,session).to_string_lossy().into_owned(), folder(root,session).join(key(turn)).to_string_lossy().into_owned()]
+}
+pub fn generation(root: &Path, session: &str, turn: &str) -> Vec<u64> {
+    let _guard = LOCK.lock().unwrap();
+    let revisions = revisions().lock().unwrap();
+    revision_keys(root,session,turn).iter().map(|k| *revisions.get(k).unwrap_or(&0)).collect()
+}
+pub fn save_at(root: &Path, session: &str, turn: &str, messages: &[Message], expected: &[u64]) -> Result<(),String> {
+    let _guard = LOCK.lock().map_err(|_| "Native transcript store lock failed")?;
+    let revisions = revisions().lock().map_err(err)?;
+    let current: Vec<_> = revision_keys(root,session,turn).iter().map(|k| *revisions.get(k).unwrap_or(&0)).collect();
+    if current != expected { return Err("Conversation was deleted. This run cannot save history.".into()); }
+    drop(revisions);
+    save_unlocked(root,session,turn,messages)
+}
 fn key(id: &str) -> String {
     format!("{:x}", Sha256::digest(id.as_bytes()))
 }
@@ -35,6 +53,9 @@ pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Res
     let _guard = LOCK
         .lock()
         .map_err(|_| "Native transcript store lock failed")?;
+    save_unlocked(root,session,turn,messages)
+}
+fn save_unlocked(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
     let dir = folder(root, session);
     let blobs = dir.join("blobs");
     let mut messages = messages.to_vec();
@@ -175,6 +196,10 @@ pub fn delete(root: &Path, session: Option<&str>, turn: Option<&str>) -> Result<
     let dir = session
         .map(|s| folder(root, s))
         .unwrap_or_else(|| root.join("llm/transcripts"));
+    let revision_key = if let (Some(session),Some(turn)) = (session,turn) { folder(root,session).join(key(turn)) } else { dir.clone() };
+    let mut revisions = revisions().lock().map_err(err)?;
+    *revisions.entry(revision_key.to_string_lossy().into_owned()).or_default() += 1;
+    drop(revisions);
     if !dir.exists() {
         return Ok(());
     }

@@ -506,7 +506,8 @@ async fn native_output_is_unicode_bounded_and_reported_to_model_and_stage() {
     assert!(stage["stage"]["durationMs"].is_number());
     request(&mut http).await;
     let r = request(&mut http).await;
-    assert_eq!(s(&r["messages"][3]["content"]).chars().count(), 9000);
+    assert!(s(&r["messages"][3]["content"]).contains("Exit status: 0"));
+    assert_eq!(s(&r["messages"][3]["content"]).matches("🦀").count(), 9000);
     next_event(&mut events, "done").await;
     core.shutdown().await;
 }
@@ -587,7 +588,7 @@ async fn native_review_applies_to_reads_and_always_decision_never_persists_file_
     assert_eq!(a["canRemember"], false);
     approve(&core, &a, "once").await;
     let b = next_event(&mut events, "approval").await;
-    approve(&core, &b, "always").await;
+    assert!(core.handle("agent:approve", &[json!({"runId":b["runId"],"approvalId":b["approvalId"],"decision":"always"})]).await.unwrap().unwrap_err().contains("requires review"));
     next_event(&mut events, "done").await;
     assert!(core
         .read_config()
@@ -748,4 +749,50 @@ async fn native_429_is_reported_without_replay_and_invalid_urls_are_configuratio
     assert!(s(&next_event(&mut events, "error").await["message"]).contains("Native configuration"));
     next_event(&mut events, "done").await;
     core.shutdown().await;
+}
+
+#[tokio::test]
+async fn shell_failure_stderr_success_and_timeout_keep_both_streams() {
+    let (_dir,core,mut events)=fixture();
+    let commands=if cfg!(windows) { vec![("Write-Output 'failure stdout'; [Console]::Error.WriteLine('failure stderr'); exit 7",120),("Write-Output 'success stdout'; [Console]::Error.WriteLine('success stderr')",120),("Write-Output 'partial stdout'; [Console]::Error.WriteLine('partial stderr'); Start-Sleep 10",1)] } else {vec![("printf 'failure stdout'; printf 'failure stderr' >&2; exit 7",120),("printf 'success stdout'; printf 'success stderr' >&2",120),("printf 'partial stdout'; printf 'partial stderr' >&2; sleep 10",1)]};
+    let mut http=server(commands.iter().flat_map(|(c,t)| vec![Reply::sse(calls(vec![call("capture","bash",json!({"command":c,"timeoutSeconds":t}))])),Reply::sse(text("done"))]).collect()).await;
+    configure(&core,&http.url,json!({"agentApprovalMode":"turbo"})).await;
+    for (i,_) in commands.iter().enumerate() {
+        start(&core,&format!("agent-capture-{i}"),&core.inner.ctx.paths.home_dir).await;
+        let approval=next_event(&mut events,"approval").await;
+        approve(&core,&approval,"once").await;
+        next_event(&mut events,"answer").await;next_event(&mut events,"done").await;
+        request(&mut http).await;
+        let wire=request(&mut http).await.to_string();
+        let label=["failure","success","partial"][i];
+        assert!(wire.contains(&format!("{label} stdout")),"{wire}");
+        assert!(wire.contains(&format!("{label} stderr")),"{wire}");
+        assert!(wire.contains(if i==0 {"Exit status: 7"}else if i==1 {"Exit status: 0"}else {"timed out"}),"{wire}");
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn active_delete_and_clear_cannot_resurrect_transcript_files() {
+    for clear in [false,true] {
+        let (_dir,core,mut events)=fixture();
+        let mut http=server(vec![Reply::hold(false,String::new())]).await;
+        configure(&core,&http.url,json!({})).await;
+        core.handle("agent:run",&[json!({"runId":"agent-delete-live","task":"hold","sessionId":"delete-live","userTurnId":"user","assistantTurnId":"answer"})]).await.unwrap().unwrap();
+        request(&mut http).await;
+        core.handle(if clear {"chat:clear"}else{"chat:delete"},&[json!("delete-live")]).await.unwrap().unwrap();
+        next_event(&mut events,"done").await;
+        for id in ["user","answer"] { assert!(runtime::store::load(&core.inner.ctx.paths.data_dir,"delete-live",id).unwrap().is_none()); }
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn missing_profile_fails_closed_before_provider_request() {
+    let (_dir,core,mut events)=fixture();let mut http=server(vec![Reply::sse(text("must not answer"))]).await;
+    configure(&core,&http.url,json!({})).await;
+    core.handle("agent:run",&[json!({"runId":"agent-missing-profile","task":"fixture","agentProfileId":"removed::reviewer"})]).await.unwrap().unwrap();
+    assert!(next_event(&mut events,"error").await.to_string().contains("profile is unavailable"));
+    next_event(&mut events,"done").await;
+    assert!(http.requests.try_recv().is_err());core.shutdown().await;
 }

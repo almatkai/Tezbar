@@ -109,6 +109,7 @@ struct Inner {
 struct State {
     agent: Option<Run>,
     agents: HashMap<String, Run>,
+    run_sessions: HashMap<String, String>,
     answer: Option<Run>,
     approvals: HashMap<String, Approval>,
     stage_indices: HashMap<String, usize>,
@@ -301,6 +302,7 @@ impl AiCore {
             }
             if take {
                 state.agents.remove(id);
+            state.run_sessions.remove(id);
                 state.indexed_attempts.remove(id);
             }
             state.approvals.retain(|_, a| a.run_id != id);
@@ -332,6 +334,7 @@ impl AiCore {
         if let Some(run) = state.agents.remove(id) {
             run.cancel.cancel();
         }
+        state.run_sessions.remove(id);
         state.clocks.remove(id);
         state.stage_indices.remove(id);
         state.indexed_attempts.remove(id);
@@ -370,7 +373,7 @@ impl AiCore {
         images: Vec<Value>,
         cwd: Option<String>,
         requested: Option<String>,
-        options: AgentOptions,
+        mut options: AgentOptions,
     ) -> CoreResult {
         let id = requested.unwrap_or_else(|| {
             format!(
@@ -379,6 +382,13 @@ impl AiCore {
                 uuid::Uuid::new_v4()
             )
         });
+        if let Some(session) = options.history["sessionId"].as_str() {
+            let data = &self.inner.ctx.paths.data_dir;
+            let user = runtime::store::generation(data,session,s(&options.history["userTurnId"]));
+            let assistant = runtime::store::generation(data,session,s(&options.history["assistantTurnId"]));
+            options.history["_userGeneration"] = json!(user);
+            options.history["_assistantGeneration"] = json!(assistant);
+        }
         let cancel = Cancel::new();
         let clock = runtime::clock::Clock::new();
         let run = Run {
@@ -399,6 +409,7 @@ impl AiCore {
                     emitted: false,
                 },
             );
+            if let Some(session) = options.history["sessionId"].as_str() { state.run_sessions.insert(id.clone(),session.into()); }
             state.agent = Some(run);
             state.clocks.insert(id.clone(), clock.clone());
         }
@@ -414,6 +425,7 @@ impl AiCore {
                 let cwd_path=tokio::fs::canonicalize(cwd_path).await.map_err(err)?;
                 core.revoke_changed_projects(&cwd_path).await?;
                 let raw=core.extension_config(core.read_config().await?,Some(&cwd_path)).await?;
+                config::validate_selection(&raw,Some("chat"),None)?;
                 let mut cfg = config::selected(&raw,Some("chat"),None);
                 cfg["sessionId"] = options.history["sessionId"].clone();
                 cfg["runId"]=json!(run);
@@ -750,7 +762,14 @@ impl AiCore {
                 .await
             }
             "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
-            | "chat:delete" | "chat:clear" => chat::handle(&self.inner.ctx, channel, args).await,
+            | "chat:delete" | "chat:clear" => {
+                if matches!(channel,"chat:delete"|"chat:clear"|"chat:delete-turn") {
+                    let session = if channel=="chat:delete-turn" { a["sessionId"].as_str() } else { a.as_str() };
+                    let state=self.inner.state.lock().unwrap();
+                    for (id,run) in &state.agents { if channel=="chat:clear" || state.run_sessions.get(id).map(String::as_str)==session { run.cancel.cancel(); } }
+                }
+                chat::handle(&self.inner.ctx, channel, args).await
+            },
             "chat:generate-meta" => {
                 let id = a["id"].as_str().ok_or("Session id must be a string")?;
                 let prompt = a["prompt"].as_str().unwrap_or("").trim();
