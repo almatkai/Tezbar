@@ -66,15 +66,21 @@ export function AiExtensionsSection(): JSX.Element {
   const [removing, setRemoving] = useState<string | null>(null)
   const [allTools, setAllTools] = useState<Record<string, boolean>>({})
   const [logs, setLogs] = useState<Record<string, string[] | undefined>>({})
+  const loadRevision = useRef(0)
+  const scrolledReview = useRef<string>()
   const load = useCallback(async () => {
+    const revision = ++loadRevision.current
     const next = await request<AiExtensionsState>('list')
+    if (revision !== loadRevision.current) return
     setState(next)
     if (!instructionsDirty.current) setInstructionsDraft(next.globalInstructions)
   }, [])
   useEffect(() => {
+    if (!state.projectReviewId || scrolledReview.current === state.projectReviewId) return
+    scrolledReview.current = state.projectReviewId
     if (state.project)
       document.getElementById('ai-extensions-section')?.scrollIntoView?.({ block: 'start' })
-  }, [state.project])
+  }, [state.projectReviewId, state.project])
   useEffect(() => {
     void load().catch((e) => setError(String(e)))
     void window.tezbar
@@ -629,6 +635,17 @@ export function AiExtensionsSection(): JSX.Element {
             </Button>
           </div>
           <p className="text-[11px] text-ink-3">{state.project.folder}</p>
+          <Button
+            variant="quiet"
+            onClick={() =>
+              void run('project', async () => {
+                await request('dismiss-project-review', state.projectReviewId)
+                setPanel(null)
+              })
+            }
+          >
+            {state.project.error ? 'Dismiss' : 'Keep disabled'}
+          </Button>
           {panel === 'project' &&
             (state.project.error ? (
               <Message tone="error">{state.project.error}</Message>
@@ -659,7 +676,8 @@ export function AiExtensionsSection(): JSX.Element {
                       await request(
                         'trust-project',
                         state.project!.folder,
-                        state.project!.entryHash
+                        state.project!.entryHash,
+                        state.projectReviewId
                       )
                       setPanel(null)
                     })

@@ -26,6 +26,7 @@ pub const CHANNELS: &[&str] = &[
     "core:platform:reveal-file",
     "core:platform:selected-text",
     "core:platform:screenshot",
+    "core:platform:ocr-images",
     "core:platform:paste-text",
     "core:platform:paste",
     "core:platform:clipboard-write",
@@ -365,6 +366,10 @@ impl PlatformCore {
                 Ok(json!({ "ok": true }))
             }
             "core:platform:selected-text" => selected_text().await.map(Value::String),
+            "core:platform:ocr-images" => {
+                let images = value.as_array().ok_or("Invalid OCR images")?.clone();
+                super::ai::ocr_images_local(&self.ctx.paths, &images).await.map(Value::String)
+            }
             "core:platform:screenshot" => {
                 let window = self
                     .app()?

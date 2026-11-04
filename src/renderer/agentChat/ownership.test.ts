@@ -770,3 +770,94 @@ it('selects a profile before the first turn and labels remembered extension tool
     )
   ).toBe(true)
 })
+
+describe('deletion during preparation', () => {
+  it('delete during send preparation must not start a native run for the deleted session', async () => {
+    await render({ kind: 'resume', sessionId: 'B' })
+    const config = deferred<LlmConfigRecord>()
+    api.getLlmConfig.mockImplementationOnce(() => config.promise)
+    const del = deferred<{ ok: boolean }>()
+    api.chatDelete.mockImplementationOnce(async (id: string) => {
+      const r = await del.promise
+      store.delete(id)
+      return r
+    })
+    await send('Private follow-up')
+    await click('[aria-label="Chat history"]')
+    await click('[aria-label="Delete Saved B"]')
+    // Config resolves while native deletion is still in flight.
+    await act(async () => config.resolve({ provider: 'ollama', model: 'llama3.2' }))
+    await tick()
+    del.resolve({ ok: true })
+    await tick(100)
+    expect(runs.filter((r) => r.sessionId === 'B')).toHaveLength(0)
+  })
+  it('delete during retry preparation must not start a native retry for the deleted session', async () => {
+    store.get('B')!.turns[1]!.error = 'Mock failure'
+    await render({ kind: 'resume', sessionId: 'B' })
+    const config = deferred<LlmConfigRecord>()
+    api.getLlmConfig.mockImplementationOnce(() => config.promise)
+    const del = deferred<{ ok: boolean }>()
+    api.chatDelete.mockImplementationOnce(async (id: string) => {
+      const r = await del.promise
+      store.delete(id)
+      return r
+    })
+    const retry = [...container.querySelectorAll('button')].find(
+      (b) =>
+        /Retry|Try again/.test(b.textContent || '') ||
+        /Retry/.test(b.getAttribute('aria-label') || '')
+    )
+    expect(retry).toBeTruthy()
+    await act(async () => retry!.click())
+    await tick()
+    await click('[aria-label="Chat history"]')
+    await click('[aria-label="Delete Saved B"]')
+    await act(async () => config.resolve({ provider: 'ollama', model: 'llama3.2' }))
+    await tick()
+    del.resolve({ ok: true })
+    await tick(100)
+    expect(runs.filter((r) => r.sessionId === 'B')).toHaveLength(0)
+  })
+})
+
+describe('failed delete recovery during preparation', () => {
+  it('invalidates the old preparation and allows a fresh send after failed deletion', async () => {
+    await render({ kind: 'resume', sessionId: 'B' })
+    const config = deferred<LlmConfigRecord>()
+    api.getLlmConfig.mockImplementationOnce(() => config.promise)
+    api.chatDelete.mockResolvedValueOnce({ ok: false })
+    await send('Abandoned preparation')
+    await click('[aria-label="Chat history"]')
+    await click('[aria-label="Delete Saved B"]')
+    config.resolve({ provider: 'ollama', model: 'llama3.2' })
+    await tick()
+    expect(runs).toHaveLength(0)
+    expect(store.has('B')).toBe(true)
+    await render({ kind: 'resume', sessionId: 'B', nonce: 'recover-preparation' })
+    await send('Fresh recovered message')
+    expect(runs).toHaveLength(1)
+    expect(runs[0]?.task).toBe('Fresh recovered message')
+    expect(runs[0]?.sessionId).toBe('B')
+  })
+})
+
+describe('deletion during user persistence', () => {
+  it('does not launch after an in-flight chat append completes during deletion', async () => {
+    await render({ kind: 'resume', sessionId: 'B' })
+    const pending = deferred<void>()
+    api.chatAppend.mockImplementationOnce(async (payload) => {
+      await pending.promise
+      return append(payload)
+    })
+    await send('Preparing SQLite turn')
+    await click('[aria-label="Chat history"]')
+    await click('[aria-label="Delete Saved B"]')
+    expect(api.chatDelete).not.toHaveBeenCalled()
+    pending.resolve()
+    await tick(100)
+    expect(api.chatDelete).toHaveBeenCalledWith('B')
+    expect(runs).toHaveLength(0)
+    expect(store.has('B')).toBe(false)
+  })
+})

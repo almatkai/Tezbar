@@ -922,3 +922,214 @@ async fn manual_retry_keeps_actual_completed_shell_effect_once() {
     );
     core.shutdown().await;
 }
+
+#[tokio::test]
+async fn deleted_sessions_refuse_send_and_retry_before_any_work_even_after_restart() {
+    for clear in [false, true] {
+        let (_dir, core, _events) = fixture();
+        let mut http = server(vec![Reply::sse(text("must not run"))]).await;
+        configure(&core, &http.url, json!({})).await;
+        let payload = json!({"session":{"id":"gone","title":"Private","createdAt":1,"updatedAt":2},"turn":{"id":"u1","role":"user","text":"private","createdAt":1}});
+        assert_eq!(
+            core.handle("chat:append", &[payload])
+                .await
+                .unwrap()
+                .unwrap()["ok"],
+            true
+        );
+        assert_eq!(
+            core.handle(
+                if clear { "chat:clear" } else { "chat:delete" },
+                &[json!("gone")]
+            )
+            .await
+            .unwrap()
+            .unwrap()["ok"],
+            true
+        );
+        // A fresh core has no in-memory generations or run registry. The
+        // persistent tombstone must still refuse before retry's pre-run write.
+        let restarted = AiCore::new(core.inner.ctx.clone());
+        for retry in [false, true] {
+            let result = restarted.handle("agent:run", &[json!({"runId":"agent-after-delete","task":"private follow-up","sessionId":"gone","userTurnId":"u1","assistantTurnId":"a1","retry":retry})]).await.unwrap().unwrap();
+            assert_eq!(result["ok"], false, "{result}");
+            assert!(s(&result["error"]).contains("deleted"));
+            assert!(restarted.inner.state.lock().unwrap().agents.is_empty());
+            for id in ["u1", "a1"] {
+                assert!(
+                    runtime::store::load(&core.inner.ctx.paths.data_dir, "gone", id)
+                        .unwrap()
+                        .is_none()
+                );
+            }
+        }
+        assert!(http.requests.try_recv().is_err());
+        restarted.shutdown().await;
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn delete_or_clear_between_registration_and_first_image_save_cannot_resurrect() {
+    for clear in [false, true] {
+        let (_dir, core, mut events) = fixture();
+        let mut http = server(vec![Reply::sse(text("must not run"))]).await;
+        configure(&core, &http.url, json!({})).await;
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let barrier = entered.clone();
+        core.inner
+            .ctx
+            .set_router(Arc::new(move |route, _| {
+                assert_eq!(route, "core:platform:ocr-images");
+                barrier.notify_one();
+                Box::pin(std::future::pending())
+            }))
+            .unwrap();
+        let waiting = entered.notified();
+        core.handle("agent:run", &[json!({"runId":"agent-before-save","task":"image","sessionId":"pending","userTurnId":"u","assistantTurnId":"a","images":[{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII="}]})]).await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_secs(5), waiting)
+            .await
+            .unwrap();
+        core.handle(
+            if clear { "chat:clear" } else { "chat:delete" },
+            &[json!("pending")],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        next_event(&mut events, "done").await;
+        for id in ["u", "a"] {
+            assert!(
+                runtime::store::load(&core.inner.ctx.paths.data_dir, "pending", id)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        assert!(http.requests.try_recv().is_err());
+        // clear must also tombstone a registered session absent from SQLite.
+        let late = core
+            .handle("agent:run", &[json!({"task":"late","sessionId":"pending"})])
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(late["ok"], false);
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn nonvision_ocr_uses_canonical_images_on_send_and_reopened_retry_only_in_wire_view() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server((0..5).map(|_| Reply::sse(text("answer"))).collect()).await;
+    configure(&core, &http.url, json!({})).await;
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let captured = seen.clone();
+    core.inner
+        .ctx
+        .set_router(Arc::new(move |route, args| {
+            assert_eq!(route, "core:platform:ocr-images");
+            captured.lock().unwrap().push(args);
+            Box::pin(async { Ok(json!("OCR fixture: invoice total 42")) })
+        }))
+        .unwrap();
+    for (index, images, retry, user) in [
+        (
+            0,
+            json!([{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII="}]),
+            false,
+            "u",
+        ),
+        (
+            1,
+            json!([{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII="}]),
+            true,
+            "u",
+        ),
+        (2, json!([]), true, "u"), // reopened renderer has no image bytes
+        (3, json!([]), false, "new-task"),
+    ] {
+        core.handle("agent:run", &[json!({"runId":format!("agent-ocr-{index}"),"task":"read invoice","sessionId":"ocr","userTurnId":user,"assistantTurnId":"a","images":images,"retry":retry})]).await.unwrap().unwrap();
+        next_event(&mut events, "done").await;
+        let body = request(&mut http).await.to_string();
+        assert_eq!(
+            body.contains("OCR fixture: invoice total 42"),
+            index != 3,
+            "{body}"
+        );
+        let stored = runtime::store::load(&core.inner.ctx.paths.data_dir, "ocr", "u")
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(&stored[0].blocks[1],runtime::transcript::Block::Image{data,..} if data=="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII=")
+        );
+        assert!(!serde_json::to_string(&stored)
+            .unwrap()
+            .contains("OCR fixture"));
+    }
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    for args in seen.lock().unwrap().iter() {
+        assert_eq!(args[0][0]["data"],"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII=");
+    }
+    // Lost blobs are explicit placeholders and never trigger OCR with fake bytes.
+    let transcripts = core.inner.ctx.paths.data_dir.join("llm/transcripts");
+    for folder in std::fs::read_dir(transcripts).unwrap() {
+        let blobs = folder.unwrap().path().join("blobs");
+        if blobs.exists() {
+            std::fs::remove_dir_all(blobs).unwrap();
+        }
+    }
+    assert!(runtime::transcript::missing_images(
+        &runtime::store::load(&core.inner.ctx.paths.data_dir, "ocr", "u")
+            .unwrap()
+            .unwrap()
+    ));
+    core.handle("agent:run", &[json!({"runId":"agent-ocr-missing","task":"read invoice","sessionId":"ocr","userTurnId":"u","assistantTurnId":"a","retry":true})]).await.unwrap().unwrap();
+    next_event(&mut events, "done").await;
+    let missing_body = request(&mut http).await.to_string();
+    assert!(!missing_body.contains("OCR fixture"));
+    assert!(missing_body.contains("image"));
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn verbose_failed_shell_summary_reaches_actual_model_tool_result() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let command = if cfg!(windows) {
+        "[Console]::WriteLine('stdout beginning'); [Console]::Error.WriteLine('stderr beginning'); for($i=0;$i -lt 7000;$i++){[Console]::WriteLine('passing 1234567890'); [Console]::Error.WriteLine('diagnostic 1234567890')}; [Console]::WriteLine('FAILED summary'); [Console]::Error.WriteLine('final error'); exit 7"
+    } else {
+        "printf 'stdout beginning\\n'; printf 'stderr beginning\\n' >&2; i=0; while [ $i -lt 7000 ]; do printf 'passing 1234567890\\n'; printf 'diagnostic 1234567890\\n' >&2; i=$((i+1)); done; printf 'FAILED summary\\n'; printf 'final error\\n' >&2; exit 7"
+    };
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "verbose",
+            "bash",
+            json!({"command":command}),
+        )])),
+        Reply::sse(text("test failed")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({"agentApprovalMode":"review"})).await;
+    start(&core, "agent-verbose", &root).await;
+    let approval = next_event(&mut events, "approval").await;
+    approve(&core, &approval, "once").await;
+    next_event(&mut events, "done").await;
+    request(&mut http).await;
+    let body = request(&mut http).await;
+    let messages = body["messages"].as_array().unwrap();
+    let result = messages.iter().find(|m| m["role"] == "tool").unwrap();
+    let text = s(&result["content"]);
+    for marker in [
+        "stdout beginning",
+        "stderr beginning",
+        "FAILED summary",
+        "final error",
+        "bytes omitted",
+        "Exit status: 7",
+    ] {
+        assert!(text.contains(marker), "Missing {marker}");
+    }
+    assert!(text.len() < 64 * 1024);
+    core.shutdown().await;
+}

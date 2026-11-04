@@ -79,6 +79,7 @@ export type AiExtension = {
 export type AiExtensionsState = {
   canResetSecrets?: boolean
   defaultWorkingFolder?: string
+  projectReviewId?: string
   project?: {
     folder: string
     path: string

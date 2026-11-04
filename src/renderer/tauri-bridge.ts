@@ -77,7 +77,7 @@ export function initTauriBridge(): void {
   const listenersMap = new Map<string, Set<Function>>()
   const eventListeners = new Map<string, Promise<any>>()
   const eventBacklog = new Map<string, unknown[]>()
-  const persistentChannels = new Set(['agent:event', 'terminal:exit'])
+  const persistentChannels = new Set(['agent:event', 'terminal:exit', 'settings-close-requested'])
 
   const ensureEventListener = (channel: string): Promise<any> => {
     const existing = eventListeners.get(channel)
@@ -136,12 +136,39 @@ export function initTauriBridge(): void {
     console.error('[Tauri bridge] Failed to listen for terminal exit events:', error)
   })
 
+  // Subscribe before Settings mounts; retain an early native close request.
+  if (window.__TEZBAR_WINDOW_LABEL__ === 'settings')
+    void ensureEventListener('settings-close-requested')
+
+  // Also drain immediate config writes outside the debounced provider editor.
+  const configWrites = new Set<Promise<any>>()
   const tezbar: TauriRaymesApi = {
     hide: () => invoke('hide_window'),
     show: () => invoke('show_window'),
     openSettingsWindow: () => invoke('open_settings_window_cmd'),
     hideLauncherForSettings: () => invoke('hide_launcher_for_settings'),
     closeCurrentWindow: () => invoke('close_current_window'),
+    onWindowCloseRequested: (beforeClose) => {
+      let closing = false
+      return setupEventListener('settings-close-requested', async () => {
+        if (closing) return
+        closing = true
+        try {
+          for (;;) {
+            await beforeClose()
+            const pending = [...configWrites]
+            if (!pending.length) break
+            await Promise.all(pending)
+          }
+          await invoke('finish_settings_close')
+        } catch (error) {
+          // Keep the renderer and its error/draft visible for recovery.
+          console.error('[Settings] Close was blocked:', error)
+        } finally {
+          closing = false
+        }
+      })
+    },
     query: (text: string) => callBackend('query', text),
     cancel: () => callBackend('cancel'),
     getExtensions: () => callBackend('get-extensions'),
@@ -229,7 +256,15 @@ export function initTauriBridge(): void {
     setSelectedVoiceModel: (modelId: any) => callBackend('voice:model:set-selected', { modelId }),
 
     getLlmConfig: (cwd?: string) => callBackend('llm-config-get', cwd),
-    setLlmConfig: (patch: any) => callBackend('llm-config-set', patch),
+    setLlmConfig: (patch: any) => {
+      const pending = callBackend('llm-config-set', patch)
+      configWrites.add(pending)
+      void pending.then(
+        () => configWrites.delete(pending),
+        () => configWrites.delete(pending)
+      )
+      return pending
+    },
     getLlmProviderStatuses: () => callBackend('llm-provider-statuses'),
     listPiExtensions: () => callBackend('pi-extensions:list'),
     listLlmModels: (providerId: any, baseURLOverride?: string, apiKeyOverride?: string) =>

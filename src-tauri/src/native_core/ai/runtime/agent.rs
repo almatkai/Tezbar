@@ -137,18 +137,6 @@ impl AiCore {
                 data: s(&image["data"]).into(),
             });
         }
-        let mut current_ocr = None;
-        if !vision && !images.is_empty() {
-            let text = self.ocr_images(&images, cancel).await?;
-            if text.trim().is_empty() {
-                return Err("The selected model cannot read images. Choose a vision model or remove the attachment.".into());
-            }
-            current_ocr = Some(text);
-        }
-        if vision {
-            let route = self.native_route(cfg, &[user.clone()]).await?;
-            limits::validate_images(&route.origin.protocol, &[user.clone()])?;
-        }
         if let (Some(session), Some(turn)) = (
             options["sessionId"].as_str(),
             options["userTurnId"].as_str(),
@@ -163,6 +151,28 @@ impl AiCore {
                     }
                 }
             }
+        }
+        if cancel.is_cancelled() { return Err("Operation cancelled".into()); }
+        let effective_images = user.blocks.iter().filter_map(|b| match b {
+            Block::Image {mime, data} => Some(json!({"mimeType":mime,"data":data})), _ => None,
+        }).collect::<Vec<_>>();
+        let mut current_ocr = None;
+        if !vision && !effective_images.is_empty() {
+            let text = self.ocr_images(&effective_images, cancel).await?;
+            if text.trim().is_empty() {
+                return Err("The selected model cannot read images. Choose a vision model or remove the attachment.".into());
+            }
+            current_ocr = Some(text);
+        }
+        if vision {
+            let route = self.native_route(cfg, &[user.clone()]).await?;
+            limits::validate_images(&route.origin.protocol, &[user.clone()])?;
+        }
+        if cancel.is_cancelled() { return Err("Operation cancelled".into()); }
+        if let (Some(session), Some(turn)) = (options["sessionId"].as_str(), options["userTurnId"].as_str()) {
+            let data = self.inner.ctx.paths.data_dir.clone();
+            let session = session.to_string();
+            let turn = turn.to_string();
             let original = user.clone();
             let generation: Vec<u64> =
                 serde_json::from_value(options["_userGeneration"].clone()).map_err(err)?;

@@ -203,85 +203,92 @@ impl AiCore {
         images: &[Value],
         cancel: &Cancel,
     ) -> Result<String, String> {
-        if !cfg!(target_os = "macos") {
-            return Ok(String::new());
-        }
-        let mut candidates = vec![
-            self.inner
-                .ctx
-                .paths
-                .resource_dir
-                .join("native/screenocr/screenocr-helper"),
-            self.inner
-                .ctx
-                .paths
-                .resource_dir
-                .join("app.asar.unpacked/native/screenocr/screenocr-helper"),
-        ];
-        if let Some(path) = std::env::var_os("SCREENOCR_HELPER_PATH") {
-            candidates.insert(0, path.into());
-        }
-        if cfg!(debug_assertions) {
-            candidates.push(
-                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("../native/screenocr/screenocr-helper"),
-            );
-        }
-        let mut helper = None;
-        for candidate in candidates {
-            if tokio::fs::try_exists(&candidate).await.unwrap_or(false) {
-                helper = Some(candidate);
-                break;
+        tokio::select! { biased;
+            _ = cancel.cancelled() => Err("Operation cancelled".into()),
+            result = self.inner.ctx.request("core:platform:ocr-images", vec![json!(images)]) => {
+                result?.as_str().map(str::to_owned).ok_or("Image text extraction returned invalid text".into())
             }
         }
-        let Some(helper) = helper else {
-            return Ok(String::new());
-        };
-        let root = self.inner.ctx.paths.temp_dir.clone();
-        let temp = tokio::task::spawn_blocking(move || {
-            tempfile::Builder::new()
-                .prefix("tezbar-agent-image-")
-                .tempdir_in(root)
-                .map_err(err)
-        })
-        .await
-        .map_err(err)??;
-        let mut texts = Vec::new();
-        for (i, image) in images.iter().enumerate() {
-            let ext = match s(&image["mimeType"]) {
-                "image/jpeg" => "jpg",
-                "image/webp" => "webp",
-                _ => "png",
-            };
-            let path = temp.path().join(format!("attachment-{i}.{ext}"));
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(s(&image["data"]))
-                .map_err(err)?;
-            tokio::fs::write(&path, bytes).await.map_err(err)?;
-            let args=json!({"imagePath":path,"fast":false,"languageCorrection":true,"ignoreLineBreaks":false}).to_string();
-            let output = process::output(
-                process::command(&helper).args(["recognize-text", &args]),
-                Duration::from_secs(45),
-                cancel,
-            )
-            .await?;
-            let v: Value = serde_json::from_str(output.trim()).map_err(err)?;
-            if v["ok"] != true {
-                return Err(v["error"]
-                    .as_str()
-                    .unwrap_or("Local screen text extraction failed")
-                    .into());
-            }
-            if !s(&v["value"]).trim().is_empty() {
-                texts.push(s(&v["value"]).trim().to_string());
-            }
-        }
-        let text = cut(&texts.join("\n\n"), 40000);
-        tokio::task::spawn_blocking(move || drop(temp))
-            .await
-            .map_err(err)?;
-        Ok(text)
     }
+}
+pub(crate) async fn ocr_images_local(
+    paths: &common::CorePaths,
+    images: &[Value],
+) -> Result<String, String> {
+    let images = normalize_images(images)?;
+    let cancel = &Cancel::new();
+    if !cfg!(target_os = "macos") {
+        return Ok(String::new());
+    }
+    let mut candidates = vec![
+        paths.resource_dir.join("native/screenocr/screenocr-helper"),
+        paths
+            .resource_dir
+            .join("app.asar.unpacked/native/screenocr/screenocr-helper"),
+    ];
+    if let Some(path) = std::env::var_os("SCREENOCR_HELPER_PATH") {
+        candidates.insert(0, path.into());
+    }
+    if cfg!(debug_assertions) {
+        candidates.push(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../native/screenocr/screenocr-helper"),
+        );
+    }
+    let mut helper = None;
+    for candidate in candidates {
+        if tokio::fs::try_exists(&candidate).await.unwrap_or(false) {
+            helper = Some(candidate);
+            break;
+        }
+    }
+    let Some(helper) = helper else {
+        return Ok(String::new());
+    };
+    let root = paths.temp_dir.clone();
+    let temp = tokio::task::spawn_blocking(move || {
+        tempfile::Builder::new()
+            .prefix("tezbar-agent-image-")
+            .tempdir_in(root)
+            .map_err(err)
+    })
+    .await
+    .map_err(err)??;
+    let mut texts = Vec::new();
+    for (i, image) in images.iter().enumerate() {
+        let ext = match s(&image["mimeType"]) {
+            "image/jpeg" => "jpg",
+            "image/webp" => "webp",
+            _ => "png",
+        };
+        let path = temp.path().join(format!("attachment-{i}.{ext}"));
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(s(&image["data"]))
+            .map_err(err)?;
+        tokio::fs::write(&path, bytes).await.map_err(err)?;
+        let args=json!({"imagePath":path,"fast":false,"languageCorrection":true,"ignoreLineBreaks":false}).to_string();
+        let output = process::output(
+            process::command(&helper).args(["recognize-text", &args]),
+            Duration::from_secs(45),
+            cancel,
+        )
+        .await?;
+        let v: Value = serde_json::from_str(output.trim()).map_err(err)?;
+        if v["ok"] != true {
+            return Err(v["error"]
+                .as_str()
+                .unwrap_or("Local screen text extraction failed")
+                .into());
+        }
+        if !s(&v["value"]).trim().is_empty() {
+            texts.push(s(&v["value"]).trim().to_string());
+        }
+    }
+    let text = cut(&texts.join("\n\n"), 40000);
+    tokio::task::spawn_blocking(move || drop(temp))
+        .await
+        .map_err(err)?;
+    Ok(text)
 }
 pub fn normalize_images(images: &[Value]) -> Result<Vec<Value>, String> {
     if images.len() > 4 {

@@ -29,7 +29,6 @@ import {
   type AiProviderModel,
   type CustomAiProvider,
   type LlmConfigRecord,
-  type LlmTask,
   type ProviderId,
 } from '../shared/llmConfig'
 import type { VoiceModel, VoiceModelId } from '../shared/voice'
@@ -672,12 +671,6 @@ export default function SettingsView({
   const [newProviderName, setNewProviderName] = useState('')
   const [newProviderProtocol, setNewProviderProtocol] = useState<AiProtocol>('openai-chat')
   const [newProviderBaseURL, setNewProviderBaseURL] = useState('')
-  const [aiTaskProviderOverrides, setAiTaskProviderOverrides] = useState<
-    Partial<Record<LlmTask, ProviderId>>
-  >({})
-  const [aiTaskModelOverrides, setAiTaskModelOverrides] = useState<
-    Partial<Record<LlmTask, string>>
-  >({})
   const [aiNewModelId, setAiNewModelId] = useState('')
   const [aiModelsLoading, setAiModelsLoading] = useState(false)
   const [safetyDryRun, setSafetyDryRunState] = useState(false)
@@ -895,8 +888,6 @@ export default function SettingsView({
       recommendedModel(provider)
     setAiProviderModels(providerModels)
     setAiProviderSelectedModels(selectedModels)
-    setAiTaskProviderOverrides(c.taskProviderOverrides ?? {})
-    setAiTaskModelOverrides(c.taskModelOverrides ?? {})
     setAiModel(selectedModel)
 
     const dryRun = await window.tezbar.getSafetyDryRun().catch(() => false)
@@ -1031,6 +1022,8 @@ export default function SettingsView({
     customProviders?: CustomAiProvider[]
     providerModels?: Partial<Record<ProviderId, AiProviderModel[]>>
     providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
+    removedProvider?: ProviderId
+    removedModel?: { provider: ProviderId; id: string; fallback: string }
   }
 
   const buildAiProviderPatch = (overrides?: AiPatchOverrides): LlmConfigRecord => {
@@ -1077,7 +1070,6 @@ export default function SettingsView({
               }
     const providerConfigs: Partial<Record<ProviderId, AiProviderConfig>> =
       overrides?.providerConfigs ?? {
-        ...aiProviderConfigs,
         [provider]: providerConfig,
       }
 
@@ -1086,48 +1078,17 @@ export default function SettingsView({
     const customList = overrides?.customProviders ?? customProviders
 
     const patch: LlmConfigRecord = {
-      provider: activeProvider,
       customProviders: customList,
-      model: activeModel,
       providerConfigs,
       providerModels,
-      providerSelectedModels,
-      taskProviderOverrides: { ...aiTaskProviderOverrides, chat: activeProvider },
-      taskModelOverrides: { ...aiTaskModelOverrides, chat: activeModel },
     }
-
-    const activeCfg = providerConfigs[activeProvider] ?? {}
-    if (
-      activeProvider === 'openai' ||
-      activeProvider === 'anthropic' ||
-      activeProvider === 'deepseek'
-    ) {
-      patch.apiKey = activeCfg.apiKey ?? ''
-      if (activeCfg.baseURL) patch.baseURL = activeCfg.baseURL
+    // A provider-data edit owns no selection fields. Only an explicit model
+    // selection or activation can change the chat picker's current choice.
+    if (overrides?.model !== undefined) patch.providerSelectedModels = { [provider]: model }
+    if (overrides?.activeProvider) {
+      patch.provider = activeProvider
+      patch.model = activeModel
     }
-    if (activeProvider === 'openai-compatible') {
-      patch.apiKey = activeCfg.apiKey ?? ''
-      patch.openaiCompatibleBaseURL =
-        activeCfg.openaiCompatibleBaseURL ?? defaultBaseUrl(activeProvider)
-      patch.baseURL = patch.openaiCompatibleBaseURL
-    }
-    if (activeProvider === 'gemini') {
-      patch.geminiApiKey = activeCfg.geminiApiKey ?? ''
-      patch.baseURL = activeCfg.baseURL ?? defaultBaseUrl(activeProvider)
-    }
-    if (activeProvider === 'ollama') {
-      patch.baseURL = activeCfg.baseURL ?? defaultBaseUrl(activeProvider)
-    }
-    if (isCustomProvider(activeProvider)) {
-      patch.apiKey = activeCfg.apiKey ?? ''
-      patch.openaiCompatibleBaseURL = activeCfg.openaiCompatibleBaseURL ?? ''
-      patch.baseURL = activeCfg.baseURL ?? activeCfg.openaiCompatibleBaseURL ?? ''
-    }
-    if (activeProvider === 'copilot') {
-      patch.copilotGithubToken = activeCfg.copilotGithubToken ?? ''
-      patch.githubOAuthClientId = activeCfg.githubOAuthClientId ?? ''
-    }
-
     return patch
   }
 
@@ -1200,23 +1161,21 @@ export default function SettingsView({
     setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: nextSelected }))
     setAiModel(nextSelected)
     setAiNewModelId('')
-    persistAiSettings()
+    persistAiSettings(false, { model: nextSelected })
   }
 
   const removeAiModel = (id: string): void => {
-    setAiProviderModels((prev) => {
-      const nextModels = (prev[aiProvider] ?? defaultModels(aiProvider)).filter(
-        (model) => model.id !== id
-      )
-      const normalized = normalizeProviderModelList(aiProvider, nextModels)
-      const nextSelected = normalized[0]?.id ?? recommendedModel(aiProvider)
-      if (aiModel === id) {
-        setAiModel(nextSelected)
-        setAiProviderSelectedModels((selected) => ({ ...selected, [aiProvider]: nextSelected }))
-      }
-      persistAiSettings()
-      return { ...prev, [aiProvider]: normalized }
-    })
+    const normalized = normalizeProviderModelList(
+      aiProvider,
+      (aiProviderModels[aiProvider] ?? defaultModels(aiProvider)).filter((model) => model.id !== id)
+    )
+    const fallback = normalized[0]?.id ?? recommendedModel(aiProvider)
+    setAiProviderModels((prev) => ({ ...prev, [aiProvider]: normalized }))
+    if (aiModel === id) {
+      setAiModel(fallback)
+      setAiProviderSelectedModels((prev) => ({ ...prev, [aiProvider]: fallback }))
+    }
+    persistAiSettings(false, { removedModel: { provider: aiProvider, id, fallback } })
   }
 
   const toggleAiModelCapability = (modelId: string, capability: AiModelCapability): void => {
@@ -1394,10 +1353,9 @@ export default function SettingsView({
 
     persistAiSettings(true, {
       provider: nextCurrent,
-      activeProvider: nextActive,
+      removedProvider: id,
       baseURL: nextBase,
       apiKey: nextKey,
-      model: nextModel,
       customProviders: nextCustomList,
       providerConfigs: nextConfigs,
       providerModels: nextModels,
@@ -1442,9 +1400,9 @@ export default function SettingsView({
     if (overrides?.activeProvider) {
       setActiveAiProvider(overrides.activeProvider)
     }
-    pendingAiOverrides.current = overrides
+    pendingAiOverrides.current = { ...pendingAiOverrides.current, ...overrides }
     if (immediate) {
-      writeAiPatch(buildAiProviderPatch(overrides))
+      writeAiPatch(buildAiProviderPatch(pendingAiOverrides.current), pendingAiOverrides.current)
       pendingAiOverrides.current = undefined
       return
     }
@@ -1455,17 +1413,79 @@ export default function SettingsView({
   const buildAiPatchRef = useRef(buildAiProviderPatch)
   buildAiPatchRef.current = buildAiProviderPatch
   const aiWrites = useRef<Promise<unknown>>(Promise.resolve())
-  const writeAiPatch = (patch: LlmConfigRecord): void => {
+  const failedAiProviders = useRef(new Set<string>())
+  const writeAiPatch = (patch: LlmConfigRecord, scope?: AiPatchOverrides): void => {
     aiWrites.current = aiWrites.current
       .catch(() => {})
-      .then(() => window.tezbar.setLlmConfig(patch))
-      .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
+      .then(async () => {
+        // Merge provider records at execution time, after older queued writes.
+        // This preserves externally edited providers and the chat selection.
+        const current = await window.tezbar.getLlmConfig()
+        const next = {
+          ...patch,
+          providerConfigs: { ...current.providerConfigs, ...patch.providerConfigs },
+        }
+        if (scope?.removedModel) {
+          const { provider, id, fallback } = scope.removedModel
+          const selected =
+            current.providerSelectedModels?.[provider] ??
+            (current.provider === provider ? current.model : undefined)
+          if (selected === id) patch.providerSelectedModels = { [provider]: fallback }
+        }
+        if (scope?.removedProvider) {
+          const removed = scope.removedProvider
+          delete next.providerConfigs[removed]
+          next.providerSelectedModels = { ...current.providerSelectedModels }
+          delete next.providerSelectedModels[removed]
+          if (current.provider === removed) {
+            next.provider = 'ollama'
+            next.model = current.providerSelectedModels?.ollama ?? recommendedModel('ollama')
+          }
+          if (current.taskProviderOverrides?.chat === removed) {
+            next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: 'ollama' }
+            next.taskModelOverrides = {
+              ...current.taskModelOverrides,
+              chat: current.providerSelectedModels?.ollama ?? recommendedModel('ollama'),
+            }
+          }
+        }
+        if (patch.providerSelectedModels) {
+          next.providerSelectedModels = {
+            ...current.providerSelectedModels,
+            ...patch.providerSelectedModels,
+          }
+          const active = current.provider ?? 'ollama'
+          const chatProvider = current.taskProviderOverrides?.chat ?? active
+          if (patch.providerSelectedModels[active])
+            next.model = patch.providerSelectedModels[active]
+          if (patch.providerSelectedModels[chatProvider])
+            next.taskModelOverrides = {
+              ...current.taskModelOverrides,
+              chat: patch.providerSelectedModels[chatProvider],
+            }
+        }
+        if (patch.provider) {
+          next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: patch.provider }
+          next.taskModelOverrides = { ...current.taskModelOverrides, chat: patch.model }
+        }
+        const result = await window.tezbar.setLlmConfig(next)
+        if (result && result.ok === false) throw new Error('Could not save')
+        for (const id of Object.keys(patch.providerConfigs ?? {}))
+          failedAiProviders.current.delete(id)
+      })
+      .catch(() => {
+        for (const id of Object.keys(patch.providerConfigs ?? {})) failedAiProviders.current.add(id)
+        setMsg({
+          tone: 'error',
+          text: 'Could not save. Settings remains open; retry the edit before closing.',
+        })
+      })
   }
   const flushAiSave = (): void => {
     if (aiSaveTimer.current === null) return
     window.clearTimeout(aiSaveTimer.current)
     aiSaveTimer.current = null
-    writeAiPatch(buildAiPatchRef.current(pendingAiOverrides.current))
+    writeAiPatch(buildAiPatchRef.current(pendingAiOverrides.current), pendingAiOverrides.current)
     pendingAiOverrides.current = undefined
   }
 
@@ -1518,7 +1538,10 @@ export default function SettingsView({
         }
         e.preventDefault()
         e.stopPropagation()
-        onBack()
+        void settleAiSavesRef
+          .current()
+          .then(onBack)
+          .catch(() => {})
         return
       }
       if (e.key === 'Enter') {
@@ -1539,11 +1562,23 @@ export default function SettingsView({
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [addProviderOpen, hotkeyRecording, onBack, saveCurrentSettings])
 
-  // Flush any pending debounced AI save when the Settings window unmounts
-  // (e.g. user closes it within the 400ms debounce window), so an edit isn't
-  // silently dropped.
+  // Native CloseRequested is prevented in Rust. Acknowledgement destroys the
+  // webview only after every queued write and edits made during that wait drain.
   const flushAiSaveRef = useRef(flushAiSave)
   flushAiSaveRef.current = flushAiSave
+  const settleAiSaves = async (): Promise<void> => {
+    aiEditRevision.current++ // discovery may finish, but cannot enqueue stale writes
+    let writes: Promise<unknown>
+    do {
+      flushAiSaveRef.current()
+      writes = aiWrites.current
+      await writes
+    } while (aiSaveTimer.current !== null || writes !== aiWrites.current)
+    if (failedAiProviders.current.size) throw new Error('Settings save failed')
+  }
+  const settleAiSavesRef = useRef(settleAiSaves)
+  settleAiSavesRef.current = settleAiSaves
+  useEffect(() => window.tezbar.onWindowCloseRequested?.(() => settleAiSavesRef.current()), [])
   useEffect(() => {
     return () => {
       if (aiSaveTimer.current !== null) {
@@ -2499,7 +2534,7 @@ export default function SettingsView({
                                         ...prev,
                                         [aiProvider]: model.id,
                                       }))
-                                      persistAiSettings()
+                                      persistAiSettings(true, { model: model.id })
                                     }}
                                   >
                                     <span className="block truncate text-[12.5px] font-semibold text-ink-1">

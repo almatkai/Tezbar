@@ -6,6 +6,7 @@ mod chat;
 mod config;
 mod ext;
 mod legacy;
+pub(crate) use legacy::ocr_images_local;
 mod memory;
 #[cfg(test)]
 mod native_tests;
@@ -96,6 +97,7 @@ struct Inner {
     state: Mutex<State>,
     oauth_flows: Mutex<HashMap<String, oauth::Handle>>,
     oauth_results: Mutex<HashMap<String, Value>>,
+    session_lifecycle: tokio::sync::Mutex<()>,
     token_refresh: tokio::sync::Mutex<()>,
     copilot_sessions: tokio::sync::Mutex<HashMap<String, providers::copilot::Session>>,
     provider_catalogs: Mutex<HashMap<String, (u64, Value)>>,
@@ -166,6 +168,7 @@ impl AiCore {
                 state: Mutex::new(State::default()),
                 oauth_flows: Mutex::new(HashMap::new()),
                 oauth_results: Mutex::new(HashMap::new()),
+                session_lifecycle: tokio::sync::Mutex::new(()),
                 token_refresh: tokio::sync::Mutex::new(()),
                 copilot_sessions: tokio::sync::Mutex::new(HashMap::new()),
                 provider_catalogs: Mutex::new(HashMap::new()),
@@ -385,6 +388,33 @@ impl AiCore {
                 uuid::Uuid::new_v4()
             )
         });
+        // Registration/generation capture and deletion are one ordered lifecycle.
+        // Only async guards cross awaits; store/State locks remain synchronous.
+        let lifecycle = self.inner.session_lifecycle.lock().await;
+        if let Some(session) = options.history["sessionId"].as_str() {
+            if chat::is_deleted(&self.inner.ctx, session).await? {
+                return Ok(json!({"ok":false,"error":"Conversation was deleted"}));
+            }
+        }
+        if options.history["retry"] == true {
+            if let (Some(session), Some(turn)) = (
+                options.history["sessionId"].as_str(),
+                options.history["assistantTurnId"].as_str(),
+            ) {
+                let root = self.inner.ctx.paths.data_dir.clone();
+                let session = session.to_string();
+                let turn = turn.to_string();
+                tokio::task::spawn_blocking(move || {
+                    let generation = runtime::store::generation(&root, &session, &turn);
+                    if let Some(mut messages) = runtime::store::load(&root, &session, &turn)? {
+                        runtime::transcript::close_unanswered(&mut messages);
+                        messages.push(runtime::transcript::Message::text("assistant", "[A manual retry was requested. The preceding attempt is historical context, not the current final answer. Completed effects and unknown outcomes remain authoritative.]"));
+                        runtime::store::save_at(&root, &session, &turn, &messages, &generation)?;
+                    }
+                    Ok::<_, String>(())
+                }).await.map_err(err)??;
+            }
+        }
         if let Some(session) = options.history["sessionId"].as_str() {
             let data = &self.inner.ctx.paths.data_dir;
             let user = runtime::store::generation(data, session, s(&options.history["userTurnId"]));
@@ -419,6 +449,7 @@ impl AiCore {
             state.agent = Some(run);
             state.clocks.insert(id.clone(), clock.clone());
         }
+        drop(lifecycle);
         let timer_clock = clock.clone();
         let timer_cancel = cancel.clone();
         self.spawn(async move{tokio::select!{biased;_=timer_cancel.cancelled()=>{},_=timer_clock.deadline()=>timer_cancel.cancel()}});
@@ -427,6 +458,7 @@ impl AiCore {
         let run = id.clone();
         self.spawn(async move {
             let result = async {
+                if cancel.is_cancelled(){return Err("Operation cancelled".into())}
                 let cwd_path=cwd.as_deref().map(std::path::PathBuf::from).unwrap_or_else(||core.inner.ctx.paths.home_dir.clone());
                 let cwd_path=tokio::fs::canonicalize(cwd_path).await.map_err(err)?;
                 core.revoke_changed_projects(&cwd_path).await?;
@@ -700,21 +732,6 @@ impl AiCore {
                 if !owned["cwd"].is_null() && !owned["cwd"].is_string() {
                     return Ok(json!({"ok":false,"error":"Invalid agent working directory"}));
                 }
-                if owned["retry"] == true {
-                    if let (Some(session), Some(turn)) = (
-                        owned["sessionId"].as_str(),
-                        owned["assistantTurnId"].as_str(),
-                    ) {
-                        let root = self.inner.ctx.paths.data_dir.clone();
-                        let session = session.to_string();
-                        let turn = turn.to_string();
-                        tokio::task::spawn_blocking(move|| { let generation=runtime::store::generation(&root,&session,&turn); if let Some(mut messages)=runtime::store::load(&root,&session,&turn)? {
-                            runtime::transcript::close_unanswered(&mut messages);
-                            messages.push(runtime::transcript::Message::text("assistant","[A manual retry was requested. The preceding attempt is historical context, not the current final answer. Completed effects and unknown outcomes remain authoritative.]"));
-                            runtime::store::save_at(&root,&session,&turn,&messages,&generation)?;
-                        } Ok::<_,String>(()) }).await.map_err(err)??;
-                    }
-                }
                 let requested = owned["runId"].as_str();
                 if !owned["runId"].is_null()
                     && !requested.is_some_and(|id| {
@@ -825,6 +842,9 @@ impl AiCore {
             }
             "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
             | "chat:delete" | "chat:clear" => {
+                let _lifecycle = if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
+                    Some(self.inner.session_lifecycle.lock().await)
+                } else { None };
                 let mut clear_sessions = Vec::new();
                 if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
                     let session = if channel == "chat:delete-turn" {

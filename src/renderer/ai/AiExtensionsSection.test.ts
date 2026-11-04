@@ -394,3 +394,80 @@ it('offers missing-key recovery as an explicit action and reloads its status', a
   expect(calls.filter((c) => c === 'reset-secrets')).toHaveLength(1)
   expect(host.textContent).not.toContain('Reset saved connection secrets')
 })
+
+it('scrolls once per review nonce, resolves the panel, and reviews the same folder again', async () => {
+  let listener = () => {}
+  let state: AiExtensionsState = {
+    extensions: [],
+    globalInstructions: '',
+    useAgentsMd: true,
+    projectReviewId: 'review-1',
+    project: {
+      folder: '/fixture',
+      path: '/fixture/.tezbar/ai-extension.json',
+      entryHash: 'hash',
+      preview: { manifestVersion: 1, id: 'fixture', name: 'Project fixture', connections: [] },
+    },
+  }
+  const calls: unknown[][] = []
+  window.tezbar = {
+    listPiExtensions: async () => [],
+    onAiExtensionsChanged: (fn: () => void) => {
+      listener = fn
+      return () => {}
+    },
+    aiExtensions: async (action: string, ...args: unknown[]) => {
+      calls.push([action, ...args])
+      if (action === 'list') return structuredClone(state)
+      if (action === 'dismiss-project-review' || action === 'trust-project')
+        state = { ...state, project: undefined, projectReviewId: undefined }
+      return { ok: true }
+    },
+  } as unknown as RaymesApi
+  const scroll = vi.fn()
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: scroll,
+  })
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  dispose = () => {
+    act(() => root.unmount())
+    host.remove()
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+  }
+  await act(async () => root.render(createElement(AiExtensionsSection)))
+  expect(scroll).toHaveBeenCalledTimes(1)
+  for (let i = 0; i < 3; i++) await act(async () => listener())
+  expect(scroll).toHaveBeenCalledTimes(1)
+  await act(async () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Keep disabled')!.click()
+  )
+  expect(calls).toContainEqual(['dismiss-project-review', 'review-1'])
+  expect(host.textContent).not.toContain('/fixture')
+  await act(async () => listener())
+  expect(scroll).toHaveBeenCalledTimes(1)
+  state = {
+    ...state,
+    projectReviewId: 'review-2',
+    project: {
+      folder: '/fixture',
+      path: '/fixture/.tezbar/ai-extension.json',
+      entryHash: 'hash',
+      preview: { manifestVersion: 1, id: 'fixture', name: 'Project fixture', connections: [] },
+    },
+  }
+  await act(async () => listener())
+  expect(scroll).toHaveBeenCalledTimes(2)
+  await act(async () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Review')!.click()
+  )
+  await act(async () =>
+    [...host.querySelectorAll('button')]
+      .find((b) => b.textContent === 'Add for this folder')!
+      .click()
+  )
+  expect(calls).toContainEqual(['trust-project', '/fixture', 'hash', 'review-2'])
+  expect(host.textContent).not.toContain('/fixture')
+})

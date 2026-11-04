@@ -428,3 +428,20 @@ mod tests {
         assert_eq!(session["title"], "Messi Legend");
     }
 }
+
+/// Persistent tombstones also fence launches after a restart, before retry writes.
+pub async fn is_deleted(ctx: &CoreContext, session: &str) -> Result<bool, String> {
+    let path = ctx.paths.data_dir.join("chat/sessions.sqlite3");
+    let session = session.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let db = open(&path)?;
+        db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM chat_deleted_sessions WHERE id=?)",
+            [session],
+            |r| r.get(0),
+        )
+        .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}

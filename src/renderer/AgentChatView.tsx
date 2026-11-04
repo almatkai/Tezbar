@@ -478,6 +478,7 @@ export default function AgentChatView({
       const text = input.trim()
       if (
         !text ||
+        owner.deleting ||
         owner.submission ||
         captureRequest.current ||
         owner.chat.status === 'streaming' ||
@@ -495,9 +496,11 @@ export default function AgentChatView({
       owner.lastError = undefined
       try {
         await modelSaveRef.current
+        if (owner.deleting || owner.submission !== submission) return
         await profileSaveRef.current
+        if (owner.deleting || owner.submission !== submission) return
         const fresh = await window.tezbar.getLlmConfig(owner.workingDirectory)
-        if (!mounted.current || owner.submission !== submission) return
+        if (!mounted.current || owner.deleting || owner.submission !== submission) return
         configRef.current = fresh
         setConfig(fresh)
         owner.responseMeta = responseMeta(fresh)
@@ -538,7 +541,7 @@ export default function AgentChatView({
           })),
         }
         await persistTurn(userTurn, owner)
-        if (!mounted.current || owner.submission !== submission) return
+        if (!mounted.current || owner.deleting || owner.submission !== submission) return
         if (selectedConversation.current === owner) {
           setDraft('')
           setAttachment(null)
@@ -568,7 +571,7 @@ export default function AgentChatView({
   )
 
   const retry = useCallback(async (): Promise<void> => {
-    if (busy || owner.submission) return
+    if (busy || owner.deleting || owner.submission) return
     const submission = makeChatId()
     const revision = viewRevision.current
     owner.submission = submission
@@ -576,8 +579,11 @@ export default function AgentChatView({
     notifyConversation(owner)
     try {
       await modelSaveRef.current
+      if (owner.deleting || owner.submission !== submission) return
+      await profileSaveRef.current
+      if (owner.deleting || owner.submission !== submission) return
       const fresh = await window.tezbar.getLlmConfig(owner.workingDirectory)
-      if (!mounted.current || owner.submission !== submission) return
+      if (!mounted.current || owner.deleting || owner.submission !== submission) return
       configRef.current = fresh
       setConfig(fresh)
       owner.responseMeta = responseMeta(fresh)
@@ -892,7 +898,12 @@ export default function AgentChatView({
   }
   const deleteConversation = async (id: string): Promise<void> => {
     const retained = [...conversations.current].find((item) => item.session?.id === id)
-    if (retained) retained.deleting = true
+    if (retained) {
+      retained.deleting = true
+      retained.submission = null
+      retained.preparing = false
+      notifyConversation(retained)
+    }
     if (selectedConversation.current?.session?.id === id) resetChat()
     if (retained) await Promise.allSettled([...retained.writes])
     let result: { ok: boolean }

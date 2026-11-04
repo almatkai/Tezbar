@@ -263,11 +263,90 @@ impl ShellCapture {
         }
     }
 }
+// State lives outside the read futures so timeout cancellation and pipe drain
+// continue the same head/tail capture, with bounded memory on both streams.
+struct CaptureBuffer {
+    head: Vec<u8>,
+    tail: std::collections::VecDeque<u8>,
+    total: u64,
+    limit: usize,
+}
+impl CaptureBuffer {
+    fn new(limit: usize) -> Self {
+        Self {
+            head: Vec::new(),
+            tail: Default::default(),
+            total: 0,
+            limit,
+        }
+    }
+    fn push(&mut self, bytes: &[u8]) {
+        self.total = self.total.saturating_add(bytes.len() as u64);
+        let head_limit = (self.limit - 128) / 3;
+        let n = bytes.len().min(head_limit.saturating_sub(self.head.len()));
+        self.head.extend_from_slice(&bytes[..n]);
+        let tail_limit = self.limit - 128 - head_limit;
+        for &byte in &bytes[n..] {
+            if self.tail.len() == tail_limit {
+                self.tail.pop_front();
+            }
+            self.tail.push_back(byte);
+        }
+    }
+    fn omitted(&self) -> u64 {
+        self.total - (self.head.len() + self.tail.len()) as u64
+    }
+    fn decode(mut bytes: &[u8]) -> String {
+        let mut out = String::new();
+        loop {
+            match std::str::from_utf8(bytes) {
+                Ok(text) => {
+                    out.push_str(text);
+                    return out;
+                }
+                Err(e) => {
+                    out.push_str(std::str::from_utf8(&bytes[..e.valid_up_to()]).unwrap());
+                    bytes = &bytes[e.valid_up_to()..];
+                    let bad = e.error_len().unwrap_or(bytes.len());
+                    // One ASCII replacement per bad byte prevents lossy UTF-8
+                    // decoding from tripling the model-facing result budget.
+                    out.extend(std::iter::repeat('?').take(bad));
+                    bytes = &bytes[bad..];
+                }
+            }
+        }
+    }
+    fn text(&self) -> String {
+        let tail = self.tail.iter().copied().collect::<Vec<_>>();
+        if self.omitted() == 0 {
+            return Self::decode(&[self.head.as_slice(), &tail].concat());
+        }
+        // Drop only partial UTF-8 codepoints at the cut boundaries. Count those
+        // bytes as omitted too; complete Unicode at either end stays intact.
+        let mut end = self.head.len();
+        while end > 0
+            && std::str::from_utf8(&self.head[..end])
+                .err()
+                .is_some_and(|e| e.error_len().is_none())
+        {
+            end -= 1;
+        }
+        let mut start = 0;
+        while start < tail.len() && tail[start] & 0xc0 == 0x80 {
+            start += 1;
+        }
+        let omitted = self.omitted() + (self.head.len() - end + start) as u64;
+        format!(
+            "{}\n[{} bytes omitted]\n{}",
+            Self::decode(&self.head[..end]),
+            omitted,
+            Self::decode(&tail[start..])
+        )
+    }
+}
 async fn capture_read(
     reader: &mut (impl AsyncRead + Unpin),
-    out: &mut Vec<u8>,
-    truncated: &mut bool,
-    limit: usize,
+    out: &mut CaptureBuffer,
 ) -> Result<(), String> {
     let mut buf = [0; 8192];
     loop {
@@ -275,9 +354,7 @@ async fn capture_read(
         if n == 0 {
             return Ok(());
         }
-        let keep = n.min(limit.saturating_sub(out.len()));
-        out.extend_from_slice(&buf[..keep]);
-        *truncated |= keep < n;
+        out.push(&buf[..n]);
     }
 }
 pub async fn shell_capture(
@@ -296,13 +373,12 @@ pub async fn shell_capture(
         .stderr
         .take()
         .ok_or("Missing subprocess stderr")?;
-    let (mut out, mut error) = (Vec::new(), Vec::new());
-    let (mut out_cut, mut err_cut) = (false, false);
+    let (mut out, mut error) = (CaptureBuffer::new(48 * 1024), CaptureBuffer::new(12 * 1024));
     let work = async {
         tokio::try_join!(
             async { group.child.wait().await.map_err(err) },
-            capture_read(&mut stdout, &mut out, &mut out_cut, 48 * 1024),
-            capture_read(&mut stderr, &mut error, &mut err_cut, 12 * 1024)
+            capture_read(&mut stdout, &mut out),
+            capture_read(&mut stderr, &mut error)
         )
         .map(|r| r.0)
     };
@@ -312,17 +388,17 @@ pub async fn shell_capture(
     // Killing the tree closes pipes; collect bytes already queued before timeout.
     let _ = tokio::time::timeout(Duration::from_millis(500), async {
         tokio::join!(
-            capture_read(&mut stdout, &mut out, &mut out_cut, 48 * 1024),
-            capture_read(&mut stderr, &mut error, &mut err_cut, 12 * 1024)
+            capture_read(&mut stdout, &mut out),
+            capture_read(&mut stderr, &mut error)
         )
     })
     .await;
     Ok(ShellCapture {
-        stdout: String::from_utf8_lossy(&out).into(),
-        stderr: String::from_utf8_lossy(&error).into(),
+        stdout: out.text(),
+        stderr: error.text(),
         exit_code: status.and_then(|s| s.code()),
         timed_out: status.is_none(),
-        truncated: out_cut || err_cut,
+        truncated: out.omitted() > 0 || error.omitted() > 0,
     })
 }
 /// Bytes remain bytes until LF arrives: split UTF-8 and U+2028/U+2029 are safe.
@@ -579,5 +655,75 @@ mod windows_repair_tests {
                     .is_err()
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod capture_tests {
+    use super::*;
+    #[tokio::test]
+    async fn verbose_failed_runner_preserves_both_stream_heads_and_summary_tails() {
+        #[cfg(unix)]
+        let mut cmd = {
+            let mut c = command("/bin/sh");
+            c.args(["-c", "printf 'stdout beginning 日本語\\n'; printf 'stderr beginning 日本語\\n' >&2; i=0; while [ $i -lt 7000 ]; do printf 'passing test 1234567890\\n'; printf 'diagnostic 1234567890\\n' >&2; i=$((i+1)); done; printf 'FAILED summary 日本語\\n'; printf 'final error 日本語\\n' >&2; exit 7"]);
+            c
+        };
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut c = command("powershell.exe");
+            c.args(["-NoLogo","-NoProfile","-Command", "[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); [Console]::WriteLine('stdout beginning 日本語'); [Console]::Error.WriteLine('stderr beginning 日本語'); for($i=0;$i -lt 7000;$i++){[Console]::WriteLine('passing test 1234567890'); [Console]::Error.WriteLine('diagnostic 1234567890')}; [Console]::WriteLine('FAILED summary 日本語'); [Console]::Error.WriteLine('final error 日本語'); exit 7"]);
+            c
+        };
+        let result = shell_capture(&mut cmd, Duration::from_secs(30), &Cancel::new())
+            .await
+            .unwrap();
+        assert_eq!(result.exit_code, Some(7));
+        assert!(!result.timed_out);
+        assert!(result.truncated);
+        let text = result.result().unwrap_err();
+        for marker in [
+            "stdout beginning 日本語",
+            "stderr beginning 日本語",
+            "FAILED summary 日本語",
+            "final error 日本語",
+            "bytes omitted",
+            "Exit status: 7",
+        ] {
+            assert!(text.contains(marker), "Missing {marker}");
+        }
+        assert!(text.len() < 64 * 1024);
+    }
+    #[test]
+    fn invalid_bytes_cannot_expand_past_the_capture_budget() {
+        let mut capture = CaptureBuffer::new(1024);
+        capture.push(&vec![0xff; 100_000]);
+        let text = capture.text();
+        assert!(text.len() <= 1024);
+        assert!(text.contains(&format!("{} bytes omitted", capture.omitted())));
+    }
+    #[tokio::test]
+    async fn cancelled_read_future_retains_ring_for_timeout_drain_and_unicode() {
+        let (mut writer, mut reader) = tokio::io::duplex(128 * 1024);
+        use tokio::io::AsyncWriteExt;
+        let mut out = CaptureBuffer::new(1024);
+        writer
+            .write_all("beginning 日本語".as_bytes())
+            .await
+            .unwrap();
+        writer.write_all(&vec![b'x'; 2000]).await.unwrap();
+        assert!(tokio::time::timeout(
+            Duration::from_millis(10),
+            capture_read(&mut reader, &mut out)
+        )
+        .await
+        .is_err());
+        writer.write_all("summary 日本語".as_bytes()).await.unwrap();
+        drop(writer);
+        capture_read(&mut reader, &mut out).await.unwrap();
+        let text = out.text();
+        assert!(text.starts_with("beginning 日本語"));
+        assert!(text.ends_with("summary 日本語"));
+        assert!(text.contains("bytes omitted"));
     }
 }

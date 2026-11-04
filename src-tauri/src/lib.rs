@@ -2600,12 +2600,22 @@ fn close_current_window(window: WebviewWindow) -> Result<(), String> {
         persist_current_window_position(&window);
         hide_main_window_native(&window)
     } else if window.label() == "settings" {
-        window.hide().map_err(|e| e.to_string())?;
-        window.close().map_err(|e| e.to_string())?;
-        restore_main_window(window.app_handle())
+        // All close routes enter the same asynchronous renderer save handshake.
+        window.close().map_err(|e| e.to_string())
     } else {
         window.close().map_err(|e| e.to_string())
     }
+}
+
+#[tauri::command]
+fn finish_settings_close(window: WebviewWindow) -> Result<(), String> {
+    if window.label() != "settings" {
+        return Err("Not a Settings window".into());
+    }
+    // destroy bypasses CloseRequested; close would recursively request a save.
+    let app = window.app_handle().clone();
+    window.destroy().map_err(|e| e.to_string())?;
+    restore_main_window(&app)
 }
 
 #[tauri::command]
@@ -2851,14 +2861,11 @@ pub fn run() {
                             log::debug!("failed to hide launcher behind Settings: {error}");
                         }
                     }
-                    tauri::WindowEvent::CloseRequested { .. } => {
-                        // Release the Settings renderer when closed.
-                        let _ = window.hide();
-                        if let Err(error) = restore_main_window(&window.app_handle()) {
-                            log::debug!(
-                                "failed to restore launcher after closing settings: {error}"
-                            );
-                        }
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        // Prevent teardown even while a config IPC write is in flight.
+                        // The renderer acknowledges only after its save queue drains.
+                        api.prevent_close();
+                        let _ = window.emit("settings-close-requested", ());
                     }
                     _ => {}
                 }
@@ -3025,6 +3032,7 @@ pub fn run() {
             hide_window,
             show_window,
             close_current_window,
+            finish_settings_close,
             quit_app,
             start_window_snap_drag,
             end_window_snap_drag,

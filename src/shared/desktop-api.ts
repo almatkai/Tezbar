@@ -128,6 +128,7 @@ export type RaymesApi = {
   openSettingsWindow: () => Promise<void>
   hideLauncherForSettings: () => Promise<void>
   closeCurrentWindow: () => Promise<void>
+  onWindowCloseRequested?: (beforeClose: () => Promise<void>) => () => void
   query: (text: string) => Promise<Intent>
   cancel: () => Promise<unknown>
   getExtensions: () => Promise<InstalledExtension[]>

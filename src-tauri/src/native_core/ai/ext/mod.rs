@@ -19,6 +19,7 @@ pub const CHANNELS: &[&str] = &[
     "ai-extensions:clear-allowance",
     "ai-extensions:list",
     "ai-extensions:review-project",
+    "ai-extensions:dismiss-project-review",
     "ai-extensions:parse-import",
     "ai-extensions:add",
     "ai-extensions:update",
@@ -57,7 +58,7 @@ pub struct Extensions {
     lock: Mutex<()>,
     clients: Mutex<HashMap<String, Arc<Client>>>,
     imports: Mutex<HashMap<String, Value>>,
-    review_cwd: Mutex<Option<String>>,
+    review_cwd: Mutex<Option<(String, String)>>,
     secrets: secrets::Secrets,
     path: std::path::PathBuf,
 }
@@ -1211,7 +1212,7 @@ impl AiCore {
                 let cwd = tokio::fs::canonicalize(s(a)).await.map_err(err)?;
                 self.project_status(&cwd).await?;
                 *self.inner.extensions.review_cwd.lock().unwrap() =
-                    Some(cwd.to_string_lossy().into());
+                    Some((cwd.to_string_lossy().into(), uuid::Uuid::new_v4().to_string()));
                 self.inner
                     .ctx
                     .emit("ai-extensions-changed", json!({"projectReview":true}));
@@ -1230,7 +1231,8 @@ impl AiCore {
                 .unwrap_or(false));
                 data["defaultWorkingFolder"] = json!(self.inner.ctx.paths.home_dir);
                 let queued = self.inner.extensions.review_cwd.lock().unwrap().clone();
-                if let Some(cwd) = a.as_str().or(queued.as_deref()) {
+                if let Some((_, nonce)) = &queued { data["projectReviewId"] = json!(nonce); }
+                if let Some(cwd) = a.as_str().or(queued.as_ref().map(|(cwd, _)| cwd.as_str())) {
                     data["project"] = self.project_status(std::path::Path::new(cwd)).await.unwrap_or_else(|_|json!({"folder":cwd,"error":"The project folder is no longer available. Choose an existing folder to review."}));
                 }
                 Ok(data)
@@ -1283,7 +1285,15 @@ impl AiCore {
                 })
                 .await
             }
-            "ai-extensions:trust-project" => self.trust_project(s(a), s(arg(args, 1))).await,
+            "ai-extensions:dismiss-project-review" => {
+                self.finish_project_review(s(a));
+                Ok(json!({"ok":true}))
+            }
+            "ai-extensions:trust-project" => {
+                let result = self.trust_project(s(a), s(arg(args, 1))).await?;
+                self.finish_project_review(s(arg(args, 2)));
+                Ok(result)
+            },
             "ai-extensions:clear-allowance" => {
                 let cid = s(arg(args, 1)).to_string();
                 let tool = s(arg(args, 2)).to_string();
@@ -2170,5 +2180,17 @@ impl AiCore {
         })
         .await
         .map(|_| ())
+    }
+}
+impl AiCore {
+    fn finish_project_review(&self, nonce: &str) {
+        let mut queued = self.inner.extensions.review_cwd.lock().unwrap();
+        if queued.as_ref().is_some_and(|(_, id)| id == nonce) {
+            *queued = None;
+            drop(queued);
+            self.inner
+                .ctx
+                .emit("ai-extensions-changed", json!({"projectReview":false}));
+        }
     }
 }

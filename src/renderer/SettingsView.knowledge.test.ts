@@ -7,6 +7,7 @@ import type { KnowledgeSnapshot, SemanticVariantStatus } from '../shared/knowled
 import SettingsView from './SettingsView'
 import { invoke } from '@tauri-apps/api/core'
 import { initTauriBridge } from './tauri-bridge'
+import { listen } from '@tauri-apps/api/event'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => null) }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}), emitTo: vi.fn() }))
@@ -177,6 +178,7 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     await act(async () => root.unmount())
     container.remove()
     Reflect.deleteProperty(window, 'tezbar')
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.restoreAllMocks()
@@ -308,6 +310,202 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     root = createRoot(container)
   })
 
+  const input = async (el: HTMLInputElement, value: string) =>
+    act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value)
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+  it.each([false, true])(
+    'native close waits for the real bridge save queue and retains errors: %s',
+    async (fail) => {
+      const config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'openai',
+        model: 'fixture',
+        providerConfigs: { openai: { apiKey: '' } },
+      }
+      const pending = deferred<{ ok: boolean; accelerator: string }>()
+      const save = vi.fn(() => pending.promise)
+      const events = new Map<string, (event: { payload: unknown }) => unknown>()
+      vi.mocked(listen).mockImplementation(async (name, handler) => {
+        events.set(String(name), handler as (event: { payload: unknown }) => unknown)
+        return () => {
+          events.delete(String(name))
+        }
+      })
+      const original = window.tezbar
+      Object.defineProperty(window, 'tezbar', {
+        configurable: true,
+        writable: true,
+        value: original,
+      })
+      Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} })
+      initTauriBridge()
+      const native = window.tezbar
+      window.tezbar = {
+        ...original,
+        onWindowCloseRequested: native.onWindowCloseRequested,
+        closeCurrentWindow: native.closeCurrentWindow,
+        getLlmConfig: async () => config,
+        setLlmConfig: save,
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      }
+      vi.mocked(invoke).mockClear()
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      await input(
+        container.querySelector<HTMLInputElement>('input[type="password"]')!,
+        'last-300ms-key'
+      )
+      // All native/back/closeCurrentWindow paths request close, then native emits
+      // the prevented request. This is deliberately not a React unmount test.
+      await window.tezbar.closeCurrentWindow()
+      expect(invoke).toHaveBeenCalledWith('close_current_window')
+      let closing!: Promise<unknown>
+      await act(async () => {
+        closing = Promise.resolve(events.get('settings-close-requested')!({ payload: null }))
+        await Promise.resolve()
+      })
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerConfigs: expect.objectContaining({
+            openai: expect.objectContaining({ apiKey: 'last-300ms-key' }),
+          }),
+        })
+      )
+      expect(invoke).not.toHaveBeenCalledWith('finish_settings_close')
+      if (!fail)
+        await input(
+          container.querySelector<HTMLInputElement>('input[type="password"]')!,
+          'edit-during-close'
+        )
+      await act(async () => {
+        pending.resolve({ ok: !fail, accelerator: '' })
+        await closing
+      })
+      if (fail) {
+        expect(invoke).not.toHaveBeenCalledWith('finish_settings_close')
+        expect(container.textContent).toContain('Could not save')
+        expect(container.querySelector<HTMLInputElement>('input[type="password"]')!.value).toBe(
+          'last-300ms-key'
+        )
+      } else {
+        expect(save).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            providerConfigs: expect.objectContaining({
+              openai: expect.objectContaining({ apiKey: 'edit-during-close' }),
+            }),
+          })
+        )
+        expect(invoke).toHaveBeenCalledWith('finish_settings_close')
+      }
+      Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    }
+  )
+
+  it.each([false, true])(
+    'preserves an external chat choice while saving provider drafts (pending: %s)',
+    async (pending) => {
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'openai',
+        model: 'fixture-a',
+        providerSelectedModels: { openai: 'fixture-a' },
+        providerConfigs: {
+          openai: { apiKey: 'old-openai', baseURL: 'https://api.openai.com/v1' },
+          anthropic: { apiKey: 'anthropic-owned' },
+        },
+        providerModels: { openai: [{ id: 'fixture-a', capabilities: ['tools'] }] },
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        getLlmConfig: async () => config,
+        setLlmConfig: async (patch: typeof config) => {
+          config = { ...config, ...patch }
+          return { ok: true }
+        },
+      })
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      const key = () => container.querySelector<HTMLInputElement>('input[type="password"]')!
+      if (pending) await input(key(), 'new-openai-draft')
+      config = {
+        ...config,
+        provider: 'anthropic',
+        model: 'chat-choice',
+        providerSelectedModels: { ...config.providerSelectedModels, anthropic: 'chat-choice' },
+        taskProviderOverrides: { chat: 'anthropic' },
+        taskModelOverrides: { chat: 'chat-choice' },
+      }
+      if (!pending) await input(key(), 'new-openai-draft')
+      const url = container.querySelector<HTMLInputElement>(
+        'input[placeholder="https://api.openai.com/v1"]'
+      )!
+      await input(url, 'https://draft.example/v1')
+      await advance(500)
+      expect(config.provider).toBe('anthropic')
+      expect(config.model).toBe('chat-choice')
+      expect(config.taskProviderOverrides?.chat).toBe('anthropic')
+      expect(config.taskModelOverrides?.chat).toBe('chat-choice')
+      expect(config.providerSelectedModels?.anthropic).toBe('chat-choice')
+      expect(config.providerConfigs?.anthropic?.apiKey).toBe('anthropic-owned')
+      expect(config.providerConfigs?.openai).toMatchObject({
+        apiKey: 'new-openai-draft',
+        baseURL: 'https://draft.example/v1',
+      })
+    }
+  )
+
+  it.each([false, true])(
+    'removes a model with a conditional selection fallback (external choice: %s)',
+    async (external) => {
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'openai',
+        model: 'fixture-a',
+        providerSelectedModels: { openai: 'fixture-a' },
+        providerConfigs: { openai: { apiKey: 'key' } },
+        providerModels: {
+          openai: ['fixture-a', 'fixture-b', 'fixture-c'].map((id) => ({
+            id,
+            capabilities: ['tools'],
+          })),
+        },
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        getLlmConfig: async () => config,
+        setLlmConfig: async (patch: typeof config) => {
+          config = { ...config, ...patch }
+          return { ok: true }
+        },
+      })
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      if (external)
+        config = {
+          ...config,
+          model: 'fixture-c',
+          providerSelectedModels: { openai: 'fixture-c' },
+          taskModelOverrides: { chat: 'fixture-c' },
+        }
+      const row = [...container.querySelectorAll('li')].find(
+        (li) => li.querySelector('span')?.textContent === 'fixture-a'
+      )!
+      await act(async () =>
+        [...row.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
+      )
+      await advance(500)
+      expect(config.providerModels?.openai?.map((m) => m.id)).toEqual(['fixture-b', 'fixture-c'])
+      expect(config.providerSelectedModels?.openai).toBe(external ? 'fixture-c' : 'fixture-b')
+      expect(config.model).toBe(external ? 'fixture-c' : 'fixture-b')
+    }
+  )
+
   it('saves latest typing, provider-scoped edits, model mutations and a pending close without hydration writes', async () => {
     let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
       provider: 'openai',
@@ -334,11 +532,6 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     })
     await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
     expect(save).not.toHaveBeenCalled()
-    const input = async (el: HTMLInputElement, value: string) =>
-      act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value)
-        el.dispatchEvent(new Event('input', { bubbles: true }))
-      })
     const key = () => container.querySelector<HTMLInputElement>('input[type="password"]')!
     await input(key(), 'fixture-o')
     await input(key(), 'fixture-openai-last')
@@ -1751,6 +1944,7 @@ describe('Knowledge embedding IPC variant contract (real Tauri bridge)', () => {
   afterEach(() => {
     Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
     Reflect.deleteProperty(window, 'tezbar')
+    Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
     Reflect.deleteProperty(window, '__TEZBAR_WINDOW_LABEL__')
   })
 

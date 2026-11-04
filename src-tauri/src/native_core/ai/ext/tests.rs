@@ -1145,6 +1145,21 @@ async fn project_review_handoff_survives_an_independent_settings_request() {
         json!(folder.canonicalize().unwrap())
     );
     assert_eq!(independent["project"]["preview"]["name"], "Handoff");
+    let nonce = independent["projectReviewId"].clone();
+    assert!(nonce.is_string());
+    for _ in 0..3 {
+        assert_eq!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["projectReviewId"], nonce);
+    }
+    core.handle("ai-extensions:dismiss-project-review", &[nonce.clone()]).await.unwrap().unwrap();
+    assert!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["project"].is_null());
+    core.handle("ai-extensions:review-project", &[json!(folder)]).await.unwrap().unwrap();
+    let again = core.handle("ai-extensions:list", &[]).await.unwrap().unwrap();
+    assert_ne!(again["projectReviewId"],nonce);
+    // An old settings reply cannot dismiss a newer request for the same folder.
+    core.handle("ai-extensions:dismiss-project-review", &[nonce]).await.unwrap().unwrap();
+    assert_eq!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["projectReviewId"], again["projectReviewId"]);
+    core.handle("ai-extensions:trust-project", &[json!(folder),again["project"]["entryHash"].clone(),again["projectReviewId"].clone()]).await.unwrap().unwrap();
+    assert!(core.handle("ai-extensions:list", &[]).await.unwrap().unwrap()["project"].is_null());
     // Reusing an already open settings window receives the newly queued folder.
     let other = core.inner.ctx.paths.home_dir.join("other");
     std::fs::create_dir_all(other.join(".tezbar")).unwrap();
