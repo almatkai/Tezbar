@@ -35,6 +35,7 @@ impl Reply {
 struct Server {
     url: String,
     requests: mpsc::UnboundedReceiver<Value>,
+    raw_requests: mpsc::UnboundedReceiver<Vec<u8>>,
     task: tokio::task::JoinHandle<()>,
 }
 impl Drop for Server {
@@ -46,6 +47,7 @@ async fn server(replies: Vec<Reply>) -> Server {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/v1", listener.local_addr().unwrap());
     let (tx, rx) = mpsc::unbounded_channel();
+    let (raw_tx, raw_rx) = mpsc::unbounded_channel();
     let task = tokio::spawn(async move {
         let mut queue: VecDeque<_> = replies.into();
         let mut clients = tokio::task::JoinSet::new();
@@ -55,7 +57,7 @@ async fn server(replies: Vec<Reply>) -> Server {
                 accepted=listener.accept()=>{
                     let Ok((mut socket,_))=accepted else{break};
                     let reply=queue.pop_front().unwrap_or(Reply{body:String::new(),status:500,hold_headers:false,hold_body:false});
-                    let tx=tx.clone();
+                    let tx=tx.clone();let raw_tx=raw_tx.clone();
                     clients.spawn(async move {
                         let mut data=Vec::new();let end;
                         loop {
@@ -68,6 +70,7 @@ async fn server(replies: Vec<Reply>) -> Server {
                         assert!(header.starts_with("POST /v1/chat/completions "));
                         let length=header.lines().find_map(|l|l.to_lowercase().strip_prefix("content-length:").map(|v|v.trim().parse::<usize>().unwrap())).unwrap();
                         while data.len()-end<length {let mut b=[0;4096];let n=socket.read(&mut b).await.unwrap_or(0);if n==0{return;}data.extend_from_slice(&b[..n]);}
+                        raw_tx.send(data[end..end+length].to_vec()).unwrap();
                         tx.send(serde_json::from_slice(&data[end..end+length]).unwrap()).unwrap();
                         if reply.hold_headers {std::future::pending::<()>().await;}
                         let length=if reply.hold_body{reply.body.len()+100}else{reply.body.len()};
@@ -83,6 +86,7 @@ async fn server(replies: Vec<Reply>) -> Server {
     Server {
         url,
         requests: rx,
+        raw_requests: raw_rx,
         task,
     }
 }
@@ -238,10 +242,11 @@ async fn completed_effect_stays_once_across_byte_identical_turn_retry() {
     request(&mut http).await;
     let first = request(&mut http).await;
     let retry = request(&mut http).await;
-    assert_eq!(
-        serde_json::to_vec(&first).unwrap(),
-        serde_json::to_vec(&retry).unwrap()
-    );
+    assert_eq!(first, retry);
+    http.raw_requests.recv().await.unwrap();
+    let first_bytes = http.raw_requests.recv().await.unwrap();
+    let retry_bytes = http.raw_requests.recv().await.unwrap();
+    assert_eq!(first_bytes, retry_bytes);
     no_extra(&mut http).await;
     core.shutdown().await;
 }

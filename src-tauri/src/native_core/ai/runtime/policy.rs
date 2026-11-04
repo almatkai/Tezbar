@@ -11,28 +11,33 @@ pub fn complex(s: &str) -> bool {
     s.contains([
         ';', '|', '<', '>', '`', '(', ')', '\r', '\n', '$', '&', '\\', '{', '}',
     ]) || matches(
-        r"(?i)^(?:sudo|doas|env|xargs|eval|exec|source|bash|sh|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh|python[0-9.]*|perl|ruby|node|bun|osascript|rundll32|wscript|cscript|invoke-expression|iex|invoke-command)\b",
+        r"(?i)^(?:[^\s]+[/\\])?(?:sudo|doas|env|xargs|eval|exec|source|bash|sh|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh|python[0-9.]*|perl|ruby|node|bun|osascript|rundll32|wscript|cscript|invoke-expression|iex|invoke-command)\b",
         s.trim(),
+    ) || matches(
+        r"(?i)(?:^|\s)(?:-c|-e|--eval|--command|-command|-encodedcommand|--config)(?:[=\s]|$)|\bfind\b.*\s-(?:exec|execdir|ok|okdir)(?:\s|$)",
+        s,
     )
 }
 pub fn destructive(s: &str) -> bool {
-    matches(r"(?i)\b(rm|srm|unlink|remove-item|rd|rmdir)\b", s)
-        || matches(
-            r"(?i)\b(DROP\s+(DATABASE|SCHEMA|TABLE)|TRUNCATE(\s+TABLE)?|mkfs(\.[a-z0-9]+)?|fdisk|parted|gdisk|shutdown|reboot|poweroff|halt|init\s+[06])\b",
-            s,
-        )
-        || matches(
-            r"(?i)\bdiskutil\s+(eraseDisk|eraseVolume|partitionDisk|zeroDisk|randomDisk|apfs\s+deleteContainer)\b",
-            s,
-        )
-        || matches(
-            r"(?i)\bdd\b.*\bof=/dev/|\b(chmod|chown)\b.*(/|~)|:\(\)\s*\{",
-            s,
-        )
-        || matches(
-            r"(?i)\b(git\s+(reset|clean)|format(-volume)?|clear-disk|stop-computer|restart-computer)\b",
-            s,
-        )
+    matches(
+        r"(?i)\b(rm|srm|unlink|remove-item|rd|rmdir|del|erase|shred|sdelete|truncate|clear-content)\b",
+        s,
+    ) || matches(
+        r"(?i)\b(DROP\s+(DATABASE|SCHEMA|TABLE)|TRUNCATE(\s+TABLE)?|mkfs(\.[a-z0-9]+)?|fdisk|parted|gdisk|shutdown|reboot|poweroff|halt|init\s+[06])\b",
+        s,
+    ) || matches(
+        r"(?i)\bdiskutil\s+(eraseDisk|eraseVolume|partitionDisk|zeroDisk|randomDisk|apfs\s+deleteContainer)\b",
+        s,
+    ) || matches(
+        r"(?i)\bdd\b.*\bof=/dev/|\b(chmod|chown)\b.*(/|~)|:\(\)\s*\{",
+        s,
+    ) || matches(
+        r"(?i)\b(git\s+(reset|clean)|format(-volume)?|clear-disk|stop-computer|restart-computer)\b",
+        s,
+    ) || matches(
+        r"(?i)\bfind\b.*\s-delete(?:\s|$)|\bgit\s+(?:branch\b.*\s-[dD]\b|push\b.*(?:--force|-f)(?:[=\s]|$))",
+        s,
+    )
 }
 pub fn auto(s: &str) -> bool {
     let s = s.trim();
@@ -205,6 +210,13 @@ mod tests {
             "cat .env",
             "git reset --hard",
             "ls; touch a",
+            "find . -delete",
+            "del victim.txt",
+            "shred victim.txt",
+            "git branch -D feature",
+            "git push --force origin main",
+            "/bin/bash -c 'touch a'",
+            "git -c alias.danger=touch danger",
         ] {
             let cfg = serde_json::json!({"agentAlwaysAllowedExactCommands":[command]});
             assert!(shell_asks(command, "turbo", &cfg, command.contains(".env")));
