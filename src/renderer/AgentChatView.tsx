@@ -745,7 +745,9 @@ export default function AgentChatView({
       if (approval && event.key === 'Enter') {
         event.preventDefault()
         event.stopImmediatePropagation()
-        void resolveApproval(event.metaKey || event.ctrlKey ? 'always' : 'once')
+        void resolveApproval(
+          (event.metaKey || event.ctrlKey) && approval.canRemember !== false ? 'always' : 'once'
+        )
       } else if (
         (event.metaKey || event.ctrlKey) &&
         !event.altKey &&
@@ -1185,15 +1187,17 @@ export default function AgentChatView({
               >
                 Deny
               </button>
-              <button
-                type="button"
-                disabled={approvalBusy}
-                className={smallButton}
-                title="Remember only this exact command"
-                onClick={() => void resolveApproval('always')}
-              >
-                Always allow this command
-              </button>
+              {approval.canRemember !== false && (
+                <button
+                  type="button"
+                  disabled={approvalBusy}
+                  className={smallButton}
+                  title="Remember only this exact command"
+                  onClick={() => void resolveApproval('always')}
+                >
+                  Always allow this command
+                </button>
+              )}
             </div>
           </section>
         ) : null}

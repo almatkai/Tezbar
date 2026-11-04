@@ -624,6 +624,7 @@ async fn native_review_applies_to_reads_and_always_decision_never_persists_file_
     start(&core, "agent-review", &root).await;
     let a = next_event(&mut events, "approval").await;
     assert!(s(&a["command"]).contains("read"));
+    assert_eq!(a["canRemember"], false);
     approve(&core, &a, "once").await;
     let b = next_event(&mut events, "approval").await;
     approve(&core, &b, "always").await;
@@ -637,6 +638,40 @@ async fn native_review_applies_to_reads_and_always_decision_never_persists_file_
     request(&mut http).await;
     request(&mut http).await;
     request(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_permission_mode_changes_apply_to_later_tools_in_the_same_run() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "first",
+            "write",
+            json!({"path":"live-mode","content":"fixture"}),
+        )])),
+        Reply::sse(calls(vec![call(
+            "second",
+            "read",
+            json!({"path":"live-mode"}),
+        )])),
+        Reply::sse(text("complete")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({"agentApprovalMode":"auto"})).await;
+    start(&core, "agent-live-mode", &root).await;
+    let write = next_event(&mut events, "approval").await;
+    core.handle("llm-config-set", &[json!({"agentApprovalMode":"review"})])
+        .await
+        .unwrap()
+        .unwrap();
+    approve(&core, &write, "once").await;
+    let read = next_event(&mut events, "approval").await;
+    assert!(s(&read["command"]).contains("read"));
+    approve(&core, &read, "once").await;
+    next_event(&mut events, "answer").await;
+    next_event(&mut events, "done").await;
     core.shutdown().await;
 }
 

@@ -73,6 +73,8 @@ export type AgentRunEvent =
       title: string
       command: string
       suggestedRule?: string
+      /** False when this runtime only supports one-time approval. */
+      canRemember?: boolean
     }
   | { type: 'done'; runId: string }
   | { type: 'error'; runId: string; message: string }

@@ -168,7 +168,7 @@ impl AiCore {
                 },
             );
         }
-        let mut event = json!({"type":"approval","approvalId":id,"title":title,"command":command});
+        let mut event = json!({"type":"approval","approvalId":id,"title":title,"command":command,"canRemember":remember_command});
         if remember_command {
             if let Some(rule) = suggested_rule(command) {
                 event["suggestedRule"] = json!(rule);

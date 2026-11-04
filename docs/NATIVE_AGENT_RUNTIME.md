@@ -65,7 +65,13 @@ requires confirmation. Shell execution uses `/bin/bash --noprofile --norc`, remo
 modes. This deliberately asks more often than Pi during migration. Native tools
 ignore remembered exact/prefix command allowances; the existing "always" response
 acts as "once" and does not persist file contents or new native command rules.
+Native prompts expose only Allow once and Deny; the keyboard shortcut also
+resolves a one-time approval. Existing Pi prompts keep the remembering control.
 Pi's existing remembered-command behavior is retained.
+
+The configured approval mode is read before each tool, so switching to Review in
+settings affects subsequent tools in an already running native agent. An explicit
+per-request `approvalMode` takes precedence for that request.
 
 An approval is tied to its live run and unique approval ID. A denied, cancelled,
 expired (300 seconds), or stale approval cannot authorize an effect. Cancellation
@@ -135,8 +141,10 @@ no-replay guarantees. Rust cannot eliminate remote provider outages. No RAM,
 speed, desktop smoke, Windows shell, packaging or live-provider claim is made.
 
 Implementation verification on macOS arm64 (Rust 1.98.0): `pnpm typecheck` passed;
-`pnpm test` passed 884 tests with 9 skipped; `CARGO_BUILD_JOBS=2 cargo +1.98.0 test
---manifest-path src-tauri/Cargo.toml --lib --locked` passed 506 tests with 9 ignored.
-The 17 added Rust fixtures include the actual 30-second post-effect header timeout.
+`pnpm test` passed 887 tests with 9 skipped; `CARGO_BUILD_JOBS=2 cargo +1.98.0 test
+--manifest-path src-tauri/Cargo.toml --lib --locked` passed 507 tests with 9 ignored.
+The 18 added Rust fixtures include the actual 30-second post-effect header timeout
+and changing approval mode during an active run. Renderer regressions also check
+one-time-only native approvals and existing Pi remembering controls/shortcuts.
 The checksum-pinned embedding ZIP was staged locally and `pnpm build:backend`
 prepared the normal test resources; the desktop application was not launched.

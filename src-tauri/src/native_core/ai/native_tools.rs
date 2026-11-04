@@ -228,15 +228,14 @@ impl AiCore {
         &self,
         tool: Tool,
         root: &Path,
-        cfg: &Value,
+        approval_mode: Option<&str>,
         run: &str,
         cancel: &Cancel,
     ) -> Result<String, String> {
         let raw = self.read_config().await?;
-        let review = cfg["agentApprovalMode"]
-            .as_str()
-            .or_else(|| raw["agentApprovalMode"].as_str())
-            == Some("review");
+        // Only an explicit per-request override is pinned. UI changes to the
+        // configured mode apply before every subsequent tool in a live run.
+        let review = approval_mode.or_else(|| raw["agentApprovalMode"].as_str()) == Some("review");
         let needs_prompt = review
             || match &tool {
                 Tool::Bash(c, _) => !safe_command(c),

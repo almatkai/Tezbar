@@ -292,6 +292,37 @@ describe('agent conversation ownership', () => {
     await render({ kind: 'resume', sessionId: aId, nonce: 'A-after-approval' })
     expect(container.querySelector('[aria-label="Command approval"]')).toBeNull()
   })
+  it.each([false, true, undefined])(
+    'honors approval persistence capability %s for controls and shortcuts',
+    async (canRemember) => {
+      await render()
+      await send('Approval capability fixture')
+      const runId = runs[0]!.runId!
+      await emit({
+        type: 'approval',
+        runId,
+        approvalId: 'capability',
+        title: 'Allow?',
+        command: 'fixture',
+        canRemember,
+      })
+      const always = [...container.querySelectorAll('button')].find(
+        (button) => button.textContent?.trim() === 'Always allow this command'
+      )
+      expect(!!always).toBe(canRemember !== false)
+      await act(async () =>
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })
+        )
+      )
+      await tick()
+      expect(api.agentApprove).toHaveBeenCalledWith({
+        runId,
+        approvalId: 'capability',
+        decision: canRemember === false ? 'once' : 'always',
+      })
+    }
+  )
   it('starts fresh on every launcher new-chat event, including the real caller nonce contract', async () => {
     const first = createAiChatNavigation({ kind: 'newChat' })
     const second = createAiChatNavigation({ kind: 'newChat' })

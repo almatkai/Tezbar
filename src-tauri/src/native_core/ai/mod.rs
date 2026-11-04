@@ -348,12 +348,12 @@ impl AiCore {
         self.spawn(async move {
             let result = async {
                 let mut cfg = core.cfg(Some("chat"), None).await?;
-                if let Some(mode) = options.approval_mode { cfg["agentApprovalMode"] = json!(mode); }
+                if let Some(mode) = &options.approval_mode { cfg["agentApprovalMode"] = json!(mode); }
                 if turns.is_none() && native::selected(&cfg)? {
                     if options.history_has_images { return Err("Native configuration: image history is unsupported in stage 1; select agentRuntime=pi or start a text-only conversation".into()); }
                     // Native errors never enter the compatibility adapter's launch retry.
                     return tokio::time::timeout(Duration::from_secs(900),
-                        core.native_run(&task, &images, cwd.as_deref(), &cfg, &cancel, &run)
+                        core.native_run(&task, &images, cwd.as_deref(), &cfg, &cancel, &run, options.approval_mode.as_deref())
                     ).await.map_err(|_| "Native limit: run exceeded 900s".to_string())?.map(|_| ());
                 }
                 let mut attempts = 0;

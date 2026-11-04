@@ -32,6 +32,7 @@ impl AiCore {
         cfg: &Value,
         cancel: &Cancel,
         run: &str,
+        approval_mode: Option<&str>,
     ) -> Result<String, String> {
         if !images.is_empty() {
             return Err("Native configuration: stage 1 is text-only; select agentRuntime=pi for image attachments".into());
@@ -92,7 +93,9 @@ impl AiCore {
                 let name = s(&call["function"]["name"]);
                 let started = std::time::Instant::now();
                 self.agent_event(run,json!({"type":"stage","stage":{"index":stage,"label":label,"toolName":name,"status":"running"}}));
-                let result = self.native_tool(tool, &root, cfg, run, cancel).await;
+                let result = self
+                    .native_tool(tool, &root, approval_mode, run, cancel)
+                    .await;
                 let (text, failed) = match result {
                     Ok(text) => (text, false),
                     Err(error) => (format!("Native tool: {error}"), true),
