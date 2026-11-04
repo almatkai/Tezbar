@@ -462,6 +462,7 @@ impl AiCore {
             client_id: client_id(),
             client_secret: Some(client_secret()),
             resource: None,
+            resource_policy: None,
             scopes: [
                 "https://www.googleapis.com/auth/aicode",
                 "https://www.googleapis.com/auth/cloud-platform",

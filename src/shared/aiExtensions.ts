@@ -31,6 +31,9 @@ export type AiConnection = {
     tools?: {
       name: string
       description?: string
+      title?: string
+      annotations?: Record<string, unknown>
+      outputSchema?: Record<string, unknown>
       inputSchema?: Record<string, unknown> & { properties?: Record<string, unknown> }
     }[]
   }
@@ -38,6 +41,9 @@ export type AiConnection = {
     tools?: {
       name: string
       description?: string
+      title?: string
+      annotations?: Record<string, unknown>
+      outputSchema?: Record<string, unknown>
       inputSchema?: Record<string, unknown> & { properties?: Record<string, unknown> }
     }[]
     resources?: { name: string }[]
@@ -71,6 +77,7 @@ export type AiExtension = {
   }[]
 }
 export type AiExtensionsState = {
+  canResetSecrets?: boolean
   defaultWorkingFolder?: string
   project?: {
     folder: string

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isAiProviderConfigured, normalizeProviderModelList } from './aiProviders'
+import {
+  inferCapabilities,
+  isAiProviderConfigured,
+  normalizeProviderModelList,
+} from './aiProviders'
 import type { AiProviderModel, LlmConfigRecord } from './llmConfig'
 
 describe('isAiProviderConfigured', () => {
@@ -103,4 +107,10 @@ describe('normalizeProviderModelList', () => {
     ])
     expect(models.map((m) => m.id)).toEqual(['gpt-4o'])
   })
+})
+
+it('infers both vision and thinking for GPT 6 families', () => {
+  for (const id of ['gpt-6-sol', 'opencode/gpt-6.1-sol']) {
+    expect(inferCapabilities(id)).toEqual(expect.arrayContaining(['vision', 'thinking', 'tools']))
+  }
 })

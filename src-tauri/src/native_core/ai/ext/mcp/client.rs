@@ -167,10 +167,33 @@ impl Client {
                 // Always terminate the owned tree, even if its root exited first.
                 group.terminate().await;
             });
-            let killed = stop.clone();
             let log = logs.clone();
             let scrubs = secrets.clone();
-            core.spawn(async move{let mut frame=Lines::default();let mut b=[0;4096];loop{let n=tokio::select!{_=killed.cancelled()=>break,r=stderr.read(&mut b)=>match r{Ok(n)if n>0=>n,_=>break}};match frame.feed(&b[..n],false){Ok(lines)=>for line in lines{push_log(&log,&line,&scrubs)},Err(_)=>frame=Lines::default()}}});
+            core.spawn(async move {
+                let mut frame = Lines::default();
+                let mut b = [0; 4096];
+                loop {
+                    let n = match stderr.read(&mut b).await {
+                        Ok(n) if n > 0 => n,
+                        _ => {
+                            if let Ok(lines) = frame.feed(&[], true) {
+                                for line in lines {
+                                    push_log(&log, &line, &scrubs);
+                                }
+                            }
+                            break;
+                        }
+                    };
+                    match frame.feed(&b[..n], false) {
+                        Ok(lines) => {
+                            for line in lines {
+                                push_log(&log, &line, &scrubs)
+                            }
+                        }
+                        Err(_) => frame = Lines::default(),
+                    }
+                }
+            });
         }
         let http = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -264,6 +287,9 @@ impl Client {
                 );
             }
         }
+        if discover.is_err() {
+            tokio::time::sleep(Duration::from_millis(40)).await;
+        }
         if client.crashed() {
             return Err(format!(
                 "The program exited during startup. {}",
@@ -288,7 +314,27 @@ impl Client {
             }
         } else {
             *client.version.lock().unwrap() = legacy_version.into();
-            let init=client.call("initialize",json!({"protocolVersion":legacy_version,"capabilities":{},"clientInfo":{"name":"Tezbar","version":env!("CARGO_PKG_VERSION")}}),&Cancel::new(),Duration::from_secs(10)).await?;
+            let init=client.call("initialize",json!({"protocolVersion":legacy_version,"capabilities":{},"clientInfo":{"name":"Tezbar","version":env!("CARGO_PKG_VERSION")}}),&Cancel::new(),Duration::from_secs(10)).await;
+            let init = match init {
+                Ok(v) => v,
+                Err(error) => {
+                    tokio::time::sleep(Duration::from_millis(40)).await;
+                    if client.crashed() {
+                        return Err(format!(
+                            "The program exited during startup. {}",
+                            client
+                                .logs
+                                .lock()
+                                .unwrap()
+                                .iter()
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        ));
+                    }
+                    return Err(error);
+                }
+            };
             let version = s(&init["protocolVersion"]);
             if !matches!(version, "2025-11-25" | "2025-06-18" | "2025-03-26") {
                 return Err(

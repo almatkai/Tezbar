@@ -496,14 +496,15 @@ pub fn windows_mcp_command(
     } else {
         std::env::split_paths(path).collect()
     };
-    let extensions: Vec<_> = std::iter::once(String::new())
-        .chain(
-            pathext
-                .split(';')
-                .filter(|e| !e.is_empty())
-                .map(str::to_string),
-        )
-        .collect();
+    let extensions: Vec<String> = if input.extension().is_some() {
+        vec![String::new()]
+    } else {
+        pathext
+            .split(';')
+            .filter(|e| !e.is_empty())
+            .map(str::to_string)
+            .collect()
+    };
     let program = dirs
         .iter()
         .flat_map(|d| {
@@ -553,6 +554,7 @@ mod windows_repair_tests {
     #[tokio::test]
     async fn pathext_cmd_programs_accept_literal_arguments_and_refuse_injection() {
         let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("npx"), "#!/bin/sh\necho wrong shim").unwrap();
         let file = dir.path().join("npx.cmd");
         std::fs::write(&file, "@echo off\r\necho %~1\r\n").unwrap();
         let mut cmd = windows_mcp_command(

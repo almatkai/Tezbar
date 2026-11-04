@@ -847,6 +847,14 @@ async fn active_delete_and_clear_cannot_resurrect_transcript_files() {
                     .is_none()
             );
         }
+        let payload = json!({"session":{"id":"delete-live","title":"Deleted","createdAt":1,"updatedAt":2},"turn":{"id":"late","role":"assistant","text":"late done","createdAt":2}});
+        let late = core
+            .handle("chat:append", &[payload])
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(late["ok"], false, "{late}");
+        assert!(late["error"].as_str().unwrap().contains("deleted"));
         core.shutdown().await;
     }
 }

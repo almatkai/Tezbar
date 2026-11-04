@@ -13,7 +13,10 @@ pub(super) fn encode(o: &Origin, ms: &[Message], tools: &[Value]) -> Result<Valu
         let content = if let Some(raw) = m.raw_for(o) {
             raw.as_array()
                 .ok_or_else(|| failure("invalid saved Anthropic blocks"))?
-                .clone()
+                .iter()
+                .filter(|b| b["type"] != "text" || !s(&b["text"]).trim().is_empty())
+                .cloned()
+                .collect()
         } else {
             let mut content = vec![];
             for b in &m.blocks {

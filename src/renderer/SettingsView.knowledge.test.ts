@@ -229,6 +229,190 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     await act(async () => vi.advanceTimersByTimeAsync(ms))
   }
 
+  it('honors contributed provider form ownership', async () => {
+    const save = vi.fn(async (_patch: Record<string, unknown>) => ({ ok: true }))
+    Object.assign(window.tezbar, {
+      getLlmConfig: async () => ({
+        provider: 'custom:ext',
+        model: 'ext-model',
+        customProviders: [
+          {
+            id: 'custom:ext',
+            title: 'Team gateway',
+            subtitle: 'x',
+            protocol: 'anthropic',
+            baseURL: 'https://team.example',
+            headers: { 'x-team-key': { secret: 'TEAM' } },
+            _extensionId: 'team',
+            models: [{ id: 'ext-model', capabilities: ['tools'] }],
+          },
+        ],
+        providerConfigs: { openai: { apiKey: 'fixture-openai-key' } },
+        providerModels: { 'custom:ext': [{ id: 'ext-model', capabilities: ['tools'] }] },
+      }),
+      setLlmConfig: save,
+      listPiExtensions: async () => [],
+      aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      listAntigravityAccounts: async () => [],
+    })
+    await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
+    const text = container.textContent || ''
+    const key = container.querySelector<HTMLInputElement>('input[type="password"]')
+    expect(text).toContain('Managed by AI Extension team')
+    expect(text).not.toContain('Remove provider')
+    expect(key).toBeNull()
+    expect(container.querySelector('[aria-label="Provider protocol"]')).toBeNull()
+    expect(
+      container.querySelector<HTMLSelectElement>('[aria-label="Protocol for ext-model"]')!
+        .disabled ||
+        container.querySelector('[aria-label="Protocol for ext-model"]')!.closest('fieldset')!
+          .disabled
+    ).toBe(true)
+  })
+
+  it('saves builtin key typed once', async () => {
+    const save = vi.fn(async (_patch: Record<string, unknown>) => ({ ok: true }))
+    Object.assign(window.tezbar, {
+      getLlmConfig: async () => ({
+        provider: 'openai',
+        model: 'gpt-5',
+        providerConfigs: { openai: { apiKey: '', baseURL: 'https://api.openai.com/v1' } },
+        providerModels: { openai: [{ id: 'gpt-5', capabilities: ['tools'] }] },
+      }),
+      setLlmConfig: save,
+      listPiExtensions: async () => [],
+      aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      listAntigravityAccounts: async () => [],
+    })
+    await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
+    const key = container.querySelector<HTMLInputElement>('input[type="password"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        key,
+        'sk-fixture-pasted'
+      )
+      key.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(2000))
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerConfigs: expect.objectContaining({
+          openai: expect.objectContaining({ apiKey: 'sk-fixture-pasted' }),
+        }),
+      })
+    )
+    await act(async () => {
+      root.unmount()
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(2000))
+    root = createRoot(container)
+  })
+
+  it('saves latest typing, provider-scoped edits, model mutations and a pending close without hydration writes', async () => {
+    let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+      provider: 'openai',
+      model: 'fixture-a',
+      providerConfigs: { openai: { apiKey: '', baseURL: 'https://api.openai.com/v1' } },
+      providerSelectedModels: { openai: 'fixture-a' },
+      providerModels: {
+        openai: [
+          { id: 'fixture-a', capabilities: ['tools'] },
+          { id: 'fixture-b', capabilities: ['tools'] },
+        ],
+      },
+    }
+    const save = vi.fn(async (patch: typeof config) => {
+      config = { ...config, ...patch }
+      return { ok: true }
+    })
+    Object.assign(window.tezbar, {
+      getLlmConfig: async () => config,
+      setLlmConfig: save,
+      listPiExtensions: async () => [],
+      aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      listAntigravityAccounts: async () => [],
+    })
+    await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
+    expect(save).not.toHaveBeenCalled()
+    const input = async (el: HTMLInputElement, value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value)
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    const key = () => container.querySelector<HTMLInputElement>('input[type="password"]')!
+    await input(key(), 'fixture-o')
+    await input(key(), 'fixture-openai-last')
+    const url = [...container.querySelectorAll('input')].find(
+      (i) => i.value === 'https://api.openai.com/v1'
+    )!
+    await input(url, 'https://fixture.example/v1')
+    await act(async () =>
+      [...container.querySelectorAll('button')]
+        .find((b) => b.textContent?.startsWith('Anthropic'))!
+        .click()
+    )
+    await advance(500)
+    expect(config.providerConfigs?.openai?.apiKey).toBe('fixture-openai-last')
+    expect(config.providerConfigs?.openai?.baseURL).toBe('https://fixture.example/v1')
+    expect(key().value).toBe('')
+    await input(key(), 'fixture-anthropic-last')
+    await act(async () =>
+      [...container.querySelectorAll('button')]
+        .find((b) => b.textContent?.startsWith('OpenAI') && !b.textContent?.includes('Compatible'))!
+        .click()
+    )
+    await advance(500)
+    expect(config.providerConfigs?.anthropic?.apiKey).toBe('fixture-anthropic-last')
+    expect(key().value).toBe('fixture-openai-last')
+    await act(async () =>
+      [...container.querySelectorAll('button')]
+        .find((b) => b.querySelector('span')?.textContent === 'fixture-b')!
+        .click()
+    )
+    await advance(500)
+    expect(config.providerSelectedModels?.openai).toBe('fixture-b')
+    await input(key(), 'fixture-close-last')
+    await act(async () => root.unmount())
+    expect(config.providerConfigs?.openai?.apiKey).toBe('fixture-close-last')
+    expect(config.providerConfigs?.anthropic?.apiKey).toBe('fixture-anthropic-last')
+    root = createRoot(container)
+  })
+
+  it('retains a chosen protocol and token limit after model rediscovery', async () => {
+    let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+      provider: 'opencode',
+      model: 'opencode/fixture',
+      providerSelectedModels: { opencode: 'opencode/fixture' },
+      providerModels: {
+        opencode: [{ id: 'opencode/fixture', capabilities: ['tools'], maxTokens: 12345 }],
+      },
+    }
+    const save = vi.fn(async (patch: typeof config) => {
+      config = { ...config, ...patch }
+      return { ok: true }
+    })
+    Object.assign(window.tezbar, {
+      getLlmConfig: async () => config,
+      setLlmConfig: save,
+      listLlmModels: async () => ['opencode/fixture'],
+      listPiExtensions: async () => [],
+      aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      listAntigravityAccounts: async () => [],
+    })
+    await act(async () => root.render(createElement(SettingsView, { ...props, initialTab: 'ai' })))
+    const protocol = container.querySelector<HTMLSelectElement>(
+      '[aria-label="Protocol for opencode/fixture"]'
+    )!
+    await act(async () => {
+      protocol.value = 'anthropic'
+      protocol.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await click('Refresh')
+    expect(config.providerModels?.opencode?.find((m) => m.id === 'opencode/fixture')).toMatchObject(
+      { protocol: 'anthropic', maxTokens: 12345 }
+    )
+  })
+
   it('does not borrow the previous provider key or URL when reloading AI settings', async () => {
     const save = vi.fn(async () => ({ ok: true }))
     Object.assign(window.tezbar, {

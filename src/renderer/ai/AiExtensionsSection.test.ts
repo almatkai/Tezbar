@@ -105,6 +105,9 @@ it.each(['dark', 'white'])(
                   {
                     name: 'read',
                     description: 'Changed description',
+                    title: 'Changed title',
+                    annotations: { readOnlyHint: true, destructiveHint: false },
+                    outputSchema: { type: 'object', required: ['changedOutput'] },
                     inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
                   },
                 ],
@@ -114,6 +117,9 @@ it.each(['dark', 'white'])(
                   {
                     name: 'read',
                     description: 'Original description',
+                    title: 'Original title',
+                    annotations: { readOnlyHint: false, destructiveHint: true },
+                    outputSchema: { type: 'string' },
                     inputSchema: { type: 'object', properties: { file: { type: 'string' } } },
                   },
                 ],
@@ -158,6 +164,11 @@ it.each(['dark', 'white'])(
     )
     expect(host.textContent).toContain('Before: Original description')
     expect(host.textContent).toContain('After: Changed description')
+    expect(host.textContent).toContain('Changed title')
+    expect(host.textContent).toContain('Original title')
+    expect(host.textContent).toContain('readOnlyHint\":true')
+    expect(host.textContent).toContain('destructiveHint\":true')
+    expect(host.textContent).toContain('changedOutput')
     await act(async () =>
       Array.from(host.querySelectorAll('button'))
         .find((b) => b.textContent === 'Accept changes')!
@@ -350,4 +361,36 @@ it('preserves typed multiline arguments, cleared timeout and an unsaved instruct
   }
   expect(added.connections[0]?.args).toEqual(['-y', 'fixture-package'])
   expect(added.connections[0]?.timeoutSeconds).toBe(120)
+})
+
+it('offers missing-key recovery as an explicit action and reloads its status', async () => {
+  let canResetSecrets = true
+  const calls: string[] = []
+  window.tezbar = {
+    listPiExtensions: async () => [],
+    aiExtensions: async (action: string) => {
+      calls.push(action)
+      if (action === 'list')
+        return { canResetSecrets, extensions: [], globalInstructions: '', useAgentsMd: true }
+      if (action === 'reset-secrets') canResetSecrets = false
+      return { ok: true }
+    },
+  } as unknown as RaymesApi
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  dispose = () => {
+    act(() => root.unmount())
+    host.remove()
+  }
+  await act(async () => root.render(createElement(AiExtensionsSection)))
+  expect(calls).not.toContain('reset-secrets')
+  expect(host.textContent).toContain('archives the unreadable secrets')
+  await act(async () =>
+    [...host.querySelectorAll('button')]
+      .find((b) => b.textContent === 'Reset saved connection secrets')!
+      .click()
+  )
+  expect(calls.filter((c) => c === 'reset-secrets')).toHaveLength(1)
+  expect(host.textContent).not.toContain('Reset saved connection secrets')
 })

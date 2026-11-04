@@ -9,7 +9,19 @@ impl Redactor {
     pub fn new(secrets: Vec<String>) -> Self {
         let secrets = secrets
             .into_iter()
-            .filter(|s| !s.is_empty())
+            .filter(|s| {
+                s.len() >= 8
+                    && !matches!(
+                        s.to_ascii_lowercase().as_str(),
+                        "none"
+                            | "empty"
+                            | "lm-studio"
+                            | "null"
+                            | "not-needed"
+                            | "no-key"
+                            | "ollama"
+                    )
+            })
             .collect::<Vec<_>>();
         let longest = secrets.iter().map(String::len).max().unwrap_or(1);
         Self {
@@ -19,7 +31,7 @@ impl Redactor {
         }
     }
     pub fn clean(&self, text: &str) -> String {
-        let mut text = super::super::redact_text(text);
+        let mut text = super::super::redact_output(text);
         for secret in &self.secrets {
             text = text.replace(secret, "[redacted]");
         }

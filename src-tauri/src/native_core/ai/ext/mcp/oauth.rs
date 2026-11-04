@@ -2,7 +2,7 @@
 //! document is invented. Pre-registered clients take precedence over DCR.
 use super::super::super::*;
 use super::super::{key, record_mut};
-use oauth::{bounded_json, resource_http, secure_url, Request};
+use oauth::{bounded_json, secure_url, Request, ResourcePolicy};
 impl AiCore {
     pub(in crate::native_core::ai) async fn mcp_oauth_start(
         &self,
@@ -26,7 +26,8 @@ impl AiCore {
             return Err("Browser sign-in is only available for web connections".into());
         }
         let resource = secure_url(s(&c["url"]))?;
-        let http = resource_http(&resource, &resource).await?;
+        let policy = ResourcePolicy::new(&resource).await?;
+        let http = policy.http(&resource).await?;
         let probe = http
             .get(resource.clone())
             .timeout(Duration::from_secs(10))
@@ -45,7 +46,7 @@ impl AiCore {
             .map(|c| c[1].to_string());
         let mut candidates = vec![];
         if let Some(url) = advertised {
-            candidates.push(metadata_url(&resource, &url).await?);
+            candidates.push(metadata_url(&policy, &url).await?);
         }
         let mut scoped = resource.clone();
         scoped.set_query(None);
@@ -60,7 +61,8 @@ impl AiCore {
         candidates.push(root);
         let mut protected = None;
         for url in candidates {
-            if let Ok(response) = resource_http(&resource, &url)
+            if let Ok(response) = policy
+                .http(&url)
                 .await?
                 .get(url)
                 .timeout(Duration::from_secs(10))
@@ -84,7 +86,7 @@ impl AiCore {
             .and_then(|a| a.first())
             .and_then(Value::as_str)
             .ok_or("No authorization server is listed for this service")?;
-        let issuer_url = metadata_url(&resource, issuer).await?;
+        let issuer_url = metadata_url(&policy, issuer).await?;
         let mut rfc = issuer_url.clone();
         rfc.set_path(&format!(
             "/.well-known/oauth-authorization-server{}",
@@ -97,7 +99,8 @@ impl AiCore {
         ));
         let mut metadata = None;
         for url in [rfc, oidc] {
-            if let Ok(response) = resource_http(&resource, &url)
+            if let Ok(response) = policy
+                .http(&url)
                 .await?
                 .get(url)
                 .timeout(Duration::from_secs(10))
@@ -121,10 +124,10 @@ impl AiCore {
         {
             return Err("The authorization server must advertise PKCE S256 support".into());
         }
-        let authorize = metadata_url(&resource, s(&metadata["authorization_endpoint"]))
+        let authorize = metadata_url(&policy, s(&metadata["authorization_endpoint"]))
             .await?
             .to_string();
-        let token = metadata_url(&resource, s(&metadata["token_endpoint"]))
+        let token = metadata_url(&policy, s(&metadata["token_endpoint"]))
             .await?
             .to_string();
         let mut client_id = s(&c["auth"]["clientId"]).to_string();
@@ -157,9 +160,8 @@ impl AiCore {
             }
         }
         if client_id.is_empty() {
-            let registration =
-                metadata_url(&resource, s(&metadata["registration_endpoint"])).await?;
-            let response=resource_http(&resource,&registration).await?.post(registration).json(&json!({"client_name":"Tezbar","application_type":"native","redirect_uris":[redirect],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"})).timeout(Duration::from_secs(30)).send().await.map_err(|_|"Native client registration failed")?;
+            let registration = metadata_url(&policy, s(&metadata["registration_endpoint"])).await?;
+            let response=policy.http(&registration).await?.post(registration).json(&json!({"client_name":"Tezbar","application_type":"native","redirect_uris":[redirect],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"})).timeout(Duration::from_secs(30)).send().await.map_err(|_|"Native client registration failed")?;
             if !response.status().is_success() {
                 return Err(
                     "This service requires a pre-registered Client ID. Enter it in Advanced."
@@ -174,7 +176,7 @@ impl AiCore {
                 .into();
             client_secret = registration["client_secret"].as_str().map(str::to_string);
         }
-        self.oauth_start_native(Request{target,issuer:issuer.into(),authorize,token,client_id,client_secret,resource:Some(resource.to_string()),scopes:c["auth"]["scopes"].as_str().filter(|s|!s.trim().is_empty()).map(str::to_string).or(challenge_scopes).unwrap_or_else(|| protected["scopes_supported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")),port,callback_path:"/callback".into(),metadata:json!({"extension":extension,"connection":cid,"issuer":issuer,"resource":resource.as_str()})}).await
+        self.oauth_start_native(Request{target,issuer:issuer.into(),authorize,token,client_id,client_secret,resource:Some(resource.to_string()),resource_policy:Some(policy),scopes:c["auth"]["scopes"].as_str().filter(|s|!s.trim().is_empty()).map(str::to_string).or_else(|| c["requestedScopes"].as_str().filter(|s| !s.trim().is_empty()).map(str::to_string)).or(challenge_scopes).unwrap_or_else(|| protected["scopes_supported"].as_array().into_iter().flatten().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")),port,callback_path:"/callback".into(),metadata:json!({"extension":extension,"connection":cid,"issuer":issuer,"resource":resource.as_str()})}).await
     }
     pub(in crate::native_core::ai) async fn persist_mcp_oauth(
         &self,
@@ -184,6 +186,8 @@ impl AiCore {
     ) -> Result<(), String> {
         token["issuer"] = json!(request.issuer);
         token["resource"] = json!(request.resource);
+        token["resourcePrivate"] =
+            json!(request.resource_policy.as_ref().is_some_and(|p| p.private));
         token["tokenEndpoint"] = json!(request.token);
         token["clientId"] = json!(request.client_id);
         if let Some(secret) = &request.client_secret {
@@ -268,7 +272,13 @@ impl AiCore {
             .filter(|v| !v.is_empty())
             .ok_or("Sign-in expired. Sign in again.")?;
         let endpoint = secure_url(s(&grant["tokenEndpoint"]))?;
-        let http = resource_http(&secure_url(s(&grant["resource"]))?, &endpoint).await?;
+        let policy = ResourcePolicy::new(&secure_url(s(&grant["resource"]))?).await?;
+        if policy.private && grant["resourcePrivate"] != true {
+            return Err(
+                "Authorization resource changed from public to private. Sign in again.".into(),
+            );
+        }
+        let http = policy.http(&endpoint).await?;
         let mut form = vec![
             ("grant_type", "refresh_token"),
             ("refresh_token", refresh),
@@ -319,9 +329,9 @@ pub(in crate::native_core::ai::ext) fn challenge_scope(challenge: &str) -> Optio
         .captures(challenge)
         .map(|c| c[1].to_string())
 }
-async fn metadata_url(resource: &reqwest::Url, raw: &str) -> Result<reqwest::Url, String> {
+async fn metadata_url(policy: &ResourcePolicy, raw: &str) -> Result<reqwest::Url, String> {
     let url = secure_url(raw)?;
-    resource_http(resource, &url).await?;
+    policy.http(&url).await?;
     Ok(url)
 }
 
@@ -331,18 +341,22 @@ mod repair_tests {
     #[tokio::test]
     async fn metadata_cannot_redirect_remote_resources_to_private_services() {
         let resource = secure_url("https://resource.example/mcp").unwrap();
+        let policy = ResourcePolicy::from_fixture(&resource, "93.184.216.34:443");
         for target in [
             "http://127.0.0.1:8888/secret",
             "https://localhost/metadata",
             "https://192.168.1.2/register",
             "https://[::1]/token",
         ] {
-            assert!(metadata_url(&resource, target).await.is_err(), "{target}");
+            assert!(metadata_url(&policy, target).await.is_err(), "{target}");
         }
         let local = secure_url("http://127.0.0.1:1234").unwrap();
-        assert!(metadata_url(&local, "http://127.0.0.1:5678/as")
-            .await
-            .is_ok());
+        assert!(metadata_url(
+            &ResourcePolicy::new(&local).await.unwrap(),
+            "http://127.0.0.1:5678/as"
+        )
+        .await
+        .is_ok());
         assert_eq!(
             secure_url(" https://MCP.example.com:443 ").unwrap(),
             secure_url("https://mcp.example.com/").unwrap()

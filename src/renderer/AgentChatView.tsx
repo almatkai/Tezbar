@@ -65,6 +65,8 @@ type AgentConversation = {
   explicitlyStopped: boolean
   preparing: boolean
   submission: string | null
+  deleting: boolean
+  writes: Set<Promise<unknown>>
   pendingWrites: number
   unsavedTurns: Set<string>
   unsubscribe: () => void
@@ -175,6 +177,7 @@ export default function AgentChatView({
   const releaseInactiveConversation = useCallback((owner: AgentConversation): void => {
     if (
       selectedConversation.current === owner ||
+      owner.deleting ||
       owner.preparing ||
       owner.submission ||
       owner.pendingWrites ||
@@ -240,19 +243,26 @@ export default function AgentChatView({
       }
       owner.session = next
       notifyConversation(owner)
+      if (owner.deleting) {
+        owner.pendingWrites--
+        owner.unsavedTurns.add(turn.id)
+        return
+      }
+      const write = window.tezbar.chatAppend({
+        session: {
+          id: next.id,
+          title: next.title,
+          icon: next.icon,
+          createdAt: next.createdAt,
+          updatedAt: next.updatedAt,
+          workingDirectory: next.workingDirectory,
+          agentProfileId: next.agentProfileId || '',
+        },
+        turn,
+      })
+      owner.writes.add(write)
       try {
-        const result = await window.tezbar.chatAppend({
-          session: {
-            id: next.id,
-            title: next.title,
-            icon: next.icon,
-            createdAt: next.createdAt,
-            updatedAt: next.updatedAt,
-            workingDirectory: next.workingDirectory,
-            agentProfileId: next.agentProfileId || '',
-          },
-          turn,
-        })
+        const result = await write
         if (!result.ok) throw new Error(result.error || 'Could not save chat')
         owner.unsavedTurns.delete(turn.id)
         if (mounted.current) void refreshHistory()
@@ -263,6 +273,7 @@ export default function AgentChatView({
             'This conversation could not be saved. Copy any response you want to keep before closing it.'
           )
       } finally {
+        owner.writes.delete(write)
         owner.pendingWrites--
         notifyConversation(owner)
       }
@@ -340,6 +351,8 @@ export default function AgentChatView({
         explicitlyStopped: false,
         preparing: false,
         submission: null,
+        deleting: false,
+        writes: new Set(),
         pendingWrites: 0,
         unsavedTurns: new Set(),
         unsubscribe: () => {},
@@ -878,8 +891,21 @@ export default function AgentChatView({
     if (mounted.current) void refreshHistory()
   }
   const deleteConversation = async (id: string): Promise<void> => {
+    const retained = [...conversations.current].find((item) => item.session?.id === id)
+    if (retained) retained.deleting = true
     if (selectedConversation.current?.session?.id === id) resetChat()
-    const result = await window.tezbar.chatDelete(id)
+    if (retained) await Promise.allSettled([...retained.writes])
+    let result: { ok: boolean }
+    try {
+      result = await window.tezbar.chatDelete(id)
+    } catch {
+      result = { ok: false }
+    }
+    if (!result.ok && retained) {
+      retained.deleting = false
+      for (const turn of retained.session?.turns || [])
+        if (retained.unsavedTurns.has(turn.id)) await persistTurn(turn, retained)
+    }
     if (!result.ok) {
       if (mounted.current) setUiError('Could not delete this conversation.')
     } else {

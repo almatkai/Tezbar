@@ -52,6 +52,7 @@ export type AiProviderConfig = {
 }
 
 export type CustomAiProvider = {
+  _extensionId?: string
   id: `custom:${string}`
   title: string
   subtitle?: string

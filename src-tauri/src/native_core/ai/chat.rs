@@ -8,6 +8,7 @@ fn open(path: &Path) -> Result<Connection, String> {
     let db = Connection::open(path).map_err(err)?;
     db.busy_timeout(Duration::from_secs(10)).map_err(err)?;
     db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;
+      CREATE TABLE IF NOT EXISTS chat_deleted_sessions(id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS chat_sessions(id TEXT PRIMARY KEY,title TEXT NOT NULL,icon TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,working_directory TEXT);
       CREATE TABLE IF NOT EXISTS chat_turns(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,role TEXT NOT NULL,text TEXT NOT NULL,response_meta_json TEXT,stages_json TEXT,timeline_json TEXT,attachments_json TEXT,error TEXT,created_at INTEGER NOT NULL,FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE);
       CREATE TABLE IF NOT EXISTS chat_session_profiles(session_id TEXT PRIMARY KEY REFERENCES chat_sessions(id) ON DELETE CASCADE, profile_id TEXT NOT NULL);
@@ -161,7 +162,21 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             }
             let text = required(turn, "text")?;
             let at = timestamp(turn, "createdAt")?;
-            let tx = db.transaction().map_err(err)?;
+            let tx = db
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(err)?;
+            if tx
+                .query_row(
+                    "SELECT 1 FROM chat_deleted_sessions WHERE id=?",
+                    [sid],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(err)?
+                .is_some()
+            {
+                return Err("This conversation was deleted".into());
+            }
             tx.execute("INSERT INTO chat_sessions(id,title,icon,created_at,updated_at,working_directory) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,icon=COALESCE(excluded.icon,chat_sessions.icon),updated_at=excluded.updated_at,working_directory=excluded.working_directory",params![sid,title,icon,created,updated,session["workingDirectory"].as_str()]).map_err(err)?;
             if let Some(profile) = session["agentProfileId"].as_str() {
                 if profile.is_empty() {
@@ -244,17 +259,44 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             Ok(json!({"ok":count>0}))
         }
         "chat:delete" => {
-            let n = db
-                .execute(
-                    "DELETE FROM chat_sessions WHERE id=?",
-                    [a.as_str().ok_or("Invalid session id")?],
-                )
+            let sid = a.as_str().ok_or("Invalid session id")?;
+            let tx = db
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
                 .map_err(err)?;
-            Ok(json!({"ok":n>0}))
+            tx.execute(
+                "INSERT OR IGNORE INTO chat_deleted_sessions(id) VALUES(?)",
+                [sid],
+            )
+            .map_err(err)?;
+            tx.execute("DELETE FROM chat_sessions WHERE id=?", [sid])
+                .map_err(err)?;
+            tx.commit().map_err(err)?;
+            Ok(json!({"ok":true}))
         }
         "chat:clear" => {
-            db.execute_batch("BEGIN;DELETE FROM chat_turns;DELETE FROM chat_sessions;COMMIT;")
+            let tx = db
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
                 .map_err(err)?;
+            tx.execute(
+                "INSERT OR IGNORE INTO chat_deleted_sessions(id) SELECT id FROM chat_sessions",
+                [],
+            )
+            .map_err(err)?;
+            for id in arg(args, 1)
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+            {
+                tx.execute(
+                    "INSERT OR IGNORE INTO chat_deleted_sessions(id) VALUES(?)",
+                    [id],
+                )
+                .map_err(err)?;
+            }
+            tx.execute("DELETE FROM chat_turns", []).map_err(err)?;
+            tx.execute("DELETE FROM chat_sessions", []).map_err(err)?;
+            tx.commit().map_err(err)?;
             Ok(json!({"ok":true}))
         }
         _ => Err("Unknown chat storage channel".into()),

@@ -819,7 +819,7 @@ Uncatalogued models expose an explicit per-model Protocol selector.
 the current official docs; `baseURL` overrides it. Choose by family: `claude-*` and listed Qwen Plus or
 Flash models → `/anthropic/v1/messages`; `gpt-*`, `grok-*`, `muse-*` → `/openai/v1/responses`; `gemini-*`
 → `/google/v1beta/models/{m}`; all else → `/openai/v1/chat/completions`. `opencode-go/*` uses the
-`/zen/go` gateway from pi-ai's catalog, chosen the same way. System One (`jev-*`) models are not chat
+`https://opencode.ai/inference/go` gateway from the official Go documentation, chosen the same way. System One (`jev-*`) models are not chat
 models and are excluded from the picker. Send `x-opencode-session` with the conversation ID, as a stable
 per-conversation value.
 

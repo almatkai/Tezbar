@@ -714,16 +714,23 @@ export default function SettingsView({
   // Mutation busy state must not lock out snapshot recovery.
   const [knowledgeBusy, setKnowledgeBusy] = useState(false)
   const [knowledgeMessage, setKnowledgeMessage] = useState<string | null>(null)
+  const aiEditRevision = useRef(0)
+  const selectedAiProviderRef = useRef(aiProvider)
+  selectedAiProviderRef.current = aiProvider
   const loadAiModels = useCallback(
     async (provider: ProviderId, baseURLOverride?: string, apiKeyOverride?: string) => {
       setAiModelsLoading(true)
+      const revision = aiEditRevision.current
       try {
         const models = await window.tezbar.listLlmModels(provider, baseURLOverride, apiKeyOverride)
         if (models.length === 0) return
         // Merge against the persisted config (the single source of truth) so
         // hand-added models — even with typos — always survive, and discovered
         // ids are added on top without dropping anything.
+        await aiWrites.current
         const config = await window.tezbar.getLlmConfig().catch(() => ({}) as LlmConfigRecord)
+        if (revision !== aiEditRevision.current) return
+        if (config.customProviders?.some((p) => p.id === provider && p._extensionId)) return
         const existing = config.providerModels?.[provider] ?? defaultModels(provider)
         const existingMap = new Map(existing.map((m) => [m.id, m]))
         const seen = new Set<string>()
@@ -736,6 +743,7 @@ export default function SettingsView({
         for (const id of models) {
           const prior = existingMap.get(id)
           push({
+            ...prior,
             id,
             capabilities: prior?.capabilities?.length ? prior.capabilities : inferCapabilities(id),
             ...(prior?.contextWindow !== undefined ? { contextWindow: prior.contextWindow } : {}),
@@ -754,7 +762,7 @@ export default function SettingsView({
         // Merge with the existing selection map — never replace it wholesale.
         const currentModel = (config.providerSelectedModels?.[provider] ?? '').trim()
         if (!currentModel && normalized[0]) {
-          patch.model = normalized[0].id
+          if (config.provider === provider) patch.model = normalized[0].id
           patch.providerSelectedModels = {
             ...(config.providerSelectedModels ?? {}),
             [provider]: normalized[0].id,
@@ -764,8 +772,12 @@ export default function SettingsView({
         if (patch.providerSelectedModels) {
           setAiProviderSelectedModels((prev) => ({ ...prev, ...patch.providerSelectedModels }))
         }
-        if (patch.model) setAiModel(patch.model)
-        void window.tezbar.setLlmConfig(patch as LlmConfigRecord)
+        if (selectedAiProviderRef.current === provider && patch.providerSelectedModels?.[provider])
+          setAiModel(patch.providerSelectedModels[provider]!)
+        aiWrites.current = aiWrites.current
+          .catch(() => {})
+          .then(() => window.tezbar.setLlmConfig(patch as LlmConfigRecord))
+        await aiWrites.current
       } catch {
         /* Model discovery is optional; user-managed models remain available. */
       } finally {
@@ -971,6 +983,7 @@ export default function SettingsView({
   }, [])
 
   const selectAiProvider = (provider: ProviderId): void => {
+    flushAiSave()
     const currentProviderConfig: AiProviderConfig =
       aiProvider === 'gemini'
         ? { ...aiProviderConfigs[aiProvider], geminiApiKey: aiApiKey, baseURL: aiBaseURL }
@@ -1006,7 +1019,7 @@ export default function SettingsView({
     )
     setGithubOAuthClientId(nextProviderConfig.githubOAuthClientId ?? '')
     setAiNewModelId('')
-    void loadAiModels(provider)
+    void aiWrites.current.then(() => loadAiModels(provider))
   }
 
   type AiPatchOverrides = {
@@ -1406,8 +1419,9 @@ export default function SettingsView({
   // user action (add/remove model, toggle visibility/capability, switch
   // provider/model, edit key/URL) invokes it.
   const persistAiSettings = (immediate = false, overrides?: AiPatchOverrides): void => {
+    aiEditRevision.current++
     if (aiSaveTimer.current !== null) window.clearTimeout(aiSaveTimer.current)
-    const patch = buildAiProviderPatch(overrides)
+    aiSaveTimer.current = null
     if (overrides?.baseURL !== undefined) {
       const targetProvider = overrides.provider ?? aiProvider
       const normalizedOverride = overrides.baseURL
@@ -1428,19 +1442,31 @@ export default function SettingsView({
     if (overrides?.activeProvider) {
       setActiveAiProvider(overrides.activeProvider)
     }
-    const write = (): void => {
-      void window.tezbar
-        .setLlmConfig(patch)
-        .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
-    }
+    pendingAiOverrides.current = overrides
     if (immediate) {
-      write()
+      writeAiPatch(buildAiProviderPatch(overrides))
+      pendingAiOverrides.current = undefined
       return
     }
-    aiSaveTimer.current = window.setTimeout(() => {
-      aiSaveTimer.current = null
-      write()
-    }, 300)
+    aiSaveTimer.current = window.setTimeout(() => flushAiSave(), 300)
+  }
+
+  const pendingAiOverrides = useRef<AiPatchOverrides | undefined>(undefined)
+  const buildAiPatchRef = useRef(buildAiProviderPatch)
+  buildAiPatchRef.current = buildAiProviderPatch
+  const aiWrites = useRef<Promise<unknown>>(Promise.resolve())
+  const writeAiPatch = (patch: LlmConfigRecord): void => {
+    aiWrites.current = aiWrites.current
+      .catch(() => {})
+      .then(() => window.tezbar.setLlmConfig(patch))
+      .catch(() => setMsg({ tone: 'error', text: 'Could not save' }))
+  }
+  const flushAiSave = (): void => {
+    if (aiSaveTimer.current === null) return
+    window.clearTimeout(aiSaveTimer.current)
+    aiSaveTimer.current = null
+    writeAiPatch(buildAiPatchRef.current(pendingAiOverrides.current))
+    pendingAiOverrides.current = undefined
   }
 
   const save = useCallback((): void => {
@@ -1479,7 +1505,7 @@ export default function SettingsView({
       triggerSaveGreen()
       setMsg({ tone: 'success', text: 'Settings saved' })
     },
-    [activeTab, save, triggerSaveGreen]
+    [activeTab, save, triggerSaveGreen, persistAiSettings]
   )
 
   useEffect(() => {
@@ -1516,16 +1542,12 @@ export default function SettingsView({
   // Flush any pending debounced AI save when the Settings window unmounts
   // (e.g. user closes it within the 400ms debounce window), so an edit isn't
   // silently dropped.
-  const persistAiSettingsRef = useRef(persistAiSettings)
-  useEffect(() => {
-    persistAiSettingsRef.current = persistAiSettings
-  })
+  const flushAiSaveRef = useRef(flushAiSave)
+  flushAiSaveRef.current = flushAiSave
   useEffect(() => {
     return () => {
       if (aiSaveTimer.current !== null) {
-        window.clearTimeout(aiSaveTimer.current)
-        aiSaveTimer.current = null
-        persistAiSettingsRef.current(true)
+        flushAiSaveRef.current()
       }
     }
   }, [])
@@ -1685,6 +1707,7 @@ export default function SettingsView({
     </ul>
   )
 
+  const extensionOwner = customProviders.find((p) => p.id === aiProvider)?._extensionId
   const currentAiModels = aiProviderModels[aiProvider] ?? defaultModels(aiProvider)
   const availableProviders = providerRows({ customProviders })
 
@@ -2169,7 +2192,7 @@ export default function SettingsView({
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {isCustomProvider(aiProvider) ? (
+                        {isCustomProvider(aiProvider) && !extensionOwner ? (
                           <Button variant="danger" onClick={() => removeCustomProvider(aiProvider)}>
                             Remove provider
                           </Button>
@@ -2197,6 +2220,12 @@ export default function SettingsView({
                       </div>
                     </div>
 
+                    {extensionOwner && (
+                      <p role="note">
+                        Managed by AI Extension {extensionOwner}. Edit its provider and credentials
+                        in AI Extensions.
+                      </p>
+                    )}
                     {/* Provider-specific config fields */}
                     <div className="space-y-3">
                       {aiProvider === 'antigravity' ? <AiAccountsPanel /> : null}
@@ -2227,7 +2256,7 @@ export default function SettingsView({
                         />
                       </label>
 
-                      {isCustomProvider(aiProvider) ? (
+                      {isCustomProvider(aiProvider) && !extensionOwner ? (
                         <label>
                           Protocol
                           <SelectField
@@ -2263,7 +2292,9 @@ export default function SettingsView({
                         </label>
                       ) : null}
 
-                      {aiProvider !== 'ollama' && aiProvider !== 'antigravity' ? (
+                      {!extensionOwner &&
+                      aiProvider !== 'ollama' &&
+                      aiProvider !== 'antigravity' ? (
                         <SettingsRow
                           label={aiProvider === 'copilot' ? 'GitHub Token' : 'API Key'}
                           detail={
@@ -2352,7 +2383,8 @@ export default function SettingsView({
                         </SettingsRow>
                       ) : null}
 
-                      {aiProvider !== 'copilot' &&
+                      {!extensionOwner &&
+                      aiProvider !== 'copilot' &&
                       aiProvider !== 'opencode' &&
                       aiProvider !== 'antigravity' ? (
                         <SettingsRow
@@ -2397,10 +2429,15 @@ export default function SettingsView({
                                   addAiModel()
                                 }
                               }}
+                              disabled={!!extensionOwner}
                               placeholder="Add model id"
                               spellCheck={false}
                             />
-                            <Button variant="ghost" onClick={addAiModel}>
+                            <Button
+                              variant="ghost"
+                              disabled={!!extensionOwner}
+                              onClick={addAiModel}
+                            >
                               Add
                             </Button>
                             <Button
@@ -2408,7 +2445,9 @@ export default function SettingsView({
                               disabled={aiModelsLoading}
                               onClick={() => {
                                 persistAiSettings(true)
-                                void loadAiModels(aiProvider, aiBaseURL, aiApiKey)
+                                void aiWrites.current.then(() =>
+                                  loadAiModels(aiProvider, aiBaseURL, aiApiKey)
+                                )
                               }}
                             >
                               {aiModelsLoading ? 'Loading...' : 'Refresh'}
@@ -2424,6 +2463,7 @@ export default function SettingsView({
                             <button
                               type="button"
                               className="text-ink-3 transition hover:text-ink-1"
+                              disabled={!!extensionOwner}
                               onClick={() => setAllAiPickerVisibility(true)}
                             >
                               Show all
@@ -2431,6 +2471,7 @@ export default function SettingsView({
                             <button
                               type="button"
                               className="text-ink-3 transition hover:text-ink-1"
+                              disabled={!!extensionOwner}
                               onClick={() => setAllAiPickerVisibility(false)}
                             >
                               Hide all
@@ -2480,11 +2521,18 @@ export default function SettingsView({
                                       ) : null}
                                     </span>
                                   </button>
-                                  <Button variant="quiet" onClick={() => removeAiModel(model.id)}>
+                                  <Button
+                                    variant="quiet"
+                                    disabled={!!extensionOwner}
+                                    onClick={() => removeAiModel(model.id)}
+                                  >
                                     Remove
                                   </Button>
                                 </div>
-                                <div className="mt-2 flex flex-wrap gap-2 items-center">
+                                <fieldset
+                                  disabled={!!extensionOwner}
+                                  className="mt-2 flex flex-wrap gap-2 items-center"
+                                >
                                   <label className="flex items-center gap-1.5 text-[11px] font-medium text-ink-2">
                                     <input
                                       type="checkbox"
@@ -2544,7 +2592,7 @@ export default function SettingsView({
                                       {capability.label}
                                     </label>
                                   ))}
-                                </div>
+                                </fieldset>
                               </li>
                             ))}
                           </ul>

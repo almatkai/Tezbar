@@ -35,7 +35,7 @@ export const RECOMMENDED_AI_MODEL: Record<BuiltInProviderId, string> = {
   anthropic: 'claude-haiku-4-5-20251001',
   ollama: 'llama3.2',
   copilot: 'gpt-5-mini',
-  opencode: 'opencode/big-pickle',
+  opencode: 'opencode/gpt-5.4-mini',
 }
 
 export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
@@ -170,7 +170,6 @@ export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[
   ],
 
   opencode: [
-    { id: 'opencode/big-pickle', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
     {
       id: 'opencode/gpt-5.5',
       capabilities: ['vision', 'thinking', 'tools'],
@@ -187,14 +186,6 @@ export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[
       capabilities: ['thinking', 'tools'],
       contextWindow: 1048576,
     },
-    {
-      id: 'opencode/deepseek-v4-flash-free',
-      capabilities: ['thinking', 'tools'],
-      contextWindow: 1048576,
-    },
-    { id: 'opencode/mimo-v2.5-free', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
-    { id: 'opencode/nemotron-3-ultra-free', capabilities: ['tools'], contextWindow: 128000 },
-    { id: 'opencode/north-mini-code-free', capabilities: ['tools'], contextWindow: 128000 },
     { id: 'opencode/kimi-k2.7-code', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
   ],
 }
@@ -280,12 +271,12 @@ export function inferCapabilities(modelId: string): AiModelCapability[] {
   const lower = modelId.toLowerCase()
   const caps: AiModelCapability[] = []
 
-  if (/vision|vl|llava|gpt-4o|gpt-5|gemini|claude|fable|opus|sonnet|haiku/.test(lower)) {
+  if (/vision|vl|llava|gpt-4o|gpt-[56]|gemini|claude|fable|opus|sonnet|haiku/.test(lower)) {
     caps.unshift('vision')
   }
 
   if (
-    /reason|think|r1|o\d|gpt-5|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek/.test(lower)
+    /reason|think|r1|o\d|gpt-[56]|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek/.test(lower)
   ) {
     caps.push('thinking')
   }

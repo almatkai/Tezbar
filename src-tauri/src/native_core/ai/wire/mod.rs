@@ -39,15 +39,24 @@ pub fn encode(
             v["max_tokens"] = json!(max_tokens);
         }
         Protocol::OpenaiResponses => {
-            if thinking {
-                v["include"] = json!(["reasoning.encrypted_content"]);
-            }
+            // Stateless replay needs encrypted reasoning even for uncatalogued models.
+            v["include"] = json!(["reasoning.encrypted_content"]);
             v["max_output_tokens"] = json!(max_tokens);
         }
         Protocol::Anthropic => {
             v["max_tokens"] = json!(max_tokens);
             if thinking {
-                v["thinking"] = json!({"type":"adaptive"});
+                let legacy = regex::Regex::new(
+                    r"(?i)sonnet-3[.-]7|(?:haiku|sonnet|opus)-4(?:[.-]5)?(?:[.-]|$)",
+                )
+                .unwrap()
+                .is_match(&origin.model);
+                let adaptive = regex::Regex::new(r"(?i)(?:sonnet|opus)-4[.-][6-9]|(?:haiku|sonnet|opus|fable|mythos)-[5-9](?:[.-]|$)|mythos-preview").unwrap().is_match(&origin.model);
+                if adaptive {
+                    v["thinking"] = json!({"type":"adaptive"});
+                } else if legacy && max_tokens > 1024 {
+                    v["thinking"] = json!({"type":"enabled", "budget_tokens": (max_tokens / 2).max(1024).min(max_tokens - 1)});
+                }
             }
         }
         Protocol::Ollama => {
@@ -84,6 +93,17 @@ fn id_for(origin: &Origin, messages: &[Message], canonical: &str, id: &str) -> S
 }
 fn image_url(mime: &str, data: &str) -> String {
     format!("data:{mime};base64,{data}")
+}
+fn argument_text(value: &Value) -> Result<String, String> {
+    match value {
+        Value::Null => Ok("{}".into()),
+        Value::String(s) if s.trim().is_empty() => Ok("{}".into()),
+        Value::String(s) => Ok(s.clone()),
+        Value::Object(_) => Ok(value.to_string()),
+        _ => Err(failure(
+            "tool arguments must be an object or JSON object string",
+        )),
+    }
 }
 fn object_args(args: &str) -> Result<Value, String> {
     let v: Value = serde_json::from_str(if args.trim().is_empty() { "{}" } else { args })
@@ -201,6 +221,9 @@ impl Decoder {
         Ok(())
     }
     pub fn json(&mut self, v: Value, on: &mut impl FnMut(&str)) -> Result<(), String> {
+        if v.get("error").is_some_and(|e| !e.is_null()) || !v["response"]["error"].is_null() {
+            return Err(provider_stream_error(&v));
+        }
         match self.origin.protocol {
             Protocol::OpenaiChat => {
                 let c = &v["choices"][0];
@@ -303,7 +326,8 @@ impl Decoder {
                         self.args
                             .get(i)
                             .cloned()
-                            .unwrap_or_else(|| s(&c["function"]["arguments"]).into())
+                            .map(Ok)
+                            .unwrap_or_else(|| argument_text(&c["function"]["arguments"]))?
                     };
                     let args = if args.trim().is_empty() {
                         "{}".into()
@@ -389,12 +413,8 @@ impl Decoder {
                             });
                         }
                         (Protocol::OpenaiResponses, "function_call") => {
-                            let a = if s(&b["arguments"]).trim().is_empty() {
-                                "{}"
-                            } else {
-                                s(&b["arguments"])
-                            };
-                            object_args(a)?;
+                            let a = argument_text(&b["arguments"])?;
+                            object_args(&a)?;
                             canonical.push(Block::ToolCall {
                                 id: format!("c{}_{}", self.turn, i),
                                 wire_id: s(&b["call_id"]).into(),

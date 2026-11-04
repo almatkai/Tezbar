@@ -82,10 +82,14 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
                             .as_object()
                             .ok_or_else(|| failure("invalid reasoning detail"))?
                         {
-                            if matches!(k.as_str(), "text" | "summary" | "data" | "signature")
+                            if matches!(k.as_str(), "text" | "summary" | "data")
                                 && value.is_string()
                             {
                                 previous[k] = json!(format!("{}{}", s(&previous[k]), s(value)));
+                            } else if k == "signature"
+                                && previous[k].as_str().is_some_and(|s| !s.is_empty())
+                            {
+                                // Signatures are opaque complete values, not text deltas.
                             } else if !value.is_null() {
                                 previous[k] = value.clone();
                             }
@@ -128,12 +132,17 @@ pub(super) fn decode(d: &mut Decoder, v: Value, on: &mut impl FnMut(&str)) -> Re
             }
             call["function"]["name"] = json!(name)
         }
-        if let Some(a) = t["function"]["arguments"].as_str() {
+        if let Some(value) = t["function"].get("arguments").filter(|v| !v.is_null()) {
+            // Empty starts/deltas are fragments, not a completed empty object.
+            let a = match value.as_str() {
+                Some(text) => text.to_string(),
+                None => argument_text(value)?,
+            };
             let buf = d.args.entry(i).or_default();
             if buf.len() + a.len() > limits::ARGUMENT_BYTES {
                 return Err(failure("arguments exceed 1 MiB"));
             }
-            buf.push_str(a)
+            buf.push_str(&a)
         }
     }
     if let Some(r) = c["finish_reason"].as_str() {

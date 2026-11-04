@@ -15,14 +15,15 @@ impl AiCore {
     ) -> Result<Turn, String> {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(600);
         let mut route = tokio::select! {biased;_=cancel.cancelled()=>return Err("Operation cancelled".into()),r=self.native_route(cfg,messages)=>r?};
+        let budget = route.request_budget;
         let mut view = messages.to_vec();
-        if limits::project_images(&route.origin.protocol, &mut view) {
+        if limits::project_images_budget(&route.origin.protocol, &mut view, budget) {
             if let Some(run) = cfg["runId"].as_str() {
                 self.agent_event(run,json!({"type":"log","source":"native","line":"Earlier images omitted to fit the selected provider limits. Original history images are retained."}));
             }
         }
         let messages = view.as_slice();
-        limits::validate_images(&route.origin.protocol, messages)?;
+        limits::validate_images_budget(&route.origin.protocol, messages, budget)?;
         let mut encoded = encode(
             &route.origin,
             messages,
@@ -30,6 +31,13 @@ impl AiCore {
             route.max_tokens,
             route.thinking,
         )?;
+        if route.origin.protocol == Protocol::OpenaiChat && route.requires_reasoning_content {
+            for m in encoded["messages"].as_array_mut().into_iter().flatten() {
+                if m["role"] == "assistant" && m["reasoning_content"].is_null() {
+                    m["reasoning_content"] = json!("");
+                }
+            }
+        }
         if route.origin.protocol == Protocol::OpenaiChat && route.official_openai {
             if let Some(tokens) = encoded.as_object_mut().unwrap().remove("max_tokens") {
                 encoded["max_completion_tokens"] = tokens;
@@ -42,11 +50,10 @@ impl AiCore {
             encoded = providers::antigravity::envelope(encoded, &options, project)
         }
         let mut body = serde_json::to_vec(&encoded).map_err(err)?;
-        if body.len() > limits::request_bytes(&route.origin.protocol) {
+        if body.len() > budget {
             return Err(format!(
                 "Native limit: {:?} request exceeds {} bytes including images",
-                route.origin.protocol,
-                limits::request_bytes(&route.origin.protocol)
+                route.origin.protocol, budget
             ));
         }
         let ag = cfg["provider"] == "antigravity";
@@ -75,6 +82,7 @@ impl AiCore {
         let mut fallback_attempt = 0;
         let mut account_attempt = 0;
         let mut copilot_exchanged = false;
+        let mut include_fallback = false;
         for _request in 0..24 {
             let attempt = retry_attempt;
             if cancel.is_cancelled() {
@@ -285,6 +293,26 @@ impl AiCore {
             match result {
                 Ok(t) => return Ok(t),
                 Err((e, retry, delay)) => {
+                    if !visible
+                        && !include_fallback
+                        && route.origin.protocol == Protocol::OpenaiResponses
+                        && encoded.get("include").is_some()
+                        && e.starts_with("Native HTTP: status 400")
+                        && e.to_ascii_lowercase().contains("include")
+                        && regex::Regex::new(
+                            "(?i)unsupported|not supported|unknown|unrecognized|not allowed",
+                        )
+                        .unwrap()
+                        .is_match(&e)
+                    {
+                        include_fallback = true;
+                        encoded.as_object_mut().unwrap().remove("include");
+                        body = serde_json::to_vec(&encoded).map_err(err)?;
+                        continue;
+                    }
+                    if cfg["provider"] == "opencode" && e.starts_with("Native HTTP: status 403") {
+                        return Err(format!("{e}. Free-tier chat models require OpenCode. Choose a supported paid model or check your OpenCode/Go access in AI settings."));
+                    }
                     if ag && !visible {
                         if e.starts_with("Native HTTP: status 429")
                             && providers::antigravity::quota_wall(&e)
@@ -423,13 +451,7 @@ impl AiCore {
 
 fn opaque_has_secret(value: &Value, key: &str, redactor: &super::redact::Redactor) -> bool {
     match value {
-        Value::String(text) => {
-            redactor.contains_secret(text)
-                || !matches!(
-                    key,
-                    "signature" | "thoughtSignature" | "encrypted_content" | "data"
-                ) && redact_text(text) != *text
-        }
+        Value::String(text) => redactor.contains_secret(text),
         Value::Array(items) => items.iter().any(|v| opaque_has_secret(v, key, redactor)),
         Value::Object(fields) => fields
             .iter()

@@ -81,7 +81,11 @@ impl AiCore {
             return self
                 .opencode_key(s(&cfg["apiKey"]), false)
                 .await
-                .is_ok_and(|key| !key.is_empty());
+                .is_ok_and(|key| !key.is_empty())
+                || self
+                    .opencode_key(s(&cfg["apiKey"]), true)
+                    .await
+                    .is_ok_and(|key| !key.is_empty());
         }
         if p == "copilot" {
             return self
@@ -191,32 +195,39 @@ impl AiCore {
             return Ok(json!(ids));
         }
         if id == "opencode" {
-            let mut models: Vec<String> = Vec::new();
-            let key = self.opencode_key(s(&cfg["apiKey"]), false).await?;
-            if !key.is_empty() {
+            let catalog: Value =
+                serde_json::from_str(include_str!("providers/opencode_catalog.json"))
+                    .expect("static catalog");
+            let mut models = Vec::<String>::new();
+            for go in [false, true] {
+                let family = if go { "opencode-go/" } else { "opencode/" };
+                let key = self.opencode_key(s(&cfg["apiKey"]), go).await?;
+                let mut found = vec![];
                 let base = cfg["baseURL"]
                     .as_str()
                     .filter(|s| !s.is_empty())
                     .unwrap_or("https://opencode.ai/inference");
-                let url = self.endpoint(
-                    "opencode-models",
-                    &format!("{}/v1/models", base.trim_end_matches('/')),
-                );
+                let base = if go && !base.ends_with("/go") {
+                    format!("{}/go", base.trim_end_matches('/'))
+                } else {
+                    base.to_string()
+                };
+                let name = if go {
+                    "opencode-go-models"
+                } else {
+                    "opencode-models"
+                };
+                let url = self.endpoint(name, &format!("{}/v1/models", base.trim_end_matches('/')));
                 #[cfg(test)]
-                let probe = self
-                    .inner
-                    .endpoints
-                    .lock()
-                    .unwrap()
-                    .contains_key("opencode-models");
+                let probe = self.inner.endpoints.lock().unwrap().contains_key(name);
                 #[cfg(not(test))]
                 let probe = true;
-                if probe {
+                if probe && !key.is_empty() {
                     if let Ok(response) = self
                         .inner
                         .http
                         .get(url)
-                        .bearer_auth(&key)
+                        .bearer_auth(key)
                         .timeout(Duration::from_secs(8))
                         .send()
                         .await
@@ -225,12 +236,13 @@ impl AiCore {
                             if let Ok(v) = oauth::bounded_json(response).await {
                                 for model in v["data"].as_array().into_iter().flatten().take(512) {
                                     if let Some(id) = model["id"].as_str() {
-                                        if !id.starts_with("jev-") {
-                                            models.push(if id.contains('/') {
-                                                id.into()
-                                            } else {
-                                                format!("opencode/{id}")
-                                            });
+                                        let id = id.strip_prefix(family).unwrap_or(id);
+                                        if !id.contains('/')
+                                            && !id.starts_with("jev-")
+                                            && !id.ends_with("-free")
+                                            && id != "big-pickle"
+                                        {
+                                            found.push(format!("{family}{id}"));
                                         }
                                     }
                                 }
@@ -238,19 +250,22 @@ impl AiCore {
                         }
                     }
                 }
-            }
-            if models.is_empty() {
-                let catalog: Value =
-                    serde_json::from_str(include_str!("providers/opencode_catalog.json"))
-                        .expect("static catalog");
-                models.extend(
-                    catalog
-                        .as_object()
-                        .unwrap()
-                        .keys()
-                        .filter(|id| !id.contains("/jev-"))
-                        .cloned(),
-                );
+                if found.is_empty() {
+                    found.extend(
+                        catalog
+                            .as_object()
+                            .unwrap()
+                            .keys()
+                            .filter(|id| {
+                                id.starts_with(family)
+                                    && !id.contains("/jev-")
+                                    && !id.ends_with("-free")
+                                    && !id.ends_with("/big-pickle")
+                            })
+                            .cloned(),
+                    );
+                }
+                models.extend(found);
             }
             models.sort();
             models.dedup();

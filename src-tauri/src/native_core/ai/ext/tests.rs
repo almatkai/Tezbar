@@ -1411,10 +1411,13 @@ async fn insufficient_scope_is_recorded_once_and_successful_discovery_resets_sta
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     let data = core.ext_read().await.unwrap();
     assert_eq!(
-        data["extensions"][0]["connections"][0]["auth"]["scopes"],
+        data["extensions"][0]["connections"][0]["requestedScopes"],
         "issues:write"
     );
     assert_eq!(data["extensions"][0]["connections"][0]["needsAuth"], true);
+    let c = &data["extensions"][0]["connections"][0];
+    assert_eq!(c["trustPin"], command_pin(c));
+    assert!(c["auth"]["scopes"].is_null());
     assert_eq!(
         core.ext_handle("ai-extensions:test", &[json!("stepup")])
             .await
@@ -1423,6 +1426,24 @@ async fn insufficient_scope_is_recorded_once_and_successful_discovery_resets_sta
     );
     let data = core.ext_read().await.unwrap();
     let connection = &data["extensions"][0]["connections"][0];
+    core.ext_edit(|data| {
+        data["extensions"][0]["connections"][0]["needsReview"] = json!(true);
+        Ok(Value::Null)
+    })
+    .await
+    .unwrap();
+    let pending = core
+        .extension_snapshot(&core.inner.ctx.paths.home_dir)
+        .await
+        .unwrap();
+    assert!(
+        pending
+            .warnings
+            .iter()
+            .any(|w| w.contains("Tools changed in Web. Review them in AI settings.")),
+        "{:?}",
+        pending.warnings
+    );
     assert!(connection["needsAuth"].is_null());
     assert!(connection["error"].is_null());
     core.shutdown().await;
@@ -1589,5 +1610,106 @@ async fn contributed_provider_cannot_borrow_legacy_keys_or_erase_a_user_owned_co
     let cfg = core.cfg(None, None).await.unwrap();
     assert_eq!(cfg["customProviders"][0]["title"], "User owned");
     assert_eq!(cfg["apiKey"], "fixture-user-owned");
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn reset_missing_connection_key_archives_ciphertext_and_allows_new_secrets_only_in_fixture() {
+    let (_dir, core, _) = fixture();
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"reset-fixture","name":"Reset fixture","connections":[{"id":"secret","name":"Secret","transport":"http","url":"https://fixture.invalid/mcp","auth":{"type":"token"}},{"id":"plain","name":"Plain","transport":"http","url":"https://fixture.invalid/plain"}]})]).await.unwrap();
+    core.inner
+        .extensions
+        .secrets
+        .put(
+            "reset-fixture:secret",
+            "access-token",
+            Some("fixture-reset-private"),
+        )
+        .unwrap();
+    core.inner.extensions.secrets.forget_fixture_key();
+    let path = core
+        .inner
+        .ctx
+        .paths
+        .config_dir
+        .join("ai-extension-secrets.bin");
+    let old = std::fs::read(&path).unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:list", &[]).await.unwrap()["canResetSecrets"],
+        true
+    );
+    let before = core.ext_read().await.unwrap()["extensions"][0]["connections"][1].clone();
+    core.ext_handle("ai-extensions:reset-secrets", &[])
+        .await
+        .unwrap();
+    let data = core.ext_read().await.unwrap();
+    assert_eq!(data["extensions"][0]["connections"][0]["tested"], false);
+    assert_eq!(data["extensions"][0]["connections"][1], before);
+    assert!(std::fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .filter_map(Result::ok)
+        .any(|f| f.file_name().to_string_lossy().contains(".unreadable-")
+            && std::fs::read(f.path()).unwrap() == old));
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"after-reset","name":"After reset","connections":[{"id":"web","name":"Web","transport":"http","url":"https://fixture.invalid/mcp","auth":{"type":"token"}}],"token":"fixture-new-token"})]).await.unwrap();
+    core.ext_handle(
+        "ai-extensions:set-secret",
+        &[
+            json!("after-reset"),
+            json!("access-token"),
+            json!("fixture-new-token"),
+            json!("web"),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        core.inner
+            .extensions
+            .secrets
+            .values(&key("after-reset", "web"))
+            .unwrap()["access-token"],
+        "fixture-new-token"
+    );
+    assert!(!std::fs::read_to_string(path)
+        .unwrap()
+        .contains("fixture-new-token"));
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn cached_era_startup_crash_retains_stderr_and_explicit_test_reprobes() {
+    let (dir, core, _) = fixture();
+    let binary = program(dir.path());
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"cached-crash","name":"Crash","connections":[{"id":"stdio","name":"Crash","transport":"stdio","command":binary,"args":["startup-error"]}]})]).await.unwrap();
+    core.ext_edit(|data| {
+        data["extensions"][0]["enabled"] = json!(true);
+        data["extensions"][0]["connections"][0]["cachedEra"] = json!("2025-11-25");
+        Ok(Value::Null)
+    })
+    .await
+    .unwrap();
+    let data = core.ext_read().await.unwrap();
+    let c = &data["extensions"][0]["connections"][0];
+    let error = core.ext_client("cached-crash", c).await.err().unwrap();
+    assert!(error.contains("exited during startup"), "{error}");
+    assert!(error.contains("fixture module missing"), "{error}");
+    // Switch fixture mode without updating the cached era: Test must detect modern.
+    core.ext_edit(|data| {
+        let c = &mut data["extensions"][0]["connections"][0];
+        c["args"] = json!([]);
+        Ok(Value::Null)
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("cached-crash")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"][0]["connections"][0]["version"],
+        "2026-07-28"
+    );
     core.shutdown().await;
 }

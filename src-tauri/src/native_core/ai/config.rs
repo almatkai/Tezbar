@@ -154,7 +154,7 @@ fn normalize_models(cfg: &mut Value) {
                     .collect::<Vec<_>>()
             } else {
                 let mut caps = Vec::new();
-                for(pattern,cap)in [("(?i)vision|vl|llava|gpt-4o|gpt-5|gemini|claude|fable|opus|sonnet|haiku","vision"),("(?i)reason|think|r1|o[0-9]|gpt-5|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek","thinking")]{if regex::Regex::new(pattern).unwrap().is_match(id){caps.push(json!(cap));}}
+                for(pattern,cap)in [("(?i)vision|vl|llava|gpt-4o|gpt-[56]|gemini|claude|fable|opus|sonnet|haiku","vision"),("(?i)reason|think|r1|o[0-9]|gpt-[56]|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek","thinking")]{if regex::Regex::new(pattern).unwrap().is_match(id){caps.push(json!(cap));}}
                 if !regex::Regex::new("(?i)embed|embedding|whisper|tts|audio|speech")
                     .unwrap()
                     .is_match(id)

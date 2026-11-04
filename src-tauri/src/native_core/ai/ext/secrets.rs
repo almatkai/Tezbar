@@ -42,11 +42,43 @@ impl Secrets {
             return Ok(key);
         }
         if self.path.exists() {
-            return Err("Connection secret key is missing. Restore the key to recover saved credentials, or remove the affected connection.".into());
+            return Err("Connection secret key is missing. Restore the key to recover saved credentials, or use Reset saved connection secrets in AI settings and enter them again.".into());
         }
         let key = crypto::generate_random_bytes();
         self.key.save(&key)?;
         Ok(key)
+    }
+    pub fn reset_available(&self) -> Result<bool, String> {
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "Connection secret store lock failed")?;
+        Ok(self.path.exists() && self.key.load()?.is_none())
+    }
+    pub fn reset_missing(&self) -> Result<(), String> {
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "Connection secret store lock failed")?;
+        if !self.path.exists() || self.key.load()?.is_some() {
+            return Err("Reset is only available when the saved connection key is missing".into());
+        }
+        let archived = self.path.with_extension(format!(
+            "bin.unreadable-{}-{}",
+            now_ms(),
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::rename(&self.path, &archived).map_err(err)?;
+        let key = crypto::generate_random_bytes();
+        if let Err(error) = self.key.save(&key) {
+            let _ = std::fs::rename(&archived, &self.path);
+            return Err(error);
+        }
+        let revoked = self.path.with_extension("revoked.json");
+        if revoked.exists() {
+            std::fs::remove_file(revoked).map_err(err)?;
+        }
+        Ok(())
     }
     fn load(&self) -> CoreResult {
         if !self.path.exists() {
@@ -364,6 +396,17 @@ mod tests {
             .put("connection", "token", Some("must-not-be-written"))
             .is_err());
         assert!(!other.path().join("ai-extension-secrets.bin").exists());
+        std::fs::write(
+            other.path().join("ai-extension-secrets.bin"),
+            "fixture unreadable ciphertext",
+        )
+        .unwrap();
+        assert!(store.reset_available().is_err());
+        assert!(store.reset_missing().is_err());
+        assert_eq!(
+            std::fs::read_to_string(other.path().join("ai-extension-secrets.bin")).unwrap(),
+            "fixture unreadable ciphertext"
+        );
     }
 }
 

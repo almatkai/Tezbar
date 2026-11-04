@@ -549,6 +549,14 @@ impl AiCore {
                 {
                     source = "opencode";
                 }
+                if source == "none"
+                    && self
+                        .opencode_key("", true)
+                        .await
+                        .is_ok_and(|key| !key.is_empty())
+                {
+                    source = "opencode";
+                }
                 let antigravity = self
                     .antigravity_accounts()
                     .await
@@ -817,6 +825,7 @@ impl AiCore {
             }
             "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
             | "chat:delete" | "chat:clear" => {
+                let mut clear_sessions = Vec::new();
                 if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
                     let session = if channel == "chat:delete-turn" {
                         a["sessionId"].as_str()
@@ -824,6 +833,9 @@ impl AiCore {
                         a.as_str()
                     };
                     let state = self.inner.state.lock().unwrap();
+                    if channel == "chat:clear" {
+                        clear_sessions.extend(state.run_sessions.values().cloned());
+                    }
                     for (id, run) in &state.agents {
                         if channel == "chat:clear"
                             || state.run_sessions.get(id).map(String::as_str) == session
@@ -832,7 +844,16 @@ impl AiCore {
                         }
                     }
                 }
-                chat::handle(&self.inner.ctx, channel, args).await
+                if channel == "chat:clear" {
+                    chat::handle(
+                        &self.inner.ctx,
+                        channel,
+                        &[Value::Null, json!(clear_sessions)],
+                    )
+                    .await
+                } else {
+                    chat::handle(&self.inner.ctx, channel, args).await
+                }
             }
             "chat:generate-meta" => {
                 let id = a["id"].as_str().ok_or("Session id must be a string")?;
@@ -919,6 +940,13 @@ impl AiCore {
     }
 }
 fn redact_text(input: &str) -> String {
+    let text = redact_output(input);
+    regex::Regex::new(r"(?i)\b(password|passwd|api[_-]?key|secret|token)\s*[=:]\s*([^\s,;]+)")
+        .unwrap()
+        .replace_all(&text, "${1}=[REDACTED]")
+        .into_owned()
+}
+fn redact_output(input: &str) -> String {
     let mut text = input.to_string();
     for (pattern, replacement) in [
         (
@@ -931,10 +959,6 @@ fn redact_text(input: &str) -> String {
         (
             r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/-]{16,}",
             "${1}[REDACTED_TOKEN]",
-        ),
-        (
-            r"(?i)\b(password|passwd|api[_-]?key|secret|token)\s*[=:]\s*([^\s,;]+)",
-            "${1}=[REDACTED]",
         ),
     ] {
         text = regex::Regex::new(pattern)
@@ -1346,3 +1370,6 @@ fn parse_meta_json(raw: &str) -> Option<Value> {
     }
     Some(json!({"title": title, "icon": icon}))
 }
+
+#[cfg(test)]
+mod review_regressions;

@@ -10,6 +10,8 @@ pub struct Route {
     pub project: Option<String>,
     pub max_tokens: u64,
     pub official_openai: bool,
+    pub requires_reasoning_content: bool,
+    pub request_budget: usize,
     pub thinking: bool,
     pub secrets: Vec<String>,
 }
@@ -58,7 +60,8 @@ impl AiCore {
             "openai" if base == "https://api.openai.com/v1" => Protocol::OpenaiResponses,
             "gemini"
                 if base.is_empty()
-                    || base == "https://generativelanguage.googleapis.com/v1beta/openai" =>
+                    || base == "https://generativelanguage.googleapis.com/v1beta/openai"
+                    || base == "https://generativelanguage.googleapis.com/v1beta" =>
             {
                 base = "https://generativelanguage.googleapis.com/v1beta".into();
                 Protocol::Gemini
@@ -116,6 +119,11 @@ impl AiCore {
         let official_openai = reqwest::Url::parse(&base)
             .ok()
             .is_some_and(|u| u.host_str() == Some("api.openai.com"));
+        let host = reqwest::Url::parse(&base)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_owned));
+        let requires_reasoning_content =
+            p == "deepseek" || matches!(host.as_deref(), Some("api.deepseek.com" | "deepseek.com"));
         #[cfg(test)]
         if let Some(url) = self.inner.endpoints.lock().unwrap().get(p) {
             base = url.clone();
@@ -255,7 +263,7 @@ impl AiCore {
                     "2023-06-01"
                 },
             )?;
-        } else if p == "gemini" && protocol == Protocol::Gemini {
+        } else if protocol == Protocol::Gemini && p != "opencode" && p != "antigravity" {
             header("x-goog-api-key", &key)?;
         } else if !key.is_empty() {
             header("authorization", &format!("Bearer {key}"))?;
@@ -303,8 +311,16 @@ impl AiCore {
                 header(&k, s(&v))?;
             }
         }
+        let request_budget =
+            if protocol == Protocol::Anthropic && host.as_deref() == Some("api.anthropic.com") {
+                128_000_000
+            } else {
+                runtime::limits::request_bytes(&protocol)
+            };
         Ok(Route {
             official_openai,
+            requires_reasoning_content,
+            request_budget,
             origin: Origin {
                 provider: p.into(),
                 model,
@@ -320,11 +336,10 @@ impl AiCore {
                     8192
                 },
             ),
-            thinking: cfg["thinking"] == true
-                || protocol == Protocol::OpenaiResponses
-                    && metadata
-                        .and_then(|m| m["capabilities"].as_array())
-                        .is_some_and(|c| c.iter().any(|v| v == "thinking")),
+            thinking: (cfg["thinking"] == true || protocol == Protocol::OpenaiResponses)
+                && metadata
+                    .and_then(|m| m["capabilities"].as_array())
+                    .is_some_and(|c| c.iter().any(|v| v == "thinking")),
             secrets,
         })
     }

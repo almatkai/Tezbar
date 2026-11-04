@@ -208,6 +208,24 @@ export function AiExtensionsSection(): JSX.Element {
       aria-label="AI Extensions"
       className="space-y-3 py-3 text-[12px] text-ink-2"
     >
+      {state.canResetSecrets && (
+        <div role="alert">
+          <p>
+            The saved connection key is missing. Reset archives the unreadable secrets; enter
+            connection credentials again afterward.
+          </p>
+          <Button
+            variant="danger"
+            onClick={() => {
+              void request('reset-secrets')
+                .then(load)
+                .catch((e) => setError(String(e)))
+            }}
+          >
+            Reset saved connection secrets
+          </Button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h3 className="text-[13px] font-semibold text-ink-1">AI Extensions</h3>
         <Button variant="quiet" onClick={() => setPanel(panel ? null : 'menu')}>
@@ -811,12 +829,18 @@ export function AiExtensionsSection(): JSX.Element {
                               {old && (
                                 <p>
                                   Before: {old.description || 'No description'} · Fields:{' '}
-                                  {JSON.stringify(old.inputSchema || {})}
+                                  {JSON.stringify(old.inputSchema || {})} · Title:{' '}
+                                  {old.title || 'None'} · Annotations (readOnlyHint /
+                                  destructiveHint): {JSON.stringify(old.annotations || {})} · Output
+                                  schema: {JSON.stringify(old.outputSchema || {})}
                                 </p>
                               )}
                               <p>
                                 After: {t.description || 'No description'} · Fields:{' '}
-                                {JSON.stringify(t.inputSchema || {})}
+                                {JSON.stringify(t.inputSchema || {})} · Title: {t.title || 'None'} ·
+                                Annotations (readOnlyHint / destructiveHint):{' '}
+                                {JSON.stringify(t.annotations || {})} · Output schema:{' '}
+                                {JSON.stringify(t.outputSchema || {})}
                               </p>
                             </div>
                           )

@@ -21,6 +21,7 @@ pub(super) struct Request {
     pub client_id: String,
     pub client_secret: Option<String>,
     pub resource: Option<String>,
+    pub resource_policy: Option<ResourcePolicy>,
     pub scopes: String,
     pub port: u16,
     pub callback_path: String,
@@ -42,63 +43,131 @@ pub(super) fn secure_url(raw: &str) -> Result<reqwest::Url, String> {
     }
     Ok(u)
 }
-/// Pin validated metadata destinations so a second DNS lookup cannot rebind a
-/// remote authorization endpoint to a private service. Redirects stay disabled.
-pub(super) async fn resource_http(
-    resource: &reqwest::Url,
-    endpoint: &reqwest::Url,
-) -> Result<reqwest::Client, String> {
-    fn private(ip: std::net::IpAddr) -> bool {
-        match ip {
-            std::net::IpAddr::V4(v) => {
-                v.is_private()
-                    || v.is_loopback()
-                    || v.is_link_local()
-                    || v.is_unspecified()
-                    || v.is_multicast()
-                    || v.is_broadcast()
-            }
-            std::net::IpAddr::V6(v) => {
-                v.is_loopback()
-                    || v.is_unspecified()
-                    || v.is_unique_local()
-                    || v.is_unicast_link_local()
-                    || v.is_multicast()
-                    || v.to_ipv4_mapped().is_some_and(|v| private(v.into()))
-            }
+/// One authorization flow pins the resource's resolved trust zone and address.
+/// Endpoints are DNS-pinned independently; redirects and proxies stay disabled.
+#[derive(Clone)]
+pub(super) struct ResourcePolicy {
+    resource: reqwest::Url,
+    addresses: Vec<std::net::SocketAddr>,
+    pub private: bool,
+}
+fn private_address(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v) => {
+            let [a, b, c, _] = v.octets();
+            v.is_private()
+                || v.is_loopback()
+                || v.is_link_local()
+                || v.is_multicast()
+                || v.is_broadcast()
+                || a == 0
+                || a >= 240
+                || (a == 100 && (64..=127).contains(&b))
+                || (a == 198 && (b == 18 || b == 19))
+                || (a == 192 && (b == 0 || b == 88 && c == 99))
+                || (a == 198 && b == 51 && c == 100)
+                || (a == 203 && b == 0 && c == 113)
+        }
+        std::net::IpAddr::V6(v) => {
+            v.is_loopback()
+                || v.is_unspecified()
+                || v.is_unique_local()
+                || v.is_unicast_link_local()
+                || v.is_multicast()
+                || v.to_ipv4_mapped()
+                    .is_some_and(|v| private_address(v.into()))
+                || (v.segments()[0] & 0xe000 != 0x2000)
+                || (v.segments()[0] == 0x2001
+                    && (v.segments()[1] < 0x200 || v.segments()[1] == 0xdb8))
+                || v.segments()[0] == 0x2002
+                || (v.segments()[0] == 0x3fff && v.segments()[1] < 0x1000)
         }
     }
-    let local = resource.host_str().is_some_and(|h| {
-        h == "localhost"
-            || h.trim_matches(['[', ']'])
-                .parse::<std::net::IpAddr>()
-                .is_ok_and(private)
-    });
-    let mut builder = reqwest::Client::builder()
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none());
-    if !local {
+}
+async fn resolve_authorization(url: &reqwest::Url) -> Result<Vec<std::net::SocketAddr>, String> {
+    let host = url
+        .host_str()
+        .ok_or("Missing authorization host")?
+        .trim_matches(['[', ']']);
+    let port = url.port_or_known_default().unwrap_or(443);
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return Ok(vec![(ip, port).into()]);
+    }
+    let addresses = tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio::net::lookup_host((host, port)),
+    )
+    .await
+    .map_err(|_| "Authorization address lookup timed out")?
+    .map_err(|_| "Authorization address lookup failed")?
+    .collect::<Vec<_>>();
+    if addresses.is_empty() {
+        return Err("Authorization address lookup returned no addresses".into());
+    }
+    Ok(addresses)
+}
+impl ResourcePolicy {
+    #[cfg(test)]
+    pub(in crate::native_core::ai) fn from_fixture(resource: &reqwest::Url, address: &str) -> Self {
+        Self::from_addresses(resource, vec![address.parse().unwrap()]).unwrap()
+    }
+    pub async fn new(resource: &reqwest::Url) -> Result<Self, String> {
+        Self::from_addresses(resource, resolve_authorization(resource).await?)
+    }
+    fn from_addresses(
+        resource: &reqwest::Url,
+        addresses: Vec<std::net::SocketAddr>,
+    ) -> Result<Self, String> {
+        if addresses.is_empty() {
+            return Err("Authorization address lookup returned no addresses".into());
+        }
+        let private = addresses.iter().all(|a| private_address(a.ip()));
+        if !private && addresses.iter().any(|a| private_address(a.ip())) {
+            return Err("Authorization resource mixes public and private addresses".into());
+        }
+        Ok(Self {
+            resource: resource.clone(),
+            addresses,
+            private,
+        })
+    }
+    pub async fn http(&self, endpoint: &reqwest::Url) -> Result<reqwest::Client, String> {
+        let addresses = if endpoint.host_str() == self.resource.host_str() {
+            self.addresses
+                .iter()
+                .map(|a| {
+                    std::net::SocketAddr::new(
+                        a.ip(),
+                        endpoint.port_or_known_default().unwrap_or(443),
+                    )
+                })
+                .collect()
+        } else {
+            resolve_authorization(endpoint).await?
+        };
+        self.pinned_http(endpoint, &addresses)
+    }
+    fn pinned_http(
+        &self,
+        endpoint: &reqwest::Url,
+        addresses: &[std::net::SocketAddr],
+    ) -> Result<reqwest::Client, String> {
+        if addresses.is_empty()
+            || (!self.private && addresses.iter().any(|a| private_address(a.ip())))
+        {
+            return Err("Remote sign-in metadata cannot access a private or local address".into());
+        }
         let host = endpoint
             .host_str()
             .ok_or("Missing authorization host")?
             .trim_matches(['[', ']']);
-        if host.eq_ignore_ascii_case("localhost") {
-            return Err("Remote sign-in metadata cannot access a local address".into());
-        }
-        let addresses = tokio::time::timeout(
-            Duration::from_secs(5),
-            tokio::net::lookup_host((host, endpoint.port_or_known_default().unwrap_or(443))),
-        )
-        .await
-        .map_err(|_| "Authorization address lookup timed out")?
-        .map_err(|_| "Authorization address lookup failed")?
-        .collect::<Vec<_>>();
-        if addresses.is_empty() || addresses.iter().any(|a| private(a.ip())) {
-            return Err("Remote sign-in metadata cannot access a private or local address".into());
-        }
-        builder = builder.resolve_to_addrs(host, &addresses);
+        reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .resolve_to_addrs(host, addresses)
+            .build()
+            .map_err(err)
     }
-    builder.build().map_err(err)
 }
 impl AiCore {
     pub(super) async fn oauth_start_native(&self, request: Request) -> CoreResult {
@@ -197,7 +266,7 @@ impl AiCore {
                 let mut form=vec![("grant_type","authorization_code".to_string()),("code",code.to_string()),("client_id",request.client_id.clone()),("redirect_uri",redirect.clone()),("code_verifier",verifier)];
                 if let Some(secret)=&request.client_secret{form.push(("client_secret",secret.clone()));}if let Some(resource)=&request.resource{form.push(("resource",resource.clone()));}
                 let endpoint=secure_url(&request.token)?;
-                let http=if request.target.starts_with("mcp:") {resource_http(&secure_url(request.resource.as_deref().ok_or("Missing OAuth resource")?)?,&endpoint).await?} else {reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().map_err(err)?};
+                let http=if request.target.starts_with("mcp:") {request.resource_policy.as_ref().ok_or("Missing OAuth resource policy")?.http(&endpoint).await?} else {reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().map_err(err)?};
                 let response=http.post(&request.token).form(&form).timeout(Duration::from_secs(30)).send().await.map_err(|_|"Authorization token request failed")?;
                 if !response.status().is_success(){return Err(format!("Authorization token request was rejected ({}). Start sign-in again.",response.status().as_u16()))}
                 let mut token:Value=bounded_json(response).await?;
@@ -346,6 +415,11 @@ mod tests {
                     client_id: "fixture-client".into(),
                     client_secret: None,
                     resource: Some("http://127.0.0.1/fixture-mcp".into()),
+                    resource_policy: Some(
+                        ResourcePolicy::new(&secure_url("http://127.0.0.1/fixture-mcp").unwrap())
+                            .await
+                            .unwrap(),
+                    ),
                     scopes: if scenario == "cancel" {
                         String::new()
                     } else {
@@ -432,5 +506,78 @@ mod tests {
             server.await.unwrap();
         }
         core.shutdown().await;
+    }
+}
+
+#[cfg(test)]
+mod resource_policy_tests {
+    use super::*;
+    #[tokio::test]
+    async fn private_hostname_resource_is_pinned_and_public_metadata_cannot_rebind() {
+        let mut fixture = crate::native_core::ai::fixture_http::server(|_| {
+            crate::native_core::ai::fixture_http::Reply::json(json!({"ok":true}))
+        })
+        .await;
+        let url = reqwest::Url::parse(&fixture.url).unwrap();
+        let mut named = url.clone();
+        named.set_host(Some("fixture.corp.example")).unwrap();
+        // Resolver override at the DNS seam; every network byte goes to our loopback fixture.
+        let policy =
+            ResourcePolicy::from_fixture(&named, &format!("127.0.0.1:{}", url.port().unwrap()));
+        assert!(policy.private);
+        let result = policy
+            .http(&named)
+            .await
+            .unwrap()
+            .get(named.clone())
+            .send()
+            .await
+            .unwrap();
+        assert!(result.status().is_success());
+        assert!(
+            s(&fixture.requests.recv().await.unwrap()["headers"]["host"])
+                .starts_with("fixture.corp.example")
+        );
+        let public = ResourcePolicy::from_fixture(
+            &secure_url("https://public.example/mcp").unwrap(),
+            "93.184.216.34:443",
+        );
+        for address in [
+            "127.0.0.1:443",
+            "10.0.0.1:443",
+            "100.77.254.64:443",
+            "198.18.0.1:443",
+            "192.0.0.1:443",
+            "240.1.1.1:443",
+            "0.1.1.1:443",
+            "[::1]:443",
+            "[fc00::1]:443",
+            "192.88.99.1:443",
+            "[2001:2::1]:443",
+            "[2002::1]:443",
+            "[3fff::1]:443",
+        ] {
+            let endpoint = secure_url("https://metadata.example/token").unwrap();
+            assert!(
+                public
+                    .pinned_http(&endpoint, &[address.parse().unwrap()])
+                    .is_err(),
+                "{address}"
+            );
+            assert!(
+                policy
+                    .pinned_http(&endpoint, &[address.parse().unwrap()])
+                    .is_ok(),
+                "{address}"
+            );
+        }
+        assert!(ResourcePolicy::from_addresses(
+            &named,
+            vec![
+                "10.0.0.1:443".parse().unwrap(),
+                "93.184.216.34:443".parse().unwrap()
+            ]
+        )
+        .is_err());
     }
 }

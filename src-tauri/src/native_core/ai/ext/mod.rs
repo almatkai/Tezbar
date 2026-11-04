@@ -15,6 +15,7 @@ pub const CHANNELS: &[&str] = &[
     "ai-extensions:oauth-status",
     "ai-extensions:trust-project",
     "ai-extensions:logs",
+    "ai-extensions:reset-secrets",
     "ai-extensions:clear-allowance",
     "ai-extensions:list",
     "ai-extensions:review-project",
@@ -197,6 +198,7 @@ fn command_pin(c: &Value) -> String {
         "hasResources",
         "pinnedCatalog",
         "cachedEra",
+        "requestedScopes",
         "ttlMs",
     ] {
         v.as_object_mut().unwrap().remove(k);
@@ -392,6 +394,13 @@ impl AiCore {
         let values = self.mcp_oauth_values(extension, connection, false).await?;
         let mut env = HashMap::new();
         let mut c = connection.clone();
+        if explicit_test {
+            c.as_object_mut().unwrap().remove("cachedEra");
+            if let Some(client) = cached.as_ref() {
+                client.shutdown();
+            }
+        }
+        let cached = if explicit_test { None } else { cached };
         for (k, v) in connection["env"].as_object().into_iter().flatten() {
             let value = if let Some(name) = v["secret"].as_str() {
                 values
@@ -790,10 +799,14 @@ impl AiCore {
                     || c["needsReview"] == true
                     || c["trustPin"] != command_pin(c)
                 {
-                    snapshot.warnings.push(format!(
-                        "{} is unavailable; test it in AI settings.",
-                        s(&c["name"])
-                    ));
+                    snapshot.warnings.push(if c["needsReview"] == true {
+                        format!(
+                            "Tools changed in {}. Review them in AI settings.",
+                            s(&c["name"])
+                        )
+                    } else {
+                        format!("{} is unavailable; test it in AI settings.", s(&c["name"]))
+                    });
                     continue;
                 }
                 let client = match tokio::time::timeout(
@@ -1050,7 +1063,7 @@ impl AiCore {
                     let c = connection_mut(record_mut(data, &extension)?, &connection)?;
                     c["needsAuth"] = json!(true);
                     if let Some(scope) = requested {
-                        c["auth"]["scopes"] = json!(scope);
+                        c["requestedScopes"] = json!(scope);
                     }
                     c["error"] = json!(saved);
                     Ok(Value::Null)
@@ -1206,12 +1219,69 @@ impl AiCore {
             }
             "ai-extensions:list" => {
                 let mut data = self.ext_read().await?;
+                let core = self.clone();
+                data["canResetSecrets"] = json!(tokio::task::spawn_blocking(move || core
+                    .inner
+                    .extensions
+                    .secrets
+                    .reset_available())
+                .await
+                .map_err(err)?
+                .unwrap_or(false));
                 data["defaultWorkingFolder"] = json!(self.inner.ctx.paths.home_dir);
                 let queued = self.inner.extensions.review_cwd.lock().unwrap().clone();
                 if let Some(cwd) = a.as_str().or(queued.as_deref()) {
                     data["project"] = self.project_status(std::path::Path::new(cwd)).await.unwrap_or_else(|_|json!({"folder":cwd,"error":"The project folder is no longer available. Choose an existing folder to review."}));
                 }
                 Ok(data)
+            }
+            "ai-extensions:reset-secrets" => {
+                let core = self.clone();
+                tokio::task::spawn_blocking(move || core.inner.extensions.secrets.reset_missing())
+                    .await
+                    .map_err(err)??;
+                let core = self.clone();
+                self.ext_edit(move |data| {
+                    for ext in data["extensions"].as_array_mut().unwrap() {
+                        let eid = s(&ext["id"]).to_string();
+                        for c in ext["connections"].as_array_mut().into_iter().flatten() {
+                            let secret_refs = ["env", "headers"].iter().any(|k| {
+                                c[*k]
+                                    .as_object()
+                                    .is_some_and(|o| o.values().any(|v| v["secret"].is_string()))
+                            });
+                            if secret_refs || matches!(s(&c["auth"]["type"]), "token" | "oauth") {
+                                c["tested"] = json!(false);
+                                c["needsAuth"] = json!(true);
+                                c["error"] =
+                                    json!("Enter the secret again, then test this connection.");
+                                let namespace = key(&eid, s(&c["id"]));
+                                if let Some(start) = core
+                                    .inner
+                                    .extensions
+                                    .starting
+                                    .lock()
+                                    .unwrap()
+                                    .get(&namespace)
+                                {
+                                    start.cancel.cancel();
+                                }
+                                if let Some(client) = core
+                                    .inner
+                                    .extensions
+                                    .clients
+                                    .lock()
+                                    .unwrap()
+                                    .remove(&namespace)
+                                {
+                                    client.shutdown();
+                                }
+                            }
+                        }
+                    }
+                    Ok(json!({"ok":true}))
+                })
+                .await
             }
             "ai-extensions:trust-project" => self.trust_project(s(a), s(arg(args, 1))).await,
             "ai-extensions:clear-allowance" => {
@@ -1236,6 +1306,15 @@ impl AiCore {
                     {
                         let _ = k;
                         lines.extend(client.logs.lock().unwrap().iter().cloned());
+                    }
+                }
+                if lines.is_empty() {
+                    for (key, (_, _, error)) in
+                        self.inner.extensions.failures.lock().unwrap().iter()
+                    {
+                        if key.starts_with(&prefix(&id)) {
+                            lines.extend(redact_text(error).lines().map(str::to_string));
+                        }
                     }
                 }
                 if lines.is_empty() {
@@ -1578,6 +1657,7 @@ impl AiCore {
                                 "hasResources",
                                 "allowances",
                                 "cachedEra",
+                                "requestedScopes",
                                 "error",
                                 "needsAuth",
                             ] {

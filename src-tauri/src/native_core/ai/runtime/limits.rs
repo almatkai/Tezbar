@@ -17,6 +17,13 @@ pub fn validate_images(
     protocol: &super::transcript::Protocol,
     messages: &[super::transcript::Message],
 ) -> Result<(), String> {
+    validate_images_budget(protocol, messages, request_bytes(protocol))
+}
+pub fn validate_images_budget(
+    protocol: &super::transcript::Protocol,
+    messages: &[super::transcript::Message],
+    budget: usize,
+) -> Result<(), String> {
     use super::transcript::{Block, Protocol};
     fn check(protocol: &Protocol, blocks: &[Block]) -> Result<(), String> {
         for b in blocks {
@@ -54,12 +61,11 @@ pub fn validate_images(
             .sum()
     }
     if messages.iter().map(|m| bytes(&m.blocks)).sum::<usize>()
-        > request_bytes(protocol).saturating_sub(CONTEXT_BYTES + 1024 * 1024)
+        > budget.saturating_sub(CONTEXT_BYTES + 1024 * 1024)
     {
         return Err(format!(
             "Native limit: {:?} image request exceeds {} bytes. Remove or resize attachments.",
-            protocol,
-            request_bytes(protocol)
+            protocol, budget
         ));
     }
 
@@ -81,8 +87,15 @@ pub fn project_images(
     protocol: &super::transcript::Protocol,
     messages: &mut [super::transcript::Message],
 ) -> bool {
+    project_images_budget(protocol, messages, request_bytes(protocol))
+}
+pub fn project_images_budget(
+    protocol: &super::transcript::Protocol,
+    messages: &mut [super::transcript::Message],
+    budget: usize,
+) -> bool {
     use super::transcript::{Block, Protocol};
-    let mut remaining = request_bytes(protocol).saturating_sub(CONTEXT_BYTES + 1024 * 1024);
+    let mut remaining = budget.saturating_sub(CONTEXT_BYTES + 1024 * 1024);
     fn project(
         protocol: &Protocol,
         blocks: &mut [Block],

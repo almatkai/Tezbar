@@ -541,6 +541,44 @@ describe('agent conversation ownership', () => {
     )
     expect(api.agentCancel).toHaveBeenCalledTimes(2)
   })
+  it('prevents resurrection on delete of a running conversation when native done overtakes the delete reply', async () => {
+    await render({ kind: 'resume', sessionId: 'B' })
+    await send('Long running task')
+    const runId = runs[0]!.runId!
+    await emit({ type: 'message', runId, delta: 'partial private text' })
+    api.chatAppend.mockClear()
+    // Native dispatch cancels first (mod.rs chat:delete) then deletes: the run's done event can precede the reply.
+    api.chatDelete.mockImplementationOnce(async (id: string) => {
+      store.delete(id)
+      listeners.forEach((l) => l({ type: 'done', runId }))
+      await new Promise((r) => setTimeout(r, 20))
+      return { ok: true }
+    })
+    await click('[aria-label="Chat history"]')
+    await click('[aria-label="Delete Saved B"]')
+    await tick(100)
+    expect(store.has('B')).toBe(false)
+  })
+
+  it('recovers a running conversation when deletion fails after a done event', async () => {
+    await render({ kind: 'resume', sessionId: 'B' })
+    await send('Long running task')
+    const runId = runs[0]!.runId!
+    await emit({ type: 'message', runId, delta: 'partial private text' })
+    api.chatAppend.mockClear()
+    // Native dispatch cancels first (mod.rs chat:delete) then deletes: the run's done event can precede the reply.
+    api.chatDelete.mockImplementationOnce(async () => {
+      listeners.forEach((l) => l({ type: 'done', runId }))
+      await new Promise((r) => setTimeout(r, 20))
+      return { ok: false }
+    })
+    await click('[aria-label="Chat history"]')
+    await click('[aria-label="Delete Saved B"]')
+    await tick(100)
+    expect(store.has('B')).toBe(true)
+    expect(store.get('B')?.turns.some((t) => t.text.includes('partial private text'))).toBe(true)
+  })
+
   it('does not resume a deleted conversation from its retained owner', async () => {
     await render({ kind: 'resume', sessionId: 'B' })
     await click('[aria-label="Chat history"]')
