@@ -1,5 +1,33 @@
 # Native AI review repair ledger
 
+## Final closure
+
+The implementation/review task is complete. Final tested source is
+`08a50f8a8f3e622ee1ff45b3b2ad123a879c2d73` on `feat/native-rust-agent`.
+The mandatory Claude Opus 5.5 audits are closed with **zero outstanding actionable
+findings** across all three scopes:
+
+- [Wire/provider closure](native-ai-opus-wire-847ea62.md), unchanged wire code.
+- [Standards/security/extension closure](native-ai-opus-standards-fd8c356.md),
+  unchanged native code.
+- Earlier runtime closures and [final T-R7 closure](native-ai-opus-runtime-dd8e8cf.md),
+  including P12/P13 and all changed sign-in persistence paths. T-R1–T-R6 remain
+  closed; no new actionable regression was found.
+
+Final validation: 951 permanent TypeScript tests, Mac Rust 608 and real Windows
+Rust 538 passed, with unchanged existing skips/ignores; typecheck, frontend build,
+MSRV, lifecycle and diff checks passed. The final reviewer independently ran a
+960-test snapshot suite, including nine additional red-before/green-after probes.
+Source hashes, platform staging and limits are in
+[NATIVE_AI_VERIFICATION.md](../NATIVE_AI_VERIFICATION.md).
+
+Original reviewer reports remain unchanged. Explicitly non-gating observations
+are preserved as such. Live provider/MCP and actual desktop event delivery remain
+unverified; no publishing occurred. All pending statements in the chronological
+repair history below refer to their earlier pass and are superseded here.
+
+## Historical starting reviews
+
 Source reviewed: `32ba9c4e5ff41b527ba5943f779a3f9ea090d135`, compared with
 `v0.3.0-beta.7`. Claude Opus 5.5 completed three independent scope reviews.
 
@@ -552,4 +580,7 @@ reproducing the defect/failure expectations before repair. Full tests pass 951 /
 9 existing skips; typecheck, frontend build and diff check pass.
 
 Native, queue and bridge sources are unchanged. Mac 608 / Windows 538 evidence
-still applies. **Fresh targeted Opus 5.5 closure of T-R7 remains pending.**
+still applies. T-R7 is now closed by the unchanged
+[final Opus report](native-ai-opus-runtime-dd8e8cf.md), with zero actionable
+findings. Its nine independent probes pass, all nine fail on the pre-fix source,
+and its full snapshot suite passes 960 tests with the same nine existing skips.

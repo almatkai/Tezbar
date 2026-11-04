@@ -1,6 +1,59 @@
 # Native AI implementation verification
 
-## Copilot sign-in persistence — source `08a50f8`
+## Final implementation and review closure
+
+The native AI migration and its mandatory Claude Opus 5.5 review/repair gate are
+complete on `feat/native-rust-agent`, based on the explicitly selected
+`v0.3.0-beta.7` (`e246752149dbbede5e44720a0e35a3eacf2d66a9`). Final tested
+implementation: **`08a50f8a8f3e622ee1ff45b3b2ad123a879c2d73`**, tree
+`47ec0cb90f04d56cb40fda4a33a0ec6d4b20c7e3`. Subsequent commits update only
+documentation/review evidence; no implementation changed during final review.
+
+The original full three-scope audits and every repair/re-review are preserved
+unchanged in `docs/reviews`. Their final closures combine as follows:
+
+| Scope | Final Opus evidence | Status |
+| --- | --- | --- |
+| Provider wire/protocols and credentials | [Wire closure at `847ea62`](reviews/native-ai-opus-wire-847ea62.md) | Closed, 0 actionable findings; code remains byte-identical |
+| Extension trust/security, OAuth, secrets and owned client lifecycle | [Standards closure at `fd8c356`](reviews/native-ai-opus-standards-fd8c356.md) | Closed, 0 actionable findings; native code remains byte-identical |
+| Runtime, conversation ownership, approvals, Settings and persistence | Earlier R/U/N-R/C-R/T-R1–T-R6 closures plus [final T-R7 closure at `dd8e8cf`](reviews/native-ai-opus-runtime-dd8e8cf.md) | Closed, 0 outstanding actionable findings |
+
+The last runtime reviewer independently ran nine probes: all fail before the
+Copilot repair and pass afterward, including sign-in ordering, late/removed
+providers, pending edits, failed-save recovery, client-ID failure and a successful
+token poll. Its full snapshot suite passed **960 tests / 9 existing skips**,
+comprising the 951 permanent tests plus those nine external probes.
+
+| Final required check | Result |
+| --- | --- |
+| Permanent TypeScript unit/integration suite | **951 passed, 9 existing skips, 0 failed** |
+| Typecheck and frontend build | Pass |
+| macOS Rust 1.98 locked library suite | **608 passed, 9 existing ignores, 0 failed** |
+| Windows x64 Rust 1.90 locked library suite | **538 passed, 8 existing ignores, 0 failed** |
+| Rust 1.85 offline library check, backend lifecycle and Windows non-test check | Pass |
+| Source identity and diff checks | Pass; final native sources/scripts are byte-identical to tested `756072e` |
+
+Detailed exact-source Windows staging, hashes, commands and retained logs follow
+in the historical evidence below. No new skip/ignore was introduced to pass a
+gate. Reviewers' explicitly non-gating observations remain recorded in their
+reports; this closure does not claim the absence of all possible defects.
+
+Built-in AI execution is Rust, with five provider protocols, durable history,
+native tools/auth/catalogs and MCP-based extensibility. React remains the UI;
+explicitly connected MCP servers may use any language. The
+[extension author guide](AI_EXTENSIONS.md) documents connections, manifests,
+instructions, commands, profiles and custom providers.
+
+Validation used temporary profiles, fixture keys, mocked IPC and owned loopback
+servers. **Live upstream provider/MCP interoperability and actual desktop window
+delivery were not exercised.** Existing Windows OCR/semantic UI Automation limits
+remain documented. No production profile, app install/launch, push, PR, Actions
+or release was used. This completes the implementation/review task, not a release.
+
+All "pending" statuses below describe earlier passes and are superseded by this
+final closure.
+
+## Historical: Copilot sign-in persistence — source `08a50f8`
 
 Validated implementation: `08a50f8a8f3e622ee1ff45b3b2ad123a879c2d73`, tree
 `47ec0cb90f04d56cb40fda4a33a0ec6d4b20c7e3`, on `feat/native-rust-agent`.
