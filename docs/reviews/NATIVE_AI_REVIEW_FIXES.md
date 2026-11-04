@@ -317,3 +317,31 @@ closes through the real window bridge there` runs successful and failed deferred
 saves. Full TypeScript suite: 918 passed, 9 skipped; typecheck and frontend build
 passed. Exact native/renderer sources and logs are in the verification record.
 This follow-up also remains pending fresh Opus 5.5 closure.
+
+## Full Opus closure audits at `1623d47` — follow-up repairs pending
+
+All three Claude Opus 5.5 audits completed after the account-limit reset. The
+unchanged reports are `native-ai-opus-{wire,runtime,standards}-1623d47.md`.
+They close the original P0/P1/P2 findings and previous repairs on their reported
+triggers. Eighteen concrete P3 variants remain; the migration is not declared
+complete. S1, S7 and S10 include unproven platform effects and require regression
+probes rather than assumptions. Every other finding has call-path or fixture
+evidence in its report.
+
+| Scope | Pending IDs | Behavior |
+| --- | --- | --- |
+| Wire | N-W1 | Current-image validation must use the route's first-party Anthropic budget. |
+| Wire | N-W2 | Null/blank continuation call fields must not overwrite established identities. |
+| Wire | N-W3 | Gemini canonical replay must omit blank text and resulting empty turns. |
+| Wire | N-W4 | Keyless custom Gemini must omit the key header. |
+| Wire | N-W5 | Missing Ollama tool arguments must normalize consistently. |
+| Extensions | S1 | Classify public NAT64 and mapped addresses by their embedded IPv4 trust zone. |
+| Extensions | S2, S3 | Explicit Test must reconnect after a crash and retain the useful tail of failed-start logs. |
+| Extensions | S4, S5 | Secret reset must explain all affected credentials and support recoverable Windows reset states. |
+| Extensions | S6, S7 | Resolve Windows relative commands against connection cwd and preserve trailing-backslash arguments. |
+| Extensions | S8 | Explicit Test must not interrupt an active call or silently reuse the wrong probe mode. |
+| Extensions | S9 | A changed server identity must clear old step-up scopes. |
+| Extensions | S10 | Bound stderr draining after process stop, including escaped descendants. |
+| Runtime | C-R1 | Hide Settings before queued destruction so the launcher can be restored. |
+| Runtime | C-R2 | Optional discovery failures must not poison closing; recover unacknowledged native close requests. |
+| Runtime | C-R3 | Accumulate rapid model removals while preserving conditional selection ownership. |
