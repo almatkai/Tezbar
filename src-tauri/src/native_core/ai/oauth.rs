@@ -30,7 +30,7 @@ fn nonce() -> String {
     URL_SAFE_NO_PAD.encode(crate::native_core::vault::crypto::generate_random_bytes::<32>())
 }
 pub(super) fn secure_url(raw: &str) -> Result<reqwest::Url, String> {
-    let u = reqwest::Url::parse(raw).map_err(|_| "Invalid authorization address")?;
+    let u = reqwest::Url::parse(raw.trim()).map_err(|_| "Invalid authorization address")?;
     if u.scheme() != "https"
         && !(u.scheme() == "http"
             && matches!(u.host_str(), Some("localhost" | "127.0.0.1" | "[::1]")))
@@ -41,6 +41,64 @@ pub(super) fn secure_url(raw: &str) -> Result<reqwest::Url, String> {
         return Err("Authorization addresses cannot contain credentials".into());
     }
     Ok(u)
+}
+/// Pin validated metadata destinations so a second DNS lookup cannot rebind a
+/// remote authorization endpoint to a private service. Redirects stay disabled.
+pub(super) async fn resource_http(
+    resource: &reqwest::Url,
+    endpoint: &reqwest::Url,
+) -> Result<reqwest::Client, String> {
+    fn private(ip: std::net::IpAddr) -> bool {
+        match ip {
+            std::net::IpAddr::V4(v) => {
+                v.is_private()
+                    || v.is_loopback()
+                    || v.is_link_local()
+                    || v.is_unspecified()
+                    || v.is_multicast()
+                    || v.is_broadcast()
+            }
+            std::net::IpAddr::V6(v) => {
+                v.is_loopback()
+                    || v.is_unspecified()
+                    || v.is_unique_local()
+                    || v.is_unicast_link_local()
+                    || v.is_multicast()
+                    || v.to_ipv4_mapped().is_some_and(|v| private(v.into()))
+            }
+        }
+    }
+    let local = resource.host_str().is_some_and(|h| {
+        h == "localhost"
+            || h.trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(private)
+    });
+    let mut builder = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none());
+    if !local {
+        let host = endpoint
+            .host_str()
+            .ok_or("Missing authorization host")?
+            .trim_matches(['[', ']']);
+        if host.eq_ignore_ascii_case("localhost") {
+            return Err("Remote sign-in metadata cannot access a local address".into());
+        }
+        let addresses = tokio::time::timeout(
+            Duration::from_secs(5),
+            tokio::net::lookup_host((host, endpoint.port_or_known_default().unwrap_or(443))),
+        )
+        .await
+        .map_err(|_| "Authorization address lookup timed out")?
+        .map_err(|_| "Authorization address lookup failed")?
+        .collect::<Vec<_>>();
+        if addresses.is_empty() || addresses.iter().any(|a| private(a.ip())) {
+            return Err("Remote sign-in metadata cannot access a private or local address".into());
+        }
+        builder = builder.resolve_to_addrs(host, &addresses);
+    }
+    builder.build().map_err(err)
 }
 impl AiCore {
     pub(super) async fn oauth_start_native(&self, request: Request) -> CoreResult {
@@ -73,11 +131,15 @@ impl AiCore {
             ("response_type", "code"),
             ("client_id", &request.client_id),
             ("redirect_uri", &redirect),
-            ("scope", &request.scopes),
             ("state", &state),
             ("code_challenge", &challenge),
             ("code_challenge_method", "S256"),
         ]);
+        if !request.scopes.trim().is_empty() {
+            authorize
+                .query_pairs_mut()
+                .append_pair("scope", request.scopes.trim());
+        }
         if let Some(resource) = &request.resource {
             authorize
                 .query_pairs_mut()
@@ -134,7 +196,8 @@ impl AiCore {
                 let code=params.get("code").filter(|c|!c.is_empty()).ok_or("Authorization callback has no code")?;
                 let mut form=vec![("grant_type","authorization_code".to_string()),("code",code.to_string()),("client_id",request.client_id.clone()),("redirect_uri",redirect.clone()),("code_verifier",verifier)];
                 if let Some(secret)=&request.client_secret{form.push(("client_secret",secret.clone()));}if let Some(resource)=&request.resource{form.push(("resource",resource.clone()));}
-                let http=reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().map_err(err)?;
+                let endpoint=secure_url(&request.token)?;
+                let http=if request.target.starts_with("mcp:") {resource_http(&secure_url(request.resource.as_deref().ok_or("Missing OAuth resource")?)?,&endpoint).await?} else {reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().map_err(err)?};
                 let response=http.post(&request.token).form(&form).timeout(Duration::from_secs(30)).send().await.map_err(|_|"Authorization token request failed")?;
                 if !response.status().is_success(){return Err(format!("Authorization token request was rejected ({}). Start sign-in again.",response.status().as_u16()))}
                 let mut token:Value=bounded_json(response).await?;
@@ -235,7 +298,7 @@ mod tests {
     #[tokio::test]
     async fn pkce_paste_checks_state_issuer_cancel_and_encrypts_successful_grant() {
         let (_dir, core, mut events) = fixture();
-        core.handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"oauth-fixture","name":"OAuth fixture","connections":[{"id":"web","name":"Web","transport":"http","url":"https://resource.example/mcp","auth":{"type":"oauth"}}]})]).await.unwrap().unwrap();
+        core.handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"oauth-fixture","name":"OAuth fixture","connections":[{"id":"web","name":"Web","transport":"http","url":"http://127.0.0.1/fixture-mcp","auth":{"type":"oauth"}}]})]).await.unwrap().unwrap();
         for scenario in ["state", "issuer", "cancel", "success"] {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let base = format!("http://{}", listener.local_addr().unwrap());
@@ -282,8 +345,12 @@ mod tests {
                     token: format!("{base}/token"),
                     client_id: "fixture-client".into(),
                     client_secret: None,
-                    resource: Some("https://resource.example/mcp".into()),
-                    scopes: "tools".into(),
+                    resource: Some("http://127.0.0.1/fixture-mcp".into()),
+                    scopes: if scenario == "cancel" {
+                        String::new()
+                    } else {
+                        "tools".into()
+                    },
                     port: 0,
                     callback_path: "/callback".into(),
                     metadata: json!({"extension":"oauth-fixture","connection":"web"}),
@@ -296,7 +363,10 @@ mod tests {
                 .map(|(k, v)| (k.into_owned(), v.into_owned()))
                 .collect::<HashMap<_, _>>();
             assert_eq!(params["code_challenge_method"], "S256");
-            assert_eq!(params["resource"], "https://resource.example/mcp");
+            assert_eq!(params["resource"], "http://127.0.0.1/fixture-mcp");
+            if scenario == "cancel" {
+                assert!(!params.contains_key("scope"));
+            }
             if scenario == "cancel" {
                 core.cancel_oauth_native("mcp:oauth-fixture:web");
                 assert!(core
@@ -342,7 +412,7 @@ mod tests {
             let body = rx.await.unwrap();
             let form = reqwest::Url::parse(&format!("http://fixture/?{body}")).unwrap();
             let form = form.query_pairs().collect::<HashMap<_, _>>();
-            assert_eq!(form["resource"], "https://resource.example/mcp");
+            assert_eq!(form["resource"], "http://127.0.0.1/fixture-mcp");
             assert_eq!(
                 URL_SAFE_NO_PAD.encode(Sha256::digest(form["code_verifier"].as_bytes())),
                 params["code_challenge"]

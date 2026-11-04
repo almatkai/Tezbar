@@ -53,6 +53,9 @@ pub fn parse(text: &str) -> CoreResult {
         v["connections"] = json!([])
     }
     for kind in ["connections", "prompts", "commands", "agents", "providers"] {
+        if v[kind].is_null() {
+            v[kind] = json!([]);
+        }
         if v.get(kind).is_some_and(|value| !value.is_array()) {
             return Err(format!("{kind} must be an array"));
         }
@@ -159,8 +162,20 @@ pub fn parse(text: &str) -> CoreResult {
     Ok(v)
 }
 pub fn validate_connection(c: &Value) -> Result<(), String> {
+    if c.get("timeoutSeconds")
+        .is_some_and(|v| !v.is_null() && !v.as_u64().is_some_and(|n| (1..=1800).contains(&n)))
+    {
+        return Err("Time limit must be between 1 and 1800 seconds.".into());
+    }
+
     if s(&c["id"]).is_empty() || s(&c["name"]).trim().is_empty() {
         return Err("Name is required".into());
+    }
+    if c["cwd"]
+        .as_str()
+        .is_some_and(|cwd| !cwd.is_empty() && !std::path::Path::new(cwd).is_absolute())
+    {
+        return Err("Working folder must be an absolute path.".into());
     }
     match s(&c["transport"]) {
         "stdio" => {
@@ -177,7 +192,8 @@ pub fn validate_connection(c: &Value) -> Result<(), String> {
             }
         }
         "http" => {
-            let url = reqwest::Url::parse(s(&c["url"])).map_err(|_| "Enter a valid web address")?;
+            let url = reqwest::Url::parse(s(&c["url"]).trim())
+                .map_err(|_| "Enter a valid web address")?;
             if !(url.scheme() == "https"
                 || url.scheme() == "http"
                     && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]")))

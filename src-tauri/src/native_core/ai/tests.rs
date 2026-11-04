@@ -36,7 +36,11 @@ pub(super) fn fixture() -> (
         use std::os::unix::fs::PermissionsExt;
         for name in ["pi", "node", "npm", "pnpm", "bun", "opencode"] {
             let path = bin.join(name);
-            std::fs::write(&path,"#!/bin/sh\nif [ \"$(basename \"$0\")\" = opencode ] && [ \"$1\" = models ]; then printf 'opencode/fixture\\n'; exit 0; fi\nprintf forbidden > \"$(dirname \"$0\")/forbidden\"\nexit 91\n").unwrap();
+            std::fs::write(
+                &path,
+                "#!/bin/sh\nprintf forbidden > \"$(dirname \"$0\")/forbidden\"\nexit 91\n",
+            )
+            .unwrap();
             std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
     }
@@ -364,7 +368,7 @@ async fn superseded_answer_cannot_complete_replacement_stream() {
 fn no_runtime_marker() -> std::path::PathBuf {
     static FIXTURE: std::sync::OnceLock<(tempfile::TempDir, std::path::PathBuf)> =
         std::sync::OnceLock::new();
-    FIXTURE.get_or_init(||{let dir=tempfile::tempdir().unwrap();let source=dir.path().join("marker.rs");let exe=dir.path().join("marker.exe");std::fs::write(&source,r#"fn main(){let exe=std::env::current_exe().unwrap();if exe.file_stem().unwrap()=="opencode"&&std::env::args().nth(1).as_deref()==Some("models"){println!("opencode/fixture");return}std::fs::write(exe.parent().unwrap().join("forbidden"),b"forbidden").unwrap();std::process::exit(91)}"#).unwrap();let result=std::process::Command::new("rustc").arg("--edition=2021").arg(&source).arg("-o").arg(&exe).output().unwrap();assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));(dir,exe)}).1.clone()
+    FIXTURE.get_or_init(||{let dir=tempfile::tempdir().unwrap();let source=dir.path().join("marker.rs");let exe=dir.path().join("marker.exe");std::fs::write(&source,r#"fn main(){let exe=std::env::current_exe().unwrap();std::fs::write(exe.parent().unwrap().join("forbidden"),b"forbidden").unwrap();std::process::exit(91)}"#).unwrap();let result=std::process::Command::new("rustc").arg("--edition=2021").arg(&source).arg("-o").arg(&exe).output().unwrap();assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));(dir,exe)}).1.clone()
 }
 #[test]
 fn native_source_has_only_reviewed_process_seams_and_never_stages_pi_policy() {

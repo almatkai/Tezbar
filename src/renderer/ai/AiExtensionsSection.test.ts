@@ -163,7 +163,11 @@ it.each(['dark', 'white'])(
         .find((b) => b.textContent === 'Accept changes')!
         .click()
     )
-    expect(calls).toContainEqual(['accept-review', 'fixture'])
+    expect(calls).toContainEqual([
+      'accept-review',
+      'fixture',
+      { connection: { pins: undefined, trustPin: undefined } },
+    ])
     await act(async () =>
       Array.from(host.querySelectorAll('button'))
         .find((b) => b.textContent === 'Edit connection')!
@@ -262,7 +266,8 @@ it.each(['dark', 'white'])(
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await click('Preview')
-    expect(host.textContent).toContain('fixture-server --stdio')
+    expect(host.textContent).toContain('Command: "fixture-server"')
+    expect(host.textContent).toContain('Arguments: ["--stdio"]')
     expect(host.textContent).toContain('1 keys will be stored as secrets.')
     expect(calls.some(([action]) => ['add', 'test', 'set-enabled'].includes(String(action)))).toBe(
       false
@@ -272,3 +277,77 @@ it.each(['dark', 'white'])(
     expect(calls.some(([action]) => ['test', 'set-enabled'].includes(String(action)))).toBe(false)
   }
 )
+
+it('preserves typed multiline arguments, cleared timeout and an unsaved instructions draft across reloads', async () => {
+  const state: AiExtensionsState = {
+    extensions: [],
+    globalInstructions: 'saved',
+    useAgentsMd: true,
+  }
+  let changed = () => {}
+  const calls: unknown[][] = []
+  window.tezbar = {
+    listPiExtensions: async () => [],
+    onAiExtensionsChanged: (cb: () => void) => {
+      changed = cb
+      return () => {}
+    },
+    aiExtensions: async (action: string, ...args: unknown[]) => {
+      calls.push([action, ...args])
+      if (action === 'list') return state
+      if (action === 'add') {
+        const record = args[0] as { connections: unknown[] }
+        return {
+          ...record,
+          connections: record.connections.map((c) => ({ ...(c as object), slug: 'retained-slug' })),
+        }
+      }
+      return { ok: false, error: 'fixture start failed' }
+    },
+  } as unknown as RaymesApi
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  dispose = () => {
+    act(() => root.unmount())
+    host.remove()
+  }
+  await act(async () => root.render(createElement(AiExtensionsSection)))
+  const click = async (text: string) =>
+    act(async () => {
+      ;[...host.querySelectorAll('button')].find((b) => b.textContent === text)!.click()
+    })
+  const input = async (element: HTMLInputElement | HTMLTextAreaElement, value: string) =>
+    act(async () => {
+      Object.getOwnPropertyDescriptor(
+        element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+        'value'
+      )!.set!.call(element, value)
+      element.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  const instructions = [...host.querySelectorAll('label')]
+    .find((l) => l.textContent?.startsWith('Custom instructions'))!
+    .querySelector('textarea')!
+  await input(instructions, 'unsaved draft')
+  await act(async () => changed())
+  expect(instructions.value).toBe('unsaved draft')
+  await click('Add ▾')
+  await click('Add connection')
+  const label = (name: string) =>
+    [...host.querySelectorAll('label')].find((l) => l.textContent?.trim().startsWith(name))!
+  await input(label('Name').querySelector('input')!, 'Multiline')
+  await input(label('Command').querySelector('input')!, 'fixture-server')
+  const args = label('Arguments, one per line').querySelector('textarea')!
+  await input(args, '-y\n')
+  expect(args.value).toBe('-y\n')
+  await input(args, '-y\nfixture-package')
+  const timeout = label('Time limit, seconds').querySelector('input')!
+  await input(timeout, '')
+  expect(timeout.value).toBe('')
+  await click('Test connection')
+  const added = calls.find(([action]) => action === 'add')?.[1] as {
+    connections: { args: string[]; timeoutSeconds: number }[]
+  }
+  expect(added.connections[0]?.args).toEqual(['-y', 'fixture-package'])
+  expect(added.connections[0]?.timeoutSeconds).toBe(120)
+})

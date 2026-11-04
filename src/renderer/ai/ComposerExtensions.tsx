@@ -13,6 +13,7 @@ export function useComposerExtensions(
 ): {
   menu: ReactNode
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean
+  profileName: (id: string) => string
   consumeEscape: () => boolean
   activeDescendant?: string
 } {
@@ -57,6 +58,9 @@ export function useComposerExtensions(
     !dismissed && /^\/[\p{L}\p{N}_-]*$/u.test(draft)
       ? items.filter((i) => (i.name || '').toLowerCase().startsWith(draft.slice(1).toLowerCase()))
       : []
+  useEffect(() => {
+    document.getElementById(`ai-command-${index}`)?.scrollIntoView?.({ block: 'nearest' })
+  }, [index])
   const resolve = async (item: ComposerItem, args: Record<string, string>): Promise<void> => {
     const requestId = ++generation.current
     const originalDraft = draft
@@ -96,7 +100,7 @@ export function useComposerExtensions(
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (!filtered.length) return false
     if (event.key === 'Escape') {
-              event.stopPropagation();
+      event.stopPropagation()
       event.preventDefault()
       setDismissed(true)
       generation.current++
@@ -116,9 +120,16 @@ export function useComposerExtensions(
   }
   return {
     onKeyDown,
+    profileName: (id) =>
+      items.find((i) => i.kind === 'agents' && (i.id === id || i.name === id))?.title ||
+      items.find((i) => i.kind === 'agents' && (i.id === id || i.name === id))?.name ||
+      `${id.split('::').pop()} (unavailable)`,
     consumeEscape: () => {
       if (!filtered.length && !prompt) return false
-      setDismissed(true); setPrompt(null); generation.current++; return true
+      setDismissed(true)
+      setPrompt(null)
+      generation.current++
+      return true
     },
     activeDescendant: filtered.length ? `ai-command-${index}` : undefined,
     menu: (
@@ -140,8 +151,12 @@ export function useComposerExtensions(
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => choose(item)}
               >
-                <span className="mr-3 text-ink-3">{item.extensionName}</span>/{item.name}{' '}
-                {item.title}
+                {(i === 0 || filtered[i - 1]?.extensionName !== item.extensionName) && (
+                  <span role="presentation" className="block text-[11px] font-medium text-ink-3">
+                    {item.extensionName}
+                  </span>
+                )}
+                /{item.name} {item.title}
               </button>
             ))}
           </div>
@@ -189,7 +204,7 @@ export function useComposerExtensions(
           </div>
         )}
         {error && (
-          <p role="alert" className="text-red-400">
+          <p role="alert" className="ai-extension-error">
             {error}
           </p>
         )}

@@ -2793,3 +2793,6 @@ html.tezbar-window-hidden body {
     animation: none;
   }
 }
+
+.ai-extension-error { color: #fda4af; }
+:root[data-theme="white"] .ai-extension-error { color: #9f1239; }

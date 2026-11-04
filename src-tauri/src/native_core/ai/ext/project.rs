@@ -54,7 +54,14 @@ fn read_project(cwd: &Path) -> CoreResult {
     let text = String::from_utf8(bytes).map_err(|_| "Project configuration isn't UTF-8")?;
     let parsed = manifest::parse(&text);
     let manifest = match parsed {
-        Ok(v) => v,
+        Ok(mut v) => {
+            for c in v["connections"].as_array_mut().into_iter().flatten() {
+                if c["transport"] == "stdio" && s(&c["cwd"]).is_empty() {
+                    c["cwd"] = json!(folder);
+                }
+            }
+            v
+        }
         Err(e) => return Ok(json!({"folder":folder,"path":path,"entryHash":hash,"error":e})),
     };
     let mut preview = manifest.clone();
@@ -113,6 +120,9 @@ impl AiCore {
         let data = self.ext_read().await?;
         let mut changed = vec![];
         for e in data["extensions"].as_array().unwrap() {
+            if e["needsProjectReview"] == true && e["enabled"] != true {
+                continue;
+            }
             let Some(folder) = e["projectPath"].as_str() else {
                 continue;
             };
@@ -176,19 +186,43 @@ impl AiCore {
         let mut manifest = project["manifest"].clone();
         let id = format!("project.{}", &pin[..32]);
         manifest["id"] = json!(id);
-        if let Some(existing) = self.ext_read().await?["extensions"]
+        let data = self.ext_read().await?;
+        if data["extensions"]
             .as_array()
             .into_iter()
             .flatten()
-            .find(|e| e["id"] == id)
-            .cloned()
+            .any(|e| e["id"] == id)
         {
-            return Ok(existing);
+            let existing = id.clone();
+            return self
+                .ext_edit(move |data| {
+                    let record = record_mut(data, &existing)?;
+                    record["needsProjectReview"] = json!(false);
+                    Ok(record.clone())
+                })
+                .await;
+        }
+        // A replacement uses the normal removal seam, including client stop and
+        // namespaced secret revocation, before adding the newly reviewed entry.
+        let previous = data["extensions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|e| e["projectFile"] == project["path"])
+            .map(|e| s(&e["id"]).to_string())
+            .collect::<Vec<_>>();
+        for old in previous {
+            Box::pin(self.ext_handle("ai-extensions:remove", &[json!(old)])).await?;
         }
         let record = Box::pin(self.ext_handle("ai-extensions:add", &[manifest])).await?;
         let id = s(&record["id"]).to_string();
         self.ext_edit(move |data| {
+            data["extensions"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|e| e["id"] == id || e["projectFile"] != project["path"]);
             let r = record_mut(data, &id)?;
+            r["needsProjectReview"] = json!(false);
             r["projectPath"] = project["folder"].clone();
             r["projectFile"] = project["path"].clone();
             r["projectPin"] = project["entryHash"].clone();

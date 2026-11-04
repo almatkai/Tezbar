@@ -317,27 +317,58 @@ describe('agent conversation ownership', () => {
       )
       await tick()
       expect(api.agentApprove).not.toHaveBeenCalled()
-      const deny = [...container.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Deny')!
+      const deny = [...container.querySelectorAll('button')].find(
+        (b) => b.textContent?.trim() === 'Deny'
+      )!
       deny.focus()
-      await act(async () => deny.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})))
+      await act(async () =>
+        deny.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+        )
+      )
       expect(api.agentApprove).not.toHaveBeenCalled()
       await act(async () => deny.click())
-      expect(api.agentApprove).toHaveBeenCalledWith({runId,approvalId:'capability',decision:'deny'})
+      expect(api.agentApprove).toHaveBeenCalledWith({
+        runId,
+        approvalId: 'capability',
+        decision: 'deny',
+      })
     }
   )
   it('mode changes leave destructive approval pending and expired cards disappear', async () => {
-    await render(); await send('mode fixture'); const runId=runs[0]!.runId!
-    await emit({type:'approval',runId,approvalId:'destructive',title:'Allow?',command:'rm -rf fixture',canRemember:false})
-    const picker=[...container.querySelectorAll('button')].find((b)=>b.textContent?.trim()==='Default')!
-    await act(async()=>picker.click()); await tick()
-    const turbo=[...container.querySelectorAll('button')].find((b)=>b.textContent?.includes('Turbo') && b.getAttribute('role')==='menuitem') || [...container.querySelectorAll('button')].find((b)=>b.textContent?.includes('Turbo'))!
-    await act(async()=>turbo.click()); await tick()
+    await render()
+    await send('mode fixture')
+    const runId = runs[0]!.runId!
+    await emit({
+      type: 'approval',
+      runId,
+      approvalId: 'destructive',
+      title: 'Allow?',
+      command: 'rm -rf fixture',
+      canRemember: false,
+    })
+    const picker = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Default'
+    )!
+    await act(async () => picker.click())
+    await tick()
+    const turbo =
+      [...container.querySelectorAll('button')].find(
+        (b) => b.textContent?.includes('Turbo') && b.getAttribute('role') === 'menuitem'
+      ) || [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('Turbo'))!
+    await act(async () => turbo.click())
+    await tick()
     expect(api.agentApprove).not.toHaveBeenCalled()
     expect(container.querySelector('[aria-label="Command approval"]')).toBeTruthy()
-    const input=container.querySelector('textarea')!; input.focus()
-    await act(async()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})))
+    const input = container.querySelector('textarea')!
+    input.focus()
+    await act(async () =>
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      )
+    )
     expect(api.agentApprove).not.toHaveBeenCalled()
-    await emit({type:'approval-expired',runId,approvalId:'destructive'})
+    await emit({ type: 'approval-expired', runId, approvalId: 'destructive' })
     expect(container.querySelector('[aria-label="Command approval"]')).toBeNull()
   })
   it('starts fresh on every launcher new-chat event, including the real caller nonce contract', async () => {
@@ -556,6 +587,18 @@ describe('agent conversation ownership', () => {
       hasCompletedOnboarding: true,
     })
     Object.assign(api, {
+      aiExtensions: async (action: string) =>
+        action === 'composer-items'
+          ? [
+              {
+                extensionId: 'menu',
+                extensionName: 'Menu fixture',
+                kind: 'prompts',
+                name: 'prompt',
+                arguments: [{ name: 'issue' }],
+              },
+            ]
+          : {},
       onWindowShown: () => noop,
       onAppSurfaceOpen: () => noop,
       onRunExtensionCommandFromHotkey: () => noop,
@@ -578,6 +621,43 @@ describe('agent conversation ownership', () => {
     )
     await tick()
     await launch('Launch new chat')
+    const composer = container.querySelector('#ai-chat-input') as HTMLTextAreaElement
+    const draft = async (value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+          composer,
+          value
+        )
+        composer.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    await draft('/')
+    await tick()
+    expect(container.querySelector('[role="listbox"][aria-label="AI commands"]')).toBeTruthy()
+    await act(async () =>
+      composer.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+    )
+    await tick()
+    expect(container.querySelector('[role="listbox"][aria-label="AI commands"]')).toBeNull()
+    expect(composer.closest('.hidden')).toBeNull()
+    await draft('/p')
+    await tick()
+    await act(async () =>
+      composer.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      )
+    )
+    await tick()
+    const argument = container.querySelector<HTMLInputElement>('input')!
+    expect(argument).toBeTruthy()
+    await act(async () =>
+      argument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+    )
+    await tick()
+    expect(composer.closest('.hidden')).toBeNull()
     await send('First launcher task')
     await emit({ type: 'answer', runId: runs[0]!.runId!, text: 'First launcher answer' })
     await emit({ type: 'done', runId: runs[0]!.runId! })

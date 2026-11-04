@@ -5,6 +5,10 @@ export type AiConnection = {
   command?: string
   args?: string[]
   cwd?: string
+  headers?: Record<string, string | { secret: string; label?: string }>
+  pendingPins?: Record<string, string>
+  trustPin?: string
+  needsAuth?: boolean
   url?: string
   env?: Record<string, string | { secret: string; label?: string }>
   auth?: {
@@ -67,6 +71,7 @@ export type AiExtension = {
   }[]
 }
 export type AiExtensionsState = {
+  defaultWorkingFolder?: string
   project?: {
     folder: string
     path: string

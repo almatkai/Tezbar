@@ -13,6 +13,10 @@ pub struct Secrets {
 }
 impl Secrets {
     #[cfg(test)]
+    pub(super) fn forget_fixture_key(&self) {
+        self.key.delete().unwrap();
+    }
+    #[cfg(test)]
     fn with_key(config: &std::path::Path, key: Arc<dyn KeyStore>) -> Self {
         Self {
             lock: Mutex::new(()),
@@ -38,7 +42,7 @@ impl Secrets {
             return Ok(key);
         }
         if self.path.exists() {
-            return Err("Connection secret key is missing. Save the secrets again.".into());
+            return Err("Connection secret key is missing. Restore the key to recover saved credentials, or remove the affected connection.".into());
         }
         let key = crypto::generate_random_bytes();
         self.key.save(&key)?;
@@ -62,6 +66,16 @@ impl Secrets {
             .lock
             .lock()
             .map_err(|_| "Connection secret store lock failed")?;
+        let revoked = self.path.with_extension("revoked.json");
+        if revoked.exists()
+            && common::read_json(&revoked)?
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|id| id == connection)
+        {
+            return Ok(HashMap::new());
+        }
         let value = self.load()?;
         Ok(value[connection]
             .as_object()
@@ -78,7 +92,43 @@ impl Secrets {
         if value.is_none() && !self.path.exists() {
             return Ok(());
         }
-        let mut all = self.load()?;
+        let mut all = match self.load() {
+            Ok(all) => all,
+            Err(_) if value.is_none() => {
+                // Ciphertext may belong to other connections. Record revocation
+                // without destroying it or silently replacing its encryption key.
+                let path = self.path.with_extension("revoked.json");
+                let mut revoked = if path.exists() {
+                    common::read_json(&path)?
+                } else {
+                    json!([])
+                };
+                if !revoked
+                    .as_array()
+                    .ok_or("Invalid secret revocations")?
+                    .iter()
+                    .any(|v| v == connection)
+                {
+                    revoked.as_array_mut().unwrap().push(json!(connection));
+                }
+                common::write_json_atomic(&path, &revoked)?;
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+        };
+        let revoked_path = self.path.with_extension("revoked.json");
+        if revoked_path.exists() {
+            for id in common::read_json(&revoked_path)?
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+            {
+                all.as_object_mut()
+                    .ok_or("Invalid secret store")?
+                    .remove(id);
+            }
+        }
         if !all[connection].is_object() {
             all[connection] = json!({})
         }
@@ -96,7 +146,11 @@ impl Secrets {
         common::write_json_atomic(
             &self.path,
             &json!({"version":1,"nonce":nonce,"ciphertext":ciphertext}),
-        )
+        )?;
+        if revoked_path.exists() {
+            common::write_json_atomic(&revoked_path, &json!([]))?;
+        }
+        Ok(())
     }
 }
 #[cfg(any(not(test), windows))]

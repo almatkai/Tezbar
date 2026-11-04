@@ -30,6 +30,7 @@ pub struct Client {
     pub logs: Arc<Mutex<VecDeque<String>>>,
     secrets: Vec<String>,
     http_token: Mutex<Option<String>>,
+    pub requested_scopes: Mutex<Option<String>>,
     refreshed_secrets: Mutex<Vec<String>>,
 }
 impl Client {
@@ -62,6 +63,32 @@ impl Client {
                 .find(|(k, _)| *k == "PATH")
                 .and_then(|(_, v)| v)
                 .map(|v| v.to_os_string());
+            #[cfg(windows)]
+            {
+                let effective = env
+                    .get("PATH")
+                    .map(std::ffi::OsStr::new)
+                    .or(path.as_deref())
+                    .unwrap_or(std::ffi::OsStr::new(""));
+                let args = c["args"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|v| {
+                        v.as_str()
+                            .map(str::to_string)
+                            .ok_or("Arguments must be text")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                cmd = process::windows_mcp_command(
+                    command,
+                    effective,
+                    &env.get("PATHEXT").cloned().unwrap_or_else(|| {
+                        std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into())
+                    }),
+                    &args,
+                )?;
+            }
             cmd.env_clear();
             if let Some(path) = path {
                 cmd.env("PATH", path);
@@ -75,6 +102,9 @@ impl Client {
                 "TMP",
                 "TMPDIR",
                 "SystemRoot",
+                "PATHEXT",
+                "ComSpec",
+                "ProgramData",
                 "LANG",
                 "LC_ALL",
             ] {
@@ -92,12 +122,17 @@ impl Client {
                     .env("TMP", &core.inner.ctx.paths.temp_dir)
                     .env("TMPDIR", &core.inner.ctx.paths.temp_dir);
             }
+            #[cfg(not(windows))]
             for arg in c["args"].as_array().into_iter().flatten() {
                 cmd.arg(arg.as_str().ok_or("Arguments must be text")?);
             }
-            if let Some(cwd) = c["cwd"].as_str().filter(|s| !s.is_empty()) {
-                cmd.current_dir(cwd);
-            }
+            cmd.current_dir(
+                c["cwd"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .map(std::path::Path::new)
+                    .unwrap_or(&core.inner.ctx.paths.home_dir),
+            );
             cmd.envs(env).stdin(std::process::Stdio::piped());
             let mut group = GroupChild::spawn(&mut cmd)?;
             let writer = Arc::new(tokio::sync::Mutex::new(Some(
@@ -150,6 +185,7 @@ impl Client {
             None
         };
         let client = Arc::new(Self {
+            requested_scopes: Mutex::new(None),
             http_token: Mutex::new(http_token),
             refreshed_secrets: Mutex::new(Vec::new()),
             changed,
@@ -159,7 +195,7 @@ impl Client {
             legacy_init: tokio::sync::Mutex::new(()),
             last_used: std::sync::atomic::AtomicU64::new(now_ms()),
             active: std::sync::atomic::AtomicUsize::new(0),
-            connection: c,
+            connection: c.clone(),
             core: Arc::downgrade(&core.inner),
             http,
             input,
@@ -172,16 +208,26 @@ impl Client {
             logs,
             secrets,
         });
-        let mut discover = client
-            .call(
-                "server/discover",
-                json!({}),
-                &Cancel::new(),
-                Duration::from_secs(5),
-            )
-            .await;
+        let mut discover = if c["cachedEra"]
+            .as_str()
+            .is_some_and(|v| v.starts_with("2025-"))
+        {
+            Err("Use previously negotiated legacy era".into())
+        } else {
+            client
+                .call(
+                    "server/discover",
+                    json!({}),
+                    &Cancel::new(),
+                    Duration::from_secs(5),
+                )
+                .await
+        };
         let negotiation = client.negotiation.lock().unwrap().clone();
-        let mut legacy_version = "2025-11-25";
+        let mut legacy_version = c["cachedEra"]
+            .as_str()
+            .filter(|v| matches!(*v, "2025-11-25" | "2025-06-18" | "2025-03-26"))
+            .unwrap_or("2025-11-25");
         let mut modern = match &discover {
             Ok(_) => true,
             Err(_) => negotiation
@@ -217,6 +263,21 @@ impl Client {
                         .into(),
                 );
             }
+        }
+        if client.crashed() {
+            return Err(format!(
+                "The program exited during startup. {}",
+                client
+                    .logs
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .rev()
+                    .take(20)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
         }
         if modern {
             if let Err(error) = &discover {
@@ -378,12 +439,14 @@ impl Client {
             req = req.header(name, value);
         }
         let response = req
-            .timeout(Duration::from_secs(
+            .timeout(Duration::from_secs(if listening {
+                86400
+            } else {
                 self.connection["timeoutSeconds"]
                     .as_u64()
                     .unwrap_or(120)
-                    .min(1800),
-            ))
+                    .clamp(1, 1800)
+            }))
             .send()
             .await
             .map_err(|_| "Connection lost. The outcome of this call is unknown.")?;
@@ -400,6 +463,16 @@ impl Client {
                 *self.session.lock().unwrap() = Some(session.into());
             }
         }
+        if matches!(status.as_u16(), 401 | 403) {
+            if let Some(scope) = response
+                .headers()
+                .get(reqwest::header::WWW_AUTHENTICATE)
+                .and_then(|v| v.to_str().ok())
+                .and_then(super::oauth::challenge_scope)
+            {
+                *self.requested_scopes.lock().unwrap() = Some(scope);
+            }
+        }
         if status.as_u16() == 401 {
             return Err("Sign in required".into());
         }
@@ -413,6 +486,12 @@ impl Client {
             return Err(format!(
                 "Access denied. Review the requested access and sign in again. {requested}"
             ));
+        }
+        if status.as_u16() == 404 && self.session.lock().unwrap().is_none() {
+            return Err(
+                "No MCP endpoint at this address (or it only supports the old HTTP+SSE transport)."
+                    .into(),
+            );
         }
         if status.as_u16() == 404 && version != MODERN {
             *self.session.lock().unwrap() = None;
@@ -478,6 +557,9 @@ impl Client {
                 }
             }
         }
+        if sse {
+            return Err("Connection lost. The outcome of this call is unknown.".into());
+        }
         let value: Value =
             serde_json::from_slice(&bytes).map_err(|_| "Invalid connection response")?;
         if value["id"].as_str() != id && !(value["id"].is_null() && value.get("error").is_some()) {
@@ -496,19 +578,29 @@ impl Client {
         cancel: &Cancel,
         timeout: Duration,
     ) -> CoreResult {
+        self.call_tool_state(name, args, descriptor, cancel, timeout, None)
+            .await
+    }
+    pub async fn call_tool_state(
+        &self,
+        name: &str,
+        args: Value,
+        descriptor: &Value,
+        cancel: &Cancel,
+        timeout: Duration,
+        state: Option<Value>,
+    ) -> CoreResult {
         let mirrors = if *self.version.lock().unwrap() == MODERN && self.input.is_none() {
             super::schema::mirrored_headers(&descriptor["inputSchema"], Some(&args))?
         } else {
             vec![]
         };
-        self.authorized(
-            "tools/call",
-            json!({"name":name,"arguments":args}),
-            cancel,
-            timeout,
-            mirrors,
-        )
-        .await
+        let mut params = json!({"name":name,"arguments":args});
+        if let Some(state) = state {
+            params["requestState"] = state;
+        }
+        self.authorized("tools/call", params, cancel, timeout, mirrors)
+            .await
     }
     pub async fn call(
         &self,

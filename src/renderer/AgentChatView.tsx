@@ -955,7 +955,7 @@ export default function AgentChatView({
               aria-label="Remove agent profile"
               onClick={() => selectProfile('')}
             >
-              {(session?.agentProfileId || pendingProfile).split('::').pop()} ×
+              {commands.profileName(session?.agentProfileId || pendingProfile)} ×
             </button>
           )}
           <CommandSurfaceAction
@@ -1178,10 +1178,16 @@ export default function AgentChatView({
         </div>
 
         <div className="mx-4 mb-2 flex justify-end">
-          <ApprovalModePicker mode={config.agentApprovalMode ?? 'default'} direction="up" onSelect={async (mode) => {
-            const next = { ...config, agentApprovalMode: mode }; setConfig(next); configRef.current = next;
-            await window.tezbar.setLlmConfig({ agentApprovalMode: mode });
-          }} />
+          <ApprovalModePicker
+            mode={config.agentApprovalMode ?? 'default'}
+            direction="up"
+            onSelect={async (mode) => {
+              const next = { ...config, agentApprovalMode: mode }
+              setConfig(next)
+              configRef.current = next
+              await window.tezbar.setLlmConfig({ agentApprovalMode: mode })
+            }}
+          />
         </div>
         {approval ? (
           <section

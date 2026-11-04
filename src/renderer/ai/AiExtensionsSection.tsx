@@ -1,6 +1,6 @@
 import { AiContributionsEditor } from './AiContributionsEditor'
 import { extensionRequest as request } from './api'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { Button, TextField, TextArea, SelectField, Message } from '../ui/primitives'
 import {
   type AiConnection,
@@ -15,14 +15,35 @@ const blank = (): AiConnection => ({
   args: [],
   toolPolicy: 'ask',
 })
+function connectionPreview(c: AiConnection): string {
+  const command =
+    c.transport === 'stdio'
+      ? `Command: ${JSON.stringify(c.command)}\nArguments: ${JSON.stringify(c.args || [])}\nWorking folder: ${c.cwd || '(inherited)'}`
+      : `URL: ${c.url}`
+  const fields = (['env', 'headers'] as const).flatMap((kind) =>
+    Object.entries(c[kind] || {}).map(
+      ([name, value]) =>
+        `${kind === 'env' ? 'Variable' : 'Header'} ${name}: ${typeof value === 'string' && !/token|secret|password|api.?key|authorization|credential|cookie/i.test(name) ? value : '[Secret — saved separately]'}${/^(PATH|NODE_OPTIONS|NPM_CONFIG_|DYLD_|LD_|PYTHON|GIT_|BASH_ENV|PERL5OPT|RUBYOPT)/i.test(name) ? ' [Changes what runs — review before Test]' : ''}`
+    )
+  )
+  if (c.auth?.type && c.auth.type !== 'none')
+    fields.push(`Header ${c.auth.header || 'Authorization'}: [Secret — saved separately]`)
+  return [command, ...fields].join('\n')
+}
 export function AiExtensionsSection(): JSX.Element {
   const [state, setState] = useState<AiExtensionsState>({
     extensions: [],
     globalInstructions: '',
     useAgentsMd: true,
   })
+  const describeConnection = (c: AiConnection): string =>
+    connectionPreview({ ...c, cwd: c.cwd || state.defaultWorkingFolder })
   const [panel, setPanel] = useState<'menu' | 'connection' | 'paste' | 'project' | null>(null)
   const [draft, setDraft] = useState<AiConnection>(blank)
+  const [argsText, setArgsText] = useState('')
+  const [timeoutText, setTimeoutText] = useState('120')
+  const instructionsDirty = useRef(false)
+  const [instructionsDraft, setInstructionsDraft] = useState('')
   const [token, setToken] = useState('')
   const [editing, setEditing] = useState<AiExtension | null>(null)
   const [variables, setVariables] = useState<
@@ -43,19 +64,16 @@ export function AiExtensionsSection(): JSX.Element {
   const [error, setError] = useState('')
   const [legacy, setLegacy] = useState<string[]>([])
   const [removing, setRemoving] = useState<string | null>(null)
+  const [allTools, setAllTools] = useState<Record<string, boolean>>({})
   const [logs, setLogs] = useState<Record<string, string[] | undefined>>({})
-  const load = useCallback(
-    async () =>
-      setState(
-        await request<AiExtensionsState>(
-          'list',
-          undefined
-        )
-      ),
-    []
-  )
+  const load = useCallback(async () => {
+    const next = await request<AiExtensionsState>('list')
+    setState(next)
+    if (!instructionsDirty.current) setInstructionsDraft(next.globalInstructions)
+  }, [])
   useEffect(() => {
-    if (state.project) document.getElementById('ai-extensions-section')?.scrollIntoView?.({ block: 'start' })
+    if (state.project)
+      document.getElementById('ai-extensions-section')?.scrollIntoView?.({ block: 'start' })
   }, [state.project])
   useEffect(() => {
     void load().catch((e) => setError(String(e)))
@@ -103,6 +121,8 @@ export function AiExtensionsSection(): JSX.Element {
   const edit = (extension: AiExtension, connection: AiConnection): void => {
     setEditing(extension)
     setDraft({ ...connection })
+    setArgsText(connection.args?.join('\n') || '')
+    setTimeoutText(String(connection.timeoutSeconds ?? 120))
     setVariables(
       Object.entries(connection.env || {}).map(([name, value]) => ({
         name,
@@ -133,6 +153,8 @@ export function AiExtensionsSection(): JSX.Element {
   const addConnection = async (): Promise<void> => {
     const connection = {
       ...draft,
+      args: argsText.split('\n').filter(Boolean),
+      timeoutSeconds: timeoutText.trim() ? Number(timeoutText) : 120,
       env: Object.fromEntries(
         variables
           .filter((v) => v.name.trim())
@@ -159,7 +181,10 @@ export function AiExtensionsSection(): JSX.Element {
     await run('new', async () => {
       if (editing)
         await request('update', record.id, { name: record.name, connections: record.connections })
-      else await request('add', record)
+      else {
+        const saved = await request<AiExtension>('add', record)
+        record.connections = saved.connections
+      }
       if (token) await request('set-secret', record.id, 'access-token', token, draft.id)
       for (const variable of variables)
         if (variable.secret && variable.value)
@@ -178,7 +203,11 @@ export function AiExtensionsSection(): JSX.Element {
   }
 
   return (
-    <section id="ai-extensions-section" aria-label="AI Extensions" className="space-y-3 py-3 text-[12px] text-ink-2">
+    <section
+      id="ai-extensions-section"
+      aria-label="AI Extensions"
+      className="space-y-3 py-3 text-[12px] text-ink-2"
+    >
       <div className="flex items-center justify-between">
         <h3 className="text-[13px] font-semibold text-ink-1">AI Extensions</h3>
         <Button variant="quiet" onClick={() => setPanel(panel ? null : 'menu')}>
@@ -194,6 +223,8 @@ export function AiExtensionsSection(): JSX.Element {
           <Button
             onClick={() => {
               setDraft(blank())
+              setArgsText('')
+              setTimeoutText('120')
               setEditing(null)
               setVariables([])
               setToken('')
@@ -218,6 +249,8 @@ export function AiExtensionsSection(): JSX.Element {
               accept=".json"
               onChange={(e) => {
                 const file = e.target.files?.[0]
+                e.currentTarget.value = ''
+                setPreview(null)
                 if (file) {
                   setPanel('paste')
                   void file
@@ -263,11 +296,18 @@ export function AiExtensionsSection(): JSX.Element {
                 />
               </label>
               <label className="block">
-                Arguments, one per line
-                <TextArea
-                  value={draft.args?.join('\n') || ''}
-                  onChange={(e) => patch({ args: e.target.value.split('\n').filter(Boolean) })}
+                Time limit, seconds
+                <TextField
+                  type="number"
+                  min={1}
+                  max={1800}
+                  value={timeoutText}
+                  onChange={(e) => setTimeoutText(e.target.value)}
                 />
+              </label>
+              <label className="block">
+                Arguments, one per line
+                <TextArea value={argsText} onChange={(e) => setArgsText(e.target.value)} />
               </label>
               <label className="block">
                 Working folder
@@ -428,8 +468,8 @@ export function AiExtensionsSection(): JSX.Element {
                     type="number"
                     min={1}
                     max={1800}
-                    value={draft.timeoutSeconds || 120}
-                    onChange={(e) => patch({ timeoutSeconds: Number(e.target.value) })}
+                    value={timeoutText}
+                    onChange={(e) => setTimeoutText(e.target.value)}
                   />
                 </label>
               </details>
@@ -457,9 +497,13 @@ export function AiExtensionsSection(): JSX.Element {
           )}
           <p>Tezbar will run this with your permissions:</p>
           <pre className="whitespace-pre-wrap break-all text-[11px]">
-            {draft.transport === 'stdio'
-              ? [draft.command, ...(draft.args || [])].join(' ')
-              : draft.url}
+            {describeConnection({
+              ...draft,
+              args: argsText.split('\n').filter(Boolean),
+              env: Object.fromEntries(
+                variables.map((v) => [v.name, v.secret ? { secret: v.name } : v.value])
+              ),
+            })}
           </pre>
           <div className="flex gap-2">
             <Button
@@ -509,7 +553,7 @@ export function AiExtensionsSection(): JSX.Element {
               <strong>{preview.manifest.name}</strong>
               {preview.manifest.connections.map((c) => (
                 <pre className="whitespace-pre-wrap break-all" key={c.id}>
-                  {c.transport === 'stdio' ? [c.command, ...(c.args || [])].join(' ') : c.url}
+                  {describeConnection(c)}
                 </pre>
               ))}
               {preview.manifest.importWarnings?.map((w) => (
@@ -526,9 +570,15 @@ export function AiExtensionsSection(): JSX.Element {
                 <p key={p.id}>{p.name} · Profile</p>
               ))}
               {preview.manifest.providers?.map((p) => (
-                <p key={p.id}>
-                  {p.title} · {p.baseURL}
-                </p>
+                <pre className="whitespace-pre-wrap break-all text-[11px]" key={p.id}>
+                  {describeConnection({
+                    id: p.id,
+                    name: p.title,
+                    transport: 'http',
+                    url: p.baseURL,
+                    headers: p.headers,
+                  })}
+                </pre>
               ))}
               {preview.secretCount > 0 && (
                 <p>{preview.secretCount} keys will be stored as secrets.</p>
@@ -569,9 +619,22 @@ export function AiExtensionsSection(): JSX.Element {
                 <strong>{state.project.preview.name}</strong>
                 {state.project.preview.connections?.map((c) => (
                   <pre key={c.id} className="whitespace-pre-wrap break-all text-[11px]">
-                    {c.transport === 'stdio' ? [c.command, ...(c.args || [])].join(' ') : c.url}
+                    {describeConnection(c)}
                   </pre>
                 ))}
+                <pre className="whitespace-pre-wrap break-all text-[11px]">
+                  {JSON.stringify(
+                    {
+                      instructions: state.project.preview.instructions,
+                      prompts: state.project.preview.prompts,
+                      commands: state.project.preview.commands,
+                      agents: state.project.preview.agents,
+                      providers: state.project.preview.providers,
+                    },
+                    null,
+                    2
+                  )}
+                </pre>
                 <Button
                   onClick={() =>
                     void run('project', async () => {
@@ -591,6 +654,18 @@ export function AiExtensionsSection(): JSX.Element {
         </div>
       )}
       {error && <Message tone="error">{error}</Message>}
+      {signIn && (
+        <Button
+          onClick={() =>
+            void run('cancel-signin', async () => {
+              await request('oauth-cancel', signIn.extension, signIn.connection)
+              setSignIn(null)
+            })
+          }
+        >
+          Cancel sign-in
+        </Button>
+      )}
       {information && <Message tone="success">{information}</Message>}
       {!state.extensions.length && <p className="text-ink-3">No extensions yet.</p>}
       {state.extensions.map((e) => {
@@ -612,11 +687,30 @@ export function AiExtensionsSection(): JSX.Element {
                 }
               />
               <span className="flex-1 text-ink-1">{e.name}</span>
-              <span className={failure ? 'text-rose-300' : 'text-ink-3'}>
+              {e.connections.some((c) => c.needsAuth && c.auth?.type === 'oauth') && (
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    const c = e.connections.find((c) => c.needsAuth && c.auth?.type === 'oauth')!
+                    void run(e.id, async () => {
+                      const result = await request<{ url: string }>('oauth-start', e.id, c.id)
+                      setSignIn({ extension: e.id, connection: c.id })
+                      await window.tezbar.openExternalUrl(result.url)
+                    })
+                  }}
+                >
+                  Sign in
+                </Button>
+              )}
+
+              <span
+                role={failure ? 'alert' : undefined}
+                className={failure ? 'ai-extension-error' : 'text-ink-3'}
+              >
                 {busy === e.id
                   ? 'Connecting…'
                   : failure
-                    ? /sign.in required/i.test(failure)
+                    ? e.connections.some((c) => c.needsAuth)
                       ? 'Sign in required'
                       : `Couldn't start: ${failure}`
                     : changed
@@ -634,9 +728,7 @@ export function AiExtensionsSection(): JSX.Element {
               <div className="space-y-2 py-3 pl-6">
                 {e.connections.map((c) => (
                   <div key={c.id}>
-                    <pre className="whitespace-pre-wrap break-all">
-                      {c.transport === 'stdio' ? [c.command, ...(c.args || [])].join(' ') : c.url}
-                    </pre>
+                    <pre className="whitespace-pre-wrap break-all">{describeConnection(c)}</pre>
                     <div className="flex gap-2">
                       <Button variant="quiet" onClick={() => edit(e, c)}>
                         Edit connection
@@ -665,7 +757,7 @@ export function AiExtensionsSection(): JSX.Element {
                         {w}
                       </Message>
                     ))}
-                    {c.catalog?.tools?.map((t) => (
+                    {c.catalog?.tools?.slice(0, allTools[c.id] ? undefined : 8).map((t) => (
                       <label className="flex gap-2 py-1" key={t.name}>
                         <input
                           type="checkbox"
@@ -696,6 +788,11 @@ export function AiExtensionsSection(): JSX.Element {
                         )}
                       </label>
                     ))}
+                    {(c.catalog?.tools?.length || 0) > 8 && !allTools[c.id] && (
+                      <Button onClick={() => setAllTools((s) => ({ ...s, [c.id]: true }))}>
+                        Show all {c.catalog?.tools?.length}
+                      </Button>
+                    )}
                   </div>
                 ))}
                 {changed &&
@@ -705,6 +802,7 @@ export function AiExtensionsSection(): JSX.Element {
                       <div key={c.id} className="space-y-1 text-[11px]">
                         {(c.catalog?.tools || []).map((t) => {
                           const old = c.previousCatalog?.tools?.find((o) => o.name === t.name)
+                          if (old && JSON.stringify(old) === JSON.stringify(t)) return null
                           return (
                             <div key={t.name}>
                               <strong>
@@ -713,13 +811,12 @@ export function AiExtensionsSection(): JSX.Element {
                               {old && (
                                 <p>
                                   Before: {old.description || 'No description'} · Fields:{' '}
-                                  {Object.keys(old.inputSchema?.properties || {}).join(', ') ||
-                                    'none'}
+                                  {JSON.stringify(old.inputSchema || {})}
                                 </p>
                               )}
                               <p>
                                 After: {t.description || 'No description'} · Fields:{' '}
-                                {Object.keys(t.inputSchema?.properties || {}).join(', ') || 'none'}
+                                {JSON.stringify(t.inputSchema || {})}
                               </p>
                             </div>
                           )
@@ -736,6 +833,15 @@ export function AiExtensionsSection(): JSX.Element {
                     <p>
                       {provider.title} · {provider.baseURL}
                     </p>
+                    <pre className="whitespace-pre-wrap break-all text-[11px]">
+                      {describeConnection({
+                        id: provider.id,
+                        name: provider.title,
+                        transport: 'http',
+                        url: provider.baseURL,
+                        headers: provider.headers,
+                      })}
+                    </pre>
                     {Object.entries(provider.headers || {})
                       .filter(
                         (entry): entry is [string, { secret: string; label?: string }] =>
@@ -785,22 +891,56 @@ export function AiExtensionsSection(): JSX.Element {
                 {e.connections.map((c) => (
                   <p className="text-[11px] text-ink-3" key={`${c.id}:summary`}>
                     Asks:{' '}
-                    {c.toolPolicy === 'allow'
-                      ? 'Allow all'
-                      : c.toolPolicy === 'allowReadOnly'
-                        ? "Allow read-only tools, based on the program's claim"
-                        : 'Ask every time'}{' '}
+                    <SelectField
+                      aria-label={`Tool policy for ${c.name}`}
+                      value={c.toolPolicy || 'ask'}
+                      onChange={(event) =>
+                        edit(e, {
+                          ...c,
+                          toolPolicy: event.target.value as AiConnection['toolPolicy'],
+                        })
+                      }
+                    >
+                      <option value="ask">Ask every time</option>
+                      <option value="allowReadOnly">
+                        Allow read-only tools, based on the program's claim
+                      </option>
+                      <option value="allow">Allow all</option>
+                    </SelectField>
                     · {c.catalog?.resources?.length || 0} files · Prompts:{' '}
                     {c.catalog?.prompts?.map((p) => p.name).join(', ') || 'none'}
                   </p>
                 ))}
                 <div className="flex gap-2">
                   {changed && (
-                    <Button onClick={() => void run(e.id, () => request('accept-review', e.id))}>
-                      Accept changes
-                    </Button>
+                    <>
+                      <Button
+                        onClick={() =>
+                          void run(e.id, () =>
+                            request(
+                              'accept-review',
+                              e.id,
+                              Object.fromEntries(
+                                e.connections
+                                  .filter((c) => c.needsReview)
+                                  .map((c) => [c.id, { pins: c.pendingPins, trustPin: c.trustPin }])
+                              )
+                            )
+                          )
+                        }
+                      >
+                        Accept changes
+                      </Button>
+                      <Button
+                        onClick={() => void run(e.id, () => request('set-enabled', e.id, false))}
+                      >
+                        Keep disabled
+                      </Button>
+                    </>
                   )}
-                  <Button onClick={() => void test(e.id)}>Test connection</Button>
+                  <Button onClick={() => void test(e.id)}>
+                    {failure ? 'Try again' : 'Test connection'}
+                  </Button>
                   {tested && !e.enabled && (
                     <Button
                       onClick={() => void run(e.id, () => request('set-enabled', e.id, true))}
@@ -854,11 +994,16 @@ export function AiExtensionsSection(): JSX.Element {
           Custom instructions
           <TextArea
             rows={4}
-            value={state.globalInstructions}
-            onChange={(e) => setState((s) => ({ ...s, globalInstructions: e.target.value }))}
+            value={instructionsDraft}
+            onChange={(e) => {
+              instructionsDirty.current = true
+              setInstructionsDraft(e.target.value)
+            }}
             onBlur={() =>
               void run('instructions', () =>
-                request('set-instructions', state.globalInstructions, state.useAgentsMd)
+                request('set-instructions', instructionsDraft, state.useAgentsMd).then(() => {
+                  instructionsDirty.current = false
+                })
               )
             }
           />
@@ -871,7 +1016,7 @@ export function AiExtensionsSection(): JSX.Element {
               const checked = e.target.checked
               setState((s) => ({ ...s, useAgentsMd: checked }))
               void run('instructions', () =>
-                request('set-instructions', state.globalInstructions, checked)
+                request('set-instructions', instructionsDraft, checked)
               )
             }}
           />{' '}

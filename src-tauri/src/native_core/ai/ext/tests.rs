@@ -388,6 +388,20 @@ async fn project_manifest_never_starts_before_review_and_byte_changes_revoke_tru
         .unwrap();
     assert_eq!(data["extensions"][0]["enabled"], false);
     assert!(data["extensions"][0]["needsProjectReview"] == true);
+    let latest = core.project_status(&project).await.unwrap();
+    let retrusted = core
+        .trust_project(project.to_str().unwrap(), s(&latest["entryHash"]))
+        .await
+        .unwrap();
+    assert_eq!(retrusted["needsProjectReview"], false);
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(!marker.exists(), "re-trusting must not start a connection");
     core.shutdown().await;
 }
 #[tokio::test]
@@ -732,9 +746,12 @@ async fn descriptor_review_revokes_allowances_and_concurrent_cancels_are_isolate
         .await
         .unwrap()
         .is_empty());
-    core.ext_handle("ai-extensions:accept-review", &[json!("change")])
-        .await
-        .unwrap();
+    core.ext_handle(
+        "ai-extensions:accept-review",
+        &[json!("change"), review_token(&core, "change").await],
+    )
+    .await
+    .unwrap();
     let current = core
         .extension_snapshot(&core.inner.ctx.paths.home_dir)
         .await
@@ -952,14 +969,13 @@ async fn catalog_notification_keeps_run_snapshot_immutable_and_requires_changed_
         assert!(core
             .extension_call(
                 entry,
-                json!({"text":"stale"}),
+                json!({"text":"current snapshot"}),
                 "agent-stale",
                 &Cancel::new(),
                 Some("auto")
             )
             .await
-            .unwrap_err()
-            .contains("catalog changed"));
+            .is_ok());
         let fresh = core
             .extension_snapshot(&core.inner.ctx.paths.home_dir)
             .await
@@ -967,10 +983,13 @@ async fn catalog_notification_keeps_run_snapshot_immutable_and_requires_changed_
         assert!(!fresh.contains_key(&name));
         let data = core.ext_read().await.unwrap();
         assert_eq!(data["extensions"][0]["connections"][0]["needsReview"], true);
-        core.handle("ai-extensions:accept-review", &[json!("notify")])
-            .await
-            .unwrap()
-            .unwrap();
+        core.handle(
+            "ai-extensions:accept-review",
+            &[json!("notify"), review_token(&core, "notify").await],
+        )
+        .await
+        .unwrap()
+        .unwrap();
         let accepted = core
             .extension_snapshot(&core.inner.ctx.paths.home_dir)
             .await
@@ -1103,18 +1122,472 @@ async fn stdio_crash_and_stdout_flood_report_unknown_without_replaying_effects()
 
 #[tokio::test]
 async fn project_review_handoff_survives_an_independent_settings_request() {
-    let (_dir,core,_events)=fixture();
-    let folder=core.inner.ctx.paths.home_dir.join("handoff");std::fs::create_dir_all(folder.join(".tezbar")).unwrap();
-    std::fs::write(folder.join(".tezbar/ai-extension.json"),json!({"manifestVersion":1,"id":"handoff","name":"Handoff","connections":[]}).to_string()).unwrap();
+    let (_dir, core, _events) = fixture();
+    let folder = core.inner.ctx.paths.home_dir.join("handoff");
+    std::fs::create_dir_all(folder.join(".tezbar")).unwrap();
+    std::fs::write(
+        folder.join(".tezbar/ai-extension.json"),
+        json!({"manifestVersion":1,"id":"handoff","name":"Handoff","connections":[]}).to_string(),
+    )
+    .unwrap();
     // Launcher webview queues through native IPC; a settings webview has no cwd or browser storage.
-    core.handle("ai-extensions:review-project",&[json!(folder)]).await.unwrap().unwrap();
-    let independent=core.handle("ai-extensions:list",&[]).await.unwrap().unwrap();
-    assert_eq!(independent["project"]["folder"],json!(folder));
-    assert_eq!(independent["project"]["preview"]["name"],"Handoff");
+    core.handle("ai-extensions:review-project", &[json!(folder)])
+        .await
+        .unwrap()
+        .unwrap();
+    let independent = core
+        .handle("ai-extensions:list", &[])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        independent["project"]["folder"],
+        json!(folder.canonicalize().unwrap())
+    );
+    assert_eq!(independent["project"]["preview"]["name"], "Handoff");
     // Reusing an already open settings window receives the newly queued folder.
-    let other=core.inner.ctx.paths.home_dir.join("other");std::fs::create_dir_all(other.join(".tezbar")).unwrap();
-    std::fs::write(other.join(".tezbar/ai-extension.json"),json!({"manifestVersion":1,"id":"other","name":"Other","connections":[]}).to_string()).unwrap();
-    core.handle("ai-extensions:review-project",&[json!(other)]).await.unwrap().unwrap();
-    assert_eq!(core.handle("ai-extensions:list",&[]).await.unwrap().unwrap()["project"]["folder"],json!(other));
+    let other = core.inner.ctx.paths.home_dir.join("other");
+    std::fs::create_dir_all(other.join(".tezbar")).unwrap();
+    std::fs::write(
+        other.join(".tezbar/ai-extension.json"),
+        json!({"manifestVersion":1,"id":"other","name":"Other","connections":[]}).to_string(),
+    )
+    .unwrap();
+    core.handle("ai-extensions:review-project", &[json!(other)])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        core.handle("ai-extensions:list", &[])
+            .await
+            .unwrap()
+            .unwrap()["project"]["folder"],
+        json!(other.canonicalize().unwrap())
+    );
+    core.shutdown().await;
+}
+
+async fn review_token(core: &AiCore, id: &str) -> Value {
+    let data = core.ext_read().await.unwrap();
+    let record = data["extensions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["id"] == id)
+        .unwrap();
+    json!(record["connections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["needsReview"] == true)
+        .map(|c| (
+            s(&c["id"]).to_string(),
+            json!({"pins":c["pendingPins"],"trustPin":c["trustPin"]})
+        ))
+        .collect::<serde_json::Map<_, _>>())
+}
+
+#[tokio::test]
+async fn pending_catalog_survives_refresh_edit_and_rejects_stale_review() {
+    use super::super::fixture_http::{server, Reply};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let (_dir, core, _events) = fixture();
+    let revision = Arc::new(AtomicUsize::new(1));
+    let rev = revision.clone();
+    let http=server(move|r| {let result=match s(&r["body"]["method"]) {"server/discover"=>json!({"capabilities":{"tools":{}}}),"tools/list"=>json!({"tools":[{"name":"effect","description":format!("version {}",rev.load(Ordering::SeqCst)),"inputSchema":{"type":"object","properties":{}}}]}),_=>json!({})}; Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":result}))}).await;
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"pins","name":"Pins","connections":[{"id":"web","name":"Web","transport":"http","url":http.url}]})]).await.unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("pins")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    revision.store(2, Ordering::SeqCst);
+    core.ext_handle("ai-extensions:test", &[json!("pins")])
+        .await
+        .unwrap();
+    let reviewed = review_token(&core, "pins").await;
+    core.ext_handle("ai-extensions:test", &[json!("pins")])
+        .await
+        .unwrap();
+    let data = core.ext_read().await.unwrap();
+    let connection = data["extensions"][0]["connections"][0].clone();
+    assert_eq!(
+        connection["previousCatalog"]["tools"][0]["description"],
+        "version 1"
+    );
+    core.ext_handle(
+        "ai-extensions:update",
+        &[
+            json!("pins"),
+            json!({"connections":[connection],"name":"Pins edited"}),
+        ],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"][0]["connections"][0]["needsReview"],
+        true
+    );
+    revision.store(3, Ordering::SeqCst);
+    core.ext_handle("ai-extensions:test", &[json!("pins")])
+        .await
+        .unwrap();
+    assert!(core
+        .ext_handle("ai-extensions:accept-review", &[json!("pins"), reviewed])
+        .await
+        .unwrap_err()
+        .contains("changed since"));
+    core.ext_handle(
+        "ai-extensions:accept-review",
+        &[json!("pins"), review_token(&core, "pins").await],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"][0]["connections"][0]["needsReview"],
+        false
+    );
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn missing_secret_key_does_not_block_secretless_test_or_remove() {
+    use super::super::fixture_http::{server, Reply};
+    let (_dir, core, _events) = fixture();
+    core.inner
+        .extensions
+        .secrets
+        .put("other", "token", Some("fixture-unrelated-secret"))
+        .unwrap();
+    let ciphertext = std::fs::read(
+        core.inner
+            .ctx
+            .paths
+            .config_dir
+            .join("ai-extension-secrets.bin"),
+    )
+    .unwrap();
+    core.inner.extensions.secrets.forget_fixture_key();
+    let http=server(|r|Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":if r["body"]["method"]=="server/discover" {json!({"capabilities":{}})}else{json!({})}}))).await;
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"secretless","name":"Secretless","connections":[{"id":"web","name":"Web","transport":"http","url":http.url}]})]).await.unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("secretless")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    core.ext_handle("ai-extensions:remove", &[json!("secretless")])
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read(
+            core.inner
+                .ctx
+                .paths
+                .config_dir
+                .join("ai-extension-secrets.bin")
+        )
+        .unwrap(),
+        ciphertext
+    );
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn changed_project_revocation_is_idempotent_and_has_one_event() {
+    let (_dir, core, mut events) = fixture();
+    let folder = core.inner.ctx.paths.home_dir.canonicalize().unwrap();
+    std::fs::create_dir_all(folder.join(".tezbar")).unwrap();
+    let file = folder.join(".tezbar/ai-extension.json");
+    let text =
+        json!({"manifestVersion":1,"id":"project-event","name":"Project event","connections":[]})
+            .to_string();
+    std::fs::write(&file, &text).unwrap();
+    let project = core.project_status(&folder).await.unwrap();
+    core.trust_project(folder.to_str().unwrap(), s(&project["entryHash"]))
+        .await
+        .unwrap();
+    while events.try_recv().is_ok() {}
+    std::fs::write(&file, format!("{text}\n")).unwrap();
+    for _ in 0..5 {
+        core.revoke_changed_projects(&folder).await.unwrap();
+    }
+    let mut changes = 0;
+    while let Ok((channel, _)) = events.try_recv() {
+        if channel == "ai-extensions-changed" {
+            changes += 1;
+        }
+    }
+    assert_eq!(changes, 1);
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn silent_legacy_era_is_cached_by_trusted_connection_for_cold_snapshot() {
+    let (dir, core, _events) = fixture();
+    let binary = program(dir.path());
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"silent","name":"Silent","connections":[{"id":"stdio","name":"Silent","transport":"stdio","command":binary,"args":["silent"]}]})]).await.unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("silent")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"][0]["connections"][0]["cachedEra"],
+        "2025-11-25"
+    );
+    core.ext_handle(
+        "ai-extensions:set-enabled",
+        &[json!("silent"), json!(false)],
+    )
+    .await
+    .unwrap();
+    core.ext_handle("ai-extensions:set-enabled", &[json!("silent"), json!(true)])
+        .await
+        .unwrap();
+    let snapshot = tokio::time::timeout(
+        Duration::from_secs(4),
+        core.extension_snapshot(&core.inner.ctx.paths.home_dir),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(!snapshot.is_empty());
+    core.shutdown().await;
+}
+#[tokio::test]
+async fn failed_start_preserves_reason_and_log_without_call_replay() {
+    let (dir, core, _events) = fixture();
+    let binary = program(dir.path());
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"crashed-start","name":"Crash","connections":[{"id":"stdio","name":"Crash","transport":"stdio","command":binary,"args":["startup-error"]}]})]).await.unwrap();
+    let tested = core
+        .ext_handle("ai-extensions:test", &[json!("crashed-start")])
+        .await
+        .unwrap();
+    assert_eq!(tested["ok"], false);
+    assert!(
+        tested.to_string().contains("exited during startup"),
+        "{tested}"
+    );
+    let logs = core
+        .ext_handle("ai-extensions:logs", &[json!("crashed-start")])
+        .await
+        .unwrap();
+    assert!(
+        logs.to_string().contains("fixture module missing"),
+        "{logs}"
+    );
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn insufficient_scope_is_recorded_once_and_successful_discovery_resets_status() {
+    use super::super::fixture_http::{server, Reply};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let (_dir, core, _events) = fixture();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let count = calls.clone();
+    let http=server(move|r|{let result=match s(&r["body"]["method"]) {"server/discover"=>json!({"capabilities":{"tools":{}}}),"tools/list"=>json!({"tools":[{"name":"stepup","inputSchema":{"type":"object","properties":{}},"annotations":{"readOnlyHint":true}}]}),"tools/call"=>{if count.fetch_add(1,Ordering::SeqCst)==0 {let mut reply=Reply::json(json!({})).status(403);reply.headers.push(("WWW-Authenticate".into(),"Bearer error=\"insufficient_scope\", scope=\"issues:write\"".into()));return reply;}json!({"content":[{"type":"text","text":"success"}]})},_=>json!({})};Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":result}))}).await;
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"stepup","name":"Stepup","connections":[{"id":"web","name":"Web","transport":"http","url":http.url,"toolPolicy":"allowReadOnly"}]})]).await.unwrap();
+    core.ext_handle("ai-extensions:test", &[json!("stepup")])
+        .await
+        .unwrap();
+    core.ext_handle("ai-extensions:set-enabled", &[json!("stepup"), json!(true)])
+        .await
+        .unwrap();
+    let snapshot = core
+        .extension_snapshot(&core.inner.ctx.paths.home_dir)
+        .await
+        .unwrap();
+    let entry = snapshot.values().next().unwrap();
+    assert!(definitions(&snapshot).unwrap()[0]["function"]["description"].is_string());
+    assert!(core
+        .extension_call(entry, json!({}), "stepup-run", &Cancel::new(), None)
+        .await
+        .unwrap_err()
+        .contains("Access denied"));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let data = core.ext_read().await.unwrap();
+    assert_eq!(
+        data["extensions"][0]["connections"][0]["auth"]["scopes"],
+        "issues:write"
+    );
+    assert_eq!(data["extensions"][0]["connections"][0]["needsAuth"], true);
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("stepup")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    let data = core.ext_read().await.unwrap();
+    let connection = &data["extensions"][0]["connections"][0];
+    assert!(connection["needsAuth"].is_null());
+    assert!(connection["error"].is_null());
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn continuations_preserve_mirrors_and_sse_eof_reports_unknown_outcome() {
+    use super::super::fixture_http::{server, Reply};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let (_dir, core, _events) = fixture();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let count = calls.clone();
+    let http=server(move|r|{let result=match s(&r["body"]["method"]) {"server/discover"=>json!({"capabilities":{"tools":{}}}),"tools/list"=>json!({"ttlMs":2000,"tools":[{"name":"continue","inputSchema":{"type":"object","properties":{"region":{"type":"string","x-mcp-header":"Region"}}},"annotations":{"readOnlyHint":true}}]}),"tools/call"=>{assert_eq!(r["headers"]["mcp-param-region"],"fixture-region");match count.fetch_add(1,Ordering::SeqCst) {0=>json!({"resultType":"input_required","requestState":"fixture-state"}),1=>{assert_eq!(r["body"]["params"]["requestState"],"fixture-state");json!({"content":[{"type":"text","text":"continued"}]})},_=>{let mut reply=Reply::json(json!({}));reply.content_type="text/event-stream".into();reply.body="event: ping\ndata: {}\n\n".into();return reply;}}},_=>json!({})};Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":result}))}).await;
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"continuation","name":"Continuation","connections":[{"id":"web","name":"Web","transport":"http","url":http.url,"timeoutSeconds":17,"toolPolicy":"allowReadOnly"}]})]).await.unwrap();
+    core.ext_handle("ai-extensions:test", &[json!("continuation")])
+        .await
+        .unwrap();
+    core.ext_handle(
+        "ai-extensions:set-enabled",
+        &[json!("continuation"), json!(true)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        core.ext_read().await.unwrap()["extensions"][0]["connections"][0]["ttlMs"],
+        2000
+    );
+    let snapshot = core
+        .extension_snapshot(&core.inner.ctx.paths.home_dir)
+        .await
+        .unwrap();
+    let entry = snapshot.values().next().unwrap();
+    assert!(format!(
+        "{:?}",
+        core.extension_call(
+            entry,
+            json!({"region":"fixture-region"}),
+            "continuation-run",
+            &Cancel::new(),
+            None
+        )
+        .await
+        .unwrap()
+    )
+    .contains("continued"));
+    assert!(core
+        .extension_call(
+            entry,
+            json!({"region":"fixture-region"}),
+            "continuation-run",
+            &Cancel::new(),
+            None
+        )
+        .await
+        .unwrap_err()
+        .contains("outcome of this call is unknown"));
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn unrelated_edit_does_not_cancel_a_disabled_connection_test_and_success_resets_backoff() {
+    use super::super::fixture_http::{server, Reply};
+    let (_dir, core, _events) = fixture();
+    let mut http=server(|r|{let mut reply=Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":if r["body"]["method"]=="server/discover" {json!({"capabilities":{}})}else{json!({})}}));if r["body"]["method"]=="server/discover"{reply.delay=Duration::from_millis(100);}reply}).await;
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"independent","name":"Independent","connections":[{"id":"web","name":"Web","transport":"http","url":http.url}]})]).await.unwrap();
+    let owner = core.clone();
+    let testing = tokio::spawn(async move {
+        owner
+            .ext_handle("ai-extensions:test", &[json!("independent")])
+            .await
+    });
+    http.requests.recv().await.unwrap();
+    core.ext_handle(
+        "ai-extensions:set-instructions",
+        &[json!("unrelated edit"), json!(false)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(testing.await.unwrap().unwrap()["ok"], true);
+    core.ext_handle(
+        "ai-extensions:set-enabled",
+        &[json!("independent"), json!(false)],
+    )
+    .await
+    .unwrap();
+    core.inner.extensions.failures.lock().unwrap().insert(
+        key("independent", "web"),
+        (3, 0, "fixture old failure".into()),
+    );
+    let data = core.ext_read().await.unwrap();
+    let c = &data["extensions"][0]["connections"][0];
+    core.ext_client_mode("independent", c, true).await.unwrap();
+    assert!(!core
+        .inner
+        .extensions
+        .failures
+        .lock()
+        .unwrap()
+        .contains_key(&key("independent", "web")));
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn invalid_add_has_no_orphan_secrets_and_timeouts_are_positive_bounded() {
+    let (_dir, core, _events) = fixture();
+    let invalid = json!({"manifestVersion":1,"id":"invalid","name":"Invalid","connections":[{"id":"one","name":"One","transport":"stdio","command":"must-not-run","env":{"API_KEY":"fixture-must-not-persist"}},{"id":"two","name":"Two","transport":"stdio","command":"must-not-run","toolPolicy":"allow"}]});
+    assert!(core
+        .ext_handle("ai-extensions:add", &[invalid])
+        .await
+        .is_err());
+    assert!(!core
+        .inner
+        .ctx
+        .paths
+        .config_dir
+        .join("ai-extension-secrets.bin")
+        .exists());
+    for timeout in [json!(0), json!(-1), json!(1801), json!(""), json!(1.5)] {
+        assert!(core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"bad-timeout","name":"Timeout","connections":[{"id":"web","name":"Web","transport":"http","url":"https://fixture.invalid/mcp","timeoutSeconds":timeout}]})]).await.unwrap_err().contains("between 1 and 1800"));
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn combined_instructions_are_bounded_and_name_the_source_that_was_truncated() {
+    let (_dir, core, _events) = fixture();
+    core.ext_handle(
+        "ai-extensions:set-instructions",
+        &[json!("global ".repeat(16000)), json!(false)],
+    )
+    .await
+    .unwrap();
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"large","name":"Large source","connections":[],"instructions":"extension ".repeat(12000)})]).await.unwrap();
+    core.ext_handle("ai-extensions:set-enabled", &[json!("large"), json!(true)])
+        .await
+        .unwrap();
+    let (text, _) = core
+        .extension_instructions(&core.inner.ctx.paths.home_dir, &json!({}))
+        .await
+        .unwrap();
+    assert!(text.len() <= 128 * 1024);
+    assert!(text.contains("Instructions from Extension Large source truncated"));
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn contributed_provider_cannot_borrow_legacy_keys_or_erase_a_user_owned_collision() {
+    let (_dir, core, _events) = fixture();
+    core.patch_config(json!({"provider":"custom:declared","apiKey":"fixture-unrelated-legacy"}))
+        .await
+        .unwrap();
+    core.ext_handle("ai-extensions:add",&[json!({"manifestVersion":1,"id":"ownership","name":"Ownership","connections":[],"providers":[{"id":"custom:declared","title":"Declared","baseURL":"https://declared.invalid/v1","protocol":"openai-chat","models":[{"id":"fixture"}]}]})]).await.unwrap();
+    core.ext_handle(
+        "ai-extensions:set-enabled",
+        &[json!("ownership"), json!(true)],
+    )
+    .await
+    .unwrap();
+    let cfg = core.cfg(None, None).await.unwrap();
+    assert!(s(&cfg["apiKey"]).is_empty());
+    core.patch_config(json!({"customProviders":[{"id":"custom:declared","title":"User owned","baseURL":"https://user.invalid/v1"}],"providerConfigs":{"custom:declared":{"apiKey":"fixture-user-owned"}}})).await.unwrap();
+    core.handle("llm-config-set",&[json!({"customProviders":[{"id":"custom:declared","title":"User owned","baseURL":"https://user.invalid/v1"}],"providerConfigs":{"custom:declared":{"apiKey":"fixture-user-owned"}}})]).await.unwrap().unwrap();
+    let cfg = core.cfg(None, None).await.unwrap();
+    assert_eq!(cfg["customProviders"][0]["title"], "User owned");
+    assert_eq!(cfg["apiKey"], "fixture-user-owned");
     core.shutdown().await;
 }

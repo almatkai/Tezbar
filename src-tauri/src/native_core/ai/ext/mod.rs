@@ -32,6 +32,20 @@ pub const CHANNELS: &[&str] = &[
     "ai-extensions:read-resource",
     "ai-extensions:set-instructions",
 ];
+struct NewSecretGuard {
+    core: AiCore,
+    namespaces: Vec<String>,
+    armed: Arc<std::sync::atomic::AtomicBool>,
+}
+impl Drop for NewSecretGuard {
+    fn drop(&mut self) {
+        if self.armed.load(std::sync::atomic::Ordering::SeqCst) {
+            for namespace in &self.namespaces {
+                let _ = self.core.inner.extensions.secrets.put(namespace, "", None);
+            }
+        }
+    }
+}
 struct Starting {
     result: tokio::sync::watch::Receiver<Option<Result<Arc<Client>, String>>>,
     cancel: Cancel,
@@ -105,12 +119,18 @@ impl Extensions {
             Ok(json!({"version":1,"extensions":[],"globalInstructions":"","useAgentsMd":true}))
         }
     }
-    fn edit(&self, f: impl FnOnce(&mut Value) -> CoreResult) -> CoreResult {
+    fn edit(
+        &self,
+        f: impl FnOnce(&mut Value) -> CoreResult,
+    ) -> Result<(Value, Value, Value), String> {
         let _guard = self.lock.lock().unwrap();
         let mut data = self.load()?;
+        let before = data.clone();
         let result = f(&mut data)?;
-        common::write_json_atomic(&self.path, &data)?;
-        Ok(result)
+        if data != before {
+            common::write_json_atomic(&self.path, &data)?;
+        }
+        Ok((result, before, data))
     }
     pub fn shutdown(&self) {
         for s in self.starting.lock().unwrap().values() {
@@ -175,6 +195,9 @@ fn command_pin(c: &Value) -> String {
         "needsAuth",
         "modelNames",
         "hasResources",
+        "pinnedCatalog",
+        "cachedEra",
+        "ttlMs",
     ] {
         v.as_object_mut().unwrap().remove(k);
     }
@@ -245,18 +268,21 @@ impl AiCore {
         f: impl FnOnce(&mut Value) -> CoreResult + Send + 'static,
     ) -> CoreResult {
         let core = self.clone();
-        let result = tokio::task::spawn_blocking(move || core.inner.extensions.edit(f))
-            .await
-            .map_err(err)??;
+        let (result, before, data) =
+            tokio::task::spawn_blocking(move || core.inner.extensions.edit(f))
+                .await
+                .map_err(err)??;
         // Persist disablement before cancelling starts, so a concurrent cold
         // start cannot observe an enabled record after the cancellation sweep.
-        let data = self.ext_read().await?;
-        for record in data["extensions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|e| e["enabled"] != true)
-        {
+        for record in data["extensions"].as_array().unwrap().iter().filter(|e| {
+            e["enabled"] != true
+                && before["extensions"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .find(|old| old["id"] == e["id"])
+                    .is_some_and(|old| old["enabled"] == true)
+        }) {
             let p = prefix(s(&record["id"]));
             for (k, start) in self.inner.extensions.starting.lock().unwrap().iter() {
                 if k.starts_with(&p) {
@@ -269,7 +295,9 @@ impl AiCore {
                 }
             }
         }
-        self.inner.ctx.emit("ai-extensions-changed", Value::Null);
+        if data != before {
+            self.inner.ctx.emit("ai-extensions-changed", Value::Null);
+        }
         Ok(result)
     }
     async fn ext_client(&self, extension: &str, connection: &Value) -> Result<Arc<Client>, String> {
@@ -308,6 +336,7 @@ impl AiCore {
                 let c = connection.clone();
                 self.spawn(async move{let result=tokio::select!{biased;_=cancel.cancelled()=>Err("Connection was disabled".into()),r=core.ext_connect(&eid,&c,explicit_test)=>r};
                     if let Err(e)=&result {if !cancel.is_cancelled(){let mut failures=core.inner.extensions.failures.lock().unwrap();let count=failures.get(&id).map(|v|v.0+1).unwrap_or(1);let wait=[1,5,30][usize::from(count.saturating_sub(1)).min(2)];failures.insert(id.clone(),(count,now_ms()+wait*1000,cut(e,500)));}}
+                    if result.is_ok() { core.inner.extensions.failures.lock().unwrap().remove(&id); }
                     let _=tx.send(Some(result));core.inner.extensions.starting.lock().unwrap().remove(&id);
                 });
                 rx
@@ -402,7 +431,8 @@ impl AiCore {
             let grant = values.get("oauth-grant").ok_or("Sign in required")?;
             let grant: Value = serde_json::from_str(grant)
                 .map_err(|_| "Saved sign-in is invalid. Sign in again.")?;
-            if grant["resource"] != c["url"] {
+            if oauth::secure_url(s(&grant["resource"]))? != oauth::secure_url(s(&c["url"]).trim())?
+            {
                 return Err("Saved sign-in belongs to another resource. Sign in again.".into());
             }
             if grant["expiresAt"]
@@ -479,6 +509,7 @@ impl AiCore {
             let mut catalog =
                 json!({"tools":[],"prompts":[],"resources":[],"templates":[],"warnings":[]});
             let caps = client.capabilities.lock().unwrap().clone();
+            let mut ttl = 60_000u64;
             for (method, kind, cap) in [
                 ("tools/list", "tools", "tools"),
                 ("prompts/list", "prompts", "prompts"),
@@ -500,6 +531,9 @@ impl AiCore {
                         .call(method, params, &Cancel::new(), Duration::from_secs(10))
                         .await?;
                     client.scrub_value(&mut result);
+                    if let Some(value) = result["ttlMs"].as_u64() {
+                        ttl = ttl.min(value.clamp(1000, 600_000));
+                    }
                     let field = if kind == "templates" {
                         "resourceTemplates"
                     } else {
@@ -599,13 +633,14 @@ impl AiCore {
                 client.version.lock().unwrap().clone(),
                 command_pin(c),
                 caps.get("resources").is_some(),
+                ttl,
             ));
         }
         let id = id.to_string();
         self.ext_edit(move |data| {
             let record = record_mut(data, &id)?;
             record.as_object_mut().unwrap().remove("error");
-            for (cid, catalog, version, pin, resources) in updated {
+            for (cid, catalog, version, pin, resources, ttl) in updated {
                 let c = connection_mut(record, &cid)?;
                 let old = c["pins"].clone();
                 let mut pins = json!({});
@@ -618,17 +653,30 @@ impl AiCore {
                     }
                     pins[name] = json!(hash);
                 }
+                changed |= old.is_object() && old != pins;
                 c["pendingPins"] = pins.clone();
                 if !old.is_object() {
-                    c["pins"] = pins
+                    c["pins"] = pins;
+                    c["pinnedCatalog"] = catalog.clone();
                 }
                 if changed {
-                    c["previousCatalog"] = c["catalog"].clone();
+                    c["previousCatalog"] = c
+                        .get("pinnedCatalog")
+                        .cloned()
+                        .filter(Value::is_object)
+                        .unwrap_or_else(|| c["catalog"].clone());
+                }
+                if c["pinnedCatalog"].is_null() {
+                    c["pinnedCatalog"] = c["previousCatalog"].clone();
                 }
                 c["catalog"] = catalog;
+                c.as_object_mut().unwrap().remove("error");
+                c.as_object_mut().unwrap().remove("needsAuth");
                 c["hasResources"] = json!(resources);
                 c["modelNames"] = profile_tool_names(c, resources);
                 c["catalogAt"] = json!(now_ms());
+                c["ttlMs"] = json!(ttl);
+                c["cachedEra"] = json!(version);
                 c["version"] = json!(version);
                 c["tested"] = json!(true);
                 c["trustPin"] = json!(pin);
@@ -738,7 +786,10 @@ impl AiCore {
                 }
             }
             for c in ext["connections"].as_array().into_iter().flatten() {
-                if c["tested"] != true || c["trustPin"] != command_pin(c) {
+                if c["tested"] != true
+                    || c["needsReview"] == true
+                    || c["trustPin"] != command_pin(c)
+                {
                     snapshot.warnings.push(format!(
                         "{} is unavailable; test it in AI settings.",
                         s(&c["name"])
@@ -751,7 +802,7 @@ impl AiCore {
                 )
                 .await
                 {
-                    Ok(Ok(c)) if !c.changed.load(std::sync::atomic::Ordering::SeqCst) => c,
+                    Ok(Ok(c)) => c,
                     _ => {
                         snapshot.warnings.push(format!(
                             "{} is unavailable for this run. Check AI settings.",
@@ -923,13 +974,6 @@ impl AiCore {
                 .await?;
         }
         let c = check(&self.ext_read().await?)?;
-        if entry
-            .client
-            .changed
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            return Err("The connection catalog changed. Start a new run to refresh it.".into());
-        }
         let cfg = self.read_config().await?;
         let mode = mode
             .or_else(|| cfg["agentApprovalMode"].as_str())
@@ -982,17 +1026,11 @@ impl AiCore {
                 .await?;
         }
         check(&self.ext_read().await?)?;
-        if entry
-            .client
-            .changed
-            .load(std::sync::atomic::Ordering::SeqCst)
-        {
-            return Err("The connection catalog changed. Start a new run to refresh it.".into());
-        }
         if cancel.is_cancelled() {
             return Err("Operation cancelled".into());
         }
-        let timeout = Duration::from_secs(c["timeoutSeconds"].as_u64().unwrap_or(120).min(1800));
+        let timeout =
+            Duration::from_secs(c["timeoutSeconds"].as_u64().unwrap_or(120).clamp(1, 1800));
         let first = if let Some(operation) = entry.resource {
             self.extension_resource(&entry.client, &c, operation, &args, cancel)
                 .await
@@ -1007,9 +1045,13 @@ impl AiCore {
                 let extension = entry.extension.clone();
                 let connection = entry.connection.clone();
                 let saved = error.clone();
+                let requested = entry.client.requested_scopes.lock().unwrap().clone();
                 self.ext_edit(move |data| {
                     let c = connection_mut(record_mut(data, &extension)?, &connection)?;
                     c["needsAuth"] = json!(true);
+                    if let Some(scope) = requested {
+                        c["auth"]["scopes"] = json!(scope);
+                    }
                     c["error"] = json!(saved);
                     Ok(Value::Null)
                 })
@@ -1033,11 +1075,13 @@ impl AiCore {
                 .clone();
             result = entry
                 .client
-                .call(
-                    "tools/call",
-                    json!({"name":name,"arguments":args,"requestState":state}),
+                .call_tool_state(
+                    name,
+                    args.clone(),
+                    &entry.descriptor,
                     cancel,
-                    Duration::from_secs(120),
+                    timeout,
+                    Some(state),
                 )
                 .await?;
         }
@@ -1153,15 +1197,19 @@ impl AiCore {
             "ai-extensions:review-project" => {
                 let cwd = tokio::fs::canonicalize(s(a)).await.map_err(err)?;
                 self.project_status(&cwd).await?;
-                *self.inner.extensions.review_cwd.lock().unwrap() = Some(cwd.to_string_lossy().into());
-                self.inner.ctx.emit("ai-extensions-changed",json!({"projectReview":true}));
+                *self.inner.extensions.review_cwd.lock().unwrap() =
+                    Some(cwd.to_string_lossy().into());
+                self.inner
+                    .ctx
+                    .emit("ai-extensions-changed", json!({"projectReview":true}));
                 Ok(json!({"ok":true}))
             }
             "ai-extensions:list" => {
                 let mut data = self.ext_read().await?;
+                data["defaultWorkingFolder"] = json!(self.inner.ctx.paths.home_dir);
                 let queued = self.inner.extensions.review_cwd.lock().unwrap().clone();
                 if let Some(cwd) = a.as_str().or(queued.as_deref()) {
-                    data["project"] = self.project_status(std::path::Path::new(cwd)).await?;
+                    data["project"] = self.project_status(std::path::Path::new(cwd)).await.unwrap_or_else(|_|json!({"folder":cwd,"error":"The project folder is no longer available. Choose an existing folder to review."}));
                 }
                 Ok(data)
             }
@@ -1179,14 +1227,26 @@ impl AiCore {
                 .await
             }
             "ai-extensions:logs" => {
-                let clients = self.inner.extensions.clients.lock().unwrap();
                 let mut lines = vec![];
-                for (k, client) in clients
-                    .iter()
-                    .filter(|(key, _)| key.starts_with(&prefix(&id)))
                 {
-                    let _ = k;
-                    lines.extend(client.logs.lock().unwrap().iter().cloned());
+                    let clients = self.inner.extensions.clients.lock().unwrap();
+                    for (k, client) in clients
+                        .iter()
+                        .filter(|(key, _)| key.starts_with(&prefix(&id)))
+                    {
+                        let _ = k;
+                        lines.extend(client.logs.lock().unwrap().iter().cloned());
+                    }
+                }
+                if lines.is_empty() {
+                    if let Some(record) = self.ext_read().await?["extensions"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .find(|e| e["id"] == id)
+                    {
+                        lines.extend(s(&record["error"]).lines().map(str::to_string));
+                    }
                 }
                 if lines.len() > 20 {
                     lines.drain(..lines.len() - 20);
@@ -1206,7 +1266,12 @@ impl AiCore {
                     }
                     tokio::fs::read_to_string(path).await.map_err(err)?
                 };
-                let manifest = manifest::parse(&text)?;
+                let mut manifest = manifest::parse(&text)?;
+                for c in manifest["connections"].as_array_mut().into_iter().flatten() {
+                    if c["transport"] == "stdio" && s(&c["cwd"]).is_empty() {
+                        c["cwd"] = json!(self.inner.ctx.paths.home_dir);
+                    }
+                }
                 let mut preview = manifest.clone();
                 let mut count = 0;
                 for c in preview["connections"].as_array_mut().into_iter().flatten() {
@@ -1252,34 +1317,85 @@ impl AiCore {
                     manifest::parse(&a.to_string())?
                 };
                 let core = self.clone();
-                self.ext_edit(move |data| {
-                    let mut record = manifest;
-                    let rid = s(&record["id"]).to_string();
-                    if data["extensions"]
+                let armed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                let guard = NewSecretGuard {
+                    core: core.clone(),
+                    namespaces: manifest["connections"]
                         .as_array()
-                        .unwrap()
-                        .iter()
-                        .any(|e| e["id"] == rid)
-                    {
-                        return Err("An extension with this ID already exists".into());
-                    }
-                    record["enabled"] = json!(false);
-                    for c in record["connections"].as_array_mut().into_iter().flatten() {
-                        let cid = s(&c["id"]).to_string();
-                        c["slug"] = json!(format!(
-                            "ext{}",
-                            &manifest::hash(&json!([&rid, &cid]))[..12]
-                        ));
-                        c["tested"] = json!(false);
-                        if c["toolPolicy"] == "allow" && a_confirmation(c) != s(&c["name"]) {
-                            return Err("Type the connection name to allow all of its tools".into());
+                        .into_iter()
+                        .flatten()
+                        .map(|c| key(s(&manifest["id"]), s(&c["id"])))
+                        .chain(
+                            manifest["providers"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .map(|p| provider_key(s(&manifest["id"]), s(&p["id"]))),
+                        )
+                        .collect(),
+                    armed: armed.clone(),
+                };
+                let result = self
+                    .ext_edit(move |data| {
+                        let mut record = manifest;
+                        let rid = s(&record["id"]).to_string();
+                        if data["extensions"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|e| e["id"] == rid)
+                        {
+                            return Err("An extension with this ID already exists".into());
                         }
-                        for section in ["env", "headers"] {
-                            for (k, v) in c[section].as_object_mut().into_iter().flatten() {
+                        for c in record["connections"].as_array().into_iter().flatten() {
+                            if c["toolPolicy"] == "allow" && a_confirmation(c) != s(&c["name"]) {
+                                return Err(
+                                    "Type the connection name to allow all of its tools".into()
+                                );
+                            }
+                        }
+                        armed.store(true, std::sync::atomic::Ordering::SeqCst);
+                        record["enabled"] = json!(false);
+                        for c in record["connections"].as_array_mut().into_iter().flatten() {
+                            if c["transport"] == "http" {
+                                c["url"] = json!(oauth::secure_url(s(&c["url"]).trim())?.as_str());
+                            }
+                            if c["transport"] == "stdio" && s(&c["cwd"]).is_empty() {
+                                c["cwd"] = json!(core.inner.ctx.paths.home_dir);
+                            }
+                            let cid = s(&c["id"]).to_string();
+                            c["slug"] = json!(format!(
+                                "ext{}",
+                                &manifest::hash(&json!([&rid, &cid]))[..12]
+                            ));
+                            c["tested"] = json!(false);
+                            if c["toolPolicy"] == "allow" && a_confirmation(c) != s(&c["name"]) {
+                                return Err(
+                                    "Type the connection name to allow all of its tools".into()
+                                );
+                            }
+                            for section in ["env", "headers"] {
+                                for (k, v) in c[section].as_object_mut().into_iter().flatten() {
+                                    if let Some(literal) = v.as_str() {
+                                        if manifest::secret_key(k, literal) {
+                                            core.inner.extensions.secrets.put(
+                                                &key(&rid, &cid),
+                                                k,
+                                                Some(literal),
+                                            )?;
+                                            *v = json!({"secret":k,"label":k});
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        for p in record["providers"].as_array_mut().into_iter().flatten() {
+                            let pid = s(&p["id"]).to_string();
+                            for (k, v) in p["headers"].as_object_mut().into_iter().flatten() {
                                 if let Some(literal) = v.as_str() {
                                     if manifest::secret_key(k, literal) {
                                         core.inner.extensions.secrets.put(
-                                            &key(&rid, &cid),
+                                            &provider_key(&rid, &pid),
                                             k,
                                             Some(literal),
                                         )?;
@@ -1288,29 +1404,19 @@ impl AiCore {
                                 }
                             }
                         }
-                    }
-                    for p in record["providers"].as_array_mut().into_iter().flatten() {
-                        let pid = s(&p["id"]).to_string();
-                        for (k, v) in p["headers"].as_object_mut().into_iter().flatten() {
-                            if let Some(literal) = v.as_str() {
-                                if manifest::secret_key(k, literal) {
-                                    core.inner.extensions.secrets.put(
-                                        &provider_key(&rid, &pid),
-                                        k,
-                                        Some(literal),
-                                    )?;
-                                    *v = json!({"secret":k,"label":k});
-                                }
-                            }
-                        }
-                    }
-                    data["extensions"]
-                        .as_array_mut()
-                        .unwrap()
-                        .push(record.clone());
-                    Ok(record)
-                })
-                .await
+                        data["extensions"]
+                            .as_array_mut()
+                            .unwrap()
+                            .push(record.clone());
+                        Ok(record)
+                    })
+                    .await;
+                if result.is_ok() {
+                    guard
+                        .armed
+                        .store(false, std::sync::atomic::Ordering::SeqCst);
+                }
+                result
             }
             "ai-extensions:test" => {
                 self.inner
@@ -1410,6 +1516,7 @@ impl AiCore {
                 let core = self.clone();
                 self.ext_edit(move |data| {
                     let r = record_mut(data, &id)?;
+                    let previous = r["connections"].clone();
                     for (k, v) in patch.as_object().ok_or("Invalid extension update")? {
                         if matches!(
                             k.as_str(),
@@ -1428,6 +1535,9 @@ impl AiCore {
                         r["enabled"] = json!(false);
                         for c in r["connections"].as_array_mut().into_iter().flatten() {
                             manifest::validate_connection(c)?;
+                            if c["transport"] == "http" {
+                                c["url"] = json!(oauth::secure_url(s(&c["url"]).trim())?.as_str());
+                            }
                             if c["toolPolicy"] == "allow" && a_confirmation(c) != s(&c["name"]) {
                                 return Err("Type the connection name to allow all tools".into());
                             }
@@ -1446,8 +1556,41 @@ impl AiCore {
                                     }
                                 }
                             }
+                            let old = previous
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .find(|old| old["id"] == c["id"]);
+                            let changed = old.is_none_or(|old| command_pin(old) != command_pin(c));
+                            for field in [
+                                "slug",
+                                "pins",
+                                "pendingPins",
+                                "pinnedCatalog",
+                                "previousCatalog",
+                                "catalog",
+                                "needsReview",
+                                "tested",
+                                "trustPin",
+                                "catalogAt",
+                                "version",
+                                "modelNames",
+                                "hasResources",
+                                "allowances",
+                                "cachedEra",
+                                "error",
+                                "needsAuth",
+                            ] {
+                                c.as_object_mut().unwrap().remove(field);
+                                if let Some(value) = old.and_then(|old| old.get(field)) {
+                                    c[field] = value.clone();
+                                }
+                            }
+                            if !changed {
+                                continue;
+                            }
+                            c.as_object_mut().unwrap().remove("cachedEra");
                             c["tested"] = json!(false);
-                            c["pins"] = Value::Null;
                             c["allowances"] = json!({});
                             let cid = key(&id, s(&c["id"]));
                             if let Some(start) =
@@ -1467,10 +1610,24 @@ impl AiCore {
                 .await
             }
             "ai-extensions:accept-review" => {
+                let reviewed = arg(args, 1).clone();
                 self.ext_edit(move |data| {
                     let r = record_mut(data, &id)?;
                     for c in r["connections"].as_array_mut().into_iter().flatten() {
+                        if c["needsReview"] != true {
+                            continue;
+                        }
+                        if reviewed[s(&c["id"])]
+                            != json!({"pins":c["pendingPins"],"trustPin":c["trustPin"]})
+                        {
+                            return Err(
+                                "The tools changed since this review. Review the latest changes."
+                                    .into(),
+                            );
+                        }
                         c["pins"] = c["pendingPins"].clone();
+                        c["pinnedCatalog"] = c["catalog"].clone();
+                        c["previousCatalog"] = Value::Null;
                         c["needsReview"] = json!(false);
                         c["allowances"] = json!({});
                     }
@@ -1757,7 +1914,7 @@ fn a_confirmation(c: &Value) -> &str {
     s(&c["allowAllConfirmation"])
 }
 pub(super) fn definitions(snapshot: &Snapshot) -> Result<Vec<Value>, String> {
-    snapshot.iter().map(|(name,e)|Ok(json!({"type":"function","function":{"name":name,"description":e.descriptor["description"],"parameters":mcp::schema::for_wire(&e.descriptor["inputSchema"])?}}))).collect()
+    snapshot.iter().map(|(name,e)|Ok(json!({"type":"function","function":{"name":name,"description":e.descriptor["description"].as_str().or(e.descriptor["title"].as_str()).unwrap_or(""),"parameters":mcp::schema::for_wire(&e.descriptor["inputSchema"])?}}))).collect()
 }
 pub(super) async fn validate_call(entry: &Entry, args: Value) -> Result<(), String> {
     mcp::schema::validate(entry.descriptor["inputSchema"].clone(), args).await
@@ -1775,7 +1932,22 @@ impl AiCore {
         let mut profile_text = None;
         fn add(out: &mut String, label: &str, text: &str) {
             if !text.trim().is_empty() {
-                out.push_str(&format!("\n<{label}>\n{text}\n</{label}>\n"));
+                let block = format!("\n<{label}>\n{text}\n</{label}>\n");
+                if out.len() + block.len() <= 128 * 1024 {
+                    out.push_str(&block);
+                } else {
+                    let notice=format!("\n[Instructions from {label} truncated to fit the combined 128 KiB limit]\n");
+                    let remaining = (128 * 1024usize)
+                        .saturating_sub(out.len() + notice.len() + label.len() * 2 + 8);
+                    let mut text = text.to_string();
+                    while text.len() > remaining {
+                        text.pop();
+                    }
+                    out.push_str(&format!("\n<{label}>\n{text}\n</{label}>\n{notice}"));
+                    while out.len() > 128 * 1024 {
+                        out.pop();
+                    }
+                }
             }
         }
         add(
@@ -1837,7 +2009,13 @@ impl AiCore {
                 }
             }
         }
-        if options["agentProfileId"].as_str().is_some_and(|id| !id.is_empty()) && profile_text.is_none() { return Err("The selected agent profile is unavailable. Enable its extension or remove the profile from this conversation.".into()); }
+        if options["agentProfileId"]
+            .as_str()
+            .is_some_and(|id| !id.is_empty())
+            && profile_text.is_none()
+        {
+            return Err("The selected agent profile is unavailable. Enable its extension or remove the profile from this conversation.".into());
+        }
         if let Some(text) = profile_text {
             add(&mut instructions, "Active profile", &text);
         }

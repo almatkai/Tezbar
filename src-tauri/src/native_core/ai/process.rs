@@ -242,36 +242,88 @@ pub struct ShellCapture {
 }
 impl ShellCapture {
     pub fn result(self) -> Result<String, String> {
-        let text = format!("Exit status: {}{}\nstdout:\n{}\nstderr:\n{}{}",
-            self.exit_code.map(|n| n.to_string()).unwrap_or_else(|| "unavailable".into()),
-            if self.timed_out { " (timed out)" } else { "" }, self.stdout, self.stderr,
-            if self.truncated { "\n[Output truncated]" } else { "" });
-        if self.timed_out || self.exit_code != Some(0) { Err(text) } else { Ok(text) }
+        let text = format!(
+            "Exit status: {}{}\nstdout:\n{}\nstderr:\n{}{}",
+            self.exit_code
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| "unavailable".into()),
+            if self.timed_out { " (timed out)" } else { "" },
+            self.stdout,
+            self.stderr,
+            if self.truncated {
+                "\n[Output truncated]"
+            } else {
+                ""
+            }
+        );
+        if self.timed_out || self.exit_code != Some(0) {
+            Err(text)
+        } else {
+            Ok(text)
+        }
     }
 }
-async fn capture_read(reader: &mut (impl AsyncRead + Unpin), out: &mut Vec<u8>, truncated: &mut bool, limit: usize) -> Result<(), String> {
+async fn capture_read(
+    reader: &mut (impl AsyncRead + Unpin),
+    out: &mut Vec<u8>,
+    truncated: &mut bool,
+    limit: usize,
+) -> Result<(), String> {
     let mut buf = [0; 8192];
     loop {
         let n = reader.read(&mut buf).await.map_err(err)?;
-        if n == 0 { return Ok(()) }
+        if n == 0 {
+            return Ok(());
+        }
         let keep = n.min(limit.saturating_sub(out.len()));
         out.extend_from_slice(&buf[..keep]);
         *truncated |= keep < n;
     }
 }
-pub async fn shell_capture(cmd: &mut Command, timeout: Duration, cancel: &Cancel) -> Result<ShellCapture, String> {
+pub async fn shell_capture(
+    cmd: &mut Command,
+    timeout: Duration,
+    cancel: &Cancel,
+) -> Result<ShellCapture, String> {
     let mut group = cancel.effect(|| GroupChild::spawn(cmd))?;
-    let mut stdout = group.child.stdout.take().ok_or("Missing subprocess stdout")?;
-    let mut stderr = group.child.stderr.take().ok_or("Missing subprocess stderr")?;
+    let mut stdout = group
+        .child
+        .stdout
+        .take()
+        .ok_or("Missing subprocess stdout")?;
+    let mut stderr = group
+        .child
+        .stderr
+        .take()
+        .ok_or("Missing subprocess stderr")?;
     let (mut out, mut error) = (Vec::new(), Vec::new());
     let (mut out_cut, mut err_cut) = (false, false);
-    let work = async { tokio::try_join!(async { group.child.wait().await.map_err(err) }, capture_read(&mut stdout, &mut out, &mut out_cut, 48*1024), capture_read(&mut stderr, &mut error, &mut err_cut, 12*1024)).map(|r| r.0) };
+    let work = async {
+        tokio::try_join!(
+            async { group.child.wait().await.map_err(err) },
+            capture_read(&mut stdout, &mut out, &mut out_cut, 48 * 1024),
+            capture_read(&mut stderr, &mut error, &mut err_cut, 12 * 1024)
+        )
+        .map(|r| r.0)
+    };
     let status = tokio::select! { biased; _=cancel.cancelled()=>Err("Operation cancelled".to_string()), r=tokio::time::timeout(timeout,work)=>match r { Ok(r)=>r.map(Some), Err(_)=>Ok(None) } };
     group.terminate().await;
     let status = status?;
     // Killing the tree closes pipes; collect bytes already queued before timeout.
-    let _ = tokio::time::timeout(Duration::from_millis(500), async { tokio::join!(capture_read(&mut stdout,&mut out,&mut out_cut, 48*1024), capture_read(&mut stderr,&mut error,&mut err_cut, 12*1024)) }).await;
-    Ok(ShellCapture { stdout: String::from_utf8_lossy(&out).into(), stderr: String::from_utf8_lossy(&error).into(), exit_code: status.and_then(|s| s.code()), timed_out: status.is_none(), truncated: out_cut || err_cut })
+    let _ = tokio::time::timeout(Duration::from_millis(500), async {
+        tokio::join!(
+            capture_read(&mut stdout, &mut out, &mut out_cut, 48 * 1024),
+            capture_read(&mut stderr, &mut error, &mut err_cut, 12 * 1024)
+        )
+    })
+    .await;
+    Ok(ShellCapture {
+        stdout: String::from_utf8_lossy(&out).into(),
+        stderr: String::from_utf8_lossy(&error).into(),
+        exit_code: status.and_then(|s| s.code()),
+        timed_out: status.is_none(),
+        truncated: out_cut || err_cut,
+    })
 }
 /// Bytes remain bytes until LF arrives: split UTF-8 and U+2028/U+2029 are safe.
 #[derive(Default)]
@@ -286,7 +338,11 @@ impl Lines {
             return Err("Protocol line exceeds 16 MiB".into());
         }
         let mut lines = Vec::new();
-        while let Some(i) = self.buffer[self.scanned..].iter().position(|b| *b == b'\n').map(|i| i + self.scanned) {
+        while let Some(i) = self.buffer[self.scanned..]
+            .iter()
+            .position(|b| *b == b'\n')
+            .map(|i| i + self.scanned)
+        {
             let mut line: Vec<u8> = self.buffer.drain(..=i).collect();
             self.scanned = 0;
             line.pop();
@@ -421,6 +477,105 @@ mod windows_tests {
                 .output()
                 .unwrap();
             assert!(!String::from_utf8_lossy(&status.stdout).contains(&format!("\"{pid}\"")));
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn windows_mcp_command(
+    binary: &str,
+    path: &std::ffi::OsStr,
+    pathext: &str,
+    args: &[String],
+) -> Result<Command, String> {
+    use std::os::windows::process::CommandExt;
+    use std::path::{Path, PathBuf};
+    let input = Path::new(binary);
+    let dirs: Vec<PathBuf> = if input.components().count() > 1 {
+        vec![PathBuf::new()]
+    } else {
+        std::env::split_paths(path).collect()
+    };
+    let extensions: Vec<_> = std::iter::once(String::new())
+        .chain(
+            pathext
+                .split(';')
+                .filter(|e| !e.is_empty())
+                .map(str::to_string),
+        )
+        .collect();
+    let program = dirs
+        .iter()
+        .flat_map(|d| {
+            extensions
+                .iter()
+                .map(move |ext| d.join(format!("{binary}{ext}")))
+        })
+        .find(|p| p.is_file())
+        .ok_or("Program not found on PATH. Install the program, then Test again.")?;
+    let batch = program
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+    if !batch {
+        let mut cmd = command(program);
+        cmd.args(args);
+        return Ok(cmd);
+    }
+    let program = program
+        .canonicalize()
+        .map_err(err)?
+        .to_string_lossy()
+        .trim_start_matches("\\\\?\\")
+        .to_string();
+    // Batch files run through cmd; unsupported expansion/metacharacters fail
+    // closed rather than letting an imported argument become another command.
+    if std::iter::once(program.as_str())
+        .chain(args.iter().map(String::as_str))
+        .any(|a| a.contains(['%', '!', '^', '&', '|', '<', '>', '"', '\r', '\n', '\0']))
+    {
+        return Err("Batch-program arguments contain unsupported shell syntax. Use an executable wrapper with literal arguments.".into());
+    }
+    let mut cmd = command(std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into()));
+    let invocation = format!(
+        "\"\"{}\"{}\"",
+        program,
+        args.iter().map(|a| format!(" \"{a}\"")).collect::<String>()
+    );
+    cmd.args(["/d", "/s", "/c"]);
+    cmd.as_std_mut().raw_arg(invocation);
+    Ok(cmd)
+}
+
+#[cfg(all(test, windows))]
+mod windows_repair_tests {
+    use super::*;
+    #[tokio::test]
+    async fn pathext_cmd_programs_accept_literal_arguments_and_refuse_injection() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("npx.cmd");
+        std::fs::write(&file, "@echo off\r\necho %~1\r\n").unwrap();
+        let mut cmd = windows_mcp_command(
+            "npx",
+            dir.path().as_os_str(),
+            ".EXE;.CMD",
+            &["literal argument".into()],
+        )
+        .unwrap();
+        assert!(output(&mut cmd, Duration::from_secs(5), &Cancel::new())
+            .await
+            .unwrap()
+            .contains("literal argument"));
+        for argument in [
+            "x & echo injected",
+            "%PATH%",
+            "x\" & echo injected",
+            "!evil!",
+        ] {
+            assert!(
+                windows_mcp_command("npx", dir.path().as_os_str(), ".CMD", &[argument.into()])
+                    .is_err()
+            );
         }
     }
 }
