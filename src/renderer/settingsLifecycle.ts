@@ -18,15 +18,19 @@ function lifecycle(): Lifecycle {
 }
 export function enqueueSettingsWrite(
   work: () => Promise<unknown>,
-  providers: string[] = []
+  providers: string[] = [],
+  origin?: number
 ): { promise: Promise<unknown>; revision: number } {
   const state = lifecycle()
-  const revision = ++state.revision
+  // Retrying an old intent must not supersede a newer draft merely because
+  // its disk write happens later. Queue order and intent order are separate.
+  const revision = origin ?? ++state.revision
   const promise = state.queue
     .catch(() => {})
     .then(work)
     .then((result) => {
-      for (const provider of providers) state.saved.set(provider, revision)
+      for (const provider of providers)
+        state.saved.set(provider, Math.max(state.saved.get(provider) ?? 0, revision))
       return result
     })
   state.queue = promise

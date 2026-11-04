@@ -842,6 +842,221 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     }
   )
 
+  describe('AI draft retry ownership', () => {
+    type DraftConfig = Awaited<ReturnType<Window['tezbar']['getLlmConfig']>>
+    function draftFixture(initial: DraftConfig) {
+      const state = {
+        config: initial,
+        failQueue: [] as boolean[],
+        failAll: false,
+        writes: [] as DraftConfig[],
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        listAntigravityAccounts: async () => [],
+        getLlmConfig: async () => state.config,
+        setLlmConfig: async (patch: DraftConfig) => {
+          state.writes.push(JSON.parse(JSON.stringify(patch)))
+          const fail = state.failAll || state.failQueue.shift() === true
+          if (fail) throw new Error('fixture failed')
+          state.config = { ...state.config, ...patch }
+          return { ok: true }
+        },
+      })
+      return state
+    }
+    const baseDraftConfig = (): DraftConfig => ({
+      provider: 'ollama',
+      model: 'llama-o',
+      customProviders: [{ id: 'custom:x', title: 'Fixture X' }],
+      providerSelectedModels: { ollama: 'llama-o', 'custom:x': 'x-a' },
+      taskProviderOverrides: { chat: 'ollama' },
+      taskModelOverrides: { chat: 'llama-o' },
+      providerConfigs: {
+        ollama: { baseURL: 'http://127.0.0.1:11434' },
+        'custom:x': { apiKey: 'fixture-x', baseURL: 'http://127.0.0.1:9/v1' },
+      },
+      providerModels: {
+        ollama: [{ id: 'llama-o', capabilities: ['tools'] }],
+        'custom:x': [{ id: 'x-a', capabilities: ['tools'] }],
+      },
+    })
+    async function mountDraftSettings() {
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      await advance(50)
+    }
+    async function retireDraftSettings() {
+      const { drainSettingsOwners } = await import('./settingsLifecycle')
+      let drained = 'ok'
+      await act(async () => {
+        await drainSettingsOwners().catch((e: Error) => (drained = e.message))
+        root.unmount()
+      })
+      root = createRoot(container)
+      return drained
+    }
+    async function retryDraftSettings() {
+      const { drainSettingsOwners, retryRetiredSettingsOwners } =
+        await import('./settingsLifecycle')
+      let r = 'ok'
+      let d = 'ok'
+      await act(async () => {
+        await retryRetiredSettingsOwners().catch((e: Error) => (r = e.message))
+        await drainSettingsOwners().catch((e: Error) => (d = e.message))
+      })
+      return { r, d }
+    }
+    async function failPeerDraft(
+      s: ReturnType<typeof draftFixture>,
+      url = 'http://127.0.0.1:11434',
+      tabTitle = 'Fixture X'
+    ) {
+      const el = [...container.querySelectorAll<HTMLInputElement>('input')].find(
+        (i) => i.value === url
+      )!
+      expect(el, 'ollama url input').toBeDefined()
+      s.failQueue.push(true)
+      await input(el, 'http://127.0.0.1:22222')
+      const tab = [...container.querySelectorAll('button')].find((b) =>
+        b.textContent?.includes(tabTitle)
+      )!
+      await act(async () => tab.click())
+      await advance(500)
+    }
+    async function createDraftProvider(name: string) {
+      await click('+ Add custom provider')
+      await input(
+        container.querySelector<HTMLInputElement>(
+          'input[placeholder="Provider name (e.g. Model)"]'
+        )!,
+        name
+      )
+      await click('Create')
+      await advance(500)
+    }
+    it('keeps a newer custom provider when retrying a failed peer draft', async () => {
+      const initial = baseDraftConfig()
+      initial.providerConfigs = {
+        'custom:x': { apiKey: 'fixture-x', baseURL: 'http://127.0.0.1:9/v1' },
+      }
+      const s = draftFixture(initial)
+      await mountDraftSettings()
+      await failPeerDraft(s, 'http://localhost:11434')
+      expect(await retireDraftSettings()).toBe('Settings save failed')
+      await mountDraftSettings()
+      await createDraftProvider('Yak')
+      expect(s.config.customProviders?.some((p) => p.id === 'custom:yak')).toBe(true)
+      const res = await retryDraftSettings()
+      expect(res).toEqual({ r: 'ok', d: 'ok' })
+      expect(s.config.customProviders?.some((p) => p.id === 'custom:yak')).toBe(true)
+      expect(s.config.providerModels?.['custom:yak']).toBeDefined()
+      expect(s.config.providerConfigs?.['custom:yak']).toBeDefined()
+      expect(s.config.provider).toBe('custom:yak')
+      expect(s.config.taskProviderOverrides?.chat).toBe('custom:yak')
+    })
+
+    it('keeps a newer successful peer URL when retrying an older creation', async () => {
+      const s = draftFixture(baseDraftConfig())
+      await mountDraftSettings()
+      s.failQueue.push(true)
+      await createDraftProvider('Zed')
+      // switch to Ollama tab and edit URL successfully
+      const tab = [...container.querySelectorAll('button')].find((b) =>
+        b.textContent?.trim().startsWith('Ollama')
+      )!
+      expect(tab, 'ollama tab').toBeDefined()
+      await act(async () => tab.click())
+      await advance(50)
+      const el = [...container.querySelectorAll<HTMLInputElement>('input')].find(
+        (i) => i.value === 'http://127.0.0.1:11434'
+      )!
+      expect(el, 'ollama url').toBeDefined()
+      await input(el, 'http://127.0.0.1:33333')
+      await advance(500)
+      expect(s.config.providerConfigs?.ollama?.baseURL).toBe('http://127.0.0.1:33333')
+      expect(await retireDraftSettings()).toBe('Settings save failed')
+      const res = await retryDraftSettings()
+      expect(res).toEqual({ r: 'ok', d: 'ok' })
+      expect(s.config.providerConfigs?.ollama?.baseURL).toBe('http://127.0.0.1:33333')
+    })
+
+    it('keeps a newer successful activation when retrying an older creation', async () => {
+      const s = draftFixture(baseDraftConfig())
+      await mountDraftSettings()
+      s.failQueue.push(true)
+      await createDraftProvider('Zed')
+      const tab = [...container.querySelectorAll('button')].find((b) =>
+        b.textContent?.trim().startsWith('Ollama')
+      )!
+      await act(async () => tab.click())
+      await advance(50)
+      await click('Use this provider')
+      await advance(500)
+      expect(s.config.provider).toBe('ollama')
+      expect(await retireDraftSettings()).toBe('Settings save failed')
+      const res = await retryDraftSettings()
+      expect(res).toEqual({ r: 'ok', d: 'ok' })
+      expect(s.config.provider).toBe('ollama')
+      expect(s.config.taskProviderOverrides?.chat).toBe('ollama')
+    })
+
+    it.each([0, 1])('keeps a pending removal across failed retry rounds: %s', async (extra) => {
+      const s = draftFixture(baseDraftConfig())
+      await mountDraftSettings()
+      s.failQueue.push(true)
+      await createDraftProvider('Zed')
+      const tab = [...container.querySelectorAll('button')].find((b) =>
+        b.textContent?.includes('Fixture X')
+      )!
+      await act(async () => tab.click())
+      await advance(50)
+      s.failQueue.push(true)
+      await click('Remove provider')
+      await advance(500)
+      expect(await retireDraftSettings()).toBe('Settings save failed')
+      for (let i = 0; i < extra; i++) {
+        s.failAll = true
+        expect((await retryDraftSettings()).r).toBe('Settings save failed')
+        s.failAll = false
+      }
+      const before = s.writes.length
+      const res = await retryDraftSettings()
+      expect(res).toEqual({ r: 'ok', d: 'ok' })
+      expect(s.writes.length - before).toBe(2)
+      expect(s.config.customProviders?.some((p) => p.id === 'custom:x')).toBe(false)
+      expect(s.config.providerConfigs?.['custom:x']).toBeUndefined()
+    })
+    it('does not let an older retired retry clear a newer live removal failure', async () => {
+      const s = draftFixture(baseDraftConfig())
+      await mountDraftSettings()
+      s.failQueue.push(true)
+      await createDraftProvider('Zed')
+      expect(await retireDraftSettings()).toBe('Settings save failed')
+      await mountDraftSettings()
+      const tab = [...container.querySelectorAll('button')].find((b) =>
+        b.textContent?.includes('Fixture X')
+      )!
+      await act(async () => tab.click())
+      await advance(50)
+      s.failQueue.push(true)
+      await click('Remove provider')
+      await advance(500)
+      const { drainSettingsOwners, retryRetiredSettingsOwners } =
+        await import('./settingsLifecycle')
+      await act(async () => {
+        await retryRetiredSettingsOwners()
+        await expect(drainSettingsOwners()).rejects.toThrow('Settings save failed')
+      })
+      expect(await retireDraftSettings()).toBe('Settings save failed')
+      expect(await retryDraftSettings()).toEqual({ r: 'ok', d: 'ok' })
+      expect(s.config.customProviders?.some((p) => p.id === 'custom:x')).toBe(false)
+      expect(s.config.providerConfigs?.['custom:x']).toBeUndefined()
+    })
+  })
+
   it('preserves peer credentials when retrying a failed provider removal', async () => {
     const { retryRetiredSettingsOwners } = await import('./settingsLifecycle')
     let failNext = false

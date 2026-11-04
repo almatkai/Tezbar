@@ -1440,124 +1440,163 @@ export default function SettingsView({
     // including drafts retained by an earlier Settings view.
     const providers = scope?.removedProvider
       ? [scope.removedProvider]
-      : Object.keys(patch.providerConfigs ?? {})
-    const { promise, revision } = enqueueSettingsWrite(async () => {
-      // Merge provider records at execution time, after older queued writes.
-      // This preserves externally edited providers and the chat selection.
-      const current = await window.tezbar.getLlmConfig()
-      const next = {
-        ...patch,
-        providerConfigs: { ...current.providerConfigs, ...patch.providerConfigs },
-      }
-      const selections = { ...patch.providerSelectedModels }
-      delete next.providerSelectedModels
-      for (const { provider } of scope?.removedModels ?? []) {
-        const removed = scope!
-          .removedModels!.filter((m) => m.provider === provider)
-          .map((m) => m.id)
-        const selected =
-          selections[provider] ??
-          current.providerSelectedModels?.[provider] ??
-          (current.provider === provider ? current.model : undefined)
-        if (selected && removed.includes(selected)) {
-          const models =
-            patch.providerModels?.[provider] ?? current.providerModels?.[provider] ?? []
-          selections[provider] =
-            models.find((m) => !removed.includes(m.id))?.id ?? recommendedModel(provider)
+      : [...Object.keys(patch.providerConfigs ?? {}), ...(patch.provider ? ['@active'] : [])]
+    const { promise, revision } = enqueueSettingsWrite(
+      async () => {
+        // Merge provider records at execution time, after older queued writes.
+        // This preserves externally edited providers and the chat selection.
+        const current = await window.tezbar.getLlmConfig()
+        const next = {
+          ...patch,
+          providerConfigs: { ...current.providerConfigs, ...patch.providerConfigs },
         }
-      }
-      if (scope?.removedProvider) {
-        const removed = scope.removedProvider
-        // Retry owns only this deletion, not snapshots of peer credentials,
-        // model lists or custom-provider definitions captured before failure.
-        next.providerConfigs = { ...current.providerConfigs }
-        next.providerModels = { ...current.providerModels }
-        next.customProviders = current.customProviders?.filter((p) => p.id !== removed) ?? []
-        delete next.providerConfigs[removed]
-        delete next.providerModels[removed]
-        delete selections[removed]
-        next.providerSelectedModels = { ...current.providerSelectedModels }
-        delete next.providerSelectedModels[removed]
-        if (current.provider === removed) {
-          next.provider = 'ollama'
-          next.model = current.providerSelectedModels?.ollama ?? recommendedModel('ollama')
-        }
-        if (current.taskProviderOverrides?.chat === removed) {
-          next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: 'ollama' }
-          next.taskModelOverrides = {
-            ...current.taskModelOverrides,
-            chat: current.providerSelectedModels?.ollama ?? recommendedModel('ollama'),
+        const selections = { ...patch.providerSelectedModels }
+        delete next.providerSelectedModels
+        for (const { provider } of scope?.removedModels ?? []) {
+          const removed = scope!
+            .removedModels!.filter((m) => m.provider === provider)
+            .map((m) => m.id)
+          const selected =
+            selections[provider] ??
+            current.providerSelectedModels?.[provider] ??
+            (current.provider === provider ? current.model : undefined)
+          if (selected && removed.includes(selected)) {
+            const models =
+              patch.providerModels?.[provider] ?? current.providerModels?.[provider] ?? []
+            selections[provider] =
+              models.find((m) => !removed.includes(m.id))?.id ?? recommendedModel(provider)
           }
         }
-      }
-      // Retrying a peer draft must not restore providers removed after that
-      // draft. Keep its first revision across repeated failures; a new Create
-      // action has its own later revision and is still allowed.
-      const liveProviders = new Set<string>(current.customProviders?.map((p) => p.id))
-      const gone = (id: string): boolean =>
-        !scope?.removedProvider &&
-        id.startsWith('custom:') &&
-        !liveProviders.has(id) &&
-        hasNewerSettingsSave(id, origin ?? revision)
-      const goneIds = new Set(
-        [
-          ...(patch.customProviders?.map((p) => p.id) ?? []),
-          ...Object.keys(patch.providerConfigs ?? {}),
-          ...Object.keys(patch.providerModels ?? {}),
-          ...Object.keys(selections),
-        ].filter(gone)
-      )
-      if (goneIds.size) {
-        next.customProviders = next.customProviders?.filter((p) => !goneIds.has(p.id))
-        next.providerModels = { ...next.providerModels }
-        for (const id of goneIds) {
-          delete next.providerConfigs[id as ProviderId]
-          delete next.providerModels[id as ProviderId]
-          delete selections[id as ProviderId]
-        }
-      }
-      if (patch.provider && gone(patch.provider)) {
-        delete next.provider
-        delete next.model
-      }
-      if (Object.keys(selections).length) {
-        next.providerSelectedModels = {
-          ...current.providerSelectedModels,
-          ...selections,
-        }
-        const active = current.provider ?? 'ollama'
-        const chatProvider = current.taskProviderOverrides?.chat ?? active
-        if (selections[active]) next.model = selections[active]
-        if (selections[chatProvider])
-          next.taskModelOverrides = {
-            ...current.taskModelOverrides,
-            chat: selections[chatProvider],
+        if (scope?.removedProvider) {
+          const removed = scope.removedProvider
+          // Retry owns only this deletion, not snapshots of peer credentials,
+          // model lists or custom-provider definitions captured before failure.
+          next.providerConfigs = { ...current.providerConfigs }
+          next.providerModels = { ...current.providerModels }
+          next.customProviders = current.customProviders?.filter((p) => p.id !== removed) ?? []
+          delete next.providerConfigs[removed]
+          delete next.providerModels[removed]
+          delete selections[removed]
+          next.providerSelectedModels = { ...current.providerSelectedModels }
+          delete next.providerSelectedModels[removed]
+          if (current.provider === removed) {
+            next.provider = 'ollama'
+            next.model = current.providerSelectedModels?.ollama ?? recommendedModel('ollama')
           }
-      }
-      if (patch.provider && !gone(patch.provider)) {
-        next.model = selections[patch.provider] ?? next.model
-        next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: patch.provider }
-        next.taskModelOverrides = { ...current.taskModelOverrides, chat: next.model }
-      }
-      const result = await window.tezbar.setLlmConfig(next)
-      if (result && result.ok === false) throw new Error('Could not save')
-      const discardedFailure = scope?.removedProvider
-        ? failedAiProviders.current.has(scope.removedProvider)
-        : false
-      for (const id of providers) {
-        failedAiProviders.current.delete(id)
-        failedAiWrites.current.delete(id)
-      }
-      if (discardedFailure && !failedAiProviders.current.size)
-        setMsg((message) => (message?.text === AI_SAVE_ERROR ? null : message))
-    }, providers)
+          if (current.taskProviderOverrides?.chat === removed) {
+            next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: 'ollama' }
+            next.taskModelOverrides = {
+              ...current.taskModelOverrides,
+              chat: current.providerSelectedModels?.ollama ?? recommendedModel('ollama'),
+            }
+          }
+        }
+        // Retrying a peer draft must not restore providers removed after that
+        // draft. Keep its first revision across repeated failures; a new Create
+        // action has its own later revision and is still allowed.
+        const liveProviders = new Set<string>(current.customProviders?.map((p) => p.id))
+        const gone = (id: string): boolean =>
+          !scope?.removedProvider &&
+          id.startsWith('custom:') &&
+          !liveProviders.has(id) &&
+          hasNewerSettingsSave(id, origin ?? revision)
+        const goneIds = new Set(
+          [
+            ...(patch.customProviders?.map((p) => p.id) ?? []),
+            ...Object.keys(patch.providerConfigs ?? {}),
+            ...Object.keys(patch.providerModels ?? {}),
+            ...Object.keys(selections),
+          ].filter(gone)
+        )
+        if (goneIds.size) {
+          next.customProviders = next.customProviders?.filter((p) => !goneIds.has(p.id))
+          next.providerModels = { ...next.providerModels }
+          for (const id of goneIds) {
+            delete next.providerConfigs[id as ProviderId]
+            delete next.providerModels[id as ProviderId]
+            delete selections[id as ProviderId]
+          }
+        }
+        // A retry owns only unsuperseded keys from its original draft. Preserve
+        // newer provider definitions, models and credentials from current state.
+        const replay = origin !== undefined && !scope?.removedProvider
+        const stale = (id: string): boolean => replay && hasNewerSettingsSave(id, origin!)
+        if (replay) {
+          const owned = new Set(Object.keys(patch.providerConfigs ?? {}))
+          for (const id of owned) {
+            if (!stale(id)) continue
+            const currentConfig = current.providerConfigs?.[id as ProviderId]
+            if (currentConfig) next.providerConfigs[id as ProviderId] = currentConfig
+            else delete next.providerConfigs[id as ProviderId]
+          }
+          if (patch.providerModels) {
+            const models = { ...current.providerModels }
+            for (const [id, list] of Object.entries(patch.providerModels))
+              if (owned.has(id) && !stale(id) && !goneIds.has(id)) models[id as ProviderId] = list
+            next.providerModels = models
+          }
+          if (patch.customProviders) {
+            const definitions = [...(current.customProviders ?? [])]
+            for (const provider of patch.customProviders) {
+              if (!owned.has(provider.id) || stale(provider.id) || goneIds.has(provider.id))
+                continue
+              const index = definitions.findIndex((p) => p.id === provider.id)
+              if (index >= 0) definitions[index] = provider
+              else definitions.push(provider)
+            }
+            next.customProviders = definitions
+          }
+          for (const id of Object.keys(selections))
+            if (stale(id)) delete selections[id as ProviderId]
+        }
+        const activate = !!patch.provider && !gone(patch.provider) && !stale('@active')
+        if (patch.provider && !activate) {
+          delete next.provider
+          delete next.model
+        }
+        if (Object.keys(selections).length) {
+          next.providerSelectedModels = {
+            ...current.providerSelectedModels,
+            ...selections,
+          }
+          const active = current.provider ?? 'ollama'
+          const chatProvider = current.taskProviderOverrides?.chat ?? active
+          if (selections[active]) next.model = selections[active]
+          if (selections[chatProvider])
+            next.taskModelOverrides = {
+              ...current.taskModelOverrides,
+              chat: selections[chatProvider],
+            }
+        }
+        if (patch.provider && activate) {
+          next.model = selections[patch.provider] ?? next.model
+          next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: patch.provider }
+          next.taskModelOverrides = { ...current.taskModelOverrides, chat: next.model }
+        }
+        const result = await window.tezbar.setLlmConfig(next)
+        if (result && result.ok === false) throw new Error('Could not save')
+        const discardedFailure = scope?.removedProvider
+          ? failedAiProviders.current.has(scope.removedProvider)
+          : false
+        for (const id of providers) {
+          // An older retry may finish while this owner has a newer failed edit.
+          if ((failedAiWrites.current.get(id)?.revision ?? 0) > revision) continue
+          failedAiProviders.current.delete(id)
+          failedAiWrites.current.delete(id)
+        }
+        if (discardedFailure && !failedAiProviders.current.size)
+          setMsg((message) => (message?.text === AI_SAVE_ERROR ? null : message))
+      },
+      providers,
+      origin
+    )
     aiWrites.current = promise.catch(() => {
+      const first = origin ?? revision
+      const failed = { revision: first, retry: () => writeAiPatch(patch, scope, first) }
       for (const id of providers) {
+        if ((failedAiWrites.current.get(id)?.revision ?? 0) > first) continue
         failedAiProviders.current.add(id)
-        failedAiWrites.current.set(id, {
-          revision,
-          retry: () => writeAiPatch(patch, scope, origin ?? revision),
-        })
+        failedAiWrites.current.set(id, failed)
       }
       setMsg({
         tone: 'error',
