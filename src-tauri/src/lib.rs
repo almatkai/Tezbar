@@ -2617,8 +2617,10 @@ fn finish_settings_close(window: WebviewWindow) -> Result<(), String> {
     let app = window.app_handle().clone();
     { let state = window.state::<WindowBehaviorState>(); let mut close = state.settings_close.lock().unwrap(); close.0 += 1; close.1 = true; }
     window.hide().map_err(|e| e.to_string())?;
-    restore_main_window(&app)?;
-    window.destroy().map_err(|e| e.to_string())
+    let restored = restore_main_window(&app);
+    // Even a launcher restoration failure must not retain a hidden webview.
+    window.destroy().map_err(|e| e.to_string())?;
+    restored
 }
 
 #[tauri::command]
