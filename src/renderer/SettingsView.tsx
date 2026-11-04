@@ -1106,11 +1106,12 @@ export default function SettingsView({
     const cid = githubOAuthClientId.trim()
     setDeviceBusy(true)
     try {
-      const patch = buildAiProviderPatch()
-      await window.tezbar.setLlmConfig({
-        ...patch,
-        ...(cid ? { githubOAuthClientId: cid } : {}),
-      })
+      // Save Copilot through the ordered merge; a direct provider patch would
+      // replace the other providers' records in the native config store.
+      persistAiSettings(true)
+      await aiWrites.current
+      if (failedAiProviders.current.has('copilot')) return
+      if (cid) await window.tezbar.setLlmConfig({ githubOAuthClientId: cid })
       const start = await window.tezbar.githubDeviceStart(cid || undefined)
       setGithubDeviceUserCode(start.user_code)
       setMsg({ tone: 'success', text: 'GitHub opened. Enter the code shown above.' })

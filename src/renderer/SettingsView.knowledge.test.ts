@@ -1086,6 +1086,82 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
       }
     )
 
+    it.each(['existing', 'late-provider', 'save-throw', 'save-false'] as const)(
+      'preserves provider records during Copilot device sign-in: %s',
+      async (scenario) => {
+        const initial = baseDraftConfig()
+        initial.providerConfigs!.copilot = { copilotGithubToken: 'fixture-github-token' }
+        const s = draftFixture(initial)
+        const start = vi.fn(async () => ({
+          device_code: 'fixture-device',
+          user_code: 'ABCD-1234',
+          verification_uri: 'https://example.invalid/device',
+          expires_in: 60,
+          interval: 1,
+        }))
+        Object.assign(window.tezbar, {
+          githubDeviceStart: start,
+          githubDevicePoll: async () => ({ status: 'error', error: 'fixture sign-in stopped' }),
+          openExternalUrl: vi.fn(async () => {}),
+        })
+        await mountDraftSettings()
+        const tab = [...container.querySelectorAll('button')].find((b) =>
+          b.textContent?.trim().startsWith('GitHub Copilot')
+        )!
+        await act(async () => tab.click())
+        await advance(50)
+        if (scenario === 'late-provider') {
+          s.config = {
+            ...s.config,
+            customProviders: [...(s.config.customProviders ?? []), { id: 'custom:w', title: 'W' }],
+            providerConfigs: { ...s.config.providerConfigs, 'custom:w': { apiKey: 'fixture-w' } },
+            providerModels: {
+              ...s.config.providerModels,
+              'custom:w': [{ id: 'w-a', capabilities: ['tools'] }],
+            },
+            providerSelectedModels: { ...s.config.providerSelectedModels, 'custom:w': 'w-a' },
+            provider: 'custom:w',
+            model: 'w-a',
+            taskProviderOverrides: { chat: 'custom:w' },
+            taskModelOverrides: { chat: 'w-a' },
+          }
+          await input(
+            container.querySelector<HTMLInputElement>(
+              'input[placeholder="OAuth Client ID (optional)"]'
+            )!,
+            'fixture-client-id'
+          )
+        }
+        if (scenario === 'save-throw') s.failQueue.push(true)
+        if (scenario === 'save-false')
+          Object.assign(window.tezbar, {
+            setLlmConfig: async () => ({ ok: false, error: 'fixture save refused' }),
+          })
+        await click('Sign in with GitHub')
+        await advance(2000)
+        expect(s.config.providerConfigs?.ollama?.baseURL).toBe('http://127.0.0.1:11434')
+        expect(s.config.providerConfigs?.['custom:x']?.apiKey).toBe('fixture-x')
+        expect(s.config.providerConfigs?.copilot?.copilotGithubToken).toBe('fixture-github-token')
+        if (scenario.startsWith('save-')) {
+          expect(start).not.toHaveBeenCalled()
+          expect(container.textContent).toContain('Could not save')
+        } else {
+          expect(start).toHaveBeenCalledWith(
+            scenario === 'late-provider' ? 'fixture-client-id' : undefined
+          )
+        }
+        if (scenario === 'late-provider') {
+          expect(s.config.githubOAuthClientId).toBe('fixture-client-id')
+          expect(s.config.customProviders?.some((p) => p.id === 'custom:w')).toBe(true)
+          expect(s.config.providerModels?.['custom:w']?.[0]?.id).toBe('w-a')
+          expect(s.config.providerConfigs?.['custom:w']?.apiKey).toBe('fixture-w')
+          expect(s.config.providerSelectedModels?.['custom:w']).toBe('w-a')
+          expect(s.config.provider).toBe('custom:w')
+          expect(s.config.taskProviderOverrides?.chat).toBe('custom:w')
+        }
+      }
+    )
+
     it('does not let an older retired retry clear a newer live removal failure', async () => {
       const s = draftFixture(baseDraftConfig())
       await mountDraftSettings()
