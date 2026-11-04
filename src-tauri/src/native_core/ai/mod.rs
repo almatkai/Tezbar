@@ -842,9 +842,12 @@ impl AiCore {
             }
             "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
             | "chat:delete" | "chat:clear" => {
-                let _lifecycle = if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
-                    Some(self.inner.session_lifecycle.lock().await)
-                } else { None };
+                let _lifecycle =
+                    if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
+                        Some(self.inner.session_lifecycle.lock().await)
+                    } else {
+                        None
+                    };
                 let mut clear_sessions = Vec::new();
                 if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
                     let session = if channel == "chat:delete-turn" {
@@ -961,30 +964,37 @@ impl AiCore {
 }
 fn redact_text(input: &str) -> String {
     let text = redact_output(input);
-    regex::Regex::new(r"(?i)\b(password|passwd|api[_-]?key|secret|token)\s*[=:]\s*([^\s,;]+)")
-        .unwrap()
-        .replace_all(&text, "${1}=[REDACTED]")
-        .into_owned()
+    static FIELDS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)\b(password|passwd|api[_-]?key|secret|token)\s*[=:]\s*([^\s,;]+)")
+            .unwrap()
+    });
+    FIELDS.replace_all(&text, "${1}=[REDACTED]").into_owned()
 }
 fn redact_output(input: &str) -> String {
+    // Log draining must not recompile six regexes per stderr line. Keep the
+    // exact same rules for wire output, errors and logs, initialized once.
+    static PATTERNS: std::sync::LazyLock<Vec<(regex::Regex, &'static str)>> =
+        std::sync::LazyLock::new(|| {
+            [
+                (
+                    "(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
+                    "[REDACTED_PRIVATE_KEY]",
+                ),
+                (r"\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]"),
+                (r"\bgh[pousr]_[A-Za-z0-9_]{12,}\b", "[REDACTED_TOKEN]"),
+                (r"\bAKIA[0-9A-Z]{16}\b", "[REDACTED_AWS_ACCESS_KEY]"),
+                (
+                    r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/-]{16,}",
+                    "${1}[REDACTED_TOKEN]",
+                ),
+            ]
+            .into_iter()
+            .map(|(pattern, replacement)| (regex::Regex::new(pattern).unwrap(), replacement))
+            .collect()
+        });
     let mut text = input.to_string();
-    for (pattern, replacement) in [
-        (
-            "(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
-            "[REDACTED_PRIVATE_KEY]",
-        ),
-        (r"\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]"),
-        (r"\bgh[pousr]_[A-Za-z0-9_]{12,}\b", "[REDACTED_TOKEN]"),
-        (r"\bAKIA[0-9A-Z]{16}\b", "[REDACTED_AWS_ACCESS_KEY]"),
-        (
-            r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/-]{16,}",
-            "${1}[REDACTED_TOKEN]",
-        ),
-    ] {
-        text = regex::Regex::new(pattern)
-            .unwrap()
-            .replace_all(&text, replacement)
-            .into_owned();
+    for (pattern, replacement) in PATTERNS.iter() {
+        text = pattern.replace_all(&text, *replacement).into_owned();
     }
     text
 }
