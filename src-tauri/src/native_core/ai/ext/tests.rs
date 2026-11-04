@@ -1827,7 +1827,8 @@ async fn closure_test_retires_client_after_long_call_and_disable_stops_retired()
     let (dir, core, _) = fixture();
     let binary = program(dir.path());
     let marker = dir.path().join("calls");
-    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"retire","name":"Retire","connections":[{"id":"stdio","name":"Slow","transport":"stdio","command":binary,"args":["slow"],"env":{"FIXTURE_MARKER":marker}}]})]).await.unwrap();
+    let release = dir.path().join("release");
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"retire","name":"Retire","connections":[{"id":"stdio","name":"Slow","transport":"stdio","command":binary,"args":["slow"],"env":{"FIXTURE_MARKER":marker,"FIXTURE_RELEASE":release}}]})]).await.unwrap();
     assert_eq!(
         core.ext_handle("ai-extensions:test", &[json!("retire")])
             .await
@@ -1838,6 +1839,11 @@ async fn closure_test_retires_client_after_long_call_and_disable_stops_retired()
         .await
         .unwrap();
     for disable in [false, true] {
+        let _ = std::fs::remove_file(&release);
+        let previous_calls = std::fs::read_to_string(&marker)
+            .unwrap_or_default()
+            .lines()
+            .count();
         let old = core.inner.extensions.clients.lock().unwrap()[&key("retire", "stdio")].clone();
         let client = old.clone();
         let call = tokio::spawn(async move {
@@ -1846,11 +1852,22 @@ async fn closure_test_retires_client_after_long_call_and_disable_stops_retired()
                     "tools/call",
                     json!({"name":"echo","arguments":{"text":"once"}}),
                     &Cancel::new(),
-                    Duration::from_secs(3),
+                    Duration::from_secs(20),
                 )
                 .await
         });
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while std::fs::read_to_string(&marker)
+                .unwrap_or_default()
+                .lines()
+                .count()
+                == previous_calls
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
         assert_eq!(
             core.ext_handle("ai-extensions:test", &[json!("retire")])
                 .await
@@ -1868,6 +1885,7 @@ async fn closure_test_retires_client_after_long_call_and_disable_stops_retired()
             assert!(old.is_closed());
             assert!(call.await.unwrap().is_err());
         } else {
+            std::fs::write(&release, "release").unwrap();
             assert!(call.await.unwrap().unwrap().to_string().contains("fixture"));
             assert!(old.is_closed());
         }

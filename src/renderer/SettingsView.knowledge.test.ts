@@ -632,9 +632,14 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     }
   )
 
-  it.each([false, true])(
-    'retired Settings drains a queued get before close and recovers a failed save: %s',
-    async (fail) => {
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    'retired Settings drains a queued get and preserves newer drafts (failure %s, newer %s)',
+    async (fail, newer) => {
       const events = new Map<string, (event: { payload: unknown }) => void>()
       vi.mocked(listen).mockImplementation(async (name, cb) => {
         events.set(String(name), cb as (event: { payload: unknown }) => void)
@@ -695,6 +700,11 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
       await act(async () =>
         root.render(createElement(SettingsView, { ...props, initialTab: 'ai', key: 'new' }))
       )
+      if (newer)
+        await input(
+          container.querySelector<HTMLInputElement>('input[type="password"]')!,
+          'newer-draft'
+        )
       vi.mocked(invoke).mockClear()
       await act(async () => {
         events.get('settings-close-requested')!({ payload: 9 })
@@ -704,7 +714,7 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
       await act(async () => {
         beforeSet.resolve(config)
       })
-      if (fail) {
+      if (fail && !newer) {
         expect(invoke).not.toHaveBeenCalledWith('finish_settings_close')
         expect(document.getElementById('settings-close-error')?.textContent).toContain(
           'Could not save Settings'
@@ -713,7 +723,12 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
           document.querySelector<HTMLButtonElement>('#settings-close-error button')!.click()
         })
       }
-      expect(config.providerConfigs?.openai?.apiKey).toBe('retired-draft')
+      if (fail && newer)
+        await act(async () => {
+          events.get('settings-close-requested')!({ payload: 10 })
+        })
+      expect(config.providerConfigs?.openai?.apiKey).toBe(newer ? 'newer-draft' : 'retired-draft')
+      if (newer) expect(save).toHaveBeenCalledTimes(2)
       expect(invoke).toHaveBeenCalledWith('finish_settings_close')
     }
   )

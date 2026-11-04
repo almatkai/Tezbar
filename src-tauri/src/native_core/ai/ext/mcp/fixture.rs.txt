@@ -26,7 +26,10 @@ fn main(){
   else if line.contains("tools/call"){
    if std::env::var("SECRET_MARKER").is_ok(){panic!("ambient secret inherited")}
    if let Ok(path)=std::env::var("FIXTURE_MARKER"){writeln!(std::fs::OpenOptions::new().create(true).append(true).open(path).unwrap(),"called").unwrap();}
-   if std::env::args().any(|a|a=="slow") { std::thread::sleep(std::time::Duration::from_millis(600)); }
+   if std::env::args().any(|a|a=="slow") {
+    let release=std::env::var("FIXTURE_RELEASE").unwrap();let deadline=std::time::Instant::now()+std::time::Duration::from_secs(20);
+    while !std::path::Path::new(&release).exists() {if std::time::Instant::now()>deadline{panic!("fixture release timeout")}std::thread::sleep(std::time::Duration::from_millis(10));}
+   }
    if std::env::args().any(|a|a=="crash"){std::process::exit(3)}
    if std::env::args().any(|a|a=="flood"){for _ in 0..65{println!("fixture non-JSON stdout");}io::stdout().flush().unwrap();std::thread::sleep(std::time::Duration::from_secs(30));}
    let secret=std::env::var("FIXTURE_TOKEN").unwrap_or_default();eprintln!("fixture {secret}");

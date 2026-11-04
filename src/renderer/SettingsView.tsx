@@ -1,4 +1,8 @@
-import { registerSettingsOwner } from './settingsLifecycle'
+import {
+  enqueueSettingsWrite,
+  hasNewerSettingsSave,
+  registerSettingsOwner,
+} from './settingsLifecycle'
 import { AiAccountsPanel } from './ai/AiAccountsPanel'
 import { AiExtensionsSection } from './ai/AiExtensionsSection'
 import {
@@ -768,12 +772,11 @@ export default function SettingsView({
         }
         if (selectedAiProviderRef.current === provider && patch.providerSelectedModels?.[provider])
           setAiModel(patch.providerSelectedModels[provider]!)
-        aiWrites.current = aiWrites.current
-          .catch(() => {})
-          .then(() => window.tezbar.setLlmConfig(patch as LlmConfigRecord))
-          .catch(() => {
-            /* Optional discovery owns no user draft. */
-          })
+        aiWrites.current = enqueueSettingsWrite(() =>
+          window.tezbar.setLlmConfig(patch as LlmConfigRecord)
+        ).promise.catch(() => {
+          /* Optional discovery owns no user draft. */
+        })
         await aiWrites.current
       } catch {
         /* Model discovery is optional; user-managed models remain available. */
@@ -1425,11 +1428,10 @@ export default function SettingsView({
   buildAiPatchRef.current = buildAiProviderPatch
   const aiWrites = useRef<Promise<unknown>>(Promise.resolve())
   const failedAiProviders = useRef(new Set<string>())
-  const failedAiWrites = useRef(new Map<string, () => void>())
+  const failedAiWrites = useRef(new Map<string, { revision: number; retry: () => void }>())
   const writeAiPatch = (patch: LlmConfigRecord, scope?: AiPatchOverrides): void => {
-    aiWrites.current = aiWrites.current
-      .catch(() => {})
-      .then(async () => {
+    const { promise, revision } = enqueueSettingsWrite(
+      async () => {
         // Merge provider records at execution time, after older queued writes.
         // This preserves externally edited providers and the chat selection.
         const current = await window.tezbar.getLlmConfig()
@@ -1496,17 +1498,19 @@ export default function SettingsView({
           failedAiProviders.current.delete(id)
           failedAiWrites.current.delete(id)
         }
+      },
+      Object.keys(patch.providerConfigs ?? {})
+    )
+    aiWrites.current = promise.catch(() => {
+      for (const id of Object.keys(patch.providerConfigs ?? {})) {
+        failedAiProviders.current.add(id)
+        failedAiWrites.current.set(id, { revision, retry: () => writeAiPatch(patch, scope) })
+      }
+      setMsg({
+        tone: 'error',
+        text: 'Could not save. Settings remains open; retry the edit before closing.',
       })
-      .catch(() => {
-        for (const id of Object.keys(patch.providerConfigs ?? {})) {
-          failedAiProviders.current.add(id)
-          failedAiWrites.current.set(id, () => writeAiPatch(patch, scope))
-        }
-        setMsg({
-          tone: 'error',
-          text: 'Could not save. Settings remains open; retry the edit before closing.',
-        })
-      })
+    })
   }
   const flushAiSave = (): void => {
     if (aiSaveTimer.current === null) return
@@ -1593,6 +1597,14 @@ export default function SettingsView({
   // webview only after every queued write and edits made during that wait drain.
   const flushAiSaveRef = useRef(flushAiSave)
   flushAiSaveRef.current = flushAiSave
+  const pruneSupersededAiFailures = (): void => {
+    for (const [id, failed] of failedAiWrites.current) {
+      if (hasNewerSettingsSave(id, failed.revision)) {
+        failedAiWrites.current.delete(id)
+        failedAiProviders.current.delete(id)
+      }
+    }
+  }
   const settleAiSaves = async (): Promise<void> => {
     aiEditRevision.current++ // discovery may finish, but cannot enqueue stale writes
     let writes: Promise<unknown>
@@ -1601,6 +1613,7 @@ export default function SettingsView({
       writes = aiWrites.current
       await writes
     } while (aiSaveTimer.current !== null || writes !== aiWrites.current)
+    pruneSupersededAiFailures()
     if (failedAiProviders.current.size) throw new Error('Settings save failed')
   }
   const settleAiSavesRef = useRef(settleAiSaves)
@@ -1610,7 +1623,11 @@ export default function SettingsView({
       registerSettingsOwner(
         () => settleAiSavesRef.current(),
         async () => {
-          for (const retry of new Set(failedAiWrites.current.values())) retry()
+          pruneSupersededAiFailures()
+          for (const retry of new Set(
+            [...failedAiWrites.current.values()].map((failed) => failed.retry)
+          ))
+            retry()
           await settleAiSavesRef.current()
         }
       ),

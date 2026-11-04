@@ -510,8 +510,63 @@ fn windows_permanent_dpapi_failure_archives_both_files_and_denied_replacement_ro
         path: dir.path().join("ai-extension-key.bin"),
     });
     key.save(&[17; 32]).unwrap();
-    let mut protected = std::fs::read(&key.path).unwrap();
-    protected.truncate(20);
+    // A structurally valid DPAPI blob protected with different entropy reaches
+    // the real permanent-decryption path; truncation is invalid parameter (87)
+    // on Windows and must remain refused.
+    let original = std::fs::read(&key.path).unwrap();
+    assert!(!dpapi(&original[..20], false).unwrap_err().permanent());
+    #[repr(C)]
+    struct Blob {
+        len: u32,
+        data: *mut u8,
+    }
+    #[link(name = "crypt32")]
+    extern "system" {
+        fn CryptProtectData(
+            input: *const Blob,
+            description: *const u16,
+            entropy: *const Blob,
+            reserved: *const std::ffi::c_void,
+            prompt: *const std::ffi::c_void,
+            flags: u32,
+            output: *mut Blob,
+        ) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LocalFree(p: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    }
+    let mut plain = [17u8; 32];
+    let mut entropy = [99u8; 32];
+    let input = Blob {
+        len: 32,
+        data: plain.as_mut_ptr(),
+    };
+    let salt = Blob {
+        len: 32,
+        data: entropy.as_mut_ptr(),
+    };
+    let mut output = Blob {
+        len: 0,
+        data: std::ptr::null_mut(),
+    };
+    let protected = unsafe {
+        assert_ne!(
+            CryptProtectData(
+                &input,
+                std::ptr::null(),
+                &salt,
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+                &mut output
+            ),
+            0
+        );
+        let bytes = std::slice::from_raw_parts(output.data, output.len as usize).to_vec();
+        LocalFree(output.data as _);
+        bytes
+    };
     std::fs::write(&key.path, &protected).unwrap();
     let error = dpapi(&protected, false).unwrap_err();
     assert!(error.permanent(), "actual DPAPI code: {error}");
