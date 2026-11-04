@@ -1439,21 +1439,20 @@ export default function SettingsView({
           ...patch,
           providerConfigs: { ...current.providerConfigs, ...patch.providerConfigs },
         }
+        const selections = { ...patch.providerSelectedModels }
         for (const { provider } of scope?.removedModels ?? []) {
           const removed = scope!
             .removedModels!.filter((m) => m.provider === provider)
             .map((m) => m.id)
           const selected =
+            selections[provider] ??
             current.providerSelectedModels?.[provider] ??
             (current.provider === provider ? current.model : undefined)
           if (selected && removed.includes(selected)) {
             const models =
               patch.providerModels?.[provider] ?? current.providerModels?.[provider] ?? []
-            patch.providerSelectedModels = {
-              ...patch.providerSelectedModels,
-              [provider]:
-                models.find((m) => !removed.includes(m.id))?.id ?? recommendedModel(provider),
-            }
+            selections[provider] =
+              models.find((m) => !removed.includes(m.id))?.id ?? recommendedModel(provider)
           }
         }
         if (scope?.removedProvider) {
@@ -1473,24 +1472,24 @@ export default function SettingsView({
             }
           }
         }
-        if (patch.providerSelectedModels) {
+        if (Object.keys(selections).length) {
           next.providerSelectedModels = {
             ...current.providerSelectedModels,
-            ...patch.providerSelectedModels,
+            ...selections,
           }
           const active = current.provider ?? 'ollama'
           const chatProvider = current.taskProviderOverrides?.chat ?? active
-          if (patch.providerSelectedModels[active])
-            next.model = patch.providerSelectedModels[active]
-          if (patch.providerSelectedModels[chatProvider])
+          if (selections[active]) next.model = selections[active]
+          if (selections[chatProvider])
             next.taskModelOverrides = {
               ...current.taskModelOverrides,
-              chat: patch.providerSelectedModels[chatProvider],
+              chat: selections[chatProvider],
             }
         }
         if (patch.provider) {
+          next.model = selections[patch.provider] ?? next.model
           next.taskProviderOverrides = { ...current.taskProviderOverrides, chat: patch.provider }
-          next.taskModelOverrides = { ...current.taskModelOverrides, chat: patch.model }
+          next.taskModelOverrides = { ...current.taskModelOverrides, chat: next.model }
         }
         const result = await window.tezbar.setLlmConfig(next)
         if (result && result.ok === false) throw new Error('Could not save')

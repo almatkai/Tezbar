@@ -48,16 +48,20 @@ impl Drop for NewSecretGuard {
         }
     }
 }
-#[derive(Default)]
 struct Probes {
     clients: Vec<(String, Arc<Client>)>,
     committed: bool,
+    core: AiCore,
+    handed_off: bool,
 }
 impl Drop for Probes {
     fn drop(&mut self) {
-        if !self.committed {
-            for (_, client) in &self.clients {
+        for (id, client) in &self.clients {
+            if !self.committed {
                 client.shutdown();
+            }
+            if !self.handed_off {
+                self.core.release_ext_probe(id, client);
             }
         }
     }
@@ -151,6 +155,8 @@ impl Extensions {
         Ok((result, before, data))
     }
     pub fn shutdown(&self) {
+        // Serialize the final drain with catalog adoption and normal registration.
+        let _guard = self.lock.lock().unwrap();
         for s in self.starting.lock().unwrap().values() {
             s.cancel.cancel();
         }
@@ -327,12 +333,18 @@ impl AiCore {
         }
         let mut clients = self.inner.extensions.clients.lock().unwrap();
         clients.retain(|key, client| {
-            if key == id || key.starts_with(&format!("{id}:retired:")) {
+            if key == id || key.starts_with(&format!("{id}:retired:")) || key.starts_with(&format!("{id}:probe:")) {
                 client.shutdown();
                 false
             } else {
                 true
             }
+        });
+    }
+    fn release_ext_probe(&self, id: &str, client: &Arc<Client>) {
+        let prefix = format!("{id}:probe:");
+        self.inner.extensions.clients.lock().unwrap().retain(|key, registered| {
+            !key.starts_with(&prefix) || !Arc::ptr_eq(registered, client)
         });
     }
     async fn ext_client(&self, extension: &str, connection: &Value) -> Result<Arc<Client>, String> {
@@ -344,6 +356,7 @@ impl AiCore {
         connection: &Value,
         explicit_test: bool,
     ) -> Result<Arc<Client>, String> {
+        if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
         let id = key(extension, s(&connection["id"]));
         if !explicit_test {
             if let Some((count, at, error)) =
@@ -365,6 +378,7 @@ impl AiCore {
         };
         let mut receiver = {
             let mut starts = self.inner.extensions.starting.lock().unwrap();
+            if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
             if let Some(start) = starts.get(&start_id) {
                 start.result.clone()
             } else {
@@ -381,7 +395,7 @@ impl AiCore {
                 let eid = extension.to_string();
                 let c = connection.clone();
                 self.spawn(async move {
-                    let result = tokio::select! { biased; _ = cancel.cancelled() => Err("Connection was disabled".into()), r = core.ext_connect(&eid, &c, explicit_test) => r };
+                    let result = tokio::select! { biased; _ = core.inner.stop.cancelled() => Err("AI runtime is shutting down".into()), _ = cancel.cancelled() => Err("Connection was disabled".into()), r = core.ext_connect(&eid, &c, explicit_test) => r };
                     if let Err(e) = &result { if !cancel.is_cancelled() {
                         let mut failures = core.inner.extensions.failures.lock().unwrap();
                         let count = failures.get(&id).map(|v|v.0+1).unwrap_or(1);
@@ -390,7 +404,7 @@ impl AiCore {
                     }} else { core.inner.extensions.failures.lock().unwrap().remove(&id); }
                     core.inner.extensions.starting.lock().unwrap().remove(&start_id);
                     if let Err(error) = tx.send(Some(result)) {
-                        if let Some(Ok(client)) = error.0 { client.shutdown(); }
+                        if let Some(Ok(client)) = error.0 { client.shutdown(); core.release_ext_probe(&id, &client); }
                     }
                 });
                 rx
@@ -527,8 +541,16 @@ impl AiCore {
         let mut connected = Probes {
             clients: vec![(id.clone(), client.clone())],
             committed: false,
+            core: self.clone(),
+            handed_off: false,
         };
-        let current = self.ext_read().await?;
+        // Include uncommitted clients in every remove/disable/shutdown sweep.
+        // Keep the lifecycle lock through validity checks and registration.
+        let _guard = self.inner.extensions.lock.lock().unwrap();
+        if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
+        self.inner.extensions.clients.lock().unwrap().insert(
+            format!("{id}:probe:{}", uuid::Uuid::new_v4()), client.clone());
+        let current = self.inner.extensions.load()?;
         if !current["extensions"]
             .as_array()
             .into_iter()
@@ -553,6 +575,7 @@ impl AiCore {
             clients.insert(id, client.clone());
         }
         connected.committed = true;
+        connected.handed_off = explicit_test;
         Ok(client)
     }
     async fn ext_discover(&self, id: &str) -> CoreResult {
@@ -570,7 +593,10 @@ impl AiCore {
             return Err("Extension was disabled".into());
         }
         let mut updated = vec![];
-        let mut probes = Probes::default();
+        let mut probes = Probes {
+            clients: Vec::new(), committed: false,
+            core: self.clone(), handed_off: false,
+        };
         for c in ext["connections"].as_array().into_iter().flatten() {
             let client = self.ext_client_mode(id, c, explicit_test).await?;
             if explicit_test {
@@ -598,7 +624,7 @@ impl AiCore {
                         params["cursor"] = cursor;
                     }
                     let mut result = client
-                        .call(method, params, &Cancel::new(), Duration::from_secs(10))
+                        .call(method, params, &self.inner.stop, Duration::from_secs(10))
                         .await?;
                     client.scrub_value(&mut result);
                     if let Some(value) = result["ttlMs"].as_u64() {
@@ -707,8 +733,10 @@ impl AiCore {
             ));
         }
         let id = id.to_string();
+        let core = self.clone();
         let result = self
             .ext_edit(move |data| {
+                if core.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
                 let record = record_mut(data, &id)?;
                 record.as_object_mut().unwrap().remove("error");
                 for (cid, catalog, version, pin, resources, ttl) in updated {
@@ -761,6 +789,7 @@ impl AiCore {
             .await;
         if result.is_ok() {
             let _guard = self.inner.extensions.lock.lock().unwrap();
+            if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
             let current = self.inner.extensions.load()?;
             for c in ext["connections"].as_array().into_iter().flatten() {
                 let valid = current["extensions"]
@@ -1713,15 +1742,7 @@ impl AiCore {
                     let r = record_mut(data, &id)?;
                     for c in r["connections"].as_array().into_iter().flatten() {
                         let cid = key(&id, s(&c["id"]));
-                        if let Some(start) =
-                            core.inner.extensions.starting.lock().unwrap().get(&cid)
-                        {
-                            start.cancel.cancel();
-                        }
-                        if let Some(c) = core.inner.extensions.clients.lock().unwrap().remove(&cid)
-                        {
-                            c.shutdown()
-                        }
+                        core.stop_ext_clients(&cid);
                         core.inner.extensions.secrets.put(&cid, "", None)?;
                     }
                     for p in r["providers"].as_array().into_iter().flatten() {

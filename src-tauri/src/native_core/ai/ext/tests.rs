@@ -2010,3 +2010,74 @@ async fn closure_escaped_stderr_pipe_does_not_hold_shutdown_tasks() {
     );
     assert!(core.inner.tasks.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn removing_an_extension_stops_retired_clients_and_their_pending_call() {
+    let (dir, core, _) = fixture();
+    let binary = program(dir.path());
+    let marker = dir.path().join("calls");
+    let release = dir.path().join("release");
+    core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"retire","name":"Retire","connections":[{"id":"stdio","name":"Slow","transport":"stdio","command":binary,"args":["slow"],"env":{"FIXTURE_MARKER":marker,"FIXTURE_RELEASE":release}}]})]).await.unwrap();
+    assert_eq!(core.ext_handle("ai-extensions:test", &[json!("retire")]).await.unwrap()["ok"], true);
+    core.ext_handle("ai-extensions:set-enabled", &[json!("retire"), json!(true)]).await.unwrap();
+    let old = core.inner.extensions.clients.lock().unwrap()[&key("retire", "stdio")].clone();
+    let client = old.clone();
+    let call = tokio::spawn(async move {
+        client.call("tools/call", json!({"name":"echo","arguments":{"text":"once"}}), &Cancel::new(), Duration::from_secs(20)).await
+    });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while std::fs::read_to_string(&marker).unwrap_or_default().lines().count() == 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }).await.unwrap();
+    assert_eq!(core.ext_handle("ai-extensions:test", &[json!("retire")]).await.unwrap()["ok"], true);
+    assert!(!old.is_closed());
+    core.ext_handle("ai-extensions:remove", &[json!("retire")]).await.unwrap();
+    assert!(core.ext_read().await.unwrap()["extensions"].as_array().unwrap().is_empty());
+    assert!(old.is_closed());
+    assert!(core.inner.extensions.clients.lock().unwrap().is_empty());
+    assert!(tokio::time::timeout(Duration::from_secs(1), call).await.unwrap().unwrap().is_err());
+    assert_eq!(std::fs::read_to_string(&marker).unwrap().lines().count(), 1);
+    core.shutdown().await;
+}
+
+
+#[tokio::test]
+async fn stopping_during_a_test_catalog_cancels_the_probe_and_prevents_adoption() {
+    use super::super::fixture_http::{server, Reply};
+    for shutdown in [false, true] {
+        let (_dir, core, _) = fixture();
+        let mut http = server(move |r| {
+            let method = s(&r["body"]["method"]);
+            let result = match method {
+                "initialize" => json!({"protocolVersion":"2025-11-25","capabilities":{"tools":{}}}),
+                "tools/list" => json!({"tools":[]}),
+                _ => json!({"capabilities":{"tools":{}}}),
+            };
+            let mut reply = Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":result}));
+            if method == "tools/list" { reply.delay = Duration::from_secs(30); }
+            reply
+        }).await;
+        core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"quit","name":"Quit","connections":[{"id":"web","name":"Web","transport":"http","url":http.url}]})]).await.unwrap();
+        let worker = core.clone();
+        let test = tokio::spawn(async move { worker.ext_handle("ai-extensions:test", &[json!("quit")]).await });
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let request = http.requests.recv().await.unwrap();
+                if request["body"]["method"] == "tools/list" { break; }
+            }
+        }).await.unwrap();
+        assert!(core.inner.extensions.clients.lock().unwrap().keys().any(|k| k.contains(":probe:")));
+        let start = std::time::Instant::now();
+        if shutdown { core.shutdown().await; }
+        else { core.ext_handle("ai-extensions:remove", &[json!("quit")]).await.unwrap(); }
+        assert!(start.elapsed() < Duration::from_secs(1));
+        let outcome = tokio::time::timeout(Duration::from_secs(1), test).await.unwrap().unwrap();
+        assert!(!outcome.is_ok_and(|v| v["ok"] == true));
+        assert!(core.inner.extensions.clients.lock().unwrap().is_empty());
+        assert!(core.inner.extensions.starting.lock().unwrap().is_empty());
+        let data = core.ext_read().await.unwrap();
+        if shutdown { assert_ne!(data["extensions"][0]["connections"][0]["tested"], true); }
+        else { assert!(data["extensions"].as_array().unwrap().is_empty()); core.shutdown().await; }
+    }
+}

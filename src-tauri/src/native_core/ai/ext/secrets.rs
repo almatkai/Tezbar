@@ -53,14 +53,16 @@ impl Secrets {
             .lock
             .lock()
             .map_err(|_| "Connection secret store lock failed")?;
-        Ok(self.path.exists() && self.key.resettable()?)
+        // A permanently unreadable protected key also needs recovery when no
+        // credential has been entered since the preceding explicit reset.
+        Ok(self.key.resettable()? && (self.path.exists() || self.key.load().is_err()))
     }
     pub fn reset_missing(&self) -> Result<(), String> {
         let _guard = self
             .lock
             .lock()
             .map_err(|_| "Connection secret store lock failed")?;
-        if !self.path.exists() || !self.key.resettable()? {
+        if !self.key.resettable()? || (!self.path.exists() && self.key.load().is_ok()) {
             return Err("Reset is only available when the saved connection key is missing".into());
         }
         let archived = self.path.with_extension(format!(
@@ -68,20 +70,25 @@ impl Secrets {
             now_ms(),
             uuid::Uuid::new_v4()
         ));
-        std::fs::rename(&self.path, &archived).map_err(err)?;
+        let had_ciphertext = self.path.exists();
+        if had_ciphertext {
+            std::fs::rename(&self.path, &archived).map_err(err)?;
+        }
         let revoked = self.path.with_extension("revoked.json");
         let archived_revoked = PathBuf::from(format!("{}.revoked.json", archived.display()));
         let had_revoked = revoked.exists();
         if had_revoked {
             if let Err(error) = std::fs::rename(&revoked, &archived_revoked) {
-                std::fs::rename(&archived, &self.path).map_err(err)?;
+                if had_ciphertext { std::fs::rename(&archived, &self.path).map_err(err)?; }
                 return Err(err(error));
             }
         }
         let key = crypto::generate_random_bytes();
         if let Err(error) = self.key.reset(&key) {
-            std::fs::rename(&archived, &self.path)
-                .map_err(|e| format!("{error}; ciphertext rollback failed: {e}"))?;
+            if had_ciphertext {
+                std::fs::rename(&archived, &self.path)
+                    .map_err(|e| format!("{error}; ciphertext rollback failed: {e}"))?;
+            }
             if had_revoked {
                 std::fs::rename(archived_revoked, revoked).map_err(err)?;
             }
@@ -470,6 +477,8 @@ mod tests {
             .put("connection", "token", Some("must-not-be-written"))
             .is_err());
         assert!(!other.path().join("ai-extension-secrets.bin").exists());
+        assert!(store.reset_available().is_err());
+        assert!(store.reset_missing().is_err());
         std::fs::write(
             other.path().join("ai-extension-secrets.bin"),
             "fixture unreadable ciphertext",
@@ -603,4 +612,15 @@ fn windows_permanent_dpapi_failure_archives_both_files_and_denied_replacement_ro
         .put("c", "token", Some("fixture-new-private"))
         .unwrap();
     assert_eq!(store.values("c").unwrap()["token"], "fixture-new-private");
+    // No credential has been entered after an earlier reset (or ciphertext
+    // persistence failed). A second permanent DPAPI failure still offers reset.
+    std::fs::remove_file(&store.path).unwrap();
+    std::fs::write(&key.path, &protected).unwrap();
+    assert!(store.reset_available().unwrap());
+    assert!(store.put("c", "token", Some("must-not-write")).is_err());
+    assert!(!store.path.exists());
+    store.reset_missing().unwrap();
+    assert!(!store.reset_available().unwrap());
+    store.put("c", "token", Some("fixture-after-second-reset")).unwrap();
+    assert_eq!(store.values("c").unwrap()["token"], "fixture-after-second-reset");
 }

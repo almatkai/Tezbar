@@ -584,6 +584,67 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     }
   )
 
+  it.each(['choose-after-remove', 'remove-after-add'] as const)(
+    'preserves the effective explicit model choice when combined with removal: %s',
+    async (action) => {
+      let config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'openai',
+        model: 'fixture-a',
+        providerSelectedModels: { openai: 'fixture-a' },
+        taskModelOverrides: { chat: 'fixture-a' },
+        providerConfigs: { openai: { apiKey: 'fixture-key' } },
+        providerModels: {
+          openai: ['a', 'b', 'c', 'd'].map((id) => ({
+            id: `fixture-${id}`,
+            capabilities: ['tools'],
+          })),
+        },
+      }
+      Object.assign(window.tezbar, {
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+        getLlmConfig: async () => config,
+        setLlmConfig: async (patch: typeof config) => {
+          config = { ...config, ...patch }
+          return { ok: true }
+        },
+      })
+      const row = (id: string) =>
+        [...container.querySelectorAll('li')].find(
+          (li) => li.querySelector('span')?.textContent === id
+        )!
+      const remove = async (id: string) =>
+        act(async () =>
+          [...row(id).querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
+        )
+      await act(async () =>
+        root.render(createElement(SettingsView, { ...props, initialTab: 'ai' }))
+      )
+      if (action === 'choose-after-remove') {
+        await remove('fixture-a')
+        await advance(50)
+        await act(async () => row('fixture-d').querySelector('button')!.click())
+      } else {
+        await input(
+          container.querySelector<HTMLInputElement>('input[placeholder="Add model id"]')!,
+          'fixture-z'
+        )
+        await click('Add')
+        await advance(50)
+        await remove('fixture-z')
+      }
+      await advance(500)
+      const expected = action === 'choose-after-remove' ? 'fixture-d' : 'fixture-a'
+      expect(config.providerSelectedModels?.openai).toBe(expected)
+      expect(config.model).toBe(expected)
+      expect(config.taskModelOverrides?.chat).toBe(expected)
+      expect(config.providerModels?.openai?.map((m) => m.id)).toContain(expected)
+      expect(config.providerModels?.openai?.map((m) => m.id)).not.toContain(
+        action === 'choose-after-remove' ? 'fixture-a' : 'fixture-z'
+      )
+    }
+  )
+
   it.each(['fixture-b', 'fixture-c'])(
     'rapid removals of the selected model then %s within the debounce fall back',
     async (secondRemoved) => {
