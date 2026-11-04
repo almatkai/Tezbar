@@ -1,6 +1,43 @@
 # Native AI implementation verification
 
-## Retired-draft removal barrier — source `30905e2`
+## Retry ownership and intent order — source `f5f8cd0`
+
+Validated implementation: `f5f8cd0964998231da433d29444bd7036c678ad2`, tree
+`1792f00d77a88e03c59236b99caecd80cd849f30`, on `feat/native-rust-agent`.
+Changes since `30905e2` are confined to Settings, its window-owned write queue,
+and real-component tests. Native sources/scripts remain byte-identical to the
+Mac/Windows-tested `756072e` source below.
+
+The [latest Opus runtime report](reviews/native-ai-opus-runtime-509f53b.md) closes
+T-R3 and identifies T-R4/T-R5. Repairs give each failed write one shared retry
+record, preserve newer failed intents, merge retries by owned provider IDs, and
+keep newer credentials, definitions, model lists and activation (`@active`).
+Retry keeps its original logical revision in the shared queue; saved revisions
+advance monotonically by intent order, so an old retry cannot clear a newer live
+owner's unsaved removal. Local success cleanup also respects newer failed intents.
+
+Six new permanent tests first failed, then passed: three newer-success scenarios,
+two repeated-retry/removal cases with exactly two writes per round, and an older
+retired retry against a newer live removal failure. The latter reproduced a
+shared-queue variant beyond the reviewer's sketch and motivated retaining logical
+intent revisions in `enqueueSettingsWrite`. No skips/ignores were added.
+
+| Check | Result / retained log |
+| --- | --- |
+| `pnpm test` | **945 passed, 9 existing skips, 0 failed**; 125 files passed, 2 skipped; `/private/tmp/tezbar-ai-draft-ownership-final-ts.log` |
+| `pnpm typecheck` | Pass; `/private/tmp/tezbar-ai-draft-ownership-final-typecheck.log` |
+| `pnpm build:frontend` | Pass; `/private/tmp/tezbar-ai-draft-ownership-final-frontend.log` |
+| `git diff --check` | Pass |
+| Unchanged native implementation | Mac **608** / Windows **538** passed, with existing ignores; MSRV/lifecycle checks below |
+
+Red/green focused logs: `/private/tmp/tezbar-ai-draft-ownership-{red,green}.log`.
+Wire/security closure remains applicable to unchanged native code. **Fresh targeted
+Opus 5.5 review of T-R4/T-R5 and touched queue/Settings paths is pending.** No overall
+completion is declared. Fixtures/mock IPC only; no app launch, live model/MCP,
+production credentials, publishing, PR or Actions. Desktop events and live upstream
+interoperability remain unverified.
+
+## Historical: retired-draft removal barrier — source `30905e2`
 
 Validated implementation: `30905e2affcb14e3f985e17a44dfdce5185325c2`, tree
 `25f8305a0c9593fcbb1e7e8f7f1c41fc29c5deae`, on `feat/native-rust-agent`.

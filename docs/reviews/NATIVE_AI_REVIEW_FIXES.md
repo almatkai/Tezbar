@@ -489,3 +489,30 @@ Full commands/logs and the corrected control assertion are recorded in verificat
 
 **Fresh targeted Opus 5.5 closure of T-R3 remains required.** Wire/security scopes
 remain closed and unchanged. No publishing or overall completion is claimed here.
+
+## Runtime follow-up at `509f53b`: T-R4/T-R5
+
+The [unchanged Opus report](native-ai-opus-runtime-509f53b.md) closes T-R3,
+including repeated failures and legitimate recreation. It identifies T-R4 (a
+pending removal replaced by duplicate failed Create retries) and T-R5 (old
+snapshots overwrite newer provider state and activation).
+
+Implementation `f5f8cd0964998231da433d29444bd7036c678ad2` addresses both:
+
+- One failure record/closure per write permits actual deduplication; older failures
+  and successful retries cannot replace or clear a newer failed intent.
+- Non-removal retries merge definitions/models by owned ID and apply only keys
+  not superseded by newer successful saves. Activation has its own `@active` key.
+- The window queue retains the original intent revision on Retry and never
+  decreases saved revisions. An old retry no longer clears a newer live owner's
+  unsaved removal merely by finishing later.
+
+Six permanent real-component regressions cover the review's R1/L2/L3/L4 scenarios
+and the independently reproduced retired-owner/live-owner variant. All six were
+red before repair, then green. Full tests: 945 passed / 9 existing skips; typecheck,
+frontend build and diff check pass. Existing close/bridge regressions remain green.
+Native Mac 608 / Windows 538 evidence applies to unchanged native sources/scripts.
+See verification for exact hashes and retained logs.
+
+**Fresh targeted Opus 5.5 closure remains pending for T-R4/T-R5 and changed shared
+queue semantics.** Wire/security and earlier runtime scopes are not reopened.
