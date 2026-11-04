@@ -158,7 +158,7 @@ impl AiCore {
                 pi_override: Mutex::new(None),
                 extensions: ext::Extensions::new(&ctx.paths.config_dir),
                 ctx,
-                http: reqwest::Client::new(),
+                http: reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().expect("provider HTTP client"),
                 state: Mutex::new(State::default()),
                 oauth_flows: Mutex::new(HashMap::new()),
                 oauth_results: Mutex::new(HashMap::new()),
@@ -570,6 +570,7 @@ impl AiCore {
                     return Err("agentRuntime must be auto, native or pi".into());
                 }
                 patch.remove("nativeProviderCredentials");
+                self.filter_extension_patch(&mut patch).await?;
                 let mut result = Value::Null;
                 if let Some(hotkey) = patch.remove("raymesHotkey") {
                     let hotkey = hotkey.as_str().ok_or("raymesHotkey must be a string")?;

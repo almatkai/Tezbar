@@ -132,21 +132,7 @@ impl AiCore {
             cfg["apiKey"] = json!(key);
         }
         if id == "opencode" {
-            let output = process::output(
-                self.command("opencode").await.arg("models"),
-                Duration::from_secs(12),
-                &Cancel::new(),
-            )
-            .await
-            .unwrap_or_default();
-            let ansi = regex::Regex::new("\u{1b}\\[[0-9;]*m").unwrap();
-            let clean = ansi.replace_all(&output, "");
-            let mut models: Vec<String> = clean
-                .lines()
-                .map(str::trim)
-                .filter(|m| m.starts_with("opencode/") || m.starts_with("opencode-go/"))
-                .map(str::to_string)
-                .collect();
+            let mut models: Vec<String> = Vec::new();
             let key = self.opencode_key(s(&cfg["apiKey"]), false).await?;
             if !key.is_empty() {
                 let base = cfg["baseURL"]

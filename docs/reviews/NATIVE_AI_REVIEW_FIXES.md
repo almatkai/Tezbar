@@ -44,5 +44,15 @@ also need repair; judgment-only smells must be distinguished from bugs.
 
 ## Dispositions
 
-Pending implementation. Record each review ID, repair or evidence-backed dismissal,
-regression coverage and source commit here; keep the original reports unchanged.
+Repair in progress. Original reports remain unchanged. Closure still requires fresh
+full validation and the parent's new Opus reviews.
+
+| IDs | Disposition and regression evidence | Commit |
+| --- | --- | --- |
+| F1 | Removed generic-key fallback; catalog, exchange and inference refuse an empty Copilot token. `providers::tests::unsigned_copilot_never_borrows_generic_credentials_or_makes_requests` failed before the repair (status made requests), passes after repair at actual dispatch. | credential ownership repair |
+| F28 | Shared provider client refuses redirects. `credentialed_catalog_and_inference_refuse_redirects` covers catalog and inference with a second loopback origin; no request reaches it. | credential ownership repair |
+| R7, standards P2-2 | Native save filters contributed providers/config/model lists; merged view drops stale contributed entries; secret resolution rejects disabled ownership. Extended `declarative_provider_is_native_scoped_and_its_header_is_never_returned` saves the merged view, checks raw config and revokes the provider. | credential ownership repair |
+| R19 | Settings uses the same legacy-only, same-active-provider fallback as native selection; unrelated top-level key/base no longer populates another provider. Typecheck passes; renderer regression remains scheduled. | credential ownership repair |
+| Runtime P3 OpenCode CLI discovery decision | Removed optional `opencode models` execution; only static/native HTTP discovery remains. Existing native catalog regression remains scheduled in final suite. | credential ownership repair |
+
+All other IDs are pending; no completion claim is made.

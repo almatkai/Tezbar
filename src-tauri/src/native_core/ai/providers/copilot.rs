@@ -28,6 +28,7 @@ impl AiCore {
         &self,
         github: &str,
     ) -> Result<Session, String> {
+        if github.trim().is_empty() { return Err("Sign in to Copilot in AI settings.".into()); }
         let mut sessions = self.inner.copilot_sessions.lock().await;
         let key = hash(github);
         if let Some(s) = sessions
@@ -109,6 +110,7 @@ impl AiCore {
             return Ok(json!([]));
         }
         let token = self.copilot_token().await?;
+        if token.trim().is_empty() { return Err("Sign in to Copilot in AI settings.".into()); }
         let catalog_key = format!("copilot:{}", hash(&token));
         if let Some((_, value)) = self
             .inner

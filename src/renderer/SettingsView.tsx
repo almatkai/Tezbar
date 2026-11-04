@@ -603,7 +603,9 @@ function isProviderConfigured(
 }
 
 function readProviderConfig(config: LlmConfigRecord, provider: ProviderId): AiProviderConfig {
-  return config.providerConfigs?.[provider] ?? {}
+  const records = config.providerConfigs ?? {}
+  const legacy = !Object.values(records).some((value) => value && typeof value === 'object')
+  return records[provider] ?? (legacy && config.provider === provider ? config : {})
 }
 
 function capabilityLabel(capability: AiModelCapability): string {
@@ -844,20 +846,18 @@ export default function SettingsView({
     setActiveAiProvider(provider)
     setAiApiKey(
       provider === 'gemini'
-        ? (providerConfig.geminiApiKey ?? c.geminiApiKey ?? c.apiKey ?? '')
+        ? (providerConfig.geminiApiKey ?? providerConfig.apiKey ?? '')
         : provider === 'copilot'
-          ? (providerConfig.copilotGithubToken ?? c.copilotGithubToken ?? '')
-          : (providerConfig.apiKey ?? c.apiKey ?? '')
+          ? (providerConfig.copilotGithubToken ?? '')
+          : (providerConfig.apiKey ?? '')
     )
     setAiBaseURL(
       provider === 'openai-compatible'
         ? (providerConfig.openaiCompatibleBaseURL ??
-            c.openaiCompatibleBaseURL ??
-            c.baseURL ??
             defaultBaseUrl(provider))
         : isCustomProvider(provider)
           ? (providerConfig.openaiCompatibleBaseURL ?? providerConfig.baseURL ?? '')
-          : (providerConfig.baseURL ?? c.baseURL ?? defaultBaseUrl(provider))
+          : (providerConfig.baseURL ?? defaultBaseUrl(provider))
     )
     setGithubOAuthClientId(providerConfig.githubOAuthClientId ?? c.githubOAuthClientId ?? '')
     const providerModels: Partial<Record<ProviderId, AiProviderModel[]>> = {

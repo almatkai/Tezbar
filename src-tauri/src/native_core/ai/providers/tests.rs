@@ -393,3 +393,43 @@ async fn copilot_catalog_exchanges_rejected_token_once_and_cache_is_credential_s
     assert_eq!(catalog.load(Ordering::SeqCst), 3);
     core.shutdown().await;
 }
+
+#[tokio::test]
+async fn unsigned_copilot_never_borrows_generic_credentials_or_makes_requests() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server(|_| Reply::json(json!({"error":"fixture rejected"})).status(401)).await;
+    core.inner.endpoints.lock().unwrap().extend([
+        ("copilot-models".into(), http.url.clone()),
+        ("copilot-session".into(), http.url.clone()),
+        ("copilot".into(), http.url.clone()),
+    ]);
+    let catalog = server(|_| Reply::json(json!({"data":[]}))).await;
+    for id in config::PROVIDERS.iter().filter(|id| **id != "copilot") { core.inner.endpoints.lock().unwrap().insert(format!("{id}-models"), catalog.url.clone()); }
+    core.patch_config(json!({"provider":"openai","apiKey":"fixture-other-provider-key"})).await.unwrap();
+    let statuses = core.handle("llm-provider-statuses", &[]).await.unwrap().unwrap();
+    assert_eq!(statuses["copilot"], false);
+    assert!(http.requests.try_recv().is_err(), "status leaked another provider's credential");
+    core.patch_config(json!({"provider":"copilot"})).await.unwrap();
+    core.handle("agent:run", &[json!({"runId":"agent-unsigned-copilot","task":"fixture"})]).await.unwrap().unwrap();
+    assert!(next_event(&mut events,"error").await.to_string().contains("Sign in to Copilot"));
+    next_event(&mut events,"done").await;
+    assert!(http.requests.try_recv().is_err(), "unsigned inference contacted Copilot");
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn credentialed_catalog_and_inference_refuse_redirects() {
+    let (_dir, core, _events) = fixture();
+    let mut target = server(|_| Reply::json(json!({"data":[]}))).await;
+    let location = target.url.clone();
+    let source = server(move |_| { let mut r = Reply::json(json!({})).status(307); r.headers.push(("Location".into(),location.clone())); r }).await;
+    core.inner.endpoints.lock().unwrap().insert("anthropic-models".into(), source.url.clone());
+    let cfg = json!({"provider":"anthropic","baseURL":source.url,"apiKey":"fixture-private"});
+    assert!(!core.available(&cfg).await);
+    assert!(target.requests.try_recv().is_err());
+    let custom=json!({"provider":"custom:redirect","model":"fixture","customProviders":[{"id":"custom:redirect","title":"fixture","baseURL":source.url,"protocol":"anthropic","headers":{"X-Private":"fixture-private"}}]});
+    let result = core.canonical_turn(&custom,&[runtime::transcript::Message::text("user","hello")],&[],0,&Cancel::new(),|_|{}).await;
+    assert!(result.is_err());
+    assert!(target.requests.try_recv().is_err());
+    core.shutdown().await;
+}

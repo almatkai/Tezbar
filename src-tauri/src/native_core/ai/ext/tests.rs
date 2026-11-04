@@ -847,6 +847,11 @@ async fn declarative_provider_is_native_scoped_and_its_header_is_never_returned(
         .iter()
         .any(|p| p["id"] == "custom:declared"));
     assert!(!config.to_string().contains("fixture-custom-private"));
+    core.handle("llm-config-set", &[json!({"customProviders":config["customProviders"],"providerModels":config["providerModels"],"providerConfigs":{"custom:declared":{"apiKey":"fixture-should-not-persist"}}})]).await.unwrap().unwrap();
+    let saved = core.read_config().await.unwrap();
+    assert!(saved["customProviders"].as_array().unwrap().is_empty());
+    assert!(saved["providerModels"].get("custom:declared").is_none());
+    assert!(saved["providerConfigs"].get("custom:declared").is_none());
     core.patch_config(json!({"provider":"custom:declared","model":"declared-model"}))
         .await
         .unwrap();

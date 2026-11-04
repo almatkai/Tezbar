@@ -158,7 +158,7 @@ impl AiCore {
         let access = cfg["copilotGithubToken"]
             .as_str()
             .or_else(|| raw["copilotGithubToken"].as_str())
-            .unwrap_or(s(&raw["apiKey"]));
+            .unwrap_or("");
         let record = &raw["providerConfigs"]["copilot"];
         let refresh = record["copilotRefreshToken"]
             .as_str()
