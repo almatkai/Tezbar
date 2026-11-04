@@ -179,6 +179,7 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
     container.remove()
     Reflect.deleteProperty(window, 'tezbar')
     Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    Reflect.deleteProperty(window, '__TEZBAR_WINDOW_LABEL__')
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.restoreAllMocks()
@@ -402,6 +403,83 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
         expect(invoke).toHaveBeenCalledWith('finish_settings_close')
       }
       Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    }
+  )
+
+  it.each([false, true])(
+    'drains Settings drafts before Permissions and closes through the real window bridge there (save fails: %s)',
+    async (fail) => {
+      const config: Awaited<ReturnType<Window['tezbar']['getLlmConfig']>> = {
+        provider: 'openai',
+        model: 'fixture',
+        providerConfigs: { openai: { apiKey: '' } },
+      }
+      const pending = deferred<{ ok: boolean; accelerator: string }>()
+      const save = vi.fn(() => pending.promise)
+      const events = new Map<string, (event: { payload: unknown }) => unknown>()
+      vi.mocked(listen).mockImplementation(async (name, handler) => {
+        events.set(String(name), handler as (event: { payload: unknown }) => unknown)
+        return () => events.delete(String(name))
+      })
+      const original = window.tezbar
+      Object.defineProperty(window, 'tezbar', {
+        configurable: true,
+        writable: true,
+        value: original,
+      })
+      Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} })
+      window.__TEZBAR_WINDOW_LABEL__ = 'settings'
+      window.localStorage.setItem('tezbar:settings-tab', 'ai')
+      initTauriBridge()
+      const native = window.tezbar
+      window.tezbar = {
+        ...original,
+        onWindowCloseRequested: native.onWindowCloseRequested,
+        hideLauncherForSettings: async () => {},
+        getPermissions: async () => ({ platform: 'darwin', statuses: [] }),
+        getLlmConfig: async () => config,
+        setLlmConfig: save,
+        listPiExtensions: async () => [],
+        aiExtensions: async () => ({ extensions: [], globalInstructions: '', useAgentsMd: true }),
+      }
+      const { default: App } = await import('./App')
+      await act(async () => root.render(createElement(App)))
+      await input(
+        container.querySelector<HTMLInputElement>('input[type="password"]')!,
+        'before-permissions'
+      )
+      await click('Permissions')
+      await click('Open Permissions')
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerConfigs: expect.objectContaining({
+            openai: expect.objectContaining({ apiKey: 'before-permissions' }),
+          }),
+        })
+      )
+      // The editor must stay mounted while its save is unresolved.
+      expect(container.textContent).toContain('Open Permissions')
+      await act(async () => {
+        pending.resolve({ ok: !fail, accelerator: '' })
+        await import('./PermissionsView')
+        await vi.advanceTimersByTimeAsync(1)
+      })
+      if (fail) {
+        expect(container.textContent).toContain('Open Permissions')
+        expect(container.textContent).toContain('Could not save')
+        expect(invoke).not.toHaveBeenCalledWith('finish_settings_close')
+        await click('AI')
+        expect(container.querySelector<HTMLInputElement>('input[type="password"]')!.value).toBe(
+          'before-permissions'
+        )
+        return
+      }
+      expect(container.textContent).not.toContain('Open Permissions')
+      vi.mocked(invoke).mockClear()
+      await act(async () => {
+        events.get('settings-close-requested')!({ payload: null })
+      })
+      expect(invoke).toHaveBeenCalledWith('finish_settings_close')
     }
   )
 

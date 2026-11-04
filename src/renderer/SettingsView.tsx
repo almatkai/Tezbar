@@ -2778,12 +2778,21 @@ export default function SettingsView({
                 detail="Accessibility, Automation, Input Monitoring, Microphone, Calendar, and Screen Recording."
               >
                 <div className="flex items-center gap-2.5">
-                  <Button variant="primary" onClick={onOpenPermissions}>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      void settleAiSavesRef
+                        .current()
+                        .then(onOpenPermissions)
+                        .catch(() => {})
+                    }}
+                  >
                     Open Permissions
                   </Button>
                   <span className="text-[12px] text-ink-3">Live status and repair steps.</span>
                 </div>
               </SettingsRow>
+              {msg?.tone === 'error' ? <Message tone="error">{msg.text}</Message> : null}
             </div>
           ) : null}
 

@@ -260,6 +260,14 @@ function SettingsWindowApp(): JSX.Element {
   })
 
   useEffect(() => {
+    if (surface !== 'permissions') return
+    // Settings drains its drafts before opening Permissions. Keep acknowledging
+    // native close requests while that editor (and its close hook) is unmounted;
+    // the bridge still drains any immediate config writes before destruction.
+    return window.tezbar.onWindowCloseRequested?.(async () => {})
+  }, [surface])
+
+  useEffect(() => {
     let cancelled = false
     const storedTab = window.localStorage.getItem(SETTINGS_TAB_STORAGE_KEY)
     void window.tezbar
