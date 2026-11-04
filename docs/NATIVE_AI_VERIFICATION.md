@@ -1,6 +1,44 @@
 # Native AI implementation verification
 
-## Final provider-removal repair — source `b2b4f77`
+## Retired-draft removal barrier — source `30905e2`
+
+Validated implementation: `30905e2affcb14e3f985e17a44dfdce5185325c2`, tree
+`25f8305a0c9593fcbb1e7e8f7f1c41fc29c5deae`, on `feat/native-rust-agent`.
+Only Settings UI/tests changed since `b2b4f77`; native sources and scripts remain
+byte-identical to the macOS/Windows-tested `756072e` source.
+
+The [latest runtime audit](reviews/native-ai-opus-runtime-dacc2e0.md) closes T-R2
+and its failure/retry repairs, but identifies T-R3: an older failed peer edit or
+failed provider creation can restore a subsequently deleted provider on retired
+owner Retry. The implementation now retains each draft's first revision across
+repeated failures, filters later-deleted custom IDs from all captured maps and
+definitions, and refuses their stale activation. Filtered selections are applied
+only after removal fallbacks, without retaining an unfiltered captured selection
+map. A newer intentional Create is allowed.
+
+- `pnpm test`: **939 passed, 9 existing skips, 0 failed**; 125 files passed,
+  2 skipped. Log: `/private/tmp/tezbar-provider-resurrection-final-ts.log`.
+- `pnpm typecheck`: pass; `/private/tmp/tezbar-provider-resurrection-final-typecheck.log`.
+- `pnpm build:frontend`: pass; `/private/tmp/tezbar-provider-resurrection-final-frontend.log`.
+- `git diff --check`: pass. Native checks remain Mac **608** / Windows **538**
+  passed, with unchanged existing ignores and the MSRV/lifecycle checks below.
+
+Four permanent failure cases first reproduced T-R3 (both original scenarios,
+with and without a second failed Retry), then passed after repair. Two controls
+verify a failed Create can be retried and an explicitly removed provider can be
+created again with the same ID. One initial control assertion incorrectly required
+a nonempty default custom model, although a new custom provider has none; the
+assertion was corrected to require the selection entry, without changing source.
+Red/green logs: `/private/tmp/tezbar-provider-resurrection-{red,green}.log`.
+
+Wire closure at `847ea62`, extension/security closure at `fd8c356`, and earlier
+runtime closures remain applicable to unchanged code. **Fresh targeted Opus 5.5
+closure of T-R3 and touched retry paths remains pending.** No overall migration
+completion is declared. Validation uses mocked IPC/fixture profiles only; live
+provider interoperability and desktop window delivery remain untested. No push,
+PR, Actions, app launch/install or release occurred.
+
+## Historical: provider-removal repair — source `b2b4f77`
 
 Validated UI implementation: `b2b4f778a1e45e3c4b7cc7385212d391195f5ea0`, tree
 `b0b43ceb0a874282e8558717cb0a321312c992a8`, on `feat/native-rust-agent`.

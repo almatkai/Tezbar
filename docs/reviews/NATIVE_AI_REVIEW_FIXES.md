@@ -464,3 +464,28 @@ unchanged sources; see [verification](../NATIVE_AI_VERIFICATION.md).
 **Only fresh targeted Opus 5.5 review of T-R2 and these touched save/retry paths
 remains pending.** This ledger does not declare overall migration completion or
 authorize publishing.
+
+## Runtime closure at `dacc2e0` and T-R3 repair
+
+The [unchanged runtime report](native-ai-opus-runtime-dacc2e0.md) closes T-R2,
+including its pending-save and removal-retry ownership cases. It identifies one
+new P3, T-R3: an older failed peer edit or failed Create can restore a later-deleted
+custom provider when a retired Settings owner is retried. Trigger B is a
+`b2b4f77` regression; trigger C predates that source.
+
+Implementation `30905e2affcb14e3f985e17a44dfdce5185325c2` preserves the draft's
+first enqueue revision across Retry failures and checks it against successful
+later saves. Custom IDs absent from current definitions after a newer save are
+removed from captured definitions/configs/models/selections and cannot activate.
+Filtering follows the removal-fallback loop; the original captured selection map
+is never sent unfiltered. Fresh Create actions have new revisions and remain valid.
+
+Six real-component regressions cover both reported scenarios, repeated Retry
+failures, a legitimate failed creation retry and explicit recreation with the same
+ID. The four defect cases were red before repair. Full TypeScript tests pass
+939 / 9 existing skips, typecheck and frontend build pass. Native Mac 608 / Windows
+538 evidence remains applicable to byte-identical native sources and scripts.
+Full commands/logs and the corrected control assertion are recorded in verification.
+
+**Fresh targeted Opus 5.5 closure of T-R3 remains required.** Wire/security scopes
+remain closed and unchanged. No publishing or overall completion is claimed here.
