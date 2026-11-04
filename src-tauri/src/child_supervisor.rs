@@ -1,5 +1,7 @@
 //! Private native child lifetime owner. Dependencies are limited to std
 //! plus Unix libc. The executable dispatches it before initializing Tauri or app state.
+#[cfg(any(windows, test))]
+use std::process::Child;
 use std::{
     ffi::OsString,
     io::{self, Read, Write},
@@ -7,8 +9,6 @@ use std::{
     sync::mpsc,
     time::Duration,
 };
-#[cfg(any(windows, test))]
-use std::process::Child;
 
 pub const EXTENSION_MODE: &str = "--tezbar-private-extension-supervisor-v1";
 
@@ -133,9 +133,11 @@ fn supervise(args: Vec<OsString>, relay: bool) -> io::Result<i32> {
     #[cfg(unix)]
     let waiter = {
         let pid = child.id();
-        std::thread::Builder::new().name("child-exit".into()).spawn(move || {
-            let _ = closed.send(MonitorEvent::Exited(wait_for_exit(pid)));
-        })
+        std::thread::Builder::new()
+            .name("child-exit".into())
+            .spawn(move || {
+                let _ = closed.send(MonitorEvent::Exited(wait_for_exit(pid)));
+            })
     };
     #[cfg(unix)]
     let result = match &waiter {
@@ -205,15 +207,20 @@ fn wait_for_exit(pid: u32) -> io::Result<i32> {
     // rather than reaping with try_wait, which permits process-group ID reuse.
     loop {
         let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-        let result = unsafe {
-            libc::waitid(libc::P_PID, pid, &mut info, libc::WEXITED | libc::WNOWAIT)
-        };
+        let result =
+            unsafe { libc::waitid(libc::P_PID, pid, &mut info, libc::WEXITED | libc::WNOWAIT) };
         if result != 0 {
             let error = io::Error::last_os_error();
-            if error.kind() == io::ErrorKind::Interrupted { continue; }
+            if error.kind() == io::ErrorKind::Interrupted {
+                continue;
+            }
             return Err(error);
         }
-        return Ok(if info.si_code == libc::CLD_EXITED { unsafe { info.si_status() } } else { 1 });
+        return Ok(if info.si_code == libc::CLD_EXITED {
+            unsafe { info.si_status() }
+        } else {
+            1
+        });
     }
 }
 #[cfg(windows)]
@@ -222,88 +229,8 @@ fn exited(child: &mut Child) -> io::Result<Option<i32>> {
 }
 
 #[cfg(windows)]
-mod windows {
-    use super::*;
-    use std::{ffi::c_void, os::windows::io::AsRawHandle};
-    type Handle = *mut c_void;
-    #[repr(C)]
-    #[derive(Default)]
-    struct BasicLimits {
-        process_time: i64,
-        job_time: i64,
-        flags: u32,
-        min_working_set: usize,
-        max_working_set: usize,
-        active_processes: u32,
-        affinity: usize,
-        priority: u32,
-        scheduling: u32,
-    }
-    #[repr(C)]
-    #[derive(Default)]
-    struct ExtendedLimits {
-        basic: BasicLimits,
-        io: [u64; 6],
-        process_memory: usize,
-        job_memory: usize,
-        peak_process_memory: usize,
-        peak_job_memory: usize,
-    }
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn CreateJobObjectW(attributes: *const c_void, name: *const u16) -> Handle;
-        fn SetInformationJobObject(job: Handle, class: i32, info: *const c_void, size: u32) -> i32;
-        fn AssignProcessToJobObject(job: Handle, process: Handle) -> i32;
-        fn CloseHandle(handle: Handle) -> i32;
-    }
-    #[link(name = "ntdll")]
-    extern "system" {
-        fn NtResumeProcess(process: Handle) -> i32;
-    }
-    pub struct Job(Handle);
-    impl Job {
-        pub fn new() -> io::Result<Self> {
-            let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
-            if handle.is_null() {
-                return Err(io::Error::last_os_error());
-            }
-            let job = Self(handle);
-            let mut limits = ExtendedLimits::default();
-            limits.basic.flags = 0x2000; // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-            if unsafe {
-                SetInformationJobObject(
-                    handle,
-                    9,
-                    &limits as *const _ as _,
-                    std::mem::size_of_val(&limits) as u32,
-                )
-            } == 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(job)
-        }
-        pub fn attach(&self, child: &Child) -> io::Result<()> {
-            if unsafe { AssignProcessToJobObject(self.0, child.as_raw_handle()) } == 0 {
-                return Err(io::Error::last_os_error());
-            }
-            let status = unsafe { NtResumeProcess(child.as_raw_handle()) };
-            if status < 0 {
-                return Err(io::Error::other(format!(
-                    "NtResumeProcess failed: {status:#x}"
-                )));
-            }
-            Ok(())
-        }
-    }
-    impl Drop for Job {
-        fn drop(&mut self) {
-            unsafe {
-                CloseHandle(self.0);
-            }
-        }
-    }
-}
+#[path = "windows_job.rs"]
+mod windows;
 
 #[cfg(test)]
 #[path = "child_supervisor_tests.rs"]

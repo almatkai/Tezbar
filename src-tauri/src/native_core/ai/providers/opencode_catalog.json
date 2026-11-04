@@ -1,0 +1,1112 @@
+{
+  "opencode/claude-fable-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-fable-5-1": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-haiku-4-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 64000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 200000
+  },
+  "opencode/claude-haiku-5-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-opus-4-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 64000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 200000
+  },
+  "opencode/claude-opus-4-6": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-opus-4-7": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-opus-4-8": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-opus-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-opus-5-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-sonnet-4": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 64000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 200000
+  },
+  "opencode/claude-sonnet-4-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 64000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 200000
+  },
+  "opencode/claude-sonnet-4-6": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 64000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-sonnet-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/claude-sonnet-5-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/qwen3.5-plus": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/qwen3.6-plus": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/qwen3.8-flash": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/gemini-3-flash": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/gemini-3.1-pro": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/gemini-3.5-flash": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/gemini-3.5-flash-lite": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/gemini-3.6-flash": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/gemini-3.7-flash": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/gemini-3.8-flash": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/gemini-4-argon": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/big-pickle": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 32000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 200000
+  },
+  "opencode/cat-jam-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/deepseek-v4-flash": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 384000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/deepseek-v4-flash-vision-exp": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 384000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/deepseek-v4-pro": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 384000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/deepseek-v4.1-flash": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 384000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/deepseek-v4.1-flash-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 32000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 200000
+  },
+  "opencode/glm-5": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 204800
+  },
+  "opencode/glm-5.1": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 204800
+  },
+  "opencode/glm-5.2": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/glm-5.3": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/glm-5.3-flash": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/kimi-k2.5": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/kimi-k2.6": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/kimi-k2.7-code": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 262144,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/kimi-k3": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/longcat-2.5-preview-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/mimo-v2.6-flash-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 32000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 200000
+  },
+  "opencode/minimax-m2.5": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 204800
+  },
+  "opencode/minimax-m2.7": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 204800
+  },
+  "opencode/minimax-m3": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 512000
+  },
+  "opencode/mistral-large-4": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 262144,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 524288
+  },
+  "opencode/nemotron-3-ultra-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/nemotron-3.5-lightning-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 262144,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/nemotron-3.5-super-vl-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/qwen3.8-max": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode/space-bunny-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 524288,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/step-5-preview-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode/gpt-5": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5-codex": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5-nano": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.1": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.1-codex": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.1-codex-max": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.1-codex-mini": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.2": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.2-codex": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.3-codex": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.4": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 272000
+  },
+  "opencode/gpt-5.4-mini": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.4-nano": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 400000
+  },
+  "opencode/gpt-5.4-pro": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-5.5": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-5.5-pro": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-5.6-luna": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-5.6-sol": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-5.6-terra": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-6-astra": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-6-luna": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-6-sol": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/gpt-6.1-sol": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode/grok-4.5": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 500000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 500000
+  },
+  "opencode/grok-4.6": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 500000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 500000
+  },
+  "opencode/grok-4.7": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 500000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 500000
+  },
+  "opencode/grok-build-0.1": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 256000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 256000
+  },
+  "opencode/muse-spark-1.2": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/muse-spark-1.3": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode/muse-spark-1.3-contributor-free": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/claude-haiku-5-5": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference/go",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/minimax-m3": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference/go",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/qwen3.7-plus": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference/go",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/qwen3.8-flash": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference/go",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/qwen3.8-max": {
+    "api": "anthropic-messages",
+    "baseUrl": "https://opencode.ai/inference/go",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/gemini-4-argon-contributor": {
+    "api": "google-generative-ai",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/cat-jam-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode-go/deepseek-v4-pro": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 384000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/deepseek-v4.1-flash": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 384000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/glm-5.2": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/glm-5.3": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/glm-5.3-flash": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/hy3": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 256000
+  },
+  "opencode-go/hy4-preview": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 64000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1024000
+  },
+  "opencode-go/kimi-k2.7-code": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 262144,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 262144
+  },
+  "opencode-go/kimi-k3": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/longcat-2.0": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/longcat-2.5-preview-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/mimo-v2.5": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/mimo-v2.5-pro": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/mimo-v2.6-flash": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/mimo-v2.6-pro": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/space-bunny": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 524288,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/step-5-preview-free": {
+    "api": "openai-completions",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 65536,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1000000
+  },
+  "opencode-go/gpt-5.6-luna": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode-go/gpt-6-luna": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 128000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1050000
+  },
+  "opencode-go/grok-4.7": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 500000,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 500000
+  },
+  "opencode-go/muse-spark-1.2-contributor": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  },
+  "opencode-go/muse-spark-1.3-contributor": {
+    "api": "openai-responses",
+    "baseUrl": "https://opencode.ai/inference/go/v1",
+    "maxTokens": 131072,
+    "input": [
+      "text",
+      "image"
+    ],
+    "contextWindow": 1048576
+  }
+}

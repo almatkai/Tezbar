@@ -1,150 +1,100 @@
-# Native agent runtime: stage 1
+# Native AI runtime
 
-Agent requests can now execute inside the existing Rust/Tauri process without Pi,
-Node, global Pi extensions or a localhost tool gateway. This changes `agent:run`
-(and agent intents from `query`); the old text-only `chat:run`, actions, voice and
-extension AI requests keep their existing adapters. The AI SDK renderer already
-builds a prompt containing the selected saved conversation; that complete prompt
-is passed unchanged to the native model. Saved stages, canonical answers and
-run-specific event/approval/cancel IPC remain unchanged.
+Implementation is in progress against [NATIVE_AI_SPEC.md](NATIVE_AI_SPEC.md).
+The full specification and its acceptance matrix are **not yet complete**. The
+mandatory Claude Opus 5.5 review has not run. Do not treat this branch as ready
+for release.
 
-## Selecting a runtime
+All owned agent and completion execution now uses Rust HTTP adapters. Pi, npm,
+Node, Bun and `opencode run` are not execution fallbacks. React remains the
+renderer. Optional external MCP programs and model servers remain external.
+Legacy `agentRuntime` values are preserved in configuration and ignored when
+routing. `pi:check` and `pi:install` report the native runtime without probing or
+installing a CLI. Existing Pi packages are listed as not loaded.
 
-Set `agentRuntime` through the existing `setLlmConfig` / `llm-config-set` interface:
+## Implemented paths
 
-```ts
-await api.setLlmConfig({ agentRuntime: 'auto' }) // default when absent
-await api.setLlmConfig({ agentRuntime: 'native' }) // unsupported provider => error
-await api.setLlmConfig({ agentRuntime: 'pi' }) // explicit compatibility mode
+- Canonical text, images, thinking, tool calls and correlated results, with opaque
+  replay limited to the original provider, protocol and model.
+- OpenAI Chat and Responses, Anthropic Messages, native Gemini/Cloud Code and
+  Ollama encoders and terminal-validated streaming decoders. DeepSeek uses Chat.
+- Native `agent:run`, `chat:run`, query answers, actions, metadata and extension AI.
+- Current-turn retries before visible text, with one encoded request body and no
+  replay of the agent loop. A completed tool remains recorded if a later turn fails.
+- Private atomic conversation turn files, content-addressed image storage and a
+  128 MiB image budget. Interrupted outstanding calls receive unknown-outcome
+  results. Renderer history IDs and legacy text fallback remain compatible.
+- Live Review/default/Auto/Turbo policy, remembered exact shell commands, sensitive
+  file checks and conservative review for unknown shell syntax before shortcuts.
+- Native file read/write/edit, directory listing/name/content search, indexed
+  launcher/Knowledge routes, shell execution and screen capture/OCR.
+- POSIX process groups and a shared Windows Job Object helper. Windows children
+  start suspended and are attached to their job before being resumed.
+- Explicit per-model and custom-provider protocols. OpenCode uses a documented
+  HTTP route and an attributed catalog snapshot, with an actionable missing-key
+  error rather than impersonating its CLI. Copilot can exchange a rejected GitHub
+  token for an in-memory session token.
+- Antigravity existing-account selection, refresh/store preservation, native
+  Cloud Code envelopes and attributed model routing from pi-antigravity 0.11.0.
+- AI extension imports, encrypted secrets, explicit Test then Enable, native stdio
+  and HTTP JSON-RPC, modern/legacy initialization, bounded schema validation,
+  discovery, pinned tool definitions and immutable per-run lookup tables.
+- Instructions, local prompts/commands, profile tool narrowing and AGENTS.md.
+  Settings has an inline single-column extension list; the composer can insert
+  resolved prompt text without sending it.
+
+## Permissions and limits
+
+Approval prompts and process ownership are not an OS sandbox. Approved commands
+and extension programs run with the person's OS permissions. Auto can mutate
+files inside cwd; Turbo can also mutate files outside cwd. Sensitive file paths,
+destructive commands and complex shell syntax still require review.
+
+The shared limits are in `runtime/limits.rs`: 100 provider turns, 256 tool calls,
+32 calls per turn, 8 MiB streamed bytes per turn, 1 MiB tool arguments, 64 KiB
+model-facing result text, 4 MiB text context and 2 MiB editable files. The UI
+receives at most 8,000 characters of stage output. Old tool results may be elided
+under context pressure; opaque blocks are retained.
+
+Connection secrets use AES-GCM and a separate OS-protected key. No plaintext
+fallback is used. Tests inject an in-memory KeyStore and temporary profiles.
+Scrubbing matches exact secret values and known patterns; transformed secrets
+cannot be reliably detected.
+
+## Outstanding implementation and verification
+
+These are unfinished product requirements, not upstream restrictions:
+
+- Native Antigravity PKCE/account-management UI, live catalog merging, account and
+  endpoint failover, project discovery, image generation and Google search tools.
+- Copilot authoritative model endpoint metadata, complete refresh/device/session
+  fixture matrix, and native OpenCode catalog/key-source fixtures.
+- MCP OAuth, complete modern-error/version negotiation, legacy session restart and
+  stream resume, subscriptions/catalog refresh and idle restart/backoff.
+- Project extension review/trust UI and byte-change revocation, resource templates,
+  image-bearing prompt/resource insertion and all remaining result/schema limits.
+- Full extension edit/variable/secret/policy/log/review UI, local prompt authoring,
+  profile selection before the first conversation turn, both-theme accessibility
+  verification and the complete renderer acceptance matrix.
+- The complete shell-policy port, multiple-edit batches, exact original-path
+  revalidation, Windows path normalization and the active-time budget excluding
+  approval waits.
+- The exhaustive NoPi marker, auth/secret, persistence, cancellation/concurrency and
+  protocol-image acceptance matrix, real Windows results and the required review.
+
+Fixture coverage proves the application's side of the exercised protocols. No
+live paid-provider calls, production profiles, desktop launches or installations
+are used for this work. Live provider compatibility and performance are unverified.
+
+## Verification
+
+Use `pnpm typecheck`, `pnpm test`, `pnpm build:frontend`,
+`node scripts/check-backend-lifecycle.mjs` and:
+
+```sh
+CARGO_BUILD_JOBS=2 cargo +1.98.0 test --manifest-path src-tauri/Cargo.toml --lib --locked
 ```
 
-No settings screen or profile migration is required. The field persists using the
-existing configuration store. Release/version metadata is unchanged.
-
-| Provider | `auto` route | Native limits |
-| --- | --- | --- |
-| `openai` | Native | API-key authenticated `/chat/completions`, text + function tools only |
-| `openai-compatible`, `custom:*` | Native | Configured base URL, optional bearer key, same protocol |
-| Anthropic, Ollama, Copilot, Gemini, DeepSeek, TokenRouter | Pi | Native protocol/auth/reasoning compatibility has not been established |
-| Antigravity, OpenCode | Pi | Existing provider/extension behavior |
-
-`openaiCompatibleBaseURL` takes precedence over `baseURL`, as in existing provider
-configuration; `/chat/completions` is appended unless already present. Custom
-servers must implement streamed Chat Completions function tools, IDs, string JSON
-argument deltas, `finish_reason` and `[DONE]`. Responses API, legacy
-`function_call`, multiple choices, reasoning/signature extensions and providers
-that omit terminal markers are unsupported. Model compatibility is not inferred
-from its name. Live providers/models have not been validated by these tests.
-
-Stage 1 rejects image attachments before sending HTTP. It also rejects renderer
-requests marked `historyHasImages`; older saved images are not silently converted
-to text by the native runtime. Use Pi compatibility or a new text-only conversation.
-Existing renderer conversation-window selection still applies; the native runtime
-never silently truncates the supplied prompt or tool history.
-
-## Tools and permissions
-
-Tools are `bash`, UTF-8 `read`/`write`/`edit`, `project_search`, `launcher_search`,
-`pc_search`, and `pc_read`. Search routes call `search:all` and the native Knowledge
-search/read routes directly. Launcher results use the same metadata projection as
-the Pi gateway: UI icons and image/base64 payloads are not sent to the model.
-
-File paths must resolve inside canonical cwd, including symlinks. Outside-cwd file
-tools are rejected in stage 1. Parent directories must already exist. Writes use
-a sibling temporary file and atomic replacement; edits require exactly one
-occurrence, counting overlapping matches. Existing permissions are retained.
-Paths and edit ambiguity are rechecked after approval. These checks and prompts
-are **not an OS sandbox**; approved shell commands run with the user's privileges.
-
-Review mode prompts for every tool, including reads and searches. In default,
-auto and turbo, only exact `pwd`, `whoami`, and `ls` commands run automatically;
-they execute directly using fixed executable paths. Every other shell command
-(including every chain, expansion, redirection, destructive or unknown command)
-requires confirmation. Shell execution uses `/bin/bash --noprofile --norc`, removes
-`BASH_ENV`/`ENV`, and requires a Unix host. File mutations always prompt in all
-modes. This deliberately asks more often than Pi during migration. Native tools
-ignore remembered exact/prefix command allowances; the existing "always" response
-acts as "once" and does not persist file contents or new native command rules.
-Native prompts expose only Allow once and Deny; the keyboard shortcut also
-resolves a one-time approval. Existing Pi prompts keep the remembering control.
-Pi's existing remembered-command behavior is retained.
-
-The configured approval mode is read before each tool, so switching to Review in
-settings affects subsequent tools in an already running native agent. An explicit
-per-request `approvalMode` takes precedence for that request.
-
-An approval is tied to its live run and unique approval ID. A denied, cancelled,
-expired (300 seconds), or stale approval cannot authorize an effect. Cancellation
-is rechecked immediately before effects. Duplicate live run IDs are rejected;
-concurrent runs have separate call histories, approvals and cancellation tokens.
-
-## Protocol, failure and resource guarantees
-
-Each turn streams visible text while buffering tool arguments. Both the matching
-`finish_reason` and `[DONE]` are required before any tool is executable. The whole
-tool batch is validated first: unknown tools, invalid arguments/paths, malformed
-JSON, oversized calls, duplicate IDs and ambiguous edits reject the batch before
-any approval or mutation. This is validation atomicity, not transaction rollback:
-a runtime failure in a later valid tool does not undo earlier completed effects.
-
-The assistant's ordered calls and exact call IDs are appended to history, followed
-by correlated `role: tool` results. Tool failures and permission denials become
-bounded error results for the model; cancellation stops the loop. Reused call IDs
-are rejected across the entire run, even if their arguments match.
-
-Native errors never enter Pi's whole-launch retry or invoke a compatibility
-fallback. **Stage 1 makes no automatic HTTP retries**, including 429/503 responses:
-HTTP status and a numeric Retry-After are reported without replay. A later model
-failure cannot repeat a completed command or file mutation. HTTP error bodies and
-unrelated subprocess warnings are not concatenated into native provider errors.
-Network, HTTP, model, protocol, validation, tool and permission errors are labeled.
-
-Headers have a 30-second deadline, stream silence a separate 60-second deadline,
-each provider turn a 600-second maximum, and the run a 900-second maximum. Healthy
-streams continue past the header deadline. Shell commands have a 60-second limit,
-search routes 20 seconds. Cancellation drops HTTP requests and terminates shell
-process groups using the existing descendant-process cleanup.
-
-Limits: 24 provider turns, 64 total calls, 16 calls per turn, 256 KiB streamed
-bytes per turn, 64 KiB argument JSON per call, 1 MiB serialized message context,
-256 KiB per UTF-8 file, and 8,000 Unicode characters per tool result/stage. The
-argument limit also limits practical write size. Output includes `outputTruncated`
-and elapsed `durationMs`. Existing subprocess capture has hard limits of 16 MiB
-stdout and 4 MiB stderr; exceeding these fails the tool. Narrow literal project
-search skips `.git`, dependencies/build folders and symlinks, limits depth to 16,
-entries to 2,000, files to 1,000, successfully read content to roughly 8 MiB, and results to a bounded
-prefix. It is intentionally incomplete and reports truncation when a scan budget
-is reached. Local tools do not provide hostile concurrent-filesystem isolation.
-
-## Local validation and remaining migration
-
-`native_tests.rs` uses temporary profiles/directories and loopback HTTP/SSE
-servers through actual `agent:run`, `agent:approve`, `agent:cancel` and event
-dispatch. Pi is pointed at a nonexistent fixture binary for native cases. Fixtures
-cover write/read/final answer, request schemas and correlated tool history,
-malformed/partial streams and batches with zero effects, duplicate IDs, review,
-remembered/destructive/complex commands, deny/stale/concurrent approvals,
-cancellation during headers/body/approval/child execution, ambiguous edits, Unicode
-output truncation, direct indexed search, routing and a side-effect counter that
-stays ONE when the next provider request fails. Pi compatibility tests use a local
-mock process. No external AI API, credentials or real profile is used.
-
-Run `pnpm typecheck`, `pnpm test`, and
-`CARGO_BUILD_JOBS=2 cargo test --manifest-path src-tauri/Cargo.toml --lib --locked`.
-Direct Cargo builds need the checksum-pinned embedding payload and existing
-Extension Worker/resources staged first (see `EMBEDDING_RUNTIME.md`).
-
-Future slices can add authenticated protocol adapters, model-specific image
-encoding, richer command permissions, turn-local transport retries, streaming tool
-output and additional tools. They must retain correlation, cancellation and
-no-replay guarantees. Rust cannot eliminate remote provider outages. No RAM,
-speed, desktop smoke, Windows shell, packaging or live-provider claim is made.
-
-Implementation verification on macOS arm64 (Rust 1.98.0): `pnpm typecheck` passed;
-`pnpm test` passed 887 tests with 9 skipped; `CARGO_BUILD_JOBS=2 cargo +1.98.0 test
---manifest-path src-tauri/Cargo.toml --lib --locked` passed 507 tests with 9 ignored.
-The 18 added Rust fixtures include the actual 30-second post-effect header timeout
-and changing approval mode during an active run. Renderer regressions also check
-one-time-only native approvals and existing Pi remembering controls/shortcuts.
-The checksum-pinned embedding ZIP was staged locally and `pnpm build:backend`
-prepared the normal test resources; the desktop application was not launched.
+The declared MSRV remains 1.85. The added jsonschema 0.29.1 uses no remote-resolution
+features and declares Rust 1.71.1. Running the project suite on Rust 1.98 does not
+establish that the existing locked dependency graph supports 1.85.

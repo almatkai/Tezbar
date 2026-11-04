@@ -16,6 +16,7 @@ pub(crate) fn fixture_executable() -> PathBuf {
         fs::write(directory.path().join("Cargo.toml"), "[package]\nname='tezbar-supervisor-fixture'\nversion='0.0.0'\nedition='2021'\n[workspace]\n[dependencies]\nlibc='0.2'\n").unwrap();
         let module = directory.path().join("src/child_supervisor.rs");
         fs::write(&module, include_str!("child_supervisor.rs")).unwrap();
+        fs::write(directory.path().join("src/windows_job.rs"), include_str!("windows_job.rs")).unwrap();
         let source = format!("#[path = {module:?}] mod child_supervisor;\n{}", r#"
 use std::{process::{Command, Stdio}, time::Duration, path::Path};
 fn main() {
@@ -174,8 +175,14 @@ fn idle_supervisor_waits_without_periodic_wakeups() {
         fn proc_pid_rusage(pid: i32, flavor: i32, data: *mut std::ffi::c_void) -> i32;
     }
     let wakes = |pid: u32| {
-        let mut usage = Usage { uuid: [0; 16], fields: [0; 64] };
-        assert_eq!(unsafe { proc_pid_rusage(pid as i32, 4, (&mut usage as *mut Usage).cast()) }, 0);
+        let mut usage = Usage {
+            uuid: [0; 16],
+            fields: [0; 64],
+        };
+        assert_eq!(
+            unsafe { proc_pid_rusage(pid as i32, 4, (&mut usage as *mut Usage).cast()) },
+            0
+        );
         usage.fields[3]
     };
     let directory = tempfile::tempdir().unwrap();
@@ -190,7 +197,10 @@ fn idle_supervisor_waits_without_periodic_wakeups() {
     drop(child.stdin.take());
     assert!(wait_exit(&mut child).success());
     wait_until(|| !alive(root) && !alive(leaf));
-    assert!(delta <= 5, "idle supervisor woke {delta} times in one second");
+    assert!(
+        delta <= 5,
+        "idle supervisor woke {delta} times in one second"
+    );
 }
 
 #[test]

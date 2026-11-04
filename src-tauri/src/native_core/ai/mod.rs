@@ -1,16 +1,20 @@
 //! Native AI services. No renderer or JavaScript backend participates in dispatch.
 mod auth;
+#[cfg(test)]
+mod canonical_tests;
 mod chat;
 mod config;
-mod gateway;
+mod ext;
+mod legacy;
 mod memory;
-mod native;
-mod native_protocol;
 #[cfg(test)]
 mod native_tests;
 mod native_tools;
-mod pi;
-mod pi_loop;
+mod providers;
+mod runtime;
+mod search_projection;
+mod wire;
+
 mod process;
 mod provider;
 #[cfg(test)]
@@ -73,12 +77,15 @@ pub struct AiCore {
 }
 struct Inner {
     #[cfg(test)]
+    endpoints: Mutex<HashMap<String, String>>,
+    #[cfg(test)]
     pi_override: Mutex<Option<std::path::PathBuf>>,
+    extensions: ext::Extensions,
     ctx: CoreContext,
     http: reqwest::Client,
     state: Mutex<State>,
-    gateway: tokio::sync::Mutex<Option<gateway::Gateway>>,
     token_refresh: tokio::sync::Mutex<()>,
+    copilot_sessions: tokio::sync::Mutex<HashMap<String, providers::copilot::Session>>,
     login_path: tokio::sync::OnceCell<String>,
     voice: voice::Voice,
     stop: Cancel,
@@ -90,6 +97,8 @@ struct State {
     agents: HashMap<String, Run>,
     answer: Option<Run>,
     approvals: HashMap<String, Approval>,
+    observations: HashMap<String, Value>,
+    indexed_attempts: std::collections::HashSet<String>,
     device: Option<Value>,
     device_generation: u64,
 }
@@ -101,12 +110,13 @@ struct Run {
 #[derive(Default)]
 struct AgentOptions {
     approval_mode: Option<String>,
-    history_has_images: bool,
+    history: Value,
 }
 struct Approval {
     run_id: String,
     command: String,
     remember_command: bool,
+    extension_identity:Option<(String,String,String,String)>,
     reply: tokio::sync::oneshot::Sender<bool>,
 }
 fn err(e: impl std::fmt::Display) -> String {
@@ -127,12 +137,15 @@ impl AiCore {
         Self {
             inner: Arc::new(Inner {
                 #[cfg(test)]
+                endpoints: Mutex::new(HashMap::new()),
+                #[cfg(test)]
                 pi_override: Mutex::new(None),
+                extensions: ext::Extensions::new(&ctx.paths.config_dir),
                 ctx,
                 http: reqwest::Client::new(),
                 state: Mutex::new(State::default()),
-                gateway: tokio::sync::Mutex::new(None),
                 token_refresh: tokio::sync::Mutex::new(()),
+                copilot_sessions: tokio::sync::Mutex::new(HashMap::new()),
                 login_path: tokio::sync::OnceCell::new(),
                 voice,
                 stop: Cancel::new(),
@@ -143,8 +156,18 @@ impl AiCore {
     /// Processes, runtime probes, and the loopback listener are demand-launched.
     /// Construction is sufficient to accept requests; startup never signs in or calls a model.
     pub async fn start(&self) {}
+    fn endpoint(&self, name: &str, default: &str) -> String {
+        #[cfg(test)]
+        if let Some(v) = self.inner.endpoints.lock().unwrap().get(name) {
+            return v.clone();
+        }
+        let _ = name;
+        default.into()
+    }
+
     pub async fn shutdown(&self) {
         self.inner.stop.cancel();
+        self.inner.extensions.shutdown();
         self.cancel_run(None, true);
         {
             let mut state = self.inner.state.lock().unwrap();
@@ -165,11 +188,8 @@ impl AiCore {
                 let _ = task.await;
             }
         }
-        if let Some(gateway) = self.inner.gateway.lock().await.take() {
-            gateway.cancel.cancel();
-            let _ = gateway.task.await;
-        }
     }
+
     fn spawn(&self, f: impl std::future::Future<Output = ()> + Send + 'static) {
         let task = tokio::spawn(f);
         let mut tasks = self.inner.tasks.lock().unwrap();
@@ -197,17 +217,6 @@ impl AiCore {
         tokio::task::spawn_blocking(move || ctx.config.patch(&patch))
             .await
             .map_err(err)?
-    }
-    async fn ensure_gateway(&self) -> Result<(String, String), String> {
-        let mut slot = self.inner.gateway.lock().await;
-        if slot.is_none() {
-            if self.inner.stop.is_cancelled() {
-                return Err("AI service is shut down".into());
-            }
-            *slot = Some(gateway::Gateway::start(self.inner.ctx.clone()).await?);
-        }
-        let gateway = slot.as_ref().unwrap();
-        Ok((gateway.endpoint.clone(), gateway.token.clone()))
     }
     fn agent_event(&self, id: &str, mut event: Value) {
         if matches!(
@@ -241,6 +250,7 @@ impl AiCore {
             }
             if take {
                 state.agents.remove(id);
+                state.indexed_attempts.remove(id);
             }
             state.approvals.retain(|_, a| a.run_id != id);
         } else {
@@ -258,28 +268,21 @@ impl AiCore {
         }
     }
     fn finish_run(&self, id: &str) {
+        {
+            let mut state = self.inner.state.lock().unwrap();
+            for observation in state.observations.values_mut() {
+                if observation["runId"] == id {
+                    observation["isStreaming"] = json!(false);
+                }
+            }
+        }
         let mut state = self.inner.state.lock().unwrap();
         state.approvals.retain(|_, a| a.run_id != id);
         state.agents.remove(id);
+        state.indexed_attempts.remove(id);
         if state.agent.as_ref().is_some_and(|r| r.id == id) {
             state.agent = None;
         }
-    }
-    fn retry_allowed(&self, id: &str, error: &str, cancel: &Cancel) -> bool {
-        !cancel.is_cancelled()
-            && !regex::Regex::new(
-                "(?i)aborted|cancelled|task is empty|invalid base64|unsupported agent image",
-            )
-            .unwrap()
-            .is_match(error)
-            && self
-                .inner
-                .state
-                .lock()
-                .unwrap()
-                .agent
-                .as_ref()
-                .is_some_and(|r| r.id == id && !r.emitted)
     }
     async fn generate_chat_meta(&self, prompt: &str, answer: &str) -> CoreResult {
         if let Ok(cfg) = self.cfg(Some("chat"), None).await {
@@ -348,46 +351,48 @@ impl AiCore {
         self.spawn(async move {
             let result = async {
                 let mut cfg = core.cfg(Some("chat"), None).await?;
-                if let Some(mode) = &options.approval_mode { cfg["agentApprovalMode"] = json!(mode); }
-                if turns.is_none() && native::selected(&cfg)? {
-                    if options.history_has_images { return Err("Native configuration: image history is unsupported in stage 1; select agentRuntime=pi or start a text-only conversation".into()); }
-                    // Native errors never enter the compatibility adapter's launch retry.
-                    return tokio::time::timeout(Duration::from_secs(900),
-                        core.native_run(&task, &images, cwd.as_deref(), &cfg, &cancel, &run, options.approval_mode.as_deref())
-                    ).await.map_err(|_| "Native limit: run exceeded 900s".to_string())?.map(|_| ());
+                cfg["sessionId"] = options.history["sessionId"].clone();
+                if let Some(mode) = &options.approval_mode {
+                    cfg["agentApprovalMode"] = json!(mode);
                 }
-                let mut attempts = 0;
-                loop {
-                    let result = if let Some(turns) = &turns {
-                        let mut messages = vec![json!({"role":"system","content":"You are Tezbar, a helpful assistant. Answer clearly and concisely unless the user asks for more detail."})];
-                        messages.extend(turns.iter().skip(turns.len().saturating_sub(16)).map(|t| json!({"role":t["role"],"content":t["text"]})));
-                        core.stream(&cfg, messages, &cancel, |delta| {
-                            if let Some(text) = delta["text"].as_str().filter(|t| !t.is_empty()) {
-                                core.agent_event(&run, json!({"type":"message","delta":text}));
+                if let Some(turns) = &turns {
+                    let mut messages = vec![
+                        json!({"role":"system","content":"You are Tezbar, a helpful assistant."}),
+                    ];
+                    messages.extend(
+                        turns
+                            .iter()
+                            .skip(turns.len().saturating_sub(16))
+                            .map(|t| json!({"role":t["role"],"content":t["text"]})),
+                    );
+                    let text = core
+                        .stream(&cfg, messages, &cancel, |d| {
+                            if let Some(t) = d["text"].as_str() {
+                                core.agent_event(&run, json!({"type":"message","delta":t}));
                             }
-                        }).await.and_then(|text| {
-                            if text.trim().is_empty() { Err("The model returned an empty response. Please try again.".into()) }
-                            else { core.agent_event(&run, json!({"type":"answer","text":text})); Ok(text) }
                         })
-                    } else {
-                        core.pi_run(&task, &images, cwd.as_deref(), &cfg, &cancel, Some(&run)).await
-                    };
-                    match result {
-                        Ok(_) => return Ok::<(), String>(()),
-                        Err(error) if attempts == 0 && core.retry_allowed(&run, &error, &cancel) => {
-                            attempts += 1;
-                            core.agent_event(&run, json!({"type":"log","source":"stderr","line":"Provider did not start cleanly. Retrying once..."}));
-                            tokio::select! {
-                                _ = cancel.cancelled() => return Err("Agent run aborted".into()),
-                                _ = tokio::time::sleep(Duration::from_millis(350)) => {}
-                            }
-                        }
-                        Err(error) => return Err(error),
-                    }
+                        .await?;
+                    core.agent_event(&run, json!({"type":"answer","text":text}));
+                    return Ok(());
                 }
-            }.await;
+                core.native_run_history(
+                    &task,
+                    &images,
+                    cwd.as_deref(),
+                    &cfg,
+                    &cancel,
+                    &run,
+                    options.approval_mode.as_deref(),
+                    &options.history,
+                )
+                .await
+                .map(|_| ())
+            }
+            .await;
             if let Err(message) = result {
-                if !cancel.is_cancelled() { core.agent_event(&run, json!({"type":"error","message":message})); }
+                if !cancel.is_cancelled() {
+                    core.agent_event(&run, json!({"type":"error","message":message}));
+                }
             }
             core.agent_event(&run, json!({"type":"done"}));
             core.finish_run(&run);
@@ -395,7 +400,7 @@ impl AiCore {
         Ok(json!({"ok":true,"runId":id}))
     }
     pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {
-        if !CHANNELS.contains(&channel) {
+        if !CHANNELS.contains(&channel) && !ext::CHANNELS.contains(&channel) {
             return None;
         }
         if self.inner.stop.is_cancelled() {
@@ -406,6 +411,7 @@ impl AiCore {
     async fn dispatch(&self, channel: &str, args: &[Value]) -> CoreResult {
         let a = arg(args, 0);
         match channel {
+            c if ext::CHANNELS.contains(&c) => self.ext_handle(c, args).await,
             "llm-config-get" => {
                 let raw = self.read_config().await?;
                 let mut value = config::selected(&raw, None, None);
@@ -562,7 +568,7 @@ impl AiCore {
                     return Err("Invalid agent images".into());
                 }
                 let images = owned["images"].as_array().cloned().unwrap_or_default();
-                if let Err(error) = pi::normalize_images(&images) {
+                if let Err(error) = legacy::normalize_images(&images) {
                     return Ok(json!({"ok":false,"error":error}));
                 }
                 self.launch(
@@ -573,7 +579,7 @@ impl AiCore {
                     requested.map(str::to_string),
                     AgentOptions {
                         approval_mode: owned["approvalMode"].as_str().map(str::to_string),
-                        history_has_images: owned["historyHasImages"] == true,
+                        history: owned.clone(),
                     },
                 )
                 .await
@@ -800,49 +806,121 @@ fn clean_prompt_snippet(prompt: &str) -> String {
     let first_line = prompt.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let mut cleaned = first_line.trim().to_string();
     let prefixes = [
-        "can you please", "could you please", "please tell me", "tell me",
-        "can you", "could you", "who is", "who was", "what is", "what was",
-        "what are", "where is", "when is", "when did", "when was",
-        "how to", "how do i", "how does", "why is", "why does", "explain",
-        "help me with", "i need to", "look up", "show me", "which", "list",
-        "подскажи пожалуйста", "расскажи пожалуйста", "скажи пожалуйста", "скажите пожалуйста",
-        "подскажи мне пожалуйста", "расскажи мне пожалуйста", "скажи мне пожалуйста", "скажите мне пожалуйста", "покажи мне пожалуйста",
-        "подскажи мне", "расскажи мне", "скажи мне", "скажите мне", "покажи мне",
-        "подскажи", "расскажи", "скажи", "скажите",
-        "пожалуйста", "кто такой", "кто такая", "что такое", "что за",
-        "как сделать", "как настроить", "как вообще", "как", "почему", "зачем",
-        "когда вышел", "когда выйдет", "когда", "объясни", "найди",
-        "какие", "какой", "какая", "какое", "покажи",
+        "can you please",
+        "could you please",
+        "please tell me",
+        "tell me",
+        "can you",
+        "could you",
+        "who is",
+        "who was",
+        "what is",
+        "what was",
+        "what are",
+        "where is",
+        "when is",
+        "when did",
+        "when was",
+        "how to",
+        "how do i",
+        "how does",
+        "why is",
+        "why does",
+        "explain",
+        "help me with",
+        "i need to",
+        "look up",
+        "show me",
+        "which",
+        "list",
+        "подскажи пожалуйста",
+        "расскажи пожалуйста",
+        "скажи пожалуйста",
+        "скажите пожалуйста",
+        "подскажи мне пожалуйста",
+        "расскажи мне пожалуйста",
+        "скажи мне пожалуйста",
+        "скажите мне пожалуйста",
+        "покажи мне пожалуйста",
+        "подскажи мне",
+        "расскажи мне",
+        "скажи мне",
+        "скажите мне",
+        "покажи мне",
+        "подскажи",
+        "расскажи",
+        "скажи",
+        "скажите",
+        "пожалуйста",
+        "кто такой",
+        "кто такая",
+        "что такое",
+        "что за",
+        "как сделать",
+        "как настроить",
+        "как вообще",
+        "как",
+        "почему",
+        "зачем",
+        "когда вышел",
+        "когда выйдет",
+        "когда",
+        "объясни",
+        "найди",
+        "какие",
+        "какой",
+        "какая",
+        "какое",
+        "покажи",
     ];
     let mut changed = true;
     while changed {
         changed = false;
         let lower = cleaned.to_lowercase();
         for p in &prefixes {
-            if lower.starts_with(p) && (lower.len() == p.len() || lower[p.len()..].starts_with(' ') || lower[p.len()..].starts_with(',')) {
-                cleaned = cleaned[p.len()..].trim_start_matches(|c: char| c.is_whitespace() || c == ',' || c == ':').to_string();
+            if lower.starts_with(p)
+                && (lower.len() == p.len()
+                    || lower[p.len()..].starts_with(' ')
+                    || lower[p.len()..].starts_with(','))
+            {
+                cleaned = cleaned[p.len()..]
+                    .trim_start_matches(|c: char| c.is_whitespace() || c == ',' || c == ':')
+                    .to_string();
                 changed = true;
                 break;
             }
         }
     }
 
-    while cleaned.ends_with('?') || cleaned.ends_with('!') || cleaned.ends_with('.') || cleaned.ends_with(':') {
+    while cleaned.ends_with('?')
+        || cleaned.ends_with('!')
+        || cleaned.ends_with('.')
+        || cleaned.ends_with(':')
+    {
         cleaned.pop();
     }
     cleaned = cleaned.trim().to_string();
 
     let suffixes = [
-        "when it came out", "when did it come out", "when was it released",
-        "когда вышел", "когда выйдет", "как вообще генерить", "как генерить",
-        "как сделать", "как настроить", "как использовать",
+        "when it came out",
+        "when did it come out",
+        "when was it released",
+        "когда вышел",
+        "когда выйдет",
+        "как вообще генерить",
+        "как генерить",
+        "как сделать",
+        "как настроить",
+        "как использовать",
     ];
     let mut changed_s = true;
     while changed_s {
         changed_s = false;
         let lower = cleaned.to_lowercase();
         for s in &suffixes {
-            if lower.ends_with(s) && (lower.len() == s.len() || lower[..lower.len() - s.len()].ends_with(' ')) {
+            if lower.ends_with(s)
+                && (lower.len() == s.len() || lower[..lower.len() - s.len()].ends_with(' '))
+            {
                 cleaned = cleaned[..cleaned.len() - s.len()].trim_end().to_string();
                 changed_s = true;
                 break;
@@ -850,7 +928,11 @@ fn clean_prompt_snippet(prompt: &str) -> String {
         }
     }
 
-    while cleaned.ends_with('?') || cleaned.ends_with('!') || cleaned.ends_with('.') || cleaned.ends_with(':') {
+    while cleaned.ends_with('?')
+        || cleaned.ends_with('!')
+        || cleaned.ends_with('.')
+        || cleaned.ends_with(':')
+    {
         cleaned.pop();
     }
     cleaned = cleaned.trim().to_string();
@@ -875,23 +957,43 @@ pub fn heuristic_meta(prompt: &str, answer: &str) -> Value {
     if combined.contains("messi") || combined.contains("месси") {
         return json!({"title": "Lionel Messi", "icon": "trophy"});
     }
-    if combined.contains("ronaldo") || combined.contains("роналду") || combined.contains("криштиану") {
+    if combined.contains("ronaldo")
+        || combined.contains("роналду")
+        || combined.contains("криштиану")
+    {
         return json!({"title": "Cristiano Ronaldo", "icon": "trophy"});
     }
-    if combined.contains("cpu") || combined.contains("processor") || combined.contains("процессор") || combined.contains("нагрузк") {
-        if combined.contains("compiler") || combined.contains("build") || combined.contains("idle") || combined.contains("compil") {
+    if combined.contains("cpu")
+        || combined.contains("processor")
+        || combined.contains("процессор")
+        || combined.contains("нагрузк")
+    {
+        if combined.contains("compiler")
+            || combined.contains("build")
+            || combined.contains("idle")
+            || combined.contains("compil")
+        {
             return json!({"title": "CPU Usage & Compiler Memory", "icon": "cpu"});
         }
         return json!({"title": "CPU & Process Diagnostics", "icon": "cpu"});
     }
-    if combined.contains("api key") || combined.contains("api-key") || combined.contains("apikey") || combined.contains("токен") || combined.contains("ключ") {
+    if combined.contains("api key")
+        || combined.contains("api-key")
+        || combined.contains("apikey")
+        || combined.contains("токен")
+        || combined.contains("ключ")
+    {
         let mut title = clean_prompt_snippet(prompt);
         if title == "New chat" {
             title = "API Key".into();
         }
         return json!({"title": title, "icon": "key"});
     }
-    if combined.contains("port") || combined.contains("порт") || combined.contains("listening") || combined.contains("слушает") {
+    if combined.contains("port")
+        || combined.contains("порт")
+        || combined.contains("listening")
+        || combined.contains("слушает")
+    {
         let mut title = clean_prompt_snippet(prompt);
         if title == "New chat" {
             title = "Listening Ports".into();
@@ -908,31 +1010,105 @@ pub fn heuristic_meta(prompt: &str, answer: &str) -> Value {
         return json!({"title": title, "icon": "snippets"});
     }
 
-    let icon = if combined.contains("football") || combined.contains("soccer") || combined.contains("fifa") || combined.contains("футбол") {
+    let icon = if combined.contains("football")
+        || combined.contains("soccer")
+        || combined.contains("fifa")
+        || combined.contains("футбол")
+    {
         "trophy"
-    } else if combined.contains("basketball") || combined.contains("nba") || combined.contains("баскетбол") {
+    } else if combined.contains("basketball")
+        || combined.contains("nba")
+        || combined.contains("баскетбол")
+    {
         "sports"
     } else if combined.contains("tennis") || combined.contains("теннис") {
         "sports"
-    } else if combined.contains("rust") || combined.contains("python") || combined.contains("typescript") || combined.contains("javascript") || combined.contains("golang") || combined.contains("react") || combined.contains("code") || combined.contains("кодинг") || combined.contains("баг") || combined.contains("ошибк") {
+    } else if combined.contains("rust")
+        || combined.contains("python")
+        || combined.contains("typescript")
+        || combined.contains("javascript")
+        || combined.contains("golang")
+        || combined.contains("react")
+        || combined.contains("code")
+        || combined.contains("кодинг")
+        || combined.contains("баг")
+        || combined.contains("ошибк")
+    {
         "snippets"
-    } else if combined.contains("mac") || combined.contains("terminal") || combined.contains("bash") || combined.contains("zsh") || combined.contains("linux") || combined.contains("windows") || combined.contains("диск") || combined.contains("ssd") || combined.contains("памят") || combined.contains("процесс") {
+    } else if combined.contains("mac")
+        || combined.contains("terminal")
+        || combined.contains("bash")
+        || combined.contains("zsh")
+        || combined.contains("linux")
+        || combined.contains("windows")
+        || combined.contains("диск")
+        || combined.contains("ssd")
+        || combined.contains("памят")
+        || combined.contains("процесс")
+    {
         "cpu"
-    } else if combined.contains("weather") || combined.contains("rain") || combined.contains("snow") || combined.contains("погода") || combined.contains("дождь") || combined.contains("температур") {
+    } else if combined.contains("weather")
+        || combined.contains("rain")
+        || combined.contains("snow")
+        || combined.contains("погода")
+        || combined.contains("дождь")
+        || combined.contains("температур")
+    {
         "weather"
-    } else if combined.contains("music") || combined.contains("song") || combined.contains("spotify") || combined.contains("песн") || combined.contains("музык") || combined.contains("трек") {
+    } else if combined.contains("music")
+        || combined.contains("song")
+        || combined.contains("spotify")
+        || combined.contains("песн")
+        || combined.contains("музык")
+        || combined.contains("трек")
+    {
         "audio"
-    } else if combined.contains("crypto") || combined.contains("bitcoin") || combined.contains("btc") || combined.contains("eth") || combined.contains("валют") || combined.contains("деньг") || combined.contains("биткоин") || combined.contains("курс") {
+    } else if combined.contains("crypto")
+        || combined.contains("bitcoin")
+        || combined.contains("btc")
+        || combined.contains("eth")
+        || combined.contains("валют")
+        || combined.contains("деньг")
+        || combined.contains("биткоин")
+        || combined.contains("курс")
+    {
         "brew"
-    } else if combined.contains("ai") || combined.contains("gpt") || combined.contains("llm") || combined.contains("claude") || combined.contains("gemini") || combined.contains("нейросет") || combined.contains("модел") {
+    } else if combined.contains("ai")
+        || combined.contains("gpt")
+        || combined.contains("llm")
+        || combined.contains("claude")
+        || combined.contains("gemini")
+        || combined.contains("нейросет")
+        || combined.contains("модел")
+    {
         "ai"
-    } else if combined.contains("auth") || combined.contains("password") || combined.contains("пароль") || combined.contains("логин") || combined.contains("secret") {
+    } else if combined.contains("auth")
+        || combined.contains("password")
+        || combined.contains("пароль")
+        || combined.contains("логин")
+        || combined.contains("secret")
+    {
         "key"
-    } else if combined.contains("movie") || combined.contains("film") || combined.contains("фильм") || combined.contains("кино") || combined.contains("сериал") {
+    } else if combined.contains("movie")
+        || combined.contains("film")
+        || combined.contains("фильм")
+        || combined.contains("кино")
+        || combined.contains("сериал")
+    {
         "picture"
-    } else if combined.contains("food") || combined.contains("coffee") || combined.contains("еда") || combined.contains("кофе") || combined.contains("рецепт") {
+    } else if combined.contains("food")
+        || combined.contains("coffee")
+        || combined.contains("еда")
+        || combined.contains("кофе")
+        || combined.contains("рецепт")
+    {
         "coffee"
-    } else if combined.contains("write") || combined.contains("draft") || combined.contains("note") || combined.contains("стать") || combined.contains("письм") {
+    } else if combined.contains("write")
+        || combined.contains("draft")
+        || combined.contains("note")
+        || combined.contains("стать")
+        || combined.contains("письм")
+    {
         "edit"
     } else {
         "chat"

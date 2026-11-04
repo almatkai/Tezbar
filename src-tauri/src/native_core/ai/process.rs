@@ -1,3 +1,6 @@
+#[cfg(windows)]
+#[path = "../../windows_job.rs"]
+mod windows_job;
 use super::*;
 use std::process::Stdio;
 use tokio::{
@@ -37,7 +40,7 @@ pub fn command(binary: impl AsRef<std::ffi::OsStr>) -> Command {
     #[cfg(unix)]
     c.process_group(0);
     #[cfg(windows)]
-    c.creation_flags(0x08000200);
+    c.creation_flags(0x08000204);
     c
 }
 /// Packaged GUI applications do not inherit the user's interactive PATH.
@@ -98,12 +101,28 @@ fn augment_path(path: &str, home: &std::path::Path) -> String {
 pub struct GroupChild {
     pub child: Child,
     pid: Option<u32>,
+    #[cfg(windows)]
+    job: Option<windows_job::Job>,
 }
 impl GroupChild {
     pub fn spawn(cmd: &mut Command) -> Result<Self, String> {
-        let child = cmd.spawn().map_err(err)?;
+        #[cfg(windows)]
+        let job = windows_job::Job::new().map_err(err)?;
+        let mut child = cmd.spawn().map_err(err)?;
+        #[cfg(windows)]
+        if let Err(e) =
+            unsafe { job.attach_raw(child.raw_handle().ok_or("Missing Windows process handle")?) }
+        {
+            let _ = child.start_kill();
+            return Err(format!("Native process ownership: {e}"));
+        }
         let pid = child.id();
-        Ok(Self { child, pid })
+        Ok(Self {
+            child,
+            pid,
+            #[cfg(windows)]
+            job: Some(job),
+        })
     }
     pub async fn terminate(&mut self) {
         #[cfg(unix)]
@@ -113,11 +132,8 @@ impl GroupChild {
             }
         }
         #[cfg(windows)]
-        if let Some(pid) = self.pid.take() {
-            let _ = Command::new("taskkill")
-                .args(["/PID", &pid.to_string(), "/T", "/F"])
-                .output()
-                .await;
+        {
+            self.job.take();
         }
         if tokio::time::timeout(Duration::from_millis(1500), self.child.wait())
             .await
@@ -136,23 +152,9 @@ impl GroupChild {
             }
         }
         #[cfg(windows)]
-        if let Some(pid) = self.pid.take() {
-            // Drop can run when an outer timeout cancels the whole request future.
-            // Launch tree termination immediately, then reap asynchronously when a runtime exists.
-            let mut command = Command::new("taskkill");
-            command
-                .args(["/PID", &pid.to_string(), "/T", "/F"])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .creation_flags(0x08000000);
-            if let Ok(mut killer) = command.spawn() {
-                if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-                    runtime.spawn(async move {
-                        let _ = killer.wait().await;
-                    });
-                }
-            }
+        {
+            self.job.take();
+            self.pid.take();
         }
         let _ = self.child.start_kill();
     }
@@ -314,5 +316,50 @@ mod tests {
         )
         .await;
         assert!(result.unwrap_err().contains("cancelled"));
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    #[tokio::test]
+    async fn powershell_unicode_and_job_owned_tree() {
+        let output=output(command("powershell.exe").args(["-NoLogo","-NoProfile","-NonInteractive","-Command","[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Write-Output 'Привет 🦀'" ]),Duration::from_secs(10),&Cancel::new()).await.unwrap();
+        assert!(output.contains("Привет 🦀"));
+        let temp = tempfile::tempdir().unwrap();
+        let pids = temp.path().join("pids.txt");
+        let child_script=format!("Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep 120' -PassThru | Select-Object -ExpandProperty Id | Set-Content -LiteralPath '{}'; Start-Sleep 120",pids.to_string_lossy().replace('\'',"''"));
+        let mut parent = command("powershell.exe");
+        parent.args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            &child_script,
+        ]);
+        let mut group = GroupChild::spawn(&mut parent).unwrap();
+        let root = group.child.id().unwrap();
+        let grandchild = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if let Ok(s) = tokio::fs::read_to_string(&pids).await {
+                    if let Ok(id) = s.trim().parse::<u32>() {
+                        break id;
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await
+            }
+        })
+        .await
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), group.terminate())
+            .await
+            .unwrap();
+        for pid in [root, grandchild] {
+            let status = std::process::Command::new("tasklist.exe")
+                .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+                .output()
+                .unwrap();
+            assert!(!String::from_utf8_lossy(&status.stdout).contains(&format!("\"{pid}\"")));
+        }
     }
 }

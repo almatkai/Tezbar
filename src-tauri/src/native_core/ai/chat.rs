@@ -10,6 +10,7 @@ fn open(path: &Path) -> Result<Connection, String> {
     db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;
       CREATE TABLE IF NOT EXISTS chat_sessions(id TEXT PRIMARY KEY,title TEXT NOT NULL,icon TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,working_directory TEXT);
       CREATE TABLE IF NOT EXISTS chat_turns(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,role TEXT NOT NULL,text TEXT NOT NULL,response_meta_json TEXT,stages_json TEXT,timeline_json TEXT,attachments_json TEXT,error TEXT,created_at INTEGER NOT NULL,FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE);
+      CREATE TABLE IF NOT EXISTS chat_session_profiles(session_id TEXT PRIMARY KEY REFERENCES chat_sessions(id) ON DELETE CASCADE, profile_id TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id);
       CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);").map_err(err)?;
     for (table, col) in [
@@ -119,6 +120,17 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             let Some(mut result) = row else {
                 return Ok(Value::Null);
             };
+            if let Some(profile) = db
+                .query_row(
+                    "SELECT profile_id FROM chat_session_profiles WHERE session_id=?",
+                    [id],
+                    |r| r.get::<_, String>(0),
+                )
+                .optional()
+                .map_err(err)?
+            {
+                result["agentProfileId"] = json!(profile);
+            }
             let mut q=db.prepare("SELECT id,role,text,response_meta_json,stages_json,timeline_json,attachments_json,error,created_at FROM chat_turns WHERE session_id=? ORDER BY created_at ASC").map_err(err)?;
             let turns=q.query_map([id],|r|{
                 let role=r.get::<_,String>(1)?;
@@ -151,6 +163,9 @@ fn operate(path: &Path, channel: &str, args: &[Value]) -> CoreResult {
             let at = timestamp(turn, "createdAt")?;
             let tx = db.transaction().map_err(err)?;
             tx.execute("INSERT INTO chat_sessions(id,title,icon,created_at,updated_at,working_directory) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,icon=COALESCE(excluded.icon,chat_sessions.icon),updated_at=excluded.updated_at,working_directory=excluded.working_directory",params![sid,title,icon,created,updated,session["workingDirectory"].as_str()]).map_err(err)?;
+            if let Some(profile) = session["agentProfileId"].as_str() {
+                tx.execute("INSERT INTO chat_session_profiles(session_id,profile_id) VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET profile_id=excluded.profile_id",params![sid,profile]).map_err(err)?;
+            }
             let owner = tx
                 .query_row("SELECT session_id FROM chat_turns WHERE id=?", [tid], |r| {
                     r.get::<_, String>(0)
@@ -231,9 +246,27 @@ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> CoreRes
         channel.as_str(),
         "chat:append" | "chat:update-title" | "chat:delete-turn" | "chat:delete" | "chat:clear"
     );
-    let result = tokio::task::spawn_blocking(move || operate(&path, &channel, &args))
-        .await
-        .map_err(err)?;
+    let root = ctx.paths.data_dir.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        let result = operate(&path, &channel, &args)?;
+        match channel.as_str() {
+            "chat:delete-turn" => runtime::store::delete(
+                &root,
+                Some(required(&args[0], "sessionId")?),
+                Some(required(&args[0], "turnId")?),
+            )?,
+            "chat:delete" => runtime::store::delete(
+                &root,
+                Some(args[0].as_str().ok_or("Invalid session id")?),
+                None,
+            )?,
+            "chat:clear" => runtime::store::delete(&root, None, None)?,
+            _ => {}
+        }
+        Ok(result)
+    })
+    .await
+    .map_err(err)?;
     if wrap {
         Ok(result.unwrap_or_else(|error| json!({"ok":false,"error":error})))
     } else {

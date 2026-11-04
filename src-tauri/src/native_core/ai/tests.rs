@@ -126,194 +126,26 @@ async fn approval_matching_cancellation_and_exact_persistence() {
     );
     core.shutdown().await;
 }
-#[cfg(unix)]
-pub(super) fn mock_pi(core: &AiCore, scenario: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    let path = core.inner.ctx.paths.resource_dir.join("pi-mock");
-    let script=r#"#!/usr/bin/env python3
-import json,sys,pathlib,time,os
-base=pathlib.Path(__file__).parent
-scenario=SCENARIO
-if scenario=='copilot':
-    assert sys.argv[sys.argv.index('--model')+1]=='github-copilot/gpt-5-mini'
-    assert os.environ.get('COPILOT_GITHUB_TOKEN')=='fixture-copilot-token'
-count=1
-# Only retry tests need a counter; observer RPCs intentionally run concurrently.
-if scenario in ('retry','partial'):
-    counter=base/'launches'
-    count=int(counter.read_text())+1 if counter.exists() else 1
-    counter.write_text(str(count))
-if scenario=='retry' and count==1:
-    sys.stderr.write('startup failed\n')
-    sys.exit(3)
-def send(v,tail=False):
-    data=json.dumps(v,ensure_ascii=False).encode()+ (b'' if tail else b'\n')
-    for byte in data:
-        sys.stdout.buffer.write(bytes([byte]))
-        sys.stdout.buffer.flush()
-def finish(text):
-    message={'role':'assistant','stopReason':'stop','content':[{'type':'text','text':text}]}
-    send({'type':'message_end','message':message})
-    send({'type':'agent_end','willRetry':False,'messages':[message]})
-    send({'type':'agent_settled'},True)
-for line in sys.stdin:
-    request=json.loads(line)
-    if request['type']=='set_model':
-        if scenario=='copilot':
-            assert request['provider']=='github-copilot'
-            assert request['modelId']=='gpt-5-mini'
-        send({'type':'response','id':'wrong-id','success':False,'error':'ignore stale'})
-        send({'type':'response','id':request['id'],'success':True})
-    elif request['type']=='get_state':
-        send({'type':'response','id':request['id'],'success':True,'data':{'model':{'provider':'mock','id':'fixture'},'messageCount':3,'isStreaming':False}})
-        break
-    elif request['type']=='get_session_stats':
-        send({'type':'response','id':request['id'],'success':True,'data':{'toolCalls':2,'contextUsage':{'tokens':10,'contextWindow':100,'percent':10}}})
-        break
-    elif request['type']=='prompt':
-        send({'type':'response','id':request['id'],'success':True})
-        send({'type':'agent_start'})
-        if scenario=='partial':
-            send({'type':'message_update','assistantMessageEvent':{'type':'text_delta','delta':'partial 🦀'}})
-            sys.stderr.write('transport lost\n')
-            sys.exit(2)
-        if scenario=='approval':
-            send({'type':'extension_ui_request','id':'ui-1','method':'confirm','title':'Allow command?','message':'echo exact'})
-        else:
-            finish('complete 🦀\u2028\u2029 end')
-            break
-    elif request['type']=='extension_ui_response':
-        finish('approved' if request.get('confirmed') else 'denied')
-        break
-"#.replace("SCENARIO",&format!("{scenario:?}"));
-    std::fs::write(&path, script).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let policy = core
-        .inner
-        .ctx
-        .paths
-        .resource_dir
-        .join("agent/raymes-pi-policy.ts");
-    std::fs::create_dir_all(policy.parent().unwrap()).unwrap();
-    std::fs::write(policy, "// Fixture: mock CLI never executes this file\n").unwrap();
-    *core.inner.pi_override.lock().unwrap() = Some(path);
-}
-#[tokio::test]
-#[cfg(unix)]
-async fn subprocess_retry_is_once_and_partial_output_never_reexecutes() {
-    for (scenario, expected) in [("retry", "2"), ("partial", "1")] {
-        let (_dir, core, mut events) = fixture();
-        mock_pi(&core, scenario);
-        let result = core
-            .handle(
-                "agent:run",
-                &[json!({"task":"test","runId":"agent-fixture"})],
-            )
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(result["ok"], true);
-        let terminal = if scenario == "retry" {
-            let answer = next_event(&mut events, "answer").await;
-            assert_eq!(answer["text"], "complete 🦀\u{2028}\u{2029} end");
-            next_event(&mut events, "done").await
-        } else {
-            let delta = next_event(&mut events, "message").await;
-            assert_eq!(delta["delta"], "partial 🦀");
-            let error = next_event(&mut events, "error").await;
-            assert!(s(&error["message"]).contains("transport lost"));
-            next_event(&mut events, "done").await
-        };
-        assert_eq!(terminal["runId"], "agent-fixture");
-        assert_eq!(
-            tokio::fs::read_to_string(core.inner.ctx.paths.resource_dir.join("launches"))
-                .await
-                .unwrap(),
-            expected
-        );
-        core.shutdown().await;
-    }
-}
-#[tokio::test]
-#[cfg(unix)]
-async fn subprocess_approval_rpc_response_is_correlated() {
-    let (_dir, core, mut events) = fixture();
-    mock_pi(&core, "approval");
-    // Exercise the actual Tauri resource mapping as well as the flat resource contract.
-    let resources = &core.inner.ctx.paths.resource_dir;
-    std::fs::create_dir_all(resources.join("dist-backend")).unwrap();
-    std::fs::rename(
-        resources.join("agent"),
-        resources.join("dist-backend/agent"),
-    )
-    .unwrap();
-    core.handle(
-        "agent:run",
-        &[json!({"task":"test","runId":"agent-approval"})],
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    let event = next_event(&mut events, "approval").await;
-    core.handle(
-        "agent:approve",
-        &[json!({"runId":"agent-approval","approvalId":event["approvalId"],"decision":"deny"})],
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert_eq!(next_event(&mut events, "answer").await["text"], "denied");
-    next_event(&mut events, "done").await;
-    core.shutdown().await;
-}
-
-#[tokio::test]
-#[cfg(unix)]
-async fn review_mode_requires_confirmation_for_a_remembered_command() {
-    let (_dir, core, mut events) = fixture();
-    mock_pi(&core, "approval");
-    core.patch_config(json!({"agentApprovalMode":"review","agentAlwaysAllowedExactCommands":["echo exact"]}))
-        .await.unwrap();
-    core.handle("agent:run", &[json!({"task":"test","runId":"agent-review"})])
-        .await.unwrap().unwrap();
-    let event = next_event(&mut events, "approval").await;
-    core.handle("agent:approve", &[json!({"runId":"agent-review","approvalId":event["approvalId"],"decision":"deny"})])
-        .await.unwrap().unwrap();
-    assert_eq!(next_event(&mut events, "answer").await["text"], "denied");
-    next_event(&mut events, "done").await;
-    core.shutdown().await;
-}
-
-#[tokio::test]
-#[cfg(unix)]
-async fn copilot_agent_uses_the_apps_token_in_the_pi_child_environment() {
-    let (_dir, core, mut events) = fixture();
-    mock_pi(&core, "copilot");
-    core.patch_config(json!({"provider":"copilot","model":"gpt-5-mini","providerConfigs":{"copilot":{"copilotGithubToken":"fixture-copilot-token"}}}))
-        .await.unwrap();
-    core.handle("agent:run", &[json!({"task":"test","runId":"agent-copilot"})])
-        .await.unwrap().unwrap();
-    assert_eq!(
-        next_event(&mut events, "answer").await["text"],
-        "complete 🦀\u{2028}\u{2029} end"
-    );
-    next_event(&mut events, "done").await;
-    core.shutdown().await;
-}
-
 #[tokio::test]
 async fn chat_metadata_handles_multibyte_answer_boundaries_without_panicking() {
     let (_dir, core, _events) = fixture();
     // Missing credentials intentionally exercise the local fallback, without a provider request.
     core.patch_config(json!({"provider":"openai","providerConfigs":{"openai":{"apiKey":""}}}))
-        .await.unwrap();
+        .await
+        .unwrap();
     for answer in [
         format!("A{}", "я".repeat(200)),
         format!("A{}", "🦀".repeat(100)),
         "x".repeat(400),
     ] {
-        let meta = core.handle("chat:generate-meta", &[json!({"id":"unicode-chat","prompt":"Unicode response","answer":answer})])
-            .await.unwrap().unwrap();
+        let meta = core
+            .handle(
+                "chat:generate-meta",
+                &[json!({"id":"unicode-chat","prompt":"Unicode response","answer":answer})],
+            )
+            .await
+            .unwrap()
+            .unwrap();
         assert!(!s(&meta["title"]).is_empty());
         assert!(!s(&meta["icon"]).is_empty());
     }
@@ -350,7 +182,7 @@ async fn extension_ask_uses_native_http_and_action_provider() {
             }
         }
         let data =
-            "data: {\"choices\":[{\"delta\":{\"content\":\" native 🦀 \"}}]}\n\ndata: [DONE]\n\n";
+            "data: {\"choices\":[{\"delta\":{\"content\":\" native 🦀 \"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
         socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",data.len()).as_bytes()).await.unwrap();
         for byte in data.as_bytes() {
             socket.write_all(&[*byte]).await.unwrap();
@@ -367,72 +199,28 @@ async fn extension_ask_uses_native_http_and_action_provider() {
     core.shutdown().await;
 }
 #[tokio::test]
-async fn gateway_auth_limits_routing_and_launcher_filters() {
+async fn legacy_aliases_report_native_state_without_a_runtime() {
     let (_dir, core, _events) = fixture();
-    core.inner.ctx.set_router(Arc::new(|channel,args|Box::pin(async move{match channel.as_str(){"core:knowledge:search"=>{assert_eq!(args,json!(["needle",20]).as_array().unwrap().clone());Ok(json!([{"id":"hit"}]))},"core:knowledge:read"=>Ok(json!({"id":args[0],"text":"content"})),"search:all"=>Ok(json!([{"id":"deep-search:hidden"},{"id":"note-add:hidden"},{"id":"file:a","title":"A","action":{"type":"open-file","path":"/fixture/a"}}])),_=>Err("Unexpected channel".into())}}))).unwrap();
-    let (endpoint, token) = core.ensure_gateway().await.unwrap();
-    let base = endpoint.trim_end_matches("/search");
-    let http = reqwest::Client::new();
     assert_eq!(
-        http.post(&endpoint)
-            .json(&json!({"query":"needle"}))
-            .send()
+        core.handle("pi:check", &[]).await.unwrap().unwrap(),
+        json!({"installed":true,"version":"native"})
+    );
+    assert_eq!(
+        core.handle("pi:install", &[]).await.unwrap().unwrap(),
+        json!({"ok":true,"method":"native","version":"native"})
+    );
+    assert_eq!(
+        core.handle("core:ai:pi-observe", &[])
             .await
             .unwrap()
-            .status(),
-        404
+            .unwrap()["isStreaming"],
+        false
     );
-    let response = http
-        .post(&endpoint)
-        .bearer_auth(&token)
-        .json(&json!({"query":"needle","limit":100}))
-        .send()
+    assert!(core
+        .handle("core:ai:pi-query", &[json!({"type":"prompt"})])
         .await
         .unwrap()
-        .json::<Value>()
-        .await
-        .unwrap();
-    assert_eq!(response, json!({"hits":[{"id":"hit"}]}));
-    let response = http
-        .post(format!("{base}/launcher-search"))
-        .bearer_auth(&token)
-        .json(&json!({"query":"a"}))
-        .send()
-        .await
-        .unwrap()
-        .json::<Value>()
-        .await
-        .unwrap();
-    assert_eq!(response["results"].as_array().unwrap().len(), 1);
-    assert_eq!(response["results"][0]["target"], "/fixture/a");
-    assert_eq!(
-        http.post(&endpoint)
-            .bearer_auth(&token)
-            .body("x".repeat(65537))
-            .send()
-            .await
-            .unwrap()
-            .status(),
-        413
-    );
-    core.shutdown().await;
-    assert!(http.post(&endpoint).send().await.is_err());
-}
-
-#[tokio::test]
-#[cfg(unix)]
-async fn observer_queries_return_native_pi_state_and_usage() {
-    let (_dir, core, _events) = fixture();
-    mock_pi(&core, "observer");
-    let observed = core
-        .handle("core:ai:pi-observe", &[])
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(observed["model"], "mock/fixture");
-    assert_eq!(observed["messageCount"], 3);
-    assert_eq!(observed["toolCalls"], 2);
-    assert_eq!(observed["contextUsage"]["tokens"], 10);
+        .is_err());
     core.shutdown().await;
 }
 

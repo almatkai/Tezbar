@@ -120,11 +120,7 @@ async function runBuild(): Promise<void> {
   ]) {
     rmSync(join(outputDirectory, obsolete), { force: true })
   }
-  mkdirSync(join(outputDirectory, 'agent'), { recursive: true })
-  copyFileIfChanged(
-    join(root, 'src/main/agent/raymes-pi-policy.ts'),
-    join(outputDirectory, 'agent/raymes-pi-policy.ts')
-  )
+  rmSync(join(outputDirectory, 'agent/raymes-pi-policy.ts'), { force: true })
   const loadablePath = getLoadablePath()
   const extensionSuffix =
     process.platform === 'win32' ? 'dll' : process.platform === 'darwin' ? 'dylib' : 'so'

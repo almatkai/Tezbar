@@ -19,7 +19,7 @@ JavaScript extension ecosystem; there is no general TypeScript backend fallback.
 | Ported extension commands (first pilot: Perplexity)                                    | `native_core/extensions`                |
 | Extension installation/build and Raycast JavaScript execution                         | Isolated extension worker               |
 
-External tools remain external: Pi/OpenCode, local speech engines, document
+External tools remain external: user-added MCP programs, local speech engines, document
 converters, optional llama.cpp inference and macOS Swift helpers are launched
 when their features need them. Moving orchestration to Rust does not rewrite
 those third-party tools or the React frontend.
@@ -69,10 +69,11 @@ reported rather than silently replacing the profile with defaults.
 
 ## Native agent runtime
 
-Stage 1 can run text/function-tool agent requests inside Rust for OpenAI-compatible
-providers, with Pi retained as a selectable compatibility adapter. See
-[Native agent runtime](NATIVE_AGENT_RUNTIME.md) for configuration, permissions,
-protocol limits and local validation.
+Agent and completion execution now uses native Rust protocol adapters, with no
+Pi/Node/OpenCode execution fallback. Canonical conversation history and AI
+Extensions are owned by `native_core/ai`. The full requested feature set remains
+in progress; [Native agent runtime](NATIVE_AGENT_RUNTIME.md) lists implemented
+behavior, outstanding requirements and verification limits.
 
 ## Build and checks
 

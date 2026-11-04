@@ -57,3 +57,12 @@ Run `pnpm build:windows` on Windows to produce both a per-user NSIS installer an
 The generic `pnpm build` command is also platform-aware. The native helper step builds Swift helpers only on macOS and is a no-op on Windows. Tauri merges `tauri.macos.conf.json` or `tauri.windows.conf.json` and packages only resources valid for that operating system. If Bun is not already available, the Tauri host downloads the pinned runtime into Tezbar's app-data directory when an extension first requires the worker. Built-in features do not require this download. It does not modify the user's PATH, shell files, Homebrew installation, or system directories.
 
 Cross-compilation from macOS can type-check Rust code, but a complete Windows Tauri build also requires a Windows resource compiler and cannot replace an installer test on Windows.
+
+## Native AI branch verification
+
+The native AI work uses a shared Windows Job Object helper and PowerShell with
+UTF-8 output. Its Windows runtime tests must run from an immutable committed-source
+archive in an isolated temporary staging directory. The release checkout is read
+only. At this point no Windows result is claimed; see
+[NATIVE_AGENT_RUNTIME.md](NATIVE_AGENT_RUNTIME.md) for the unfinished acceptance
+matrix.

@@ -5,7 +5,7 @@ impl AiCore {
         let response = self
             .inner
             .http
-            .post(format!("https://github.com/login/{path}"))
+            .post(self.endpoint("github-oauth", &format!("https://github.com/login/{path}")))
             .header("Accept", "application/json")
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(
@@ -40,7 +40,7 @@ impl AiCore {
         let v = self
             .oauth(
                 "device/code",
-                &[("client_id", client), ("scope", "repo workflow")],
+                &[("client_id", client), ("scope", "read:user")],
             )
             .await?;
         for k in ["device_code", "user_code", "verification_uri"] {
@@ -186,7 +186,7 @@ impl AiCore {
         Ok(access)
     }
 }
-fn url_encode(v: &str) -> String {
+pub(super) fn url_encode(v: &str) -> String {
     v.bytes()
         .map(|b| {
             if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {

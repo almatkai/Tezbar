@@ -61,6 +61,7 @@ pub fn selected(raw: &Value, task: Option<&str>, explicit: Option<&str>) -> Valu
         "geminiApiKey",
         "copilotGithubToken",
         "githubOAuthClientId",
+        "protocol",
     ] {
         let value = raw["providerConfigs"][provider][key].as_str().or_else(|| {
             if legacy && provider == active {
@@ -137,6 +138,11 @@ fn normalize_models(cfg: &mut Value) {
                 caps
             };
             let mut next = json!({"id":id,"capabilities":caps});
+            for key in ["protocol", "maxTokens", "supported_endpoints"] {
+                if let Some(v) = model.get(key) {
+                    next[key] = v.clone();
+                }
+            }
             if let Some(n) = model["contextWindow"].as_f64() {
                 next["contextWindow"] = json!(n.max(0.0).round());
             }
@@ -153,104 +159,9 @@ fn normalize_models(cfg: &mut Value) {
     cfg["providerModels"] = json!(normalized);
 }
 
-pub fn pi_bridge(cfg: &Value) -> (String, Option<String>, bool) {
-    let p = s(&cfg["provider"]);
-    let model = s(&cfg["model"]);
-    let id = model.trim_start_matches(&format!("{p}/"));
-    let id = if p == "copilot" {
-        id.strip_prefix("github-copilot/").unwrap_or(id)
-    } else {
-        id
-    };
-    if p == "antigravity" {
-        return (format!("antigravity/{id}"), None, true);
-    }
-    if p == "opencode" {
-        return (
-            if model.starts_with("opencode/opencode/") {
-                model.to_string()
-            } else if model.starts_with("opencode/") {
-                format!("opencode/{model}")
-            } else {
-                format!("opencode/opencode/{model}")
-            },
-            None,
-            false,
-        );
-    }
-    let catalogs = defaults();
-    let list = cfg["providerModels"][p]
-        .as_array()
-        .or_else(|| catalogs["DEFAULT_PROVIDER_MODELS"][p].as_array());
-    let vision = list
-        .and_then(|list| {
-            list.iter()
-                .find(|m| s(&m["id"]).trim_start_matches(&format!("{p}/")) == id)
-        })
-        .and_then(|m| m["capabilities"].as_array())
-        .is_some_and(|c| c.iter().any(|c| c == "vision"));
-    if p == "copilot" {
-        return (format!("github-copilot/{id}"), None, vision);
-    }
-    let mut base = cfg["openaiCompatibleBaseURL"]
-        .as_str()
-        .filter(|b| !b.is_empty())
-        .unwrap_or(s(&cfg["baseURL"]))
-        .trim_end_matches('/')
-        .to_string();
-    if p == "ollama" && !base.ends_with("/v1") {
-        base.push_str("/v1");
-    }
-    let deepseek = p == "deepseek"
-        && (base == "https://api.deepseek.com" || base == "https://api.deepseek.com/v1");
-    if deepseek {
-        base = "https://api.deepseek.com/anthropic".into();
-    }
-    let key = if p == "ollama" {
-        "ollama"
-    } else if p == "gemini" {
-        cfg["geminiApiKey"].as_str().unwrap_or(s(&cfg["apiKey"]))
-    } else if (p.starts_with("custom:") || p == "openai-compatible") && s(&cfg["apiKey"]).is_empty()
-    {
-        "tezbar-local"
-    } else {
-        s(&cfg["apiKey"])
-    };
-    if base.is_empty() || key.is_empty() {
-        let pattern =
-            if model.starts_with(&format!("{p}/")) || model.contains('/') && p != "tokenrouter" {
-                model.to_string()
-            } else {
-                format!("{p}/{model}")
-            };
-        return (pattern, None, vision);
-    }
-    let mut m = json!({"id":id,"name":format!("Tezbar {p} {id}"),"reasoning":regex::Regex::new("(?i)reason|think|r1|o[0-9]|gpt-5|claude|deepseek").unwrap().is_match(id),"input":if vision{json!(["text","image"])}else{json!(["text"])},"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0},"contextWindow":128000,"maxTokens":8192});
-    if deepseek {
-        m["compat"] = json!({"supportsEagerToolInputStreaming":false,"supportsLongCacheRetention":false,"supportsCacheControlOnTools":false,"allowEmptySignature":true});
-    } else if p == "deepseek" {
-        m["compat"] = json!({"supportsStore":false,"supportsDeveloperRole":false,"requiresReasoningContentOnAssistantMessages":true,"thinkingFormat":"deepseek"});
-    } else if p == "tokenrouter" || p == "openai-compatible" || p.starts_with("custom:") {
-        m["compat"] = json!({"supportsStore":false,"supportsDeveloperRole":false,"supportsReasoningEffort":false,"maxTokensField":"max_tokens"});
-    }
-    (format!("tezbar/{id}"),Some(json!({"baseUrl":base,"apiKey":key,"api":if p=="anthropic"||deepseek{"anthropic-messages"}else{"openai-completions"},"authHeader":true,"models":[m]}).to_string()),vision)
-}
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn copilot_uses_the_native_pi_provider_without_serializing_credentials() {
-        let cfg = selected(
-            &json!({"provider":"copilot","copilotGithubToken":"fixture-token","model":"gpt-5-mini"}),
-            Some("chat"),
-            None,
-        );
-        let (pattern, bridge, vision) = pi_bridge(&cfg);
-        assert_eq!(pattern, "github-copilot/gpt-5-mini");
-        assert!(bridge.is_none());
-        assert!(vision);
-    }
-
     #[test]
     fn credentials_are_not_leaked_to_other_providers() {
         let raw = json!({"provider":"openai","apiKey":"legacy","providerConfigs":{"anthropic":{"apiKey":"claude"}},"taskProviderOverrides":{"chat":"anthropic"},"providerSelectedModels":{"anthropic":"custom-model"}});
@@ -258,15 +169,5 @@ mod tests {
         assert_eq!(cfg["apiKey"], "claude");
         assert_eq!(cfg["model"], "custom-model");
         assert!(selected(&raw, None, None).get("apiKey").is_none());
-    }
-    #[test]
-    fn legacy_defaults_and_tokenrouter_slashes() {
-        assert_eq!(selected(&json!({}), None, None)["model"], "llama3.2");
-        let cfg = selected(
-            &json!({"provider":"tokenrouter","apiKey":"key"}),
-            None,
-            None,
-        );
-        assert_eq!(pi_bridge(&cfg).0, "tezbar/moonshotai/kimi-k3-free");
     }
 }
