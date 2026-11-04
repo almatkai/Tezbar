@@ -1,6 +1,38 @@
 # Native AI implementation verification
 
-## Four targeted-review variants — source `756072e`
+## Final provider-removal repair — source `b2b4f77`
+
+Validated UI implementation: `b2b4f778a1e45e3c4b7cc7385212d391195f5ea0`, tree
+`b0b43ceb0a874282e8558717cb0a321312c992a8`, on `feat/native-rust-agent`.
+The only implementation changes since `756072e` are `SettingsView.tsx` and its
+real-component regression tests. Native sources and lifecycle/build inputs are
+byte-identical to the macOS/Windows-tested `756072e` source below.
+
+- `pnpm test`: **933 passed, 9 existing skips, 0 failed**; 125 files passed,
+  2 skipped. Log: `/private/tmp/tezbar-provider-final-ts.log`.
+- `pnpm typecheck`: pass. Log: `/private/tmp/tezbar-provider-current-typecheck.log`.
+- `pnpm build:frontend`: pass. Log: `/private/tmp/tezbar-provider-final-frontend.log`.
+- `git diff --check`: pass. No skips or ignores were added.
+- Native evidence remains **608 macOS / 538 Windows tests passed**, with the same
+  existing ignores; MSRV, lifecycle and non-test Windows checks passed below.
+
+The unchanged [wire closure](reviews/native-ai-opus-wire-847ea62.md) and
+[extension/security closure](reviews/native-ai-opus-standards-fd8c356.md) have
+zero actionable findings. The [runtime review](reviews/native-ai-opus-runtime-fd8c356.md)
+closed T-R1 and left only T-R2. This repair flushes pending model edits before
+provider removal, supersedes that provider's failed drafts on successful removal,
+and recomputes deletion from current records on Retry to preserve peer credentials.
+Five permanent regressions cover both original triggers, failed pending saves,
+retired-owner retry and a newer peer key after a failed removal. The failure cases
+were reproduced before the corresponding repairs.
+
+**Fresh targeted Claude Opus 5.5 closure of T-R2 and the touched save/retry paths
+is pending. Overall migration completion is not declared yet.** No live model,
+production profile, desktop launch, push, PR, Actions or release was used. Live
+upstream interoperability and actual desktop window/event delivery remain
+unverified. The existing Windows OCR/UI Automation limitations are unchanged.
+
+## Historical: four targeted-review variants — source `756072e`
 
 Validated implementation: `756072ee682eae773626b3d1b78d807217014580`, tree
 `0147dc5caa1e3dfbe94ab2214c5f7e8b808994a0`, in the same clean task worktree

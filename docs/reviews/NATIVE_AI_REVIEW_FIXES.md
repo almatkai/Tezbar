@@ -430,3 +430,37 @@ identities and retained logs are in `NATIVE_AI_VERIFICATION.md`.
 Fresh targeted Opus closure for these four variants remains pending. No new skip,
 ignore, credential read, live Tezbar provider call, app launch, push or release was
 used. The already closed wire scope is byte-identical to its reviewed source.
+
+## Follow-up closure at `fd8c356` and final T-R2 repair
+
+The original reports are retained unchanged:
+
+- [Standards/security](native-ai-opus-standards-fd8c356.md): S8-R1, S8-R2 and
+  S5-V1 closed, with zero actionable findings. Independent probes included stdio
+  stop/catalog cases and 40 lifecycle race iterations. Three observations are
+  explicitly non-gating; they do not reopen the completed findings.
+- [Runtime](native-ai-opus-runtime-fd8c356.md): T-R1 closed, no regression from
+  `756072e`; one actionable P3, T-R2, remained. C-R1/C-R2 remain closed.
+- The wire closure at `847ea62` still applies to byte-identical wire/provider/
+  runtime code. Native sources remain identical to tested `756072e`.
+
+Implementation `b2b4f778a1e45e3c4b7cc7385212d391195f5ea0` repairs T-R2:
+
+1. Flush the debounced model edit before removing its custom provider.
+2. A successful removal supersedes failed drafts owned by that provider, including
+   a retired Settings owner, so close/Retry cannot resurrect them.
+3. Retry derives the deletion from current persisted records and deletes only that
+   provider. It does not replay captured peer keys, model lists or definitions.
+4. Remove the deleted provider from pending selections as well as saved records.
+
+Five new permanent real-Settings cases cover both reported triggers, both with
+and without a failed pending save, and a failed removal retried after another
+provider's key was changed. The two failure variants first reproduced a blocked
+close, and the peer-key case first reproduced an old key overwriting the new one.
+The full suite now passes 933 tests / 9 existing skips; typecheck, frontend build
+and diff check pass. Native Mac 608 / Windows 538 evidence remains applicable to
+unchanged sources; see [verification](../NATIVE_AI_VERIFICATION.md).
+
+**Only fresh targeted Opus 5.5 review of T-R2 and these touched save/retry paths
+remains pending.** This ledger does not declare overall migration completion or
+authorize publishing.
