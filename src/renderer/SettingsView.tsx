@@ -1517,11 +1517,11 @@ export default function SettingsView({
             delete selections[id as ProviderId]
           }
         }
-        // A retry owns only unsuperseded keys from its original draft. Preserve
-        // newer provider definitions, models and credentials from current state.
+        // Provider writes own their keys, not the full UI snapshot. Retries also
+        // preserve keys superseded by newer successful saves.
         const replay = origin !== undefined && !scope?.removedProvider
         const stale = (id: string): boolean => replay && hasNewerSettingsSave(id, origin!)
-        if (replay) {
+        if (!scope?.removedProvider) {
           const owned = new Set(Object.keys(patch.providerConfigs ?? {}))
           for (const id of owned) {
             if (!stale(id)) continue

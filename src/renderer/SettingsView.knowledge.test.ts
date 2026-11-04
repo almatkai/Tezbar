@@ -1029,6 +1029,63 @@ describe('Knowledge settings snapshot recovery (real SettingsView)', () => {
       expect(s.config.customProviders?.some((p) => p.id === 'custom:x')).toBe(false)
       expect(s.config.providerConfigs?.['custom:x']).toBeUndefined()
     })
+    it.each(['provider-creation', 'peer-url'] as const)(
+      'preserves providers saved by a retired retry during a live edit after failed %s',
+      async (scenario) => {
+        const s = draftFixture(baseDraftConfig())
+        await mountDraftSettings()
+        s.failQueue.push(true)
+        await createDraftProvider('Zed')
+        expect(await retireDraftSettings()).toBe('Settings save failed')
+        await mountDraftSettings()
+        if (scenario === 'provider-creation') {
+          s.failQueue.push(true)
+          await createDraftProvider('Yak')
+        } else {
+          await failPeerDraft(s)
+        }
+        const { drainSettingsOwners, retryRetiredSettingsOwners } =
+          await import('./settingsLifecycle')
+        await act(async () => {
+          await retryRetiredSettingsOwners()
+          await expect(drainSettingsOwners()).rejects.toThrow('Settings save failed')
+        })
+        expect(s.config.provider).toBe('custom:zed')
+        const tab = [...container.querySelectorAll('button')].find((b) =>
+          b.textContent?.trim().startsWith('Ollama')
+        )!
+        await act(async () => tab.click())
+        await advance(50)
+        const url = [...container.querySelectorAll<HTMLInputElement>('input')].find(
+          (i) =>
+            i.value ===
+            (scenario === 'peer-url' ? 'http://127.0.0.1:22222' : 'http://127.0.0.1:11434')
+        )!
+        await input(url, 'http://127.0.0.1:44444')
+        await advance(500)
+        expect(s.config.customProviders?.some((p) => p.id === 'custom:zed')).toBe(true)
+        expect(s.config.providerConfigs?.['custom:zed']).toBeDefined()
+        expect(s.config.providerModels?.['custom:zed']).toBeDefined()
+        expect(s.config.providerSelectedModels?.['custom:zed']).toBeDefined()
+        expect(s.config.provider).toBe('custom:zed')
+        expect(s.config.taskProviderOverrides?.chat).toBe('custom:zed')
+        expect(s.config.providerConfigs?.ollama?.baseURL).toBe('http://127.0.0.1:44444')
+        if (scenario === 'peer-url') {
+          await act(async () => {
+            await expect(drainSettingsOwners()).resolves.toBeUndefined()
+          })
+        } else {
+          expect(s.config.customProviders?.some((p) => p.id === 'custom:yak')).toBe(false)
+          expect(await retireDraftSettings()).toBe('Settings save failed')
+          expect(await retryDraftSettings()).toEqual({ r: 'ok', d: 'ok' })
+          expect(s.config.customProviders?.some((p) => p.id === 'custom:zed')).toBe(true)
+          expect(s.config.customProviders?.some((p) => p.id === 'custom:yak')).toBe(true)
+          expect(s.config.provider).toBe('custom:yak')
+          expect(s.config.taskProviderOverrides?.chat).toBe('custom:yak')
+        }
+      }
+    )
+
     it('does not let an older retired retry clear a newer live removal failure', async () => {
       const s = draftFixture(baseDraftConfig())
       await mountDraftSettings()
