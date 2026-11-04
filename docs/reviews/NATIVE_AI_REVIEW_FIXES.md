@@ -253,3 +253,23 @@ establishes live provider entitlement, desktop visual quality, or upstream behav
 
 No live credentials/model requests or private-service probes were used to confirm
 these upstream facts. Full runtime closure remains explicitly pending.
+
+## Runtime re-review at a28c564 — pending repairs
+
+Claude Opus 5.5 completed the full runtime audit; the unchanged report is
+`native-ai-opus-runtime-a28c564.md`. Original R1–R20 are closed on their reported
+triggers; runtime closure is still blocked by these six newly found variants:
+
+| ID | Priority | Outstanding behavior |
+| --- | --- | --- |
+| N-R1 | P2 | Send/retry preparation can launch a deleted conversation; native run dispatch does not check the persistent deletion marker. |
+| N-R2 | P3 | A real native Settings window close bypasses the React-unmount autosave flush. |
+| N-R3 | P3 | Bounded shell capture drops the tail and test failure summary. |
+| N-R4 | P3 | A completed project-review request stays queued and repeated reloads scroll Settings. |
+| N-R5 | P3 | Reopened non-vision image retries omit the previously available OCR text. |
+| N-R6 | P3 | An open Settings view can overwrite a model choice made from the chat picker. |
+
+The wire and standards a28c564 review attempts stopped at the Claude account's
+five-hour limit before auditing. They provide no closure verdict. The same Opus
+5.5 model on the second configured Claude instance completed the runtime audit;
+that instance may be used for the remaining same-model reviews after repairs.
