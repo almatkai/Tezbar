@@ -1,8 +1,12 @@
 # Native launcher prototype — local review handoff
 
-This is a runnable, isolated GPUI launcher backed by the current Rust core. It does not
-replace the React/Tauri UI. Opus review, the complete native input/IME matrix and the
-full measured migration decision remain open. No push, PR, merge, release or Actions run.
+This is a runnable, isolated GPUI launcher backed by the current Rust core. The
+[2026-11-05 measured decision](../../docs/performance/native-launcher-matched-7434ba1-20261105.md)
+records 20/20 valid background-idle runs and Windows absolute B/C observations. The
+original strict CPU gate failed; parent review and complete input/IME/accessibility QA
+remain open. The final measured artifact source is 7434ba1, harness 0c00d26. Historical
+handoff sections below retain earlier snapshots; use the report artifact manifest for
+these measurements. No push, PR, merge, release or Actions run.
 
 ## Build and run on this Mac
 
