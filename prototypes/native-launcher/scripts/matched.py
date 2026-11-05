@@ -20,7 +20,7 @@ for i,(mode,condition) in enumerate(order):
     if mode=='A':subprocess.run([py,str(scripts/'stage-a.py'),'--local-preview','--root',str(root),'--binary',str(a.a_binary.resolve())],check=True)
     else:subprocess.run([py,str(scripts/'stage-resources.py'),str(root),'--from-resources',str(resources)],check=True)
     binary=a.a_binary.resolve() if mode=='A' else a.b_binary.resolve()
-    if mode=='B':
+    if mode in ['B','C']:
         subprocess.run([str(scripts/'bundle-macos.sh'),'--local-preview',str(root),'--binary',str(a.b_binary.resolve())],check=True)
         binary=root/'Tezbar Launcher Prototype.app/Contents/MacOS/tezbar-launcher-prototype'
         assert native_version(binary,source)==version

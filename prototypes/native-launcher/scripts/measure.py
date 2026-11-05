@@ -67,22 +67,33 @@ class Native:
         self.root=root;self.binary=binary;self.resources=resources;self.headless=headless;self.theme=theme;self.process=None;self.control=Control(root)
     def launch(self):
         token=self.root/'control-token';token.write_text(secrets.token_hex(32));token.chmod(0o600)
-        self.stdout=(self.root/'stdout.log').open('w');self.stderr=(self.root/'stderr.log').open('w')
         self.started=time.monotonic()
-        self.process=subprocess.Popen([str(self.binary),'--profile',str(self.root),'--resources',str(self.resources),'--control-token-file',str(token),'--theme',self.theme]+(['--headless'] if self.headless else []),stdout=self.stdout,stderr=self.stderr)
-        self.pid=self.process.pid
+        app=self.binary.parent.parent.parent
+        if app.suffix!='.app':raise RuntimeError('macOS measurements require a staged bundle for independent XPC responsibility')
+        subprocess.run(['open','-n','-g','-o',str(self.root/'stdout.log'),'--stderr',str(self.root/'stderr.log'),str(app),'--args','--profile',str(self.root),'--resources',str(self.resources),'--control-token-file',str(token),'--theme',self.theme]+(['--headless'] if self.headless else []),check=True)
+        def find():
+            for line in subprocess.check_output(['ps','-axo','pid=,comm='],text=True).splitlines():
+                fields=line.strip().split(None,1)
+                if len(fields)==2 and fields[1]==str(self.binary):self.pid=int(fields[0]);return True
+            return False
+        wait(find,60)
         wait(lambda:(self.root/'control.sock').exists() or (self.root/'control-pipe.txt').exists(),60)
         wait(lambda:self.command('status').get('launcher',{}).get('status')=='ready')
         self.ready_ms=(time.monotonic()-self.started)*1000
     def command(self,op,**fields):return self.control.command(op,**fields)
     def close(self):
-        if self.process is not None:
+        if getattr(self,'pid',None):
             try:
-                if self.process.poll() is None:self.command('quit')
+                self.command('quit')
+            except (OSError,RuntimeError):pass
             finally:
-                try:self.process.wait(15)
-                except subprocess.TimeoutExpired:self.process.terminate();self.process.wait(10)
-                self.stdout.close();self.stderr.close()
+                try:wait(lambda:not any(p['pid']==self.pid for p in processes(self.pid)),15)
+                except TimeoutError:
+                    expected=str(self.binary)
+                    actual=subprocess.run(['ps','-p',str(self.pid),'-o','comm='],capture_output=True,text=True).stdout.strip()
+                    if actual!=expected:raise RuntimeError('native process identity changed')
+                    import signal;os.kill(self.pid,signal.SIGTERM)
+                    wait(lambda:not any(p['pid']==self.pid for p in processes(self.pid)),10)
         scrub_fixture_clipboard(self.root)
 
 def settled(d,minimum=0):
@@ -144,6 +155,8 @@ def main():
         stopping.set();thread.join();result['startup_samples']=startup
         if a.mode=='A':d.wait(lambda:d.request('core:launcher:status')['status']=='ready',120)
         result.update(pid=d.pid,ready_ms=d.ready_ms,indexed_counts=counts(root))
+        host=next(p for p in processes(d.pid) if p['pid']==d.pid)
+        if host['responsible']!=d.pid:raise RuntimeError('Host must own its responsibility domain; XPC attribution would be incomplete')
         if a.mode in ['A','B']:
             result['pre_sample_steps']=['show']
             d.command('show')

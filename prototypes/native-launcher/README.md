@@ -289,3 +289,9 @@ hide acknowledgement precedes WindowServer visibility. Fresh-reply comparisons u
 the same six queries starting at two characters in both apps (one-character native
 result timing is omitted explicitly). Both variants now reach the requested OS
 visibility state before warmup sampling. Failed smoke outputs remain preserved.
+
+All macOS A/B/C measurement processes launch through LaunchServices from their
+separate temporary bundles. Directly spawning B from the harness made the host
+inherit T3's responsibility domain, which could omit reparented XPC helpers. The
+harness now refuses a run unless the root PID owns its responsibility domain;
+C is bundled as well. Earlier direct-spawn smokes are functional evidence only.
