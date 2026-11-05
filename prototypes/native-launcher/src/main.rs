@@ -129,6 +129,14 @@ fn main() -> anyhow::Result<()> {
                 #[cfg(feature = "bench-control")]
                 _server: server,
             });
+            #[cfg(feature = "bench-control")]
+            cx.on_app_quit(|cx| {
+                if let Some(server) = &cx.global::<RuntimeOwner>()._server {
+                    server.remove_endpoint();
+                }
+                async {}
+            })
+            .detach();
             cx.bind_keys([
                 KeyBinding::new("backspace", Backspace, Some("TextInput")),
                 KeyBinding::new("delete", Delete, Some("TextInput")),

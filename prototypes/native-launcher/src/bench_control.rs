@@ -16,12 +16,21 @@ pub struct Server {
 impl Drop for Server {
     fn drop(&mut self) {
         self.task.abort();
-        if let Some(p) = &self.socket {
-            let _ = std::fs::remove_file(p);
-        }
+        self.remove_endpoint();
     }
 }
 impl Server {
+    // GPUI's native process exit does not drop App globals. Remove the endpoint
+    // explicitly from its quit hook so a normal relaunch can reuse this profile.
+    pub fn remove_endpoint(&self) {
+        if let Some(path) = &self.socket {
+            if let Err(error) = std::fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!("prototype control endpoint cleanup: {error}");
+                }
+            }
+        }
+    }
     pub fn start(root: PathBuf, token: String, tx: mpsc::Sender<Command>) -> Result<Self, String> {
         if token.len() < 32 || !token.is_ascii() {
             return Err("control token must contain at least 32 ASCII characters".into());

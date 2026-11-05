@@ -73,16 +73,17 @@ Evidence is ignored under `evidence/`; old reports/data under `docs/performance`
 | M0 official GPUI release, CLT, runtime shaders + font-kit | Built and real native text window observed via CUA; `m0-build.log` |
 | Main default backend tests, Rust 1.85 | 609 passed, 9 existing ignored; `default-test-bounded.log` |
 | Facade/full backend tests, Rust 1.85 | 611 passed, 9 existing ignored; `facade-test-handoff.log` |
-| Rust 1.85 checks, default and facade | Passed; `msrv-default.log`, `msrv-facade.log` |
-| Prototype session/control tests | 5 passed, no ignored; `prototype-test-handoff.log` |
+| Rust 1.85 checks, default and facade | Passed; `msrv-default-handoff.log`, `msrv-facade-handoff.log` |
+| Prototype session/control tests | 7 passed, no ignored; `prototype-test-final.log` (6 session tests plus Unix authentication) |
+| Prototype release without controls | Built; `prototype-default-build.log`, `prototype-default-version.json` confirms `bench_control:false` |
 | Main `pnpm typecheck` | Passed; `typecheck.log` |
 | Main `pnpm test` | 744 passed, 7 existing skipped; `pnpm-test.log`; no new skips |
 | Main frontend artifact for A | Built from unchanged renderer; `a-frontend-build.log` |
 | Instrumented A release | Built locally with `desktop-bench,tauri/custom-protocol`; `a-build-404429e.log` |
-| A/B/C functional smokes | See `mac-A5-smoke.json`, `mac-B2-A-resources-smoke.json`, `mac-C-smoke.json` |
+| A/B/C functional smokes | Initial matched-resource paths: `mac-A5-smoke.json`, `mac-B2-A-resources-smoke.json`, `mac-C-smoke.json`; final code B/C: `mac-handoff-B-smoke.json`, `mac-handoff-C-smoke.json` |
 | Exactly-once activation | B synthetic `add-note`: one `click_events` record; no clipboard write |
-| Representative CUA screenshots | `mac-dark-results.png`, `mac-light-results.png` (source 404429e) |
-| Installed beta | PID/path/hash recorded; unchanged hash and no owned survivors after successful smokes |
+| Representative CUA screenshots | `mac-dark-handoff-7617803.png` (current UI snapshot), `mac-light-results.png` (source 404429e); `mac-dark-core-failed-fixed.png` for startup failure |
+| Installed beta | Path/hash recorded; unchanged binary hash and no owned prototype survivors after successful smokes. Initial installed PID 6376 later became 74254 during this long task; PID continuity is **not** claimed. No installed-app stop/relaunch/write was issued. |
 
 The default test runner initially hit 2-second subprocess deadlines under high parallelism.
 The single failing subprocess test passed alone, then the entire suite passed with four
@@ -100,11 +101,18 @@ a measurement confound; do not claim the complete dependency graphs are identica
 
 ## Measurement handoff
 
-Successful smokes used source `404429e706e9fa22eb677f205655d6ce3573fea4`, fixed seed 65001,
+Initial A/B/C smokes used source `404429e706e9fa22eb677f205655d6ce3573fea4`, fixed seed 65001,
 20,000 generated files, 50 notes, 50 fixture snippets and 20 quick links. A and B had the
 same observed database counts: 235 applications, 14,997 files, 50 notes, 79 snippets
 (including built-ins), 20 quick links, 10 commands and 41 native commands. Record actual
 counts on every run rather than assuming all generated files are eligible for indexing.
+
+The B/C smoke binaries at the UI handoff snapshot are clean source `76178030aacc7a8c18970a99f0e2a042d8d11018`.
+The later explicit control-endpoint quit cleanup is verified by a same-profile relaunch
+smoke. `evidence/HANDOFF.json` gives each final artifact’s exact source and hash. The
+B at that snapshot repeats safe add-note activation and records exactly one usage event. It uses
+locally staged read-only resources (`matched_A:false`), not a newly built matched A.
+The earlier B smoke directly used A’s read-only resources.
 
 The initial A smoke used Rust 1.85 and B/C used 1.98.1; this compiler difference is
 another confound. Use 1.98.1 for **both** builds in the final measurement, while
@@ -162,6 +170,63 @@ prototype_template="$(/opt/homebrew/bin/python3 prototypes/native-launcher/scrip
 Use fresh output directories. The complete matrix takes over an hour; review the code
 and representative UI before spending that time. Preserve every raw run, failure and
 per-process map. The old reference artifacts stay immutable.
+
+## Windows handoff
+
+The authorized host is `User@100.77.254.64` (`DESKTOP-OB83S8J`). T3 environment links
+were unavailable; SSH was the authorized fallback. Its logged-in console session was
+Active, but no remote CUA surface was available. No interactive DirectX/IME/focus result
+is claimed. `C:\Users\User\Desktop\Tezbar` was never used or edited.
+
+Task staging (all remote build/run paths below are within this directory):
+
+```text
+C:\Users\User\AppData\Local\Temp\tezbar-native-launcher-91e690194efa440ca6c7a3f874856a32
+```
+
+Rust 1.98.1 was installed user-level without changing the default. The existing Visual
+Studio environment and SDK 10.0.22621 `fxc.exe`/`rc.exe` were used. The verified pre-cleanup git
+archive `source-7617803.tar.gz` has SHA-256
+`d99acb575bd55c70028cc73ae1ba462c74a854a98aee2619522e219276ddab81`;
+`source-7617803-manifest.json` verifies all 1,683 tracked source files. The private
+`cargo-home` and `target-1-98-1` are task-owned. No global SDK was installed.
+
+Final source archives and source-file hash manifests are retained in staging and listed
+in `evidence/HANDOFF.json`. The task build script points at that final archive.
+
+The Windows default/facade backend checks passed on **both 1.90 and 1.98.1**, and the two
+facade integration tests passed on 1.98.1 (no ignored tests). See
+`evidence/windows-backend-repaired-host.log`. Those checks used source 79821f2; the
+production seam has no changes after that snapshot.
+
+Source 7617803 debug/release and all six session tests passed, with no ignored tests
+(`windows-build-handoff2-host.log`). Earlier source 79821f2 headless C passed, including rejection of an
+unauthenticated quit, 80 results for `doc`, 14,997 indexed files, all fixture stores and
+exit 0. Three-second PrivateUsage/WorkingSet/CPU samples are **collector smokes**, without
+stabilization or a matched A. Cached generated SQLite outputs needed targeted task-cache
+invalidation for the final rebuild; retained failure logs are not presented as successes.
+
+From SSH, rerun the exact verified staged build (this script verifies the archive before
+writing changed source files; logs stay in staging):
+
+```powershell
+$prototypeStage = 'C:\Users\User\AppData\Local\Temp\tezbar-native-launcher-91e690194efa440ca6c7a3f874856a32'
+powershell -NoProfile -ExecutionPolicy Bypass -File "$prototypeStage\windows-build-handoff.ps1"
+& "$prototypeStage\target-1-98-1\release\tezbar-launcher-prototype.exe" --version
+```
+
+For a new isolated headless run of that artifact (fixture generation, named-pipe auth
+negative check, ready/query, metrics, quit and marked clipboard-store cleanup):
+
+```powershell
+& 'C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe' "$prototypeStage\windows-headless-smoke.py"
+```
+
+That task-owned helper creates `fixture-C-<binary source SHA>` and refuses an existing
+fixture; keep the previous raw run and choose a fresh root before repeating the same SHA.
+For manual controls use the source’s `scripts/control.py <fixture path> status|query|quit`.
+The task-owned metrics collector is `scripts/windows-metrics.ps1 -RootPid <pid> -Seconds
+60 -Output <tasktemp file>`; no exposed TCP server or arbitrary code-evaluation hook.
 
 ## Remaining review and platform QA
 
