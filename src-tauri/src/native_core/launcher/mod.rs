@@ -131,7 +131,7 @@ impl LauncherCore {
         }
         self.inner.db.call(|_| Ok(Value::Null)).await?;
         self.inner.terminal.initialize().await?;
-        self.inner.clipboard.start(self.inner.ctx.app.is_some());
+        self.inner.clipboard.start(self.inner.ctx.runs_desktop_services());
         let this = self.clone();
         let refresh = tokio::spawn(async move {
             let _ = this
@@ -157,7 +157,7 @@ impl LauncherCore {
             .lock()
             .map_err(|e| e.to_string())?
             .push(refresh);
-        if self.inner.ctx.app.is_some() {
+        if self.inner.ctx.runs_desktop_services() {
             let this = self.clone();
             let scan = tokio::spawn(async move {
                 tokio::select! {_=this.inner.wake.notified()=>return,_=tokio::time::sleep(std::time::Duration::from_secs(5))=>{}}
@@ -351,7 +351,7 @@ impl LauncherCore {
             }
             Err(e) => log::debug!("Extension command descriptors: {e}"),
         };
-        if apps && self.inner.ctx.app.is_some() {
+        if apps && self.inner.ctx.runs_desktop_services() {
             let applications = providers::applications(&self.inner.ctx).await?;
             let applications = applications
                 .as_array()
@@ -774,7 +774,7 @@ impl LauncherCore {
                 let name = string(action, "appName")?;
                 let mut request = action.clone();
                 if self.inner.apps.read().await.is_empty()
-                    && ctx.app.is_some()
+                    && ctx.runs_desktop_services()
                     && request["appPath"].as_str().map_or(true, |p| p.is_empty())
                 {
                     let discovered = providers::applications(ctx).await?;

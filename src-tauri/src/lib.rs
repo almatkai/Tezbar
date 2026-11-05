@@ -3,6 +3,8 @@ mod backend_health;
 #[cfg(feature = "desktop-bench")]
 mod desktop_bench;
 mod native_core;
+#[cfg(feature = "native-launcher-facade")]
+pub mod launcher_facade;
 mod native_v2_cli;
 pub use native_v2_cli::dispatch as dispatch_native_v2_cli;
 mod native_input;

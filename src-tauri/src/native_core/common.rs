@@ -29,6 +29,7 @@ pub struct CoreContext {
     pub paths: CorePaths,
     pub config: Arc<ConfigStore>,
     pub app: Option<AppHandle>,
+    desktop_services: bool,
     events: EventSink,
     router: Arc<OnceLock<CoreRouter>>,
     foreground_until: Arc<AtomicU64>,
@@ -40,6 +41,7 @@ impl CoreContext {
         Self {
             config: Arc::new(ConfigStore::new(paths.config_dir.join("config.json"))),
             paths,
+            desktop_services: app.is_some(),
             app,
             events: Arc::new(move |channel, payload| {
                 if let Some(app) = &event_app {
@@ -51,6 +53,16 @@ impl CoreContext {
             router: Arc::new(OnceLock::new()),
             foreground_until: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    pub fn runs_desktop_services(&self) -> bool {
+        self.desktop_services
+    }
+
+    #[cfg(feature = "native-launcher-facade")]
+    pub(crate) fn with_headless_desktop_services(mut self) -> Self {
+        self.desktop_services = true;
+        self
     }
 
     #[cfg(test)]
@@ -222,6 +234,26 @@ pub fn write_json_atomic(path: &Path, value: &Value) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn headless_defaults_do_not_enable_desktop_services() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = CorePaths {
+            data_dir: dir.path().into(),
+            config_dir: dir.path().into(),
+            resource_dir: dir.path().into(),
+            temp_dir: dir.path().into(),
+            home_dir: dir.path().into(),
+        };
+        let ctx = CoreContext::new(paths, None);
+        assert!(!ctx.runs_desktop_services());
+        #[cfg(feature = "native-launcher-facade")]
+        {
+            let ctx = ctx.with_headless_desktop_services();
+            assert!(ctx.app.is_none());
+            assert!(ctx.runs_desktop_services());
+        }
+    }
 
     #[test]
     fn config_cache_detects_external_changes() {
