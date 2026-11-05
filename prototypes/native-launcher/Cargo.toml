@@ -1,0 +1,20 @@
+[package]
+name = "tezbar-launcher-prototype"
+version = "0.0.0"
+edition = "2024"
+publish = false
+rust-version = "1.98.1"
+
+[workspace]
+
+[features]
+bench-control = []
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35", default-features = false, features = ["font-kit", "runtime_shaders"] }
+gpui_tokio = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+[patch.crates-io]
+async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }

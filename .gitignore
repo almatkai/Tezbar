@@ -66,3 +66,7 @@ AGENT.md
 .gemini/
 CLAUDE.md
 .claude/
+
+# Isolated native launcher prototype build and measurement evidence
+/prototypes/native-launcher/target/
+/prototypes/native-launcher/evidence/
