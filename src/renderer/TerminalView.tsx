@@ -9,6 +9,7 @@ import {
   terminalSessionShortcutIndex,
 } from './terminalSessionSelection'
 import { terminalOutputAfterSnapshot } from './terminalSessionHistory'
+import { observeTerminalFit } from './terminalFit'
 import {
   commandFromTerminalLine,
   formatTerminalSessionName,
@@ -368,8 +369,6 @@ export default function TerminalView({
       attributeFilter: ['data-theme'],
     })
 
-    let disposed = false
-    let resizeFrame = 0
     let wheelZoomAccumulator = 0
 
     terminal.attachCustomKeyEventHandler((event) => {
@@ -385,13 +384,6 @@ export default function TerminalView({
       }
       return true
     })
-
-    const scheduleFit = (): void => {
-      cancelAnimationFrame(resizeFrame)
-      resizeFrame = requestAnimationFrame(() => {
-        if (!disposed) fit()
-      })
-    }
 
     const offData = window.tezbar.onTerminalData((event: TerminalDataEvent) => {
       if (
@@ -512,25 +504,21 @@ export default function TerminalView({
       wheelZoomAccumulator = 0
     }
 
-    const resizeObserver = new ResizeObserver(scheduleFit)
-    resizeObserver.observe(host)
+    const stopFitting = observeTerminalFit(host, terminal, fitAddon, fit)
     window.addEventListener('keydown', onWindowKeyDown, true)
     host.addEventListener('wheel', onZoomWheel, { passive: false })
 
-    scheduleFit()
     setTerminalReady(true)
     terminal.focus()
 
     return () => {
-      disposed = true
       const attachedSessionId = lastAttachedSessionIdRef.current
       if (attachedSessionId) void window.tezbar.terminalDetach(attachedSessionId)
       lastAttachedSessionIdRef.current = null
       activeSessionIdRef.current = null
       window.removeEventListener('keydown', onWindowKeyDown, true)
       host.removeEventListener('wheel', onZoomWheel)
-      cancelAnimationFrame(resizeFrame)
-      resizeObserver.disconnect()
+      stopFitting()
       themeObserver.disconnect()
       inputDisposable.dispose()
       offData()
