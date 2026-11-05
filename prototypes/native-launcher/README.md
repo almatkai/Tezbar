@@ -295,3 +295,17 @@ separate temporary bundles. Directly spawning B from the harness made the host
 inherit T3's responsibility domain, which could omit reparented XPC helpers. The
 harness now refuses a run unless the root PID owns its responsibility domain;
 C is bundled as well. Earlier direct-spawn smokes are functional evidence only.
+
+## Final measurement notes after Opus recheck 4da6ff8
+
+The A build command now rebuilds the frontend itself and receipts all dist hashes
+before Cargo compiles it; staging refuses changed frontend output. Rebuild A/B at
+one clean source commit before the final matrix. Receipt tests include stale frontend
+and native --version failures. A latency rows now retain the fixed query for grouping.
+Both modes record input and actual signed/measured executable hashes separately.
+
+Do not compare ready_ms as startup latency: A waits for bridge/renderer readiness,
+whereas B waits for the scan. Opening frame/OS observations have separate labels.
+Character typing still sends B's first character through Rust while A filters locally;
+that extra work remains included and is a declared latency confound, not a pure engine
+comparison. A visible preparation waits two frames; query work settles during warmup.

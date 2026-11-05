@@ -58,8 +58,11 @@ class Baseline(Desktop):
             else:
                 expected=str(self.root/'Tezbar Performance.app/Contents/MacOS/tezbar')
                 actual=subprocess.run(['ps','-p',str(self.pid),'-o','comm='],capture_output=True,text=True).stdout.strip()
-                if actual!=expected:raise RuntimeError('baseline process identity changed')
-                import signal;os.kill(self.pid,signal.SIGTERM)
+                if actual and actual!=expected:raise RuntimeError('baseline process identity changed')
+                if actual:
+                    import signal
+                    try:os.kill(self.pid,signal.SIGTERM)
+                    except ProcessLookupError:pass
                 wait(lambda:not any(p['pid']==self.pid for p in processes(self.pid)),10)
         scrub_fixture_clipboard(self.root)
 class Native:
@@ -91,8 +94,11 @@ class Native:
                 except TimeoutError:
                     expected=str(self.binary)
                     actual=subprocess.run(['ps','-p',str(self.pid),'-o','comm='],capture_output=True,text=True).stdout.strip()
-                    if actual!=expected:raise RuntimeError('native process identity changed')
-                    import signal;os.kill(self.pid,signal.SIGTERM)
+                    if actual and actual!=expected:raise RuntimeError('native process identity changed')
+                    if actual:
+                        import signal
+                        try:os.kill(self.pid,signal.SIGTERM)
+                        except ProcessLookupError:pass
                     wait(lambda:not any(p['pid']==self.pid for p in processes(self.pid)),10)
         scrub_fixture_clipboard(self.root)
 
@@ -140,7 +146,7 @@ def main():
     d=Baseline(root) if a.mode=='A' else Native(root,binary,a.resources.resolve(),a.mode=='C',a.theme)
     source=(root/'.tezbar-native-launcher-prototype').read_text()
     version=baseline_version(binary,source) if a.mode=='A' else native_version(binary,source)
-    raw=[];result=dict(mode=a.mode,condition=a.condition,smoke=a.smoke,binary_version=version,source_sha=version['source'],harness_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),resources_manifest=json.loads((root/'resource-manifest.json').read_text()) if (root/'resource-manifest.json').exists() else None,latency_boundary='synthetic committed input -> content render plus following frame callback; not photon time',runtime_shaders=True if a.mode=='B' else None)
+    raw=[];result=dict(mode=a.mode,condition=a.condition,smoke=a.smoke,binary_version=version,source_sha=version['source'],harness_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),input_binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),resources_manifest=json.loads((root/'resource-manifest.json').read_text()) if (root/'resource-manifest.json').exists() else None,latency_boundary='synthetic committed input -> content render plus following frame callback; not photon time',runtime_shaders=True if a.mode=='B' else None)
     installed=pathlib.Path('/Applications/Tezbar.app/Contents/MacOS/tezbar');before=hashlib.sha256(installed.read_bytes()).hexdigest()
     startup=[];stopping=threading.Event()
     def startup_sampler():
@@ -154,7 +160,8 @@ def main():
         else:d.launch()
         stopping.set();thread.join();result['startup_samples']=startup
         if a.mode=='A':d.wait(lambda:d.request('core:launcher:status')['status']=='ready',120)
-        result.update(pid=d.pid,ready_ms=d.ready_ms,indexed_counts=counts(root))
+        measured=(root/'Tezbar Performance.app/Contents/MacOS/tezbar') if a.mode=='A' else binary
+        result.update(pid=d.pid,ready_ms=d.ready_ms,indexed_counts=counts(root),measured_binary_sha256=hashlib.sha256(measured.read_bytes()).hexdigest())
         host=next(p for p in processes(d.pid) if p['pid']==d.pid)
         if host['responsible']!=d.pid:raise RuntimeError('Host must own its responsibility domain; XPC attribution would be incomplete')
         if a.mode in ['A','B']:
@@ -163,7 +170,7 @@ def main():
             if a.condition=='retained':
                 result['open_timings']=open_timings(d)
                 result['pre_sample_steps']+=['hide','show','opening frame receipt','fixed query workload']
-            elif a.condition=='visible':result['pre_sample_steps']+=['query doc','results committed']
+            elif a.condition=='visible':result['pre_sample_steps']+=['query doc','results committed' if a.mode=='B' else 'two animation frames; search settles during warmup']
             else:result['pre_sample_steps']+=['hide']
         if a.mode=='B':
             if a.condition=='retained' or a.smoke:result['latencies']=latency(d,1 if a.smoke else 10)
@@ -193,7 +200,7 @@ def main():
                             d.js("window.__inputBench.input('','');await new Promise(r=>setTimeout(r,30));while(window.__inputBench.active)await new Promise(r=>setTimeout(r,1));return true")
                             value=module.burst(d,[query] if style=='burst' else [query[:i] for i in range(1,len(query)+1)],70)
                             # Do not retain action envelopes, titles or incidental user input.
-                            observations.append(dict(rep=rep,warmup=rep==0,style=style,**{k:value[k] for k in ['inputToTwoFramesMs','inputToCorrectDomObservedMs','ipcMs','obsoleteCompleted','trustedInputEvents']}))
+                            observations.append(dict(rep=rep,warmup=rep==0,query=query,style=style,**{k:value[k] for k in ['inputToTwoFramesMs','inputToCorrectDomObservedMs','ipcMs','obsoleteCompleted','trustedInputEvents']}))
                 result['latencies_tauri']=observations;d.command('hide')
             # Existing, preserved harness provides the app-internal Tauri latency
             # instrumentation. Run responsiveness-desktop.py separately for A;
@@ -201,7 +208,7 @@ def main():
         if a.mode!='C':
             from window_visibility import main_on_screen
             wait(lambda:bool(main_on_screen(d.pid))==(a.condition=='visible'),5)
-        result['latency_query_note']='Fresh-native-reply timing starts at two characters: A deliberately filters one-character input locally. One-character results/IPC timings are not compared.'
+        result['latency_query_note']='Fresh-native-reply timing starts at two characters: A deliberately filters one-character input locally. One-character results/IPC timings are not compared. In character typing B still searches the first character while A filters locally; that extra work is included in B and can affect latency.'
         started=time.monotonic();warmup=2 if a.smoke else 120
         def sample(phase):
             if a.mode!='C':
