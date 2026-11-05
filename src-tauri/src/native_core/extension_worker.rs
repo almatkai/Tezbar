@@ -133,11 +133,6 @@ impl ExtensionWorker {
     async fn launch(&self) -> Result<Process, String> {
         self.ctx
             .emit("extension-worker-status", json!({"phase":"starting"}));
-        let data = self.ctx.paths.data_dir.clone();
-        // Runtime discovery/download happens only in this extension-only path.
-        let bun = tokio::task::spawn_blocking(move || crate::locate_bun(&data))
-            .await
-            .map_err(|e| e.to_string())??;
         let directory = if cfg!(debug_assertions) {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../dist-backend")
         } else {
@@ -150,6 +145,20 @@ impl ExtensionWorker {
                 entry.display()
             ));
         }
+        let data = self.ctx.paths.data_dir.clone();
+        let context = self.ctx.clone();
+        // JavaScript extensions are the only feature that needs Bun. Prefer a
+        // local installation, otherwise provision a pinned copy in app data.
+        let bun = tokio::task::spawn_blocking(move || {
+            crate::bun_runtime::ensure_bun(&data, &|phase, percent| {
+                context.emit(
+                    "extension-worker-status",
+                    json!({"phase": phase, "percent": percent}),
+                );
+            })
+        })
+        .await
+        .map_err(|e| e.to_string())??;
         let mut command = tokio::process::Command::new(&bun);
         command
             .arg(&entry)

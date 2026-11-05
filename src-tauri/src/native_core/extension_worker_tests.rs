@@ -81,7 +81,7 @@ async fn real_rust_host_bun_roundtrip_and_termination() {
         .join("bun")
         .join(if cfg!(windows) { "bun.exe" } else { "bun" });
     std::fs::create_dir_all(cached.parent().unwrap()).unwrap();
-    // Cache lookup precedes profile/PATH discovery, so production launch cannot download.
+    // Stage the runtime in the app cache so this test never downloads one.
     if std::fs::hard_link(&runtime, &cached).is_err() {
         std::fs::copy(&runtime, &cached).unwrap();
     }
@@ -89,7 +89,7 @@ async fn real_rust_host_bun_roundtrip_and_termination() {
         cached.is_file(),
         "staged runtime must exist before production discovery"
     );
-    assert_eq!(crate::locate_bun(&paths.data_dir).unwrap(), cached);
+    assert_eq!(crate::bun_runtime::locate_bun(&paths.data_dir).unwrap(), cached);
     let extension = paths.data_dir.join("extensions/protocol-fixture");
     std::fs::create_dir_all(extension.join(".sc-build")).unwrap();
     std::fs::write(extension.join("package.json"), json!({

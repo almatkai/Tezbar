@@ -1,5 +1,6 @@
 // src-tauri/src/lib.rs
 mod backend_health;
+mod bun_runtime;
 #[cfg(feature = "desktop-bench")]
 mod desktop_bench;
 mod native_core;
@@ -42,7 +43,6 @@ use std::collections::BTreeMap;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -496,44 +496,9 @@ fn openray_config_path() -> Option<PathBuf> {
         .map(|home| PathBuf::from(home).join(".openray").join("config.json"))
 }
 
-fn bun_executable_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "bun.exe"
-    } else {
-        "bun"
-    }
-}
-
 static PROFILE_CONFIG_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 static PROFILE_STORE: std::sync::OnceLock<Arc<native_core::common::ConfigStore>> =
     std::sync::OnceLock::new();
-
-fn bun_in_user_profile() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .map(|home| home.join(".bun").join("bin").join(bun_executable_name()))
-}
-
-fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
-    let cached = app_local_data.join("bun").join(bun_executable_name());
-    if cached.is_file() {
-        return Ok(cached);
-    }
-    if let Some(user_bun) = bun_in_user_profile().filter(|path| path.is_file()) {
-        return Ok(user_bun);
-    }
-    if Command::new(bun_executable_name())
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-    {
-        return Ok(PathBuf::from(bun_executable_name()));
-    }
-    Err("Bun runtime is not installed on this system. Tezbar core features and Native V2 extensions run natively in Rust without Bun.".to_string())
-}
 
 fn read_openray_config() -> serde_json::Value {
     if let Some(config) = PROFILE_STORE.get() {
@@ -3268,9 +3233,9 @@ mod backend_timeout_tests {
         let _ = std::fs::remove_dir_all(&temp);
         let fake_bun_dir = temp.join("bun");
         let _ = std::fs::create_dir_all(&fake_bun_dir);
-        let fake_bin = fake_bun_dir.join(bun_executable_name());
+        let fake_bin = fake_bun_dir.join(bun_runtime::executable_name());
         let _ = std::fs::write(&fake_bin, b"fake");
-        assert_eq!(locate_bun(&temp).unwrap(), fake_bin);
+        assert_eq!(bun_runtime::locate_bun(&temp).unwrap(), fake_bin);
         let _ = std::fs::remove_dir_all(&temp);
     }
 
