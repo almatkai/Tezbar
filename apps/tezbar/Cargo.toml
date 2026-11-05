@@ -19,7 +19,7 @@ bench-control = []
 tezbar-core = { path = "../../crates/tezbar-core" }
 tezbar-host = { path = "../../crates/tezbar-host" }
 tezbar-update = { path = "../../crates/tezbar-update" }
-tezbar-ui-model = { path = "../../crates/tezbar-ui-model" }
+tezbar-ui-model = { path = "../../crates/tezbar-ui-model", features = ["launcher-models", "agent-models"] }
 tezbar-ui = { path = "../../crates/tezbar-ui" }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }

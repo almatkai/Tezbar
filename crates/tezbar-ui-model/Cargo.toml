@@ -8,7 +8,7 @@ publish = false
 
 [features]
 default = []
-launcher-models = ["tezbar-core/native-ui-instant"]
+launcher-models = ["tezbar-core/native-ui-instant", "dep:html5ever"]
 agent-models = []
 
 [dependencies]
@@ -22,6 +22,7 @@ regex = "1"
 url = "2"
 base64 = "0.22"
 unicode-normalization = "0.1"
+html5ever = { version = "=0.29.1", optional = true }
 
 [dev-dependencies]
 tempfile = "3.27"

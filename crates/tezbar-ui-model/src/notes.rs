@@ -14,25 +14,41 @@ fn escape(s: &str) -> String {
         .replace('\'', "&#039;")
 }
 fn decode(s: &str) -> String {
-    Regex::new(r"&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos|nbsp);")
-        .unwrap()
-        .replace_all(s, |c: &regex::Captures| match &c[1] {
-            "amp" => "&".into(),
-            "lt" => "<".into(),
-            "gt" => ">".into(),
-            "quot" => "\"".into(),
-            "apos" => "'".into(),
-            "nbsp" => "\u{a0}".into(),
-            n => {
-                let n = if let Some(h) = n.strip_prefix("#x") {
-                    u32::from_str_radix(h, 16).ok()
-                } else {
-                    n[1..].parse().ok()
-                };
-                n.and_then(char::from_u32).unwrap_or('\u{fffd}').to_string()
+    if !s.bytes().any(|b| matches!(b, b'&' | b'\r' | 0)) {
+        return s.to_owned();
+    }
+    use html5ever::tokenizer::{
+        states, BufferQueue, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
+    };
+    use std::cell::RefCell;
+    struct Text(RefCell<String>);
+    impl TokenSink for Text {
+        type Handle = ();
+        fn process_token(&self, token: Token, _: u64) -> TokenSinkResult<()> {
+            match token {
+                Token::CharacterTokens(text) => self.0.borrow_mut().push_str(&text),
+                Token::NullCharacterToken => self.0.borrow_mut().push('\u{fffd}'),
+                _ => {}
             }
-        })
-        .into_owned()
+            TokenSinkResult::Continue
+        }
+    }
+    // The old editor used a textarea's HTML fragment decoder. RCDATA with no
+    // matching end tag gives the same one-pass character references without
+    // constructing a DOM, treating markup as UI, or interpreting any script.
+    let tokenizer = Tokenizer::new(
+        Text(RefCell::new(String::with_capacity(s.len()))),
+        TokenizerOpts {
+            initial_state: Some(states::RawData(states::Rcdata)),
+            discard_bom: false,
+            ..Default::default()
+        },
+    );
+    let input = BufferQueue::default();
+    input.push_back(s.into());
+    let _ = tokenizer.feed(&input);
+    tokenizer.end();
+    tokenizer.sink.0.into_inner()
 }
 fn strip_markdown(s: &str) -> String {
     let mut s = s.to_string();
@@ -58,7 +74,7 @@ pub fn sanitize_html(s: &str) -> Result<String, String> {
     let s = Regex::new(r"(?is)<script.*?</script>|<style.*?</style>")
         .unwrap()
         .replace_all(s, "");
-    let s = Regex::new(r"(?i)<(/?)([a-z0-9-]+)(?:\s[^>]*)?>")
+    let s = Regex::new(r"(?i)<(/?)([a-z0-9-]+)(?:\s[^>]*)?\s*/?>")
         .unwrap()
         .replace_all(&s, |c: &regex::Captures| {
             let n = c[2].to_lowercase();
@@ -1076,5 +1092,31 @@ mod partial_style_test {
             d.html(),
             "<div><strong>a</strong>bc<strong>d</strong></div>"
         );
+    }
+}
+
+#[cfg(test)]
+mod legacy_html_compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn self_closing_legacy_breaks_remain_line_breaks() {
+        let document = Document::load("<div>A<br/>B<br />C</div>").unwrap();
+        assert_eq!(document.html(), "<div>A<br>B<br>C</div>");
+    }
+
+    #[test]
+    fn named_legacy_entities_keep_their_visible_text() {
+        let stored = "<div>&copy; &eacute; &mdash; &unknownEntity;</div>";
+        let document = Document::load(stored).unwrap();
+        assert_eq!(document.html(), "<div>© é — &amp;unknownEntity;</div>");
+        assert_eq!(plain_text(stored), "© é — &unknownEntity;");
+    }
+
+    #[test]
+    fn legacy_entities_are_decoded_once_with_html_numeric_rules() {
+        let document =
+            Document::load("<div>&amp;copy; &#x80; &#0; &copy &NotEqualTilde;</div>").unwrap();
+        assert_eq!(document.html(), "<div>&amp;copy; € � © ≂̸</div>");
     }
 }

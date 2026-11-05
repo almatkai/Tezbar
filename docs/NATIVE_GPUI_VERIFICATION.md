@@ -18,6 +18,13 @@ hash/mapping checks, a reproduced provider-removal defect, its repair and the 19
 controller reruns on Rust 1.98.1/1.85. This is model progress; GPUI adapter/view parity
 and fresh Opus acceptance remain pending.
 
+The M3 launcher/instant/utility delivery is saved at `97e6cab`. Its
+[parent check](native-m03/parent-launcher-model-check.md) records independently
+verified source/data/case hashes, repaired legacy HTML-note compatibility and
+the first combined **306-pass** controller run on Rust 1.98.1 and Rust 1.85.
+The native app enables both model groups; full native surfaces and review gates
+remain open.
+
 ## M0–M1 evidence
 
 Raw logs and archive: `/tmp/tezbar-native-m01-evidence/` on the build Mac.
