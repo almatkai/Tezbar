@@ -6,5 +6,22 @@ rust-version = "1.85"
 license = "Apache-2.0"
 publish = false
 
+[features]
+default = []
+launcher-models = ["tezbar-core/native-ui-instant"]
+agent-models = []
+
 [dependencies]
 tezbar-update = { path = "../tezbar-update" }
+
+tezbar-core = { path = "../tezbar-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+regex = "1"
+url = "2"
+base64 = "0.22"
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+tempfile = "3.27"

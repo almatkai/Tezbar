@@ -1,4 +1,6 @@
 pub mod ai;
+#[cfg(feature = "native-ui-instant")]
+pub mod instant;
 pub mod common;
 pub mod extension_worker;
 pub mod extensions;

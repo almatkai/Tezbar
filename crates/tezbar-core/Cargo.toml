@@ -8,11 +8,13 @@ publish = false
 
 [features]
 native-launcher-facade = []
+native-ui-instant = ["dep:qrcode"]
 
 [build-dependencies]
 cc = "1.2.64"
 
 [dependencies]
+qrcode = { version = "0.14", default-features = false, optional = true }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 semver = "1.0"

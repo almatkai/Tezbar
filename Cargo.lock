@@ -4736,6 +4736,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+
+[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5920,6 +5926,7 @@ dependencies = [
  "objc2-user-notifications",
  "open",
  "portable-pty",
+ "qrcode",
  "regex",
  "reqwest",
  "rusqlite",
@@ -5985,7 +5992,16 @@ version = "0.3.0-beta.7"
 name = "tezbar-ui-model"
 version = "0.3.0-beta.7"
 dependencies = [
+ "base64",
+ "chrono",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tezbar-core",
  "tezbar-update",
+ "unicode-normalization",
+ "url",
 ]
 
 [[package]]
