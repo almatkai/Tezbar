@@ -2,12 +2,13 @@
 use std::{
     fs::{File, OpenOptions},
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Mutex,
 };
 const LIMIT: u64 = 5_000_000;
 pub struct FileLog {
     file: Mutex<File>,
+    path: PathBuf,
 }
 impl FileLog {
     pub fn open(directory: &Path, name: &str) -> Result<Self, String> {
@@ -23,6 +24,7 @@ impl FileLog {
             .map_err(|e| e.to_string())?;
         Ok(Self {
             file: Mutex::new(file),
+            path,
         })
     }
     pub fn write(&self, line: &[u8]) -> Result<(), String> {
@@ -31,7 +33,14 @@ impl FileLog {
             file.flush().map_err(|e| e.to_string())?;
             // The locked legacy logger defaults to KeepOne: retain only the
             // active 5 MB file, rather than introducing a second log history.
-            file.set_len(0).map_err(|e| e.to_string())?;
+            // Windows append handles lack FILE_WRITE_DATA, which set_len needs.
+            // Keep the append handle for writes and truncate through a short-lived
+            // write handle under the same mutex.
+            OpenOptions::new()
+                .write(true)
+                .open(&self.path)
+                .and_then(|truncate| truncate.set_len(0))
+                .map_err(|e| e.to_string())?;
         }
         file.write_all(&line[..line.len().min(LIMIT as usize)])
             .map_err(|e| e.to_string())
