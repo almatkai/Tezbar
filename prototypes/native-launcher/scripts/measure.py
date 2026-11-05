@@ -148,6 +148,8 @@ def main():
     version=baseline_version(binary,source) if a.mode=='A' else native_version(binary,source)
     raw=[];result=dict(mode=a.mode,condition=a.condition,smoke=a.smoke,binary_version=version,source_sha=version['source'],harness_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),input_binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),resources_manifest=json.loads((root/'resource-manifest.json').read_text()) if (root/'resource-manifest.json').exists() else None,latency_boundary='synthetic committed input -> content render plus following frame callback; not photon time',runtime_shaders=True if a.mode=='B' else None)
     installed=pathlib.Path('/Applications/Tezbar.app/Contents/MacOS/tezbar');before=hashlib.sha256(installed.read_bytes()).hexdigest()
+    # Retain every collected sample even when stabilization or visibility fails.
+    result.update(root=str(root),samples=raw)
     startup=[];stopping=threading.Event()
     def startup_sampler():
         while not stopping.is_set():
@@ -223,6 +225,7 @@ def main():
             while True:
                 s=sample('stabilize');last=[v for v in raw if v['phase']=='stabilize'][-31:]
                 cpu=[summarize(last[i:i+2])['cpu_percent_one_core'] for i in range(len(last)-1)]
+                result['stabilization']=dict(intervals=len(cpu),mean_cpu=statistics.mean(cpu) if cpu else None,p95_cpu=sorted(cpu)[28] if len(cpu)==30 else None,last_intervals_cpu=cpu)
                 if len(cpu)==30 and statistics.mean(cpu)<2 and sorted(cpu)[28]<5:break
                 if time.monotonic()>deadline:raise TimeoutError('CPU stabilization did not meet spec')
                 time.sleep(1)
