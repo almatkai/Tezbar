@@ -28,7 +28,7 @@ migration evidence and Opus reviews retain their original counts and conclusions
   output is ignored. No generated incidental output was restored or copied from
   another checkout.
 
-Rust sources/build inputs, renderer behavior, release/signing policy and pins,
+Rust sources/Cargo configuration, renderer behavior, release/signing policy and pins,
 real credentials/profiles, historical verification reports and third-party
 reference/license material were not changed. User-installed MCP programs retain
 their language-independent native-host contract.
@@ -97,6 +97,22 @@ No desktop app, production profile or extension install was opened or modified.
 No live provider/MCP calls, releases, signing or GitHub Actions were run. Manual
 probes requiring installed extensions, sibling repositories or external audit
 files were preserved/typechecked but not executed. Bun 1.2.5 and Windows were not
-retested here. Rust suites were not repeated because neither Rust source nor its
-build inputs changed; their prior reviewed evidence remains in
+retested here. Rust suites were not repeated because Rust source and Cargo
+configuration did not change; the updated extension bundle was instead exercised
+through the actual Bun fixture. Prior reviewed native evidence remains in
 [NATIVE_AI_VERIFICATION.md](NATIVE_AI_VERIFICATION.md).
+
+## Coordinator acceptance
+
+The coordinator independently inspected the complete deletion/non-deletion diff
+and lockfile changes at `86fc4ad`, verified unchanged Rust/renderer/signing sources
+and immutable review reports, and compared both esbuild source-input sets: exactly
+the same 22 paths, all still present. It reran typecheck, the complete retained
+suite (744 passed / 7 existing skips), and the real Bun worker fixture successfully.
+No additional implementation changes or skips were needed.
+
+Retained coordinator logs:
+
+- `/private/tmp/tezbar-cleanup-parent-typecheck.log`
+- `/private/tmp/tezbar-cleanup-parent-tests.log`
+- `/private/tmp/tezbar-cleanup-parent-worker.log`

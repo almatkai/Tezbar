@@ -1,13 +1,25 @@
 # Native AI implementation verification
 
+## Post-closure TypeScript cleanup
+
+After migration review closure, `86fc4ad2e7e6de8211ac3965be3cb9c9c2b85886`
+removed the unused TypeScript core and its retired implementation tests. The
+[cleanup verification](TS_BACKEND_CLEANUP.md) records the exact scope and retained
+extension worker. Rust and renderer sources remain unchanged; worker imports now
+target their existing host bridges directly and its generated bundle was updated.
+The current retained TypeScript suite passes **744 tests / 7 existing skips**.
+The historical 951-test count below includes the removed legacy tests. Typecheck,
+frontend/backend builds and the actual Bun extension-worker fixture pass. The
+native AI review findings are not reopened by deleting the unused implementation.
+
 ## Final implementation and review closure
 
 The native AI migration and its mandatory Claude Opus 5.5 review/repair gate are
 complete on `feat/native-rust-agent`, based on the explicitly selected
 `v0.3.0-beta.7` (`e246752149dbbede5e44720a0e35a3eacf2d66a9`). Final tested
 implementation: **`08a50f8a8f3e622ee1ff45b3b2ad123a879c2d73`**, tree
-`47ec0cb90f04d56cb40fda4a33a0ec6d4b20c7e3`. Subsequent commits update only
-documentation/review evidence; no implementation changed during final review.
+`47ec0cb90f04d56cb40fda4a33a0ec6d4b20c7e3`. Documentation-only follow-ups through
+`e2d19a0` recorded the final review; no implementation changed during that review.
 
 The original full three-scope audits and every repair/re-review are preserved
 unchanged in `docs/reviews`. Their final closures combine as follows:
