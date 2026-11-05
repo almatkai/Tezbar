@@ -1,5 +1,11 @@
 # M3 Lane B: agent/settings presentation models
 
+**Review status: needs repairs.** Opus found controller correctness/parity bugs,
+including cumulative effect replay and trimmed AI context. See the immutable
+[review](../reviews/GPUI_M3B_OPUS_a52240a.md) and current
+[repair status](agent-settings-review-repairs.md). The delivery evidence below
+describes its tested checkpoint; passing tests do not override these findings.
+
 This is model progress for the full Rust/GPUI migration. No GPUI view ledger row is
 closed by this lane. The parent continues M4–M11 and owns integration, all manifests,
 locks, exports, common orchestration and commits. Work is confined to

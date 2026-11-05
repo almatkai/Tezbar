@@ -6393,6 +6393,7 @@ version = "0.3.0-beta.7"
 dependencies = [
  "accesskit",
  "gpui",
+ "html5ever",
  "image",
  "pulldown-cmark",
  "serde",

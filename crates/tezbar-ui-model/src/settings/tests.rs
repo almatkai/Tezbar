@@ -211,6 +211,77 @@ fn explicit_recreation_can_activate_provider_again() {
     );
 }
 #[test]
+fn failed_creation_preserves_a_later_api_key_edit() {
+    let mut q = WriteQueue::default();
+    let mut c = config();
+    c["customProviders"] = json!([]);
+    c["providerConfigs"] = json!({});
+    q.enqueue(
+        1,
+        vec![Edit::Definition {
+            provider: "custom:new".into(),
+            value: json!({"id":"custom:new"}),
+        }],
+    );
+    flush(&mut q, &mut c, false);
+    q.enqueue(1, vec![field("custom:new", "apiKey", "fixture-new-key")]);
+    flush(&mut q, &mut c, true);
+    q.retry(false);
+    while !q.pending.is_empty() {
+        flush(&mut q, &mut c, true);
+    }
+    assert_eq!(
+        c["providerConfigs"]["custom:new"]["apiKey"],
+        "fixture-new-key"
+    );
+    assert!(c["customProviders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["id"] == "custom:new"));
+    assert_eq!(q.failure_count(), 0);
+}
+#[test]
+fn failed_definition_retries_before_its_dependent_field_write() {
+    let mut q = WriteQueue::default();
+    let mut c = json!({"customProviders":[]});
+    q.enqueue(
+        1,
+        vec![Edit::Definition {
+            provider: "custom:new".into(),
+            value: json!({"id":"custom:new"}),
+        }],
+    );
+    flush(&mut q, &mut c, false);
+    q.enqueue(1, vec![field("custom:new", "apiKey", "fixture-new-key")]);
+    flush(&mut q, &mut c, false);
+    q.retry(false);
+    while let Some(Effect::Read { token }) = q.next_effect() {
+        let Some(Effect::Save { patch, .. }) = q.read_result(token, Ok(c.clone())) else {
+            panic!()
+        };
+        // A real provider-dependent writer may reject a key until its definition
+        // has been durably created. The retry batch must respect intent order.
+        let has_definition = c["customProviders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == "custom:new");
+        let ok = patch.get("providerConfigs").is_none() || has_definition;
+        if ok {
+            for (key, value) in patch.as_object().unwrap() {
+                c[key] = value.clone();
+            }
+        }
+        q.finish(token, ok);
+    }
+    assert_eq!(q.failure_count(), 0);
+    assert_eq!(
+        c["providerConfigs"]["custom:new"]["apiKey"],
+        "fixture-new-key"
+    );
+}
+#[test]
 fn t_r4_retries_are_deduplicated_and_keep_newer_failed_removal() {
     let mut q = WriteQueue::default();
     let mut c = config();

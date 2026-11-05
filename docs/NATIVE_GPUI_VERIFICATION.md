@@ -25,6 +25,12 @@ the first combined **306-pass** controller run on Rust 1.98.1 and Rust 1.85.
 The native app enables both model groups; full native surfaces and review gates
 remain open.
 
+Opus review of the agent/settings slice at `a52240a` found two high-severity and
+several additional controller issues. That slice is not accepted; its
+[repair status](native-m03/agent-settings-review-repairs.md) tracks F1–F12. The parent
+repaired its own failed-provider-creation regression with failing-before tests;
+the integrated suite passes 308 cases while the remaining repairs are pending.
+
 ## M0–M1 evidence
 
 Raw logs and archive: `/tmp/tezbar-native-m01-evidence/` on the build Mac.

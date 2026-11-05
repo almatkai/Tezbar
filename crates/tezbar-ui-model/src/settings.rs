@@ -271,12 +271,13 @@ impl WriteQueue {
             if self.stale_edit(e, intent.revision) {
                 continue;
             }
-            // A live tab can be older than a successful provider removal. Only
-            // an explicit new Definition may recreate that id, never activation
-            // or stale form/model fields from that tab.
+            // A known removal must not be undone by stale tab fields. Absence
+            // alone is not deletion: a failed Create can still have later edits
+            // whose values must survive until its Definition is retried.
             if !matches!(e, Edit::Definition { .. } | Edit::RemoveProvider(_))
                 && e.target_provider().is_some_and(|p| {
                     p.starts_with("custom:")
+                        && self.removed.contains_key(p)
                         && !current["customProviders"]
                             .as_array()
                             .is_some_and(|providers| providers.iter().any(|v| v["id"] == p))
@@ -501,7 +502,9 @@ impl WriteQueue {
     }
     pub fn retry(&mut self, retired_only: bool) {
         let mut seen = BTreeSet::new();
-        for i in self.failures.values() {
+        let mut intents: Vec<_> = self.failures.values().collect();
+        intents.sort_by_key(|intent| intent.revision);
+        for i in intents {
             if (!retired_only || self.owners.get(&i.owner) == Some(&true))
                 && seen.insert(i.id)
                 && !self.pending.iter().any(|p| p.id == i.id)
