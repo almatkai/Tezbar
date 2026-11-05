@@ -254,7 +254,9 @@ impl Launcher {
         if !Arc::ptr_eq(&ticket.owner, &self.owner) {
             return Activation::Failed("Ticket belongs to another launcher".into());
         }
-        if ticket.support != Support::Native {
+        // `Row::support` is a public display projection. Never trust a caller's
+        // edits to it as authority to execute the private action envelope.
+        if ticket.support != Support::Native || classify(&ticket.action) != Support::Native {
             return Activation::Unsupported;
         }
         if let Err(e) = self.profile.validate_tree() {
@@ -370,6 +372,13 @@ mod tests {
             launcher.activate(unsupported.ticket(query, 1)).await,
             Activation::Unsupported
         );
+        let mut edited = unsupported.clone();
+        edited.support = Support::Native;
+        assert_eq!(
+            launcher.activate(edited.ticket(query, 1)).await,
+            Activation::Unsupported
+        );
+
         let (rank, row) = rows
             .iter()
             .enumerate()

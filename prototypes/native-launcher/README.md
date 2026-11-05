@@ -45,7 +45,8 @@ Run from a second terminal, with that exact `prototype_root`:
 and starts the same core before any GPUI application is constructed. Without
 `bench-control` there is no control listener. Controls are bounded JSON-lines with a
 profile-local random token; Unix socket mode 0600, Windows local-only owner-DACL pipe.
-No raw core commands or JS execution are exposed by the prototype. `query` replaces the
+No raw core commands or JS execution are exposed by the prototype. Activation rechecks
+the private action envelope even if a Rust caller edits the public support projection. `query` replaces the
 field; `type` inserts through `EntityInputHandler::replace_text_in_range`. Both reply with
 `expected_generation`: wait for that generation and `painted_generation` before measuring.
 `status` includes scan readiness, counts/row IDs, generations and timing, without returning
@@ -71,9 +72,9 @@ Evidence is ignored under `evidence/`; old reports/data under `docs/performance`
 | --- | --- |
 | M0 official GPUI release, CLT, runtime shaders + font-kit | Built and real native text window observed via CUA; `m0-build.log` |
 | Main default backend tests, Rust 1.85 | 609 passed, 9 existing ignored; `default-test-bounded.log` |
-| Facade/full backend tests, Rust 1.85 | 611 passed, 9 existing ignored; `facade-test-final.log` |
+| Facade/full backend tests, Rust 1.85 | 611 passed, 9 existing ignored; `facade-test-handoff.log` |
 | Rust 1.85 checks, default and facade | Passed; `msrv-default.log`, `msrv-facade.log` |
-| Prototype session/control tests | 5 passed, no ignored; `prototype-test-latest.log` |
+| Prototype session/control tests | 5 passed, no ignored; `prototype-test-handoff.log` |
 | Main `pnpm typecheck` | Passed; `typecheck.log` |
 | Main `pnpm test` | 744 passed, 7 existing skipped; `pnpm-test.log`; no new skips |
 | Main frontend artifact for A | Built from unchanged renderer; `a-frontend-build.log` |
@@ -105,6 +106,10 @@ same observed database counts: 235 applications, 14,997 files, 50 notes, 79 snip
 (including built-ins), 20 quick links, 10 commands and 41 native commands. Record actual
 counts on every run rather than assuming all generated files are eligible for indexing.
 
+The initial A smoke used Rust 1.85 and B/C used 1.98.1; this compiler difference is
+another confound. Use 1.98.1 for **both** builds in the final measurement, while
+keeping the separate 1.85 MSRV checks for the production crate.
+
 These short smokes **do not close a memory/CPU/latency gate**. They have a 2-second warmup
 and three samples, no stabilization, no repetitions and no cold-shader launch. They exist
 to verify the control, accounting, activation, fixture and cleanup paths. Do not use the
@@ -128,6 +133,10 @@ proof a short-lived service never existed. The first M0 shader launch was not sa
 all subsequent evidence is cache-warmed. `vmmap -summary` and `footprint -p` logs are in
 the fixture root for each observed PID; no heap contents or process command lines are read.
 
+Focus loss or unexpected window visibility invalidates a run; do not interact with
+the desktop during a timed workload. A failed focus-interfered smoke was retained
+(`mac-final-B-smoke.log`), then the repeat passed (`mac-final-B2-smoke.json`).
+
 Full run defaults: 120-second warmup, 30 stable one-second CPU intervals (mean <2%,
 p95 <5%), then 60 seconds of samples. `matched.py` runs C, then A B B A A B per condition,
 then C, with fresh byte-identical fixture copies and manifest checks. It does not issue a
@@ -140,12 +149,12 @@ workload reuses the preserved responsiveness harness, not new arbitrary frontend
 ```sh
 # From clean selected worktree, after rebuilding both binaries at the same final SHA:
 pnpm build:frontend
-cargo +1.85.0 build --manifest-path src-tauri/Cargo.toml --locked --release --features desktop-bench,tauri/custom-protocol
+CARGO_TARGET_DIR="$PWD/prototypes/native-launcher/target/tauri-a" cargo +1.98.1 build --manifest-path src-tauri/Cargo.toml --locked --release --features desktop-bench,tauri/custom-protocol
 export CARGO_TARGET_DIR="$PWD/prototypes/native-launcher/target"
 cargo +1.98.1 build --manifest-path prototypes/native-launcher/Cargo.toml --locked --release --features bench-control
 prototype_template="$(/opt/homebrew/bin/python3 prototypes/native-launcher/scripts/fixture.py)"
 /opt/homebrew/bin/python3 prototypes/native-launcher/scripts/matched.py \
-  --template "$prototype_template" --a-binary "$PWD/src-tauri/target/release/tezbar" \
+  --template "$prototype_template" --a-binary "$PWD/prototypes/native-launcher/target/tauri-a/release/tezbar" \
   --b-binary "$PWD/prototypes/native-launcher/target/release/tezbar-launcher-prototype" \
   --output "$PWD/prototypes/native-launcher/evidence/matched-final"
 ```

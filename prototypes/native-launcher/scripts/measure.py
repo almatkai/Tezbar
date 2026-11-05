@@ -85,7 +85,11 @@ class Native:
         scrub_fixture_clipboard(self.root)
 
 def settled(d,minimum=0):
-    return wait(lambda:(s if s['generation']>=minimum and not s['pending'] and s['painted_generation']==s['generation'] else None) if (s:=d.command('status')) else None)
+    def check():
+        status=d.command('status')
+        if not status['visible']:raise RuntimeError('Launcher lost focus/was hidden during synthetic workload; discard this run')
+        return status if status['generation']>=minimum and not status['pending'] and status['painted_generation']==status['generation'] else None
+    return wait(check)
 def open_timings(d):
     from window_visibility import main_on_screen
     d.command('hide');wait(lambda:not main_on_screen(d.pid),5)
@@ -172,6 +176,9 @@ def main():
             # this file does not mislabel core-only timing as matched UI latency.
         started=time.monotonic();warmup=2 if a.smoke else 120
         def sample(phase):
+            if a.mode!='C':
+                from window_visibility import main_on_screen
+                if bool(main_on_screen(d.pid)) != (a.condition=='visible'):raise RuntimeError('Window visibility changed during measurement; discard this run')
             value=dict(t=time.monotonic()-started,phase=phase,processes=processes(d.pid));raw.append(value);return value
         until=time.monotonic()+warmup
         while time.monotonic()<until:sample('warmup');time.sleep(1)
@@ -188,9 +195,18 @@ def main():
         while time.monotonic()<until:sample('measure');time.sleep(1)
         result['summary']=summarize([s for s in raw if s['phase']=='measure']);result['samples']=raw
         result['host']={cmd:subprocess.run(command,capture_output=True,text=True).stdout for cmd,command in [('swap',['sysctl','vm.swapusage']),('power',['pmset','-g','batt'])]}
+        result['map_commands']=[]
         for proc in raw[-1]['processes']:
             for name,command in [('footprint',['footprint','-p',str(proc['pid'])]),('vmmap',['vmmap','-summary',str(proc['pid'])])]:
-                (root/f'{name}-{proc["pid"]}.log').write_text(subprocess.run(command,capture_output=True,text=True).stdout)
+                captured=subprocess.run(command,capture_output=True,text=True,timeout=60)
+                (root/f'{name}-{proc["pid"]}.log').write_text(captured.stdout)
+                (root/f'{name}-{proc["pid"]}-stderr.log').write_text(captured.stderr)
+                result['map_commands'].append(dict(pid=proc['pid'],command=name,returncode=captured.returncode))
+            mapped=subprocess.run(['vmmap',str(proc['pid'])],capture_output=True,text=True,timeout=60)
+            (root/f'webkit-mappings-{proc["pid"]}.log').write_text('\n'.join(mapped.stdout.splitlines()[:15]+[line for line in mapped.stdout.splitlines() if 'WebKit' in line])+ '\n'+mapped.stderr)
+            result['map_commands'].append(dict(pid=proc['pid'],command='vmmap-WebKit-mappings',returncode=mapped.returncode))
+    except BaseException as error:
+        result['failure']=str(error);raise
     finally:
         stopping.set();thread.join();d.close();result['owned_survivors']=processes(d.pid) if getattr(d,'pid',None) else []
         result['installed_app_unchanged']=hashlib.sha256(installed.read_bytes()).hexdigest()==before
