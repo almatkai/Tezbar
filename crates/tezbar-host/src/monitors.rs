@@ -10,7 +10,7 @@ use core_foundation::string::{CFString, CFStringRef};
 #[cfg(target_os = "macos")]
 use core_foundation::uuid::{CFUUIDCreateString, CFUUIDRef, CFUUID};
 #[cfg(target_os = "macos")]
-use core_graphics::display::{CGDirectDisplayID, CGDisplay};
+use core_graphics::display::CGDirectDisplayID;
 #[cfg(target_os = "macos")]
 use core_graphics::window::{
     copy_window_info, kCGWindowAlpha, kCGWindowBounds, kCGWindowLayer,

@@ -27,6 +27,32 @@ pub enum Claim {
     Owner(Instance),
     Activated,
 }
+// The ownership guard becomes visible before its activation endpoint is bound.
+// Retry only connection establishment; never replay an activation after sending it.
+async fn connect_owner<S, F, Fut>(mut connect: F) -> std::io::Result<S>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = std::io::Result<S>>,
+{
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        match connect().await {
+            Ok(stream) => return Ok(stream),
+            Err(error)
+                if (matches!(
+                    error.kind(),
+                    std::io::ErrorKind::NotFound
+                        | std::io::ErrorKind::ConnectionRefused
+                        | std::io::ErrorKind::WouldBlock
+                ) || cfg!(windows) && error.raw_os_error() == Some(231))
+                    && std::time::Instant::now() < deadline =>
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
 async fn activate<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
     mut stream: S,
 ) -> Result<(), String> {
@@ -84,7 +110,7 @@ impl Instance {
             let socket = directory.join(format!(".instance-{}.sock", &key[..16]));
             if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
                 activate(
-                    tokio::net::UnixStream::connect(socket)
+                    connect_owner(|| tokio::net::UnixStream::connect(&socket))
                         .await
                         .map_err(|e| e.to_string())?,
                 )
@@ -117,8 +143,8 @@ impl Instance {
             ))
             .map_err(|e| e.to_string())?;
             if !mutex.owner {
-                let stream = ClientOptions::new()
-                    .open(&name)
+                let stream = connect_owner(|| std::future::ready(ClientOptions::new().open(&name)))
+                    .await
                     .map_err(|e| e.to_string())?;
                 activate(stream).await?;
                 return Ok(Claim::Activated);
@@ -161,6 +187,30 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn waits_for_owner_binding_and_does_not_retry_permission_errors() {
+        let mut attempts = 0;
+        let stream = connect_owner(|| {
+            attempts += 1;
+            std::future::ready(match attempts {
+                1 => Err(std::io::ErrorKind::NotFound.into()),
+                2 => Err(std::io::ErrorKind::WouldBlock.into()),
+                _ => Ok(42),
+            })
+        })
+        .await
+        .unwrap();
+        assert_eq!((stream, attempts), (42, 3));
+        let mut denied_attempts = 0;
+        let denied = connect_owner::<(), _, _>(|| {
+            denied_attempts += 1;
+            std::future::ready(Err(std::io::ErrorKind::PermissionDenied.into()))
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(denied.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(denied_attempts, 1);
+    }
     #[tokio::test]
     async fn second_instance_activates_owner_and_drop_releases_profile() {
         let d = tempfile::tempdir().unwrap();
