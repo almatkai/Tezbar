@@ -120,7 +120,9 @@ impl LauncherView {
         self.committed = Instant::now();
         self.message = None;
         self.message_error = false;
-        self.error = None;
+        if self.ready {
+            self.error = None;
+        }
         self.enter_timer = None;
         let g = self.session.generation;
         let entity = cx.entity();

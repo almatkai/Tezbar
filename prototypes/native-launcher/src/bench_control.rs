@@ -46,7 +46,6 @@ impl Server {
         }
         #[cfg(windows)]
         {
-            use tokio::net::windows::named_pipe::ServerOptions;
             let pipe = format!(r"\\.\pipe\tezbar-native-{}", std::process::id());
             let first = owner_pipe(&pipe, true).map_err(|e| e.to_string())?;
             std::fs::write(root.join("control-pipe.txt"), &pipe).map_err(|e| e.to_string())?;
@@ -58,7 +57,10 @@ impl Server {
                     }
                     let next = match owner_pipe(&pipe, false) {
                         Ok(v) => v,
-                        Err(_) => break,
+                        Err(error) => {
+                            eprintln!("prototype control pipe: {error}");
+                            break;
+                        }
                     };
                     handle(server, &token, &tx).await;
                     server = next;
@@ -134,7 +136,10 @@ fn owner_pipe(
             SECURITY_ATTRIBUTES,
         },
     };
-    let sddl: Vec<u16> = "D:P(A;;GA;;;OW)".encode_utf16().chain(Some(0)).collect();
+    let sddl: Vec<u16> = format!("D:P(A;;GA;;;{})", process_user_sid()?)
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
     let mut descriptor = std::ptr::null_mut();
     unsafe {
         if ConvertStringSecurityDescriptorToSecurityDescriptorW(
@@ -196,5 +201,63 @@ mod tests {
         );
         drop(server);
         assert!(!root.path().join("control.sock").exists());
+    }
+}
+
+#[cfg(windows)]
+fn process_user_sid() -> std::io::Result<String> {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use windows_sys::Win32::{
+        Foundation::LocalFree,
+        Security::{
+            Authorization::ConvertSidToStringSidW, GetTokenInformation, TOKEN_QUERY, TOKEN_USER,
+            TokenUser,
+        },
+        System::Threading::{GetCurrentProcess, OpenProcessToken},
+    };
+    unsafe {
+        let mut raw = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let token = OwnedHandle::from_raw_handle(raw);
+        let mut length = 0;
+        GetTokenInformation(
+            token.as_raw_handle(),
+            TokenUser,
+            std::ptr::null_mut(),
+            0,
+            &mut length,
+        );
+        if length == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut buffer = vec![
+            0usize;
+            (length as usize + std::mem::size_of::<usize>() - 1)
+                / std::mem::size_of::<usize>()
+        ];
+        if GetTokenInformation(
+            token.as_raw_handle(),
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            length,
+            &mut length,
+        ) == 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        let user = &*buffer.as_ptr().cast::<TOKEN_USER>();
+        let mut text = std::ptr::null_mut();
+        if ConvertSidToStringSidW(user.User.Sid, &mut text) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut count = 0;
+        while *text.add(count) != 0 {
+            count += 1;
+        }
+        let sid = String::from_utf16_lossy(std::slice::from_raw_parts(text, count));
+        LocalFree(text.cast());
+        Ok(sid)
     }
 }

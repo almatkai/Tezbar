@@ -8,7 +8,10 @@ class Control:
         if (self.root/'control-pipe.txt').exists():
             with open((self.root/'control-pipe.txt').read_text(),'r+b',buffering=0) as s:
                 s.write(request); data=b''
-                while not data.endswith(b'\n'):data+=s.read(1)
+                while not data.endswith(b'\n'):
+                    chunk=s.read(1)
+                    if not chunk:raise RuntimeError('control pipe disconnected')
+                    data+=chunk
         else:
             with socket.socket(socket.AF_UNIX) as s:
                 s.settimeout(40);s.connect(str(self.root/'control.sock'));s.sendall(request);data=b''
