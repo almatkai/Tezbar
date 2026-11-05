@@ -12,8 +12,8 @@ pub fn shutdown_all(app: &AppHandle) {
 }
 // Tauri executes non-async commands on the UI thread. Keep the synchronous
 // entry points for the legacy bridge (which already uses spawn_blocking), and
-// run direct invoke calls on blocking workers as well. metadata() may block_on
-// the launcher here; it must never run on a Tokio async worker.
+// run direct invoke calls on blocking workers as well. The synchronous metadata
+// transaction and PTY operations must not block a Tokio async worker.
 #[tauri::command]
 pub async fn native_terminal_create(
     app: AppHandle,

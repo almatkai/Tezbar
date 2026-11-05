@@ -1,0 +1,53 @@
+{
+  "source": "80a2aa1286ac8b4517452594a4779bc33c724b6b",
+  "mac_release_arm64": {
+    "version": {
+      "version": "0.3.0-beta.7",
+      "source": "80a2aa1286ac8b4517452594a4779bc33c724b6b",
+      "dirty": "false",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true
+    },
+    "sha256": "3115a0a7d5a60a1af60ed7eecebd6f22568f9b572490d880dc6a691deb57de0a",
+    "path": "/tmp/tezbar-native-m01-evidence/artifacts/80a2aa1/mac/tezbar"
+  },
+  "windows_debug_x64": {
+    "no_profile_exit": 1,
+    "path": "C:\\Users\\User\\AppData\\Local\\Temp\\tezbar-native-m01-80a2aa1\\artifacts\\tezbar.exe",
+    "sha256": "bf023e4fe25bccfaac3f7d4f35b9c83b8ef3009b5e4843c50fc5acb151a4c40f",
+    "help_exit": 0,
+    "version": {
+      "version": "0.3.0-beta.7",
+      "source": "80a2aa1286ac8b4517452594a4779bc33c724b6b",
+      "dirty": "false",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true
+    },
+    "local_path": "/tmp/tezbar-native-m01-evidence/artifacts/80a2aa1/windows/tezbar.exe"
+  },
+  "windows_source_archive": {
+    "path": "/tmp/tezbar-native-m01-evidence/source-80a2aa1.tar.gz",
+    "sha256": "ebaa99fd8ae5ffd6e251ccc9f88f4c77c33e611c624395f4c7233a0785c92656",
+    "tracked_files_verified": 1738,
+    "manifest": "/tmp/tezbar-native-m01-evidence/manifest-80a2aa1.json"
+  },
+  "raw_evidence": "/tmp/tezbar-native-m01-evidence",
+  "windows_test_counts": {
+    "tezbar-host": {
+      "passed": 38,
+      "ignored": 0
+    },
+    "tezbar-ui-model": {
+      "passed": 28,
+      "ignored": 0
+    },
+    "tezbar-update": {
+      "passed": 16,
+      "ignored": 1
+    }
+  }
+}

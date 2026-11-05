@@ -1,0 +1,19 @@
+{
+  "source": "80a2aa1286ac8b4517452594a4779bc33c724b6b",
+  "command_count": 51,
+  "commands_equal_baseline": true,
+  "bridge_members_baseline": 206,
+  "unchanged_files_sha256": {
+    "src/renderer/tauri-bridge.ts": "8cd44b966596ef466e1c36ed2085c637ea1d9be0811c6eaabe512c41def5ca7b",
+    "src/shared/desktop-api.ts": "b797e6ad1ca9021b74e52b1c7f5dfc714c4c3a4b0d41f1a37bb29c34bc23089b",
+    "src-tauri/macos-signing.json": "f3a6eddc5c16979588b37856fc9294d4778e5ab4579d797ca36d36a684e69aeb",
+    "scripts/build-release.mjs": "0694d69262626b0b7bbe14b850a15e050779bb00a33691a1f5d09c8992a1a569",
+    "package.json": "2c92e74aa7e5721d6ac31eebb4a4a99b8b149cdee9dd437263b8c43b84cc8802"
+  },
+  "tauri_config_change": "Only infoPlist path follows the moved core; all other configuration, identity and signing values are identical",
+  "legacy_channels_equal_baseline": true,
+  "core_framework_references": [],
+  "portable_framework_dependencies": [],
+  "old_performance_evidence_unchanged": true,
+  "raw_tree": "/tmp/tezbar-native-m01-evidence/m2-80a2aa1-portable-tree.log"
+}

@@ -27,6 +27,17 @@ Mac release and Windows debug compile gates passed. The core/Host extraction, le
 adapter and prototype compatibility are validated; native window/surface parity is
 still pending. Existing W/S/L/etc. rows remain `todo`: a Host seam is not a native UI.
 
+M2 libraries: runtime source `80a2aa1`. See the [M2 checkpoint and handoff](NATIVE_GPUI_VERIFICATION.md#m2-checkpoint),
+[retention map](native-m01/m2-test-retention.json), [all-lock audit](native-m01/m2-lock-drift.json),
+[source audit](native-m01/m2-source-audit.json) and [artifacts](native-m01/m2-artifacts.json).
+Mac: core 564/8 ignored, host 39/0, update 22/1, UI-model 28/0, Tauri 13/0;
+666 passed and the original 9 ignores, zero missing baseline cases. Prototype 8/0;
+TS 744 passed/7 existing skipped; real worker fixture and explicit 1.85 checks passed.
+Mac release and verified-archive Windows debug compile passed; Windows host 38/0,
+UI-model 28/0 and update 16/1 passed. No ledger UI row changes status: the shared OS
+implementations and updater are tested, while GPUI controls, bootstrap/event-loop wiring,
+manual OS spikes and M3–M11 parity remain outstanding. Inactive services remain lazy.
+
 ## §W Windows, processes and OS integration
 
 | ID | Behaviour | Current owner | New module | Acceptance | Status |
