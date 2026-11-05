@@ -28,6 +28,8 @@ serde_json = "1.0"
 semver = "1.0"
 
 [dependencies]
+tezbar-host = { path = "../crates/tezbar-host" }
+tezbar-update = { path = "../crates/tezbar-update" }
 tezbar-core = { path = "../crates/tezbar-core" }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

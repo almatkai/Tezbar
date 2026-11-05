@@ -1,0 +1,114 @@
+[
+  {
+    "typescript": "uses Stable as the recommended channel and explains shared Alpha data",
+    "rust": "update_policy::tests::uses_stable_as_the_recommended_channel_and_explains_shared_alpha_data"
+  },
+  {
+    "typescript": "explains waiting for a newer release after opting out of a prerelease",
+    "rust": "update_policy::tests::explains_waiting_for_a_newer_release_after_opting_out_of_a_prerelease"
+  },
+  {
+    "typescript": "returns false when never checked",
+    "rust": "update_policy::tests::returns_false_when_never_checked"
+  },
+  {
+    "typescript": "returns false when timestamp is NaN",
+    "rust": "update_policy::tests::returns_false_when_timestamp_is_nan"
+  },
+  {
+    "typescript": "returns true when checked within 12 hours",
+    "rust": "update_policy::tests::returns_true_when_checked_within_12_hours"
+  },
+  {
+    "typescript": "returns false when 12 hours have elapsed",
+    "rust": "update_policy::tests::returns_false_when_12_hours_have_elapsed"
+  },
+  {
+    "typescript": "returns false when timestamp is in the future",
+    "rust": "update_policy::tests::returns_false_when_timestamp_is_in_the_future"
+  },
+  {
+    "typescript": "checks when never checked before",
+    "rust": "update_policy::tests::checks_when_never_checked_before"
+  },
+  {
+    "typescript": "checks when the previous timestamp is invalid",
+    "rust": "update_policy::tests::checks_when_the_previous_timestamp_is_invalid"
+  },
+  {
+    "typescript": "skips the check when the interval has not elapsed",
+    "rust": "update_policy::tests::skips_the_check_when_the_interval_has_not_elapsed"
+  },
+  {
+    "typescript": "checks again once the interval has elapsed",
+    "rust": "update_policy::tests::checks_again_once_the_interval_has_elapsed"
+  },
+  {
+    "typescript": "round-trips the timestamp",
+    "rust": "update_policy::tests::round_trips_the_timestamp"
+  },
+  {
+    "typescript": "returns null when unset or corrupt",
+    "rust": "update_policy::tests::returns_null_when_unset_or_corrupt"
+  },
+  {
+    "typescript": "reads and writes auto-update preference",
+    "rust": "update_policy::tests::reads_and_writes_auto_update_preference"
+  },
+  {
+    "typescript": "preserves non-upToDate statuses unchanged",
+    "rust": "update_policy::tests::preserves_non_uptodate_statuses_unchanged"
+  },
+  {
+    "typescript": "keeps upToDate status when checked within 12 hours",
+    "rust": "update_policy::tests::keeps_uptodate_status_when_checked_within_12_hours"
+  },
+  {
+    "typescript": "reverts upToDate status to idle after 12 hours have elapsed",
+    "rust": "update_policy::tests::reverts_uptodate_status_to_idle_after_12_hours_have_elapsed"
+  },
+  {
+    "typescript": "returns true only for available, ready, and downloading states",
+    "rust": "update_policy::tests::returns_true_only_for_available_ready_and_downloading_states"
+  },
+  {
+    "typescript": "does not match empty query for upToDate when not checked in current window",
+    "rust": "update_policy::tests::does_not_match_empty_query_for_uptodate_when_not_checked_in_current_window"
+  },
+  {
+    "typescript": "matches empty query for urgent update notifications",
+    "rust": "update_policy::tests::matches_empty_query_for_urgent_update_notifications"
+  },
+  {
+    "typescript": "matches when user types update keywords for upToDate",
+    "rust": "update_policy::tests::matches_when_user_types_update_keywords_for_uptodate"
+  },
+  {
+    "typescript": "does not match unrelated queries",
+    "rust": "update_policy::tests::does_not_match_unrelated_queries"
+  },
+  {
+    "typescript": "does not promote upToDate once the window has reopened (not in active check window)",
+    "rust": "update_policy::tests::does_not_promote_uptodate_once_the_window_has_reopened_not_in_active_check_window"
+  },
+  {
+    "typescript": "promotes upToDate immediately after checking in the current window",
+    "rust": "update_policy::tests::promotes_uptodate_immediately_after_checking_in_the_current_window"
+  },
+  {
+    "typescript": "promotes urgent update notifications regardless of window session",
+    "rust": "update_policy::tests::promotes_urgent_update_notifications_regardless_of_window_session"
+  },
+  {
+    "typescript": "does not promote idle status",
+    "rust": "update_policy::tests::does_not_promote_idle_status"
+  },
+  {
+    "typescript": "downgrades score for upToDate when downgraded",
+    "rust": "update_policy::tests::downgrades_score_for_uptodate_when_downgraded"
+  },
+  {
+    "typescript": "preserves top score when not downgraded or for urgent updates",
+    "rust": "update_policy::tests::preserves_top_score_when_not_downgraded_or_for_urgent_updates"
+  }
+]

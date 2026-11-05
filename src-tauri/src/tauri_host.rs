@@ -193,11 +193,7 @@ impl ShortcutRegistry for TauriHost {
         true
     }
     fn parse(&self, raw: &str) -> Result<Shortcut, String> {
-        let shortcut = NativeShortcut::from_str(raw).map_err(|e| e.to_string())?;
-        Ok(Shortcut {
-            id: shortcut.id(),
-            accelerator: shortcut.to_string(),
-        })
+        tezbar_host::desktop::parse_shortcut(raw)
     }
     fn register(&self, shortcut: &Shortcut) -> Result<(), String> {
         self.app

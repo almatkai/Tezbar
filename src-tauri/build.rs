@@ -64,5 +64,5 @@ fn verify_embedding_payload() {
 }
 
 #[allow(dead_code)]
-#[path = "src/release_channels.rs"]
+#[path = "../crates/tezbar-update/src/release_channels.rs"]
 mod release_channels;

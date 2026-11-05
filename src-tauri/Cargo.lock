@@ -5195,6 +5195,8 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tezbar-core",
+ "tezbar-host",
+ "tezbar-update",
  "tokio",
  "unicode-normalization",
  "uuid",
@@ -5247,6 +5249,49 @@ dependencies = [
  "windows-sys 0.59.0",
  "zeroize",
  "zip",
+]
+
+[[package]]
+name = "tezbar-host"
+version = "0.3.0-beta.7"
+dependencies = [
+ "block2",
+ "core-graphics 0.23.2",
+ "global-hotkey",
+ "image",
+ "libc",
+ "log",
+ "muda",
+ "objc2",
+ "objc2-foundation",
+ "objc2-user-notifications",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tezbar-core",
+ "tokio",
+ "tray-icon",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "tezbar-update"
+version = "0.3.0-beta.7"
+dependencies = [
+ "base64 0.22.1",
+ "flate2",
+ "futures-util",
+ "libc",
+ "minisign-verify",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "tokio",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

@@ -1,0 +1,1 @@
+Synthetic archive, never executable. Signed with an ephemeral, unencrypted OS-temp fixture key; only the public key, signature and synthetic payload are retained here. This key is unrelated to Tezbar release credentials.
