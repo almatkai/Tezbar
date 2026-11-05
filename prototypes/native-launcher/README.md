@@ -41,6 +41,16 @@ Run from a second terminal, with that exact `prototype_root`:
 /opt/homebrew/bin/python3 prototypes/native-launcher/scripts/control.py "$prototype_root" quit
 ```
 
+To inspect the prebuilt final f387675 app without rebuilding, use its existing isolated
+profile (this is a review profile, not a fresh measurement fixture):
+
+```sh
+prototype_root="$(cat prototypes/native-launcher/evidence/mac-final-relaunch-root.txt)"
+"$prototype_root/Tezbar Launcher Prototype.app/Contents/MacOS/tezbar-launcher-prototype" \
+  --show --theme dark --profile "$prototype_root" --resources "$prototype_root/resources" \
+  --control-token-file "$prototype_root/control-token"
+```
+
 `--theme light|dark|system` is a launch setting. `--headless` takes the same arguments
 and starts the same core before any GPUI application is constructed. Without
 `bench-control` there is no control listener. Controls are bounded JSON-lines with a
@@ -74,14 +84,15 @@ Evidence is ignored under `evidence/`; old reports/data under `docs/performance`
 | Main default backend tests, Rust 1.85 | 609 passed, 9 existing ignored; `default-test-bounded.log` |
 | Facade/full backend tests, Rust 1.85 | 611 passed, 9 existing ignored; `facade-test-handoff.log` |
 | Rust 1.85 checks, default and facade | Passed; `msrv-default-handoff.log`, `msrv-facade-handoff.log` |
-| Prototype session/control tests | 7 passed, no ignored; `prototype-test-final.log` (6 session tests plus Unix authentication) |
-| Prototype release without controls | Built; `prototype-default-build.log`, `prototype-default-version.json` confirms `bench_control:false` |
+| Prototype session/control tests | 7 passed, no ignored; `prototype-test-quit-cleanup.log` (6 session tests plus Unix authentication) |
+| Prototype release without controls | Built; `prototype-default-build-final.log`, `prototype-default-version-final.json` confirms `bench_control:false` |
 | Main `pnpm typecheck` | Passed; `typecheck.log` |
 | Main `pnpm test` | 744 passed, 7 existing skipped; `pnpm-test.log`; no new skips |
 | Main frontend artifact for A | Built from unchanged renderer; `a-frontend-build.log` |
 | Instrumented A release | Built locally with `desktop-bench,tauri/custom-protocol`; `a-build-404429e.log` |
-| A/B/C functional smokes | Initial matched-resource paths: `mac-A5-smoke.json`, `mac-B2-A-resources-smoke.json`, `mac-C-smoke.json`; final code B/C: `mac-handoff-B-smoke.json`, `mac-handoff-C-smoke.json` |
+| A/B/C functional smokes | Initial matched-resource paths: `mac-A5-smoke.json`, `mac-B2-A-resources-smoke.json`, `mac-C-smoke.json`; UI snapshot B/C: `mac-handoff-B-smoke.json`, `mac-handoff-C-smoke.json` |
 | Exactly-once activation | B synthetic `add-note`: one `click_events` record; no clipboard write |
+| Final normal quit / same-profile relaunch | Passed twice at f387675, 80 results each, endpoint removed after each quit; `mac-final-relaunch.json` |
 | Representative CUA screenshots | `mac-dark-handoff-7617803.png` (current UI snapshot), `mac-light-results.png` (source 404429e); `mac-dark-core-failed-fixed.png` for startup failure |
 | Installed beta | Path/hash recorded; unchanged binary hash and no owned prototype survivors after successful smokes. Initial installed PID 6376 later became 74254 during this long task; PID continuity is **not** claimed. No installed-app stop/relaunch/write was issued. |
 
@@ -108,7 +119,8 @@ same observed database counts: 235 applications, 14,997 files, 50 notes, 79 snip
 counts on every run rather than assuming all generated files are eligible for indexing.
 
 The B/C smoke binaries at the UI handoff snapshot are clean source `76178030aacc7a8c18970a99f0e2a042d8d11018`.
-The later explicit control-endpoint quit cleanup is verified by a same-profile relaunch
+The final code artifact is clean source **f3876757bc6f9d7578789273ac4f2c44ce4e42f4**.
+Its explicit control-endpoint quit cleanup is verified by a same-profile relaunch
 smoke. `evidence/HANDOFF.json` gives each final artifact’s exact source and hash. The
 B at that snapshot repeats safe add-note activation and records exactly one usage event. It uses
 locally staged read-only resources (`matched_A:false`), not a newly built matched A.
@@ -199,10 +211,12 @@ facade integration tests passed on 1.98.1 (no ignored tests). See
 `evidence/windows-backend-repaired-host.log`. Those checks used source 79821f2; the
 production seam has no changes after that snapshot.
 
-Source 7617803 debug/release and all six session tests passed, with no ignored tests
-(`windows-build-handoff2-host.log`). Earlier source 79821f2 headless C passed, including rejection of an
+Final source f387675 debug/release and all six session tests passed, with no ignored tests
+(`windows-build-final-host.log`). The same final source headless C passed, including rejection of an
 unauthenticated quit, 80 results for `doc`, 14,997 indexed files, all fixture stores and
-exit 0. Three-second PrivateUsage/WorkingSet/CPU samples are **collector smokes**, without
+exit 0 (`windows-headless-final.json`). The artifact path/hash and empty owned-process
+audit are in `windows-artifact-final.json`. Three-second PrivateUsage/WorkingSet/CPU
+samples (`windows-C-metrics-final.json`) are **collector smokes**, without
 stabilization or a matched A. Cached generated SQLite outputs needed targeted task-cache
 invalidation for the final rebuild; retained failure logs are not presented as successes.
 
@@ -222,8 +236,8 @@ negative check, ready/query, metrics, quit and marked clipboard-store cleanup):
 & 'C:\Users\User\AppData\Local\Programs\Python\Python313\python.exe' "$prototypeStage\windows-headless-smoke.py"
 ```
 
-That task-owned helper creates `fixture-C-<binary source SHA>` and refuses an existing
-fixture; keep the previous raw run and choose a fresh root before repeating the same SHA.
+That task-owned helper creates a fresh `fixture-C-<binary source SHA>-<random>` directory
+on every run, preserving each previous fixture and raw log.
 For manual controls use the source’s `scripts/control.py <fixture path> status|query|quit`.
 The task-owned metrics collector is `scripts/windows-metrics.ps1 -RootPid <pid> -Seconds
 60 -Output <tasktemp file>`; no exposed TCP server or arbitrary code-evaluation hook.
