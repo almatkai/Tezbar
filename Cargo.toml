@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["crates/tezbar-core", "crates/tezbar-host", "crates/tezbar-update", "crates/tezbar-ui-model", "crates/tezbar-ui", "apps/tezbar"]
+exclude = ["src-tauri", "prototypes/native-launcher", "native/input"]
+
+[patch.crates-io]
+async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }

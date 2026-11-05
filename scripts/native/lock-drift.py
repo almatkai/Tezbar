@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""Audit the separate lock domains against the accepted Tauri seed. Python 3.11+."""
+import hashlib, json, pathlib, subprocess, tomllib
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+BASE = '55971131bf2bcb2cd4e44129fc0c1a130d085500'
+WATCH = {'tokio','rusqlite','serde_json','notify','walkdir','arboard','regex','unicode-normalization','image','reqwest'}
+def packages(data):
+    return { (p['name'],p['version'],p.get('source','path')): p for p in tomllib.loads(data)['package'] }
+def versions(packages):
+    result={}
+    for name,version,source in packages:
+        if source.startswith('registry+'):
+            result.setdefault(name,[]).append(version)
+    return {name:sorted(v) for name,v in result.items()}
+seed=packages(subprocess.check_output(['git','show',f'{BASE}:src-tauri/Cargo.lock'],cwd=ROOT).decode())
+a=versions(seed)
+report={'baseline':BASE,'locks':{}}
+failed=False
+for path in ['Cargo.lock','src-tauri/Cargo.lock','prototypes/native-launcher/Cargo.lock']:
+    data=(ROOT/path).read_bytes(); current=packages(data.decode()); b=versions(current)
+    changes=[dict(name=name,before=a[name],after=b[name]) for name in sorted(a.keys() & b.keys()) if a[name]!=b[name]]
+    watch=[c for c in changes if c['name'] in WATCH]
+    registry_changes=sorted(set(k for k in seed if k[2].startswith('registry+')) ^ set(k for k in current if k[2].startswith('registry+')))
+    report['locks'][path]={'sha256':hashlib.sha256(data).hexdigest(),'watchlist':{name:b.get(name) for name in sorted(WATCH)},'watchlist_changes':watch,'shared_registry_changes':changes,'registry_set_changes':registry_changes if path=='src-tauri/Cargo.lock' else None}
+    failed |= bool(watch) or (path=='src-tauri/Cargo.lock' and bool(registry_changes))
+print(json.dumps(report,indent=2))
+raise SystemExit(1 if failed else 0)

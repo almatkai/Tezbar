@@ -67,7 +67,7 @@
       "../dist-backend/extension-worker.js": "dist-backend/extension-worker.js"
     },
     "macOS": {
-      "infoPlist": "src/native_core/system/macos-permissions.plist",
+      "infoPlist": "../crates/tezbar-core/src/system/macos-permissions.plist",
       "signingIdentity": "Apple Development: almat.2003@icloud.com (ABGRBU6DGZ)"
     }
   }

@@ -2,11 +2,12 @@
 mod backend_health;
 #[cfg(feature = "desktop-bench")]
 mod desktop_bench;
-mod native_core;
+use tezbar_core as native_core;
+mod tauri_host;
+mod process_notifications;
 #[cfg(feature = "native-launcher-facade")]
-pub mod launcher_facade;
-mod native_v2_cli;
-pub use native_v2_cli::dispatch as dispatch_native_v2_cli;
+pub use tezbar_core::launcher_facade;
+pub use tezbar_core::native_v2_cli::dispatch as dispatch_native_v2_cli;
 mod native_input;
 mod window_layout;
 use backend_health::BackendStatus;
@@ -14,7 +15,7 @@ mod manual_releases;
 mod native_terminal;
 mod qr_download;
 mod release_channels;
-mod resource_directory;
+use tezbar_core::resource_directory;
 #[cfg(target_os = "macos")]
 mod timer_notifications;
 mod updater;
@@ -44,7 +45,7 @@ use std::collections::BTreeMap;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -499,45 +500,14 @@ fn openray_config_path() -> Option<PathBuf> {
         .map(|home| PathBuf::from(home).join(".openray").join("config.json"))
 }
 
-fn bun_executable_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "bun.exe"
-    } else {
-        "bun"
-    }
-}
-
 static PROFILE_CONFIG_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 static PROFILE_STORE: std::sync::OnceLock<Arc<native_core::common::ConfigStore>> =
     std::sync::OnceLock::new();
 
-fn bun_in_user_profile() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .map(|home| home.join(".bun").join("bin").join(bun_executable_name()))
-}
-
-fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
-    let cached = app_local_data.join("bun").join(bun_executable_name());
-    if cached.is_file() {
-        return Ok(cached);
-    }
-    if let Some(user_bun) = bun_in_user_profile().filter(|path| path.is_file()) {
-        return Ok(user_bun);
-    }
-    if Command::new(bun_executable_name())
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-    {
-        return Ok(PathBuf::from(bun_executable_name()));
-    }
-    Err("Bun runtime is not installed on this system. Tezbar core features and Native V2 extensions run natively in Rust without Bun.".to_string())
-}
-
+#[cfg(test)]
+use tezbar_core::bun::locate_bun;
+#[cfg(test)]
+use tezbar_core::bun::bun_executable_name;
 fn read_openray_config() -> serde_json::Value {
     if let Some(config) = PROFILE_STORE.get() {
         return config.read().unwrap_or_else(|error| {
@@ -2868,7 +2838,6 @@ pub fn run() {
         })
         .manage(WindowBehaviorState::default())
         .manage(window_layout::WindowLayoutState::default())
-        .manage(native_terminal::NativeTerminalState::default())
         .on_window_event(|window, event| {
             if window.label() == "settings" {
                 match event {
@@ -3139,7 +3108,7 @@ pub fn run() {
                 temp_dir: handle.path().temp_dir()?,
                 home_dir,
             };
-            let context = native_core::common::CoreContext::new(paths, Some(handle.clone()));
+            let context = native_core::common::CoreContext::new(paths, Some(Arc::new(tauri_host::TauriHost::new(handle.clone())))).with_dev_mode(tauri::is_dev()).with_legacy_data_dir(handle.path().app_data_dir().ok());
             let _ = PROFILE_STORE.set(context.config.clone());
             let core = native_core::NativeCore::new(context).map_err(std::io::Error::other)?;
             app.manage(core.clone());

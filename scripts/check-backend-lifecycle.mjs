@@ -9,13 +9,15 @@ const child = spawn(
   [
     'test',
     '--locked',
+    '-p',
+    'tezbar-core',
     '--lib',
-    'native_core::tests::native_profile_survives_restart_without_an_extension_runtime',
+    'tests::native_profile_survives_restart_without_an_extension_runtime',
     '--',
     '--exact',
   ],
   {
-    cwd: fileURLToPath(new URL('../src-tauri/', import.meta.url)),
+    cwd: fileURLToPath(new URL('../', import.meta.url)),
     stdio: 'inherit',
   }
 )

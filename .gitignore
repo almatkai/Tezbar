@@ -72,3 +72,6 @@ CLAUDE.md
 /prototypes/native-launcher/evidence/
 /prototypes/native-launcher/scripts/__pycache__/
 /docs/performance/__pycache__/
+
+# Native application workspace build artifacts
+/target/

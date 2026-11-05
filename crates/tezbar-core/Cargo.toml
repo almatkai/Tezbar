@@ -1,0 +1,68 @@
+[package]
+name = "tezbar-core"
+version = "0.3.0-beta.7"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+publish = false
+
+[features]
+native-launcher-facade = []
+
+[build-dependencies]
+cc = "1.2.64"
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+semver = "1.0"
+base64 = "0.22"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "native-tls", "stream", "multipart", "query", "form", "gzip", "brotli"] }
+log = "0.4"
+open = "5"
+tokio = { version = "1", features = ["full"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "tiff"] }
+portable-pty = "0.9"
+alloc-stdlib = "=0.2.2"
+brotli-decompressor = "=5.0.0"
+tempfile = "3.27"
+rusqlite = { version = "0.32.1", features = ["bundled", "load_extension"] }
+sha1 = "0.10"
+sha2 = "0.10"
+zip = { version = "4.6.1", default-features = false, features = ["deflate"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+regex = "1"
+walkdir = "2"
+unicode-normalization = "0.1"
+futures-util = "0.3"
+arboard = "=3.6.1"
+notify = "8"
+libc = "0.2"
+aes-gcm = "0.10"
+zeroize = "1"
+jsonschema = { version = "=0.29.1", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
+core-graphics = { version = "0.23", features = ["highsierra"] }
+core-foundation = "0.9"
+objc2 = "0.6.4"
+objc2-foundation = "0.3.2"
+objc2-user-notifications = "0.3.2"
+security-framework = "3"
+objc2-local-authentication = { version = "0.3", default-features = false, features = ["std", "LAContext", "LAError", "block2"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging"
+] }
