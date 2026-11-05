@@ -50,7 +50,7 @@ impl NativeDesktop {
     }
 }
 struct Item {
-    tray: tray_icon::TrayIcon,
+    _tray: tray_icon::TrayIcon,
     actions: HashMap<String, String>,
     callback: StatusCallback,
 }
@@ -145,7 +145,7 @@ impl StatusItems for NativeDesktop {
                 state.items.insert(
                     id,
                     Item {
-                        tray,
+                        _tray: tray,
                         actions,
                         callback,
                     },

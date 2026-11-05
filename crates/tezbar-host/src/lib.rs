@@ -11,3 +11,4 @@ pub mod desktop;
 pub mod logging;
 pub mod paths;
 pub mod single_instance;
+pub mod monitors;

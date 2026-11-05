@@ -8,9 +8,6 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-/// GitHub repository that publishes Tezbar releases ("owner/repo").
-const GITHUB_REPO: &str = "almatkai/Tezbar";
-
 pub use tezbar_update::AppUpdateStatus;
 pub struct UpdaterState {
     operation: tokio::sync::Mutex<()>,

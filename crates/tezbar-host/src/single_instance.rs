@@ -4,7 +4,7 @@ use std::{path::Path, sync::Arc};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub struct Instance {
     #[cfg(windows)]
-    mutex: MutexLease,
+    _mutex: MutexLease,
     task: tokio::task::JoinHandle<()>,
     #[cfg(unix)]
     lock: std::fs::File,
@@ -147,11 +147,14 @@ impl Instance {
                     server = next;
                 }
             });
-            Ok(Claim::Owner(Self { task, mutex }))
+            Ok(Claim::Owner(Self {
+                task,
+                _mutex: mutex,
+            }))
         }
     }
 }
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
     #[tokio::test]
@@ -285,34 +288,19 @@ fn process_user_sid() -> std::io::Result<String> {
 }
 #[cfg(windows)]
 struct MutexLease {
-    handle: std::os::windows::io::OwnedHandle,
+    _handle: std::os::windows::io::OwnedHandle,
     owner: bool,
-}
-#[cfg(windows)]
-impl Drop for MutexLease {
-    fn drop(&mut self) {
-        use std::os::windows::io::AsRawHandle;
-        if self.owner {
-            unsafe {
-                windows_sys::Win32::System::Threading::ReleaseMutex(
-                    self.handle.as_raw_handle() as _
-                );
-            }
-        }
-    }
 }
 #[cfg(windows)]
 fn owner_mutex(name: &str) -> std::io::Result<MutexLease> {
     use std::os::windows::io::FromRawHandle;
     use windows_sys::Win32::{
-        Foundation::{
-            GetLastError, LocalFree, ERROR_ALREADY_EXISTS, WAIT_ABANDONED, WAIT_OBJECT_0,
-        },
+        Foundation::{GetLastError, LocalFree, ERROR_ALREADY_EXISTS},
         Security::{
             Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW,
             SECURITY_ATTRIBUTES,
         },
-        System::Threading::{CreateMutexW, WaitForSingleObject},
+        System::Threading::CreateMutexW,
     };
     let sddl: Vec<u16> = format!("D:P(A;;GA;;;{})", process_user_sid()?)
         .encode_utf16()
@@ -335,20 +323,69 @@ fn owner_mutex(name: &str) -> std::io::Result<MutexLease> {
             lpSecurityDescriptor: descriptor,
             bInheritHandle: 0,
         };
-        let handle = CreateMutexW(&attributes, 1, name.as_ptr());
+        let handle = CreateMutexW(&attributes, 0, name.as_ptr());
         let existed = GetLastError() == ERROR_ALREADY_EXISTS;
         LocalFree(descriptor);
         if handle.is_null() {
             return Err(std::io::Error::last_os_error());
         }
-        let owner = !existed
-            || matches!(
-                WaitForSingleObject(handle, 0),
-                WAIT_OBJECT_0 | WAIT_ABANDONED
-            );
+        let owner = !existed;
         Ok(MutexLease {
-            handle: std::os::windows::io::OwnedHandle::from_raw_handle(handle),
+            _handle: std::os::windows::io::OwnedHandle::from_raw_handle(handle),
             owner,
         })
+    }
+}
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+    #[tokio::test]
+    async fn isolated_activation_child() {
+        let Some(root) = std::env::var_os("TEZBAR_INSTANCE_FIXTURE") else {
+            return;
+        };
+        assert!(matches!(
+            Instance::claim(
+                Path::new(&root),
+                "fixture-two-process",
+                Arc::new(|| panic!("child must not own"))
+            )
+            .await
+            .unwrap(),
+            Claim::Activated
+        ));
+    }
+    #[tokio::test]
+    async fn actual_second_process_activates_only_its_profile() {
+        let d = tempfile::tempdir().unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let callback: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            let _ = tx.send(());
+        });
+        let Claim::Owner(_owner) = Instance::claim(d.path(), "fixture-two-process", callback)
+            .await
+            .unwrap()
+        else {
+            panic!("owner missing")
+        };
+        let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "single_instance::process_tests::isolated_activation_child",
+            ])
+            .env("TEZBAR_INSTANCE_FIXTURE", d.path())
+            .kill_on_drop(true);
+        let output = tokio::time::timeout(std::time::Duration::from_secs(5), command.output())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        rx.recv().await.unwrap();
+        assert!(rx.try_recv().is_err());
     }
 }
