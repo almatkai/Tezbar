@@ -22,7 +22,14 @@ impl PrototypeProfile {
     /// Both roots must carry matching 40-hex source manifests. Writable paths are
     /// derived exclusively from a marked, canonical child of the OS temp root.
     pub fn open(root: &Path, resource_dir: &Path) -> Result<Self, String> {
-        if !root.is_absolute() || std::fs::symlink_metadata(root).map_err(err)?.file_type().is_symlink() { return Err("Profile must be an absolute non-symlink directory".into()); }
+        if !root.is_absolute()
+            || std::fs::symlink_metadata(root)
+                .map_err(err)?
+                .file_type()
+                .is_symlink()
+        {
+            return Err("Profile must be an absolute non-symlink directory".into());
+        }
         let root = root.canonicalize().map_err(err)?;
         let temp = std::env::temp_dir().canonicalize().map_err(err)?;
         if !root.starts_with(&temp) || root == temp {
@@ -42,7 +49,15 @@ impl PrototypeProfile {
         }
         for name in ["data", "config", "home", "temp"] {
             let path = root.join(name);
-            if path.exists() && (std::fs::symlink_metadata(&path).map_err(err)?.file_type().is_symlink() || path.canonicalize().map_err(err)? != path) { return Err("Symlink in prototype paths".into()); }
+            if path.exists()
+                && (std::fs::symlink_metadata(&path)
+                    .map_err(err)?
+                    .file_type()
+                    .is_symlink()
+                    || path.canonicalize().map_err(err)? != path)
+            {
+                return Err("Symlink in prototype paths".into());
+            }
             std::fs::create_dir_all(&path).map_err(err)?;
         }
         let profile = Self {
@@ -262,7 +277,10 @@ impl Launcher {
         self.profile.validate().ok()?;
         let data = self
             .core
-            .request("asset-icon:data-url", &[json!({"kind":icon.kind,"path":icon.path})])
+            .request(
+                "asset-icon:data-url",
+                &[json!({"kind":icon.kind,"path":icon.path})],
+            )
             .await
             .ok()?;
         STANDARD

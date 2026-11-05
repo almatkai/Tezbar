@@ -70,3 +70,5 @@ CLAUDE.md
 # Isolated native launcher prototype build and measurement evidence
 /prototypes/native-launcher/target/
 /prototypes/native-launcher/evidence/
+/prototypes/native-launcher/scripts/__pycache__/
+/docs/performance/__pycache__/
