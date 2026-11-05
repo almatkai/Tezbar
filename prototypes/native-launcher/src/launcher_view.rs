@@ -194,7 +194,7 @@ impl LauncherView {
                 if applied {
                     this.search_ms = ms;
                     this.scroll.scroll_to_item_strict(0, ScrollStrategy::Top);
-                    this.prepare_icons(w, cx);
+                    this.prepare_icons_after_frame(w, cx);
                     let entity = cx.entity();
                     let committed = this.committed;
                     w.on_next_frame(move |w, _cx| {
@@ -240,12 +240,14 @@ impl LauncherView {
         });
         cx.notify();
     }
-    pub fn hide(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+    pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if !self.visible {
             return;
         }
         self.visible = false;
         self.session.hide();
+        self.input
+            .update(cx, |input, cx| input.clear_silently(w, cx));
         self.pump = None;
         self.notice = None;
         self.enter_timer = None;
@@ -283,13 +285,14 @@ impl LauncherView {
     fn activate(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.message = None;
         self.message_error = false;
+        let generation = self.session.generation;
         let Some(row) = self.session.rows.get(self.session.selected) else {
-            self.session.activation_finished();
+            self.session.activation_finished(generation);
             return;
         };
         if row.support == Support::Unsupported {
             self.message = Some(format!("{} isn't available in the prototype", row.title));
-            self.session.activation_finished();
+            self.session.activation_finished(generation);
             self.notice = Some(cx.spawn_in(w, async move |this, cx| {
                 cx.background_executor().timer(Duration::from_secs(3)).await;
                 let _ = this.update_in(cx, |this, _, cx| {
@@ -311,19 +314,22 @@ impl LauncherView {
             let _ = this.update_in(cx, |this, w, cx| {
                 this.activation_ms = started.elapsed().as_secs_f64() * 1000.;
                 this.activation_started = None;
-                this.session.activation_finished();
-                match result {
-                    Ok(Activation::Done) => this.hide(w, cx),
-                    Ok(Activation::Failed(error)) => {
-                        this.message_error = true;
-                        this.message = Some(format!("Couldn't open {title}: {error}"));
-                    }
-                    Ok(Activation::Unsupported) => {
-                        this.message = Some(format!("{title} isn't available in the prototype"));
-                    }
-                    Err(error) => {
-                        this.message_error = true;
-                        this.message = Some(format!("Couldn't open {title}: {error}"));
+                let current = this.session.activation_finished(generation);
+                if current {
+                    match result {
+                        Ok(Activation::Done) => this.hide(w, cx),
+                        Ok(Activation::Failed(error)) => {
+                            this.message_error = true;
+                            this.message = Some(format!("Couldn't open {title}: {error}"));
+                        }
+                        Ok(Activation::Unsupported) => {
+                            this.message =
+                                Some(format!("{title} isn't available in the prototype"));
+                        }
+                        Err(error) => {
+                            this.message_error = true;
+                            this.message = Some(format!("Couldn't open {title}: {error}"));
+                        }
                     }
                 };
                 eprintln!(
@@ -340,6 +346,12 @@ impl LauncherView {
             let _ = this.update_in(cx, |_, _, cx| cx.notify());
         }));
         cx.notify();
+    }
+    fn prepare_icons_after_frame(&self, w: &Window, cx: &Context<Self>) {
+        let weak = cx.weak_entity();
+        w.on_next_frame(move |w, cx| {
+            let _ = weak.update(cx, |this, cx| this.prepare_icons(w, cx));
+        });
     }
     fn prepare_icons(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if !self.visible {
@@ -471,6 +483,7 @@ impl LauncherView {
                     .move_selection(if event.keystroke.key == "up" { -1 } else { 1 });
                 self.scroll
                     .scroll_to_item(self.session.selected, ScrollStrategy::Top);
+                self.prepare_icons_after_frame(w, cx);
                 cx.stop_propagation();
                 cx.notify();
             }

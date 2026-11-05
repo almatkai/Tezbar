@@ -71,6 +71,19 @@ impl TextInput {
             scroll_x: px(0.),
         }
     }
+    pub fn clear_silently(&mut self, window: &Window, cx: &mut Context<Self>) {
+        self.content = "".into();
+        self.selected_range = 0..0;
+        self.selection_reversed = false;
+        self.marked_range = None;
+        self.before_composition = None;
+        self.last_layout = None;
+        self.last_bounds = None;
+        self.is_selecting = false;
+        self.scroll_x = px(0.);
+        window.notify_text_input_changed(&self.focus_handle);
+        cx.notify();
+    }
     pub fn set_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.selected_range = 0..self.content.len();
         self.replace_text_in_range(None, text, window, cx);

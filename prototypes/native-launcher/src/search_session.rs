@@ -118,8 +118,10 @@ impl<R> SearchSession<R> {
             true
         }
     }
-    pub fn activation_finished(&mut self) {
+    pub fn activation_finished(&mut self, generation: u64) -> bool {
+        let current = self.activating && generation == self.generation;
         self.activating = false;
+        current
     }
     pub fn hide(&mut self) {
         self.generation += 1;
@@ -166,9 +168,24 @@ mod tests {
         assert!(s.deferred_enter(30));
         assert!(!s.enter(31, false));
         assert!(!s.deferred_enter(32));
-        s.activation_finished();
+        s.activation_finished(2);
         s.hide();
         assert!(!s.enter(33, true));
+    }
+    #[test]
+    fn late_activation_releases_ownership_without_clobbering_new_session() {
+        let mut s = SearchSession::default();
+        s.commit("a".into(), 0);
+        s.complete(1, vec![1], 10);
+        assert!(s.enter(11, false));
+        s.hide();
+        s.commit("b".into(), 20);
+        s.complete(3, vec![2], 30);
+        assert!(!s.activation_finished(1));
+        assert!(!s.activating);
+        assert_eq!(s.query, "b");
+        assert_eq!(s.rows, vec![2]);
+        assert!(s.enter(31, false));
     }
     #[test]
     fn timeout_and_hide_drop_deferred_activation() {
