@@ -216,7 +216,13 @@ def main():
             if a.mode!='C':
                 from window_visibility import main_on_screen
                 if bool(main_on_screen(d.pid)) != (a.condition=='visible'):raise RuntimeError('Window visibility changed during measurement; discard this run')
-            value=dict(t=time.monotonic()-started,phase=phase,processes=processes(d.pid));raw.append(value);return value
+            elapsed=time.monotonic()-started;wall_ns=time.time_ns()
+            if raw:
+                drift_s=(wall_ns-raw[-1]['wall_time_ns'])/1e9-(elapsed-raw[-1]['t'])
+                if abs(drift_s)>2:
+                    result['clock_discontinuity']=dict(drift_s=drift_s,wall_time_ns=wall_ns,t=elapsed)
+                    raise RuntimeError('Wall/monotonic clock discontinuity (sleep or clock adjustment); discard this run')
+            value=dict(t=elapsed,wall_time_ns=wall_ns,phase=phase,processes=processes(d.pid));raw.append(value);return value
         until=time.monotonic()+warmup
         while time.monotonic()<until:sample('warmup');time.sleep(1)
         if not a.smoke:
