@@ -3,7 +3,7 @@
 recursive + responsibility-owned XPC). --smoke is functional evidence, not a verdict.
 Requires a fresh byte-for-byte fixture copy for EVERY invocation. Never hashes stores.
 """
-import argparse,hashlib,json,os,pathlib,secrets,sqlite3,statistics,subprocess,sys,time,threading,tempfile
+import argparse,hashlib,json,math,os,pathlib,secrets,sqlite3,statistics,subprocess,sys,time,threading,tempfile
 from control import Control
 from build_identity import baseline_version,native_version
 REPO=pathlib.Path(__file__).resolve().parents[3]
@@ -139,7 +139,7 @@ def latency(d,repetitions=10):
     return out
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--mode',choices=['A','B','C'],required=True);p.add_argument('--root',type=pathlib.Path,required=True);p.add_argument('--binary',type=pathlib.Path,required=True);p.add_argument('--resources',type=pathlib.Path);p.add_argument('--theme',default='system');p.add_argument('--condition',choices=['hidden','visible','retained'],default='hidden');p.add_argument('--smoke',action='store_true');p.add_argument('--output',type=pathlib.Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--mode',choices=['A','B','C'],required=True);p.add_argument('--root',type=pathlib.Path,required=True);p.add_argument('--binary',type=pathlib.Path,required=True);p.add_argument('--resources',type=pathlib.Path);p.add_argument('--theme',default='system');p.add_argument('--condition',choices=['hidden','visible','retained'],default='hidden');p.add_argument('--smoke',action='store_true');p.add_argument('--protocol',choices=['strict-idle','background-idle'],default='strict-idle');p.add_argument('--output',type=pathlib.Path,required=True);a=p.parse_args()
     if sys.platform!='darwin':raise RuntimeError('macOS accounting harness only; use Windows collector for PrivateUsage')
     root=a.root.resolve();binary=a.binary.resolve();assert (root/'.tezbar-desktop-benchmark').is_file()
     if a.mode!='C':require_unlocked_display()
@@ -149,7 +149,8 @@ def main():
     raw=[];result=dict(mode=a.mode,condition=a.condition,smoke=a.smoke,binary_version=version,source_sha=version['source'],harness_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),input_binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),resources_manifest=json.loads((root/'resource-manifest.json').read_text()) if (root/'resource-manifest.json').exists() else None,latency_boundary='synthetic committed input -> content render plus following frame callback; not photon time',runtime_shaders=True if a.mode=='B' else None)
     installed=pathlib.Path('/Applications/Tezbar.app/Contents/MacOS/tezbar');before=hashlib.sha256(installed.read_bytes()).hexdigest()
     # Retain every collected sample even when stabilization or visibility fails.
-    result.update(root=str(root),samples=raw)
+    result.update(root=str(root),samples=raw,protocol=a.protocol,strict_cpu_gate_passed=False)
+    if a.protocol=='background-idle':result['protocol_deviation']='Separately authorized background-idle observation: preserve periodic core refresh/scans; 120s warmup, 30 diagnostic CPU intervals, 60s sampling without CPU-p95<5 prerequisite. Original strict-idle C failed; this is not a strict-idle pass or a causal renderer comparison.'
     startup=[];stopping=threading.Event()
     def startup_sampler():
         while not stopping.is_set():
@@ -232,12 +233,18 @@ def main():
                 s=sample('stabilize');last=[v for v in raw if v['phase']=='stabilize'][-31:]
                 cpu=[summarize(last[i:i+2])['cpu_percent_one_core'] for i in range(len(last)-1)]
                 result['stabilization']=dict(intervals=len(cpu),mean_cpu=statistics.mean(cpu) if cpu else None,p95_cpu=sorted(cpu)[28] if len(cpu)==30 else None,last_intervals_cpu=cpu)
-                if len(cpu)==30 and statistics.mean(cpu)<2 and sorted(cpu)[28]<5:break
+                if len(cpu)==30:
+                    if a.protocol=='background-idle':break
+                    if statistics.mean(cpu)<2 and sorted(cpu)[28]<5:
+                        result['strict_cpu_gate_passed']=True;break
                 if time.monotonic()>deadline:raise TimeoutError('CPU stabilization did not meet spec')
                 time.sleep(1)
         until=time.monotonic()+(3 if a.smoke else 60)
         while time.monotonic()<until:sample('measure');time.sleep(1)
-        result['summary']=summarize([s for s in raw if s['phase']=='measure']);result['samples']=raw
+        measured_samples=[s for s in raw if s['phase']=='measure']
+        result['summary']=summarize(measured_samples);result['samples']=raw
+        interval_cpu=[summarize(measured_samples[i:i+2])['cpu_percent_one_core'] for i in range(len(measured_samples)-1)]
+        result['cpu_interval_summary']=dict(intervals=len(interval_cpu),mean=statistics.mean(interval_cpu),p95=sorted(interval_cpu)[math.ceil(.95*len(interval_cpu))-1],peak=max(interval_cpu))
         result['host']={cmd:subprocess.run(command,capture_output=True,text=True).stdout for cmd,command in [('swap',['sysctl','vm.swapusage']),('power',['pmset','-g','batt'])]}
         result['map_commands']=[]
         for proc in raw[-1]['processes']:
