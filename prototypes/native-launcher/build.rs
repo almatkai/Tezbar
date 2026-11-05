@@ -1,5 +1,16 @@
 use std::process::Command;
 fn main() {
+    let compiler = Command::new(std::env::var_os("RUSTC").expect("Cargo RUSTC"))
+        .arg("-vV")
+        .output()
+        .expect("compiler identity");
+    assert!(compiler.status.success());
+    let compiler = String::from_utf8(compiler.stdout).expect("UTF-8 rustc version");
+    let commit = compiler
+        .lines()
+        .find_map(|line| line.strip_prefix("commit-hash: "))
+        .expect("compiler commit");
+    println!("cargo:rustc-env=TEZBAR_PROTOTYPE_RUSTC={commit}");
     println!("cargo:rerun-if-env-changed=TEZBAR_PROTOTYPE_SOURCE_SHA");
     for path in ["src", "Cargo.toml", "Cargo.lock", "../../src-tauri/src"] {
         println!("cargo:rerun-if-changed={path}");

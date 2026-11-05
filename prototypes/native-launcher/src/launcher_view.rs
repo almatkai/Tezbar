@@ -24,6 +24,7 @@ pub struct LauncherView {
     message: Option<String>,
     message_error: bool,
     visible: bool,
+    quitting: bool,
     started: Instant,
     committed: Instant,
     painted_generation: Option<u64>,
@@ -76,6 +77,7 @@ impl LauncherView {
             message: None,
             message_error: false,
             visible: show,
+            quitting: false,
             started: Instant::now(),
             committed: Instant::now(),
             painted_generation: None,
@@ -257,7 +259,9 @@ impl LauncherView {
         self.notice = None;
         self.enter_timer = None;
         self.icons_task = None;
-        self.icons.clear();
+        for image in self.icons.drain().filter_map(|(_, image)| image) {
+            cx.drop_image(image, Some(&mut *w));
+        }
         self.lru.clear();
         cx.hide();
         let core = self.core.clone();
@@ -395,29 +399,47 @@ impl LauncherView {
         let g = self.session.displayed;
         let task = Tokio::spawn(cx, async move {
             let mut decoded = vec![];
-            for icon in icons {
-                let image = core
-                    .icon(&icon)
-                    .await
-                    .and_then(|png| image::load_from_memory(&png).ok())
-                    .map(|i| Arc::new(RenderImage::new(vec![image::Frame::new(i.to_rgba8())])));
-                decoded.push((icon.key(), image));
+            // Bound qlmanage/decode work while allowing the first viewport to fill together.
+            for batch in icons.chunks(4) {
+                let mut tasks = tokio::task::JoinSet::new();
+                for icon in batch.iter().cloned() {
+                    let core = core.clone();
+                    tasks.spawn(async move {
+                        let image = core
+                            .icon(&icon)
+                            .await
+                            .and_then(|png| image::load_from_memory(&png).ok())
+                            .map(|image| {
+                                Arc::new(RenderImage::new(vec![image::Frame::new(bgra(image))]))
+                            });
+                        (icon.key(), image)
+                    });
+                }
+                while let Some(result) = tasks.join_next().await {
+                    if let Ok(icon) = result {
+                        decoded.push(icon);
+                    }
+                }
             }
             decoded
         });
         self.icons_task = Some(cx.spawn_in(w, async move |this, cx| {
             if let Ok(decoded) = task.await {
-                let _ = this.update_in(cx, |this, _, cx| {
+                let _ = this.update_in(cx, |this, w, cx| {
                     if !this.visible || this.session.displayed != g {
                         return;
                     }
                     for (key, image) in decoded {
                         this.lru.retain(|k| k != &key);
                         this.lru.push_back(key.clone());
-                        this.icons.insert(key, image);
+                        if let Some(Some(old)) = this.icons.insert(key, image) {
+                            cx.drop_image(old, Some(&mut *w));
+                        }
                         while this.lru.len() > 128 {
                             if let Some(old) = this.lru.pop_front() {
-                                this.icons.remove(&old);
+                                if let Some(Some(image)) = this.icons.remove(&old) {
+                                    cx.drop_image(image, Some(&mut *w));
+                                }
                             }
                         }
                     }
@@ -432,6 +454,9 @@ impl LauncherView {
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<Value, String> {
+        if self.quitting && !matches!(request["op"].as_str(), Some("status" | "ready" | "quit")) {
+            return Err("Prototype is shutting down".into());
+        }
         match request["op"].as_str().unwrap_or("") {
             "status" | "ready" => Ok(
                 json!({"ready":self.ready,"generation":self.session.generation,"displayed":self.session.displayed,"painted_generation":self.painted_generation,"pending":self.session.pending(),"visible":self.visible,"result_count":self.session.rows.len(),"rows":self.session.rows.iter().map(|r|json!({"id":r.id,"category":r.category,"supported":r.support==Support::Native})).collect::<Vec<_>>(),"selected":self.session.selected,"stale_dropped":self.session.stale_dropped,"activating":self.session.activating,"frames":self.frames,"input_echo_ms":self.echo_ms,"input_results_ms":self.results_ms,"core_search_ms":self.search_ms,"activation_ms":self.activation_ms,"error":self.error}),
@@ -469,7 +494,7 @@ impl LauncherView {
                 Ok(json!(null))
             }
             "quit" => {
-                cx.quit();
+                self.quit(w, cx);
                 Ok(json!(null))
             }
             _ => Err("unknown prototype operation".into()),
@@ -489,7 +514,7 @@ impl LauncherView {
                 self.session
                     .move_selection(if event.keystroke.key == "up" { -1 } else { 1 });
                 self.scroll
-                    .scroll_to_item(self.session.selected, ScrollStrategy::Top);
+                    .scroll_to_item(self.session.selected, ScrollStrategy::Nearest);
                 self.prepare_icons_after_frame(w, cx);
                 cx.stop_propagation();
                 cx.notify();
@@ -505,6 +530,29 @@ impl LauncherView {
             _ => {}
         }
     }
+    fn quit(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        if self.quitting {
+            return;
+        }
+        self.quitting = true;
+        self.hide(w, cx);
+        let core = self.core.clone();
+        cx.spawn(async move |_, cx| {
+            let _ = Tokio::spawn(cx, async move {
+                let _ = tokio::time::timeout(Duration::from_secs(5), core.shutdown()).await;
+            })
+            .await;
+            let _ = cx.update(|cx| cx.quit());
+        })
+        .detach();
+    }
+}
+fn bgra(image: image::DynamicImage) -> image::RgbaImage {
+    let mut pixels = image.to_rgba8();
+    for pixel in pixels.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+    }
+    pixels
 }
 fn category(category: &str) -> &'static str {
     match category {
@@ -572,7 +620,11 @@ impl Render for LauncherView {
             div()
                 .p(px(16.))
                 .text_size(px(13.))
-                .text_color(t.text3)
+                .text_color(if self.session.query.is_empty() {
+                    t.text3
+                } else {
+                    t.text2
+                })
                 .child(if self.session.query.is_empty() {
                     "Type to search apps, files, notes and commands.".into()
                 } else {
@@ -761,7 +813,7 @@ impl Render for LauncherView {
             .flex()
             .flex_col()
             .on_key_down(cx.listener(Self::key))
-            .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
+            .on_action(cx.listener(|this, _: &Quit, w, cx| this.quit(w, cx)))
             .child(
                 div()
                     .h(px(43.))
@@ -827,5 +879,18 @@ impl Render for LauncherView {
                             .child(hint("Hide", "Esc")),
                     ),
             )
+    }
+}
+
+#[cfg(test)]
+mod icon_tests {
+    #[test]
+    fn native_icon_pixels_use_gpui_bgra_and_preserve_alpha() {
+        let rgba =
+            image::RgbaImage::from_raw(2, 1, vec![255, 30, 0, 128, 0, 10, 255, 255]).unwrap();
+        assert_eq!(
+            super::bgra(image::DynamicImage::ImageRgba8(rgba)).into_raw(),
+            vec![0, 30, 255, 128, 255, 10, 0, 255]
+        );
     }
 }

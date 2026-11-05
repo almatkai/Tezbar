@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Local-preview-only baseline bundle. Never modifies an installed application."""
 import argparse,pathlib,plistlib,shutil,subprocess,tempfile,hashlib,json
+from build_identity import baseline_version
 p=argparse.ArgumentParser();p.add_argument('--local-preview',action='store_true',required=True);p.add_argument('--root',type=pathlib.Path,required=True);p.add_argument('--binary',type=pathlib.Path,required=True);a=p.parse_args()
 r=a.root.resolve();repo=pathlib.Path(__file__).resolve().parents[3]
 assert pathlib.Path(tempfile.gettempdir()).resolve() in r.parents and (r/'.tezbar-desktop-benchmark').is_file()
+receipt=baseline_version(a.binary,(r/'.tezbar-native-launcher-prototype').read_text())
 app=r/'Tezbar Performance.app';assert not app.exists();contents=app/'Contents';(contents/'MacOS').mkdir(parents=True)
 shutil.copy2(a.binary,contents/'MacOS/tezbar')
 # Same resource generator as B/C, from the same selected checkout's built payloads.

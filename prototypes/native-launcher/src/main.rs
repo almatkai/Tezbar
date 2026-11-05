@@ -45,7 +45,7 @@ fn main() -> anyhow::Result<()> {
     if args.iter().any(|a| a == "--version") {
         println!(
             "{}",
-            serde_json::json!({"source":env!("TEZBAR_PROTOTYPE_GIT_SHA"),"dirty":env!("TEZBAR_PROTOTYPE_DIRTY"),"gpui_rev":"c84af5b99cbc366d675064e52b23664a015b6e35","runtime_shaders":true,"bench_control":cfg!(feature="bench-control")})
+            serde_json::json!({"source":env!("TEZBAR_PROTOTYPE_GIT_SHA"),"dirty":env!("TEZBAR_PROTOTYPE_DIRTY"),"rustc_commit":env!("TEZBAR_PROTOTYPE_RUSTC"),"gpui_rev":"c84af5b99cbc366d675064e52b23664a015b6e35","runtime_shaders":true,"bench_control":cfg!(feature="bench-control")})
         );
         return Ok(());
     }

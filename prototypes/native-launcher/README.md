@@ -169,7 +169,7 @@ workload reuses the preserved responsiveness harness, not new arbitrary frontend
 ```sh
 # From clean selected worktree, after rebuilding both binaries at the same final SHA:
 pnpm build:frontend
-CARGO_TARGET_DIR="$PWD/prototypes/native-launcher/target/tauri-a" cargo +1.98.1 build --manifest-path src-tauri/Cargo.toml --locked --release --features desktop-bench,tauri/custom-protocol
+/opt/homebrew/bin/python3 prototypes/native-launcher/scripts/build-a.py
 export CARGO_TARGET_DIR="$PWD/prototypes/native-launcher/target"
 cargo +1.98.1 build --manifest-path prototypes/native-launcher/Cargo.toml --locked --release --features bench-control
 prototype_template="$(/opt/homebrew/bin/python3 prototypes/native-launcher/scripts/fixture.py)"
@@ -261,3 +261,24 @@ The task-owned metrics collector is `scripts/windows-metrics.ps1 -RootPid <pid> 
   focus validation. No available CUA surface controls the remote console. `windows-metrics.ps1`
   collects Toolhelp-owned PrivateUsage/WorkingSet/CPU; it does not compare platforms.
   A Windows matched baseline control transport is deferred while interactive QA is blocked.
+
+## Parent repairs after Opus review 45278ff
+
+F1/F2: RGBA icons are converted to GPUI BGRA. Hide, replacement and LRU eviction
+explicitly remove their GPU atlas entries. Icon lookup/decode has concurrency four.
+F7/F9: keyboard navigation scrolls to the nearest viewport edge; the no-results
+line uses text-2. Control quit and Cmd-Q/Alt-F4 await bounded core shutdown before
+GPUI quit (an OS-forced termination can still bypass this hook).
+
+F3: hidden A/B start hidden, then show once and hide, with no icon query. Visible
+A/B show once and commit doc. Opening timings and the fixed latency workload run
+only in the retained condition in both apps. Each result records the preparation
+steps; smoke results separately identify their extra synthetic activation work.
+A retains its resolved icon cache on hide while B releases it, a declared difference.
+
+F4–F6: bundling accepts an explicit binary, which is re-verified after signing.
+Build A with scripts/build-a.py from a clean checkout. Its adjacent build receipt
+binds source, binary SHA-256, resource hashes and compiler commit; stale receipts,
+resource changes and compilers other than Rust 1.98.1 are refused. B embeds its
+compiler commit and exposes it with --version. Results separate binary source from
+harness source. The full runner also requires equal indexed category counts.

@@ -5,6 +5,7 @@ Requires a fresh byte-for-byte fixture copy for EVERY invocation. Never hashes s
 """
 import argparse,hashlib,json,os,pathlib,secrets,sqlite3,statistics,subprocess,sys,time,threading,tempfile
 from control import Control
+from build_identity import baseline_version,native_version
 REPO=pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(REPO/'docs/performance'))
 from desktop import Desktop,processes,summarize,scrub_fixture_clipboard,require_unlocked_display
@@ -68,7 +69,7 @@ class Native:
         token=self.root/'control-token';token.write_text(secrets.token_hex(32));token.chmod(0o600)
         self.stdout=(self.root/'stdout.log').open('w');self.stderr=(self.root/'stderr.log').open('w')
         self.started=time.monotonic()
-        self.process=subprocess.Popen([str(self.binary),'--profile',str(self.root),'--resources',str(self.resources),'--control-token-file',str(token),'--theme',self.theme]+(['--headless'] if self.headless else ['--show']),stdout=self.stdout,stderr=self.stderr)
+        self.process=subprocess.Popen([str(self.binary),'--profile',str(self.root),'--resources',str(self.resources),'--control-token-file',str(token),'--theme',self.theme]+(['--headless'] if self.headless else []),stdout=self.stdout,stderr=self.stderr)
         self.pid=self.process.pid
         wait(lambda:(self.root/'control.sock').exists() or (self.root/'control-pipe.txt').exists(),60)
         wait(lambda:self.command('status').get('launcher',{}).get('status')=='ready')
@@ -89,18 +90,21 @@ def settled(d,minimum=0):
         status=d.command('status')
         if not status['visible']:raise RuntimeError('Launcher lost focus/was hidden during synthetic workload; discard this run')
         return status if status['generation']>=minimum and not status['pending'] and status['painted_generation']==status['generation'] else None
-    return wait(check)
+    try:return wait(check)
+    except TimeoutError as error:raise TimeoutError(f'{error}; last status={d.command("status")}') from error
 def open_timings(d):
     from window_visibility import main_on_screen
     d.command('hide');wait(lambda:not main_on_screen(d.pid),5)
-    previous=d.command('status')['frames'];observed=[];stop=threading.Event()
+    previous=d.command('status')['frames'] if isinstance(d,Native) else None;observed=[];stop=threading.Event()
     def poll():
         while not stop.is_set():
             if main_on_screen(d.pid):observed.append(time.monotonic());return
             stop.wait(.002)
     thread=threading.Thread(target=poll);thread.start();started=time.monotonic()
     try:
-        d.command('show');wait(lambda:d.command('status')['frames']>previous,5)
+        d.command('show')
+        if isinstance(d,Native):wait(lambda:d.command('status')['frames']>previous,5)
+        else:d.js('await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);return true')
         receipt=time.monotonic();thread.join(5)
         return dict(open_control_receipt_ms=(receipt-started)*1000,open_os_poll_ms=(observed[0]-started)*1000 if observed else None,app_boundary='write show -> first post-show frame receipt (includes socket/poll overhead)',os_boundary='write show -> CoreGraphics on-screen 760x640 window observed; <=2ms requested polling')
     finally:stop.set();thread.join()
@@ -123,7 +127,9 @@ def main():
     root=a.root.resolve();binary=a.binary.resolve();assert (root/'.tezbar-desktop-benchmark').is_file()
     if a.mode!='C':require_unlocked_display()
     d=Baseline(root) if a.mode=='A' else Native(root,binary,a.resources.resolve(),a.mode=='C',a.theme)
-    raw=[];result=dict(mode=a.mode,condition=a.condition,smoke=a.smoke,source_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),resources_manifest=json.loads((root/'resource-manifest.json').read_text()) if (root/'resource-manifest.json').exists() else None,latency_boundary='synthetic committed input -> content render plus following frame callback; not photon time',runtime_shaders=True if a.mode=='B' else None)
+    source=(root/'.tezbar-native-launcher-prototype').read_text()
+    version=baseline_version(binary,source) if a.mode=='A' else native_version(binary,source)
+    raw=[];result=dict(mode=a.mode,condition=a.condition,smoke=a.smoke,binary_version=version,source_sha=version['source'],harness_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),resources_manifest=json.loads((root/'resource-manifest.json').read_text()) if (root/'resource-manifest.json').exists() else None,latency_boundary='synthetic committed input -> content render plus following frame callback; not photon time',runtime_shaders=True if a.mode=='B' else None)
     installed=pathlib.Path('/Applications/Tezbar.app/Contents/MacOS/tezbar');before=hashlib.sha256(installed.read_bytes()).hexdigest()
     startup=[];stopping=threading.Event()
     def startup_sampler():
@@ -138,9 +144,15 @@ def main():
         stopping.set();thread.join();result['startup_samples']=startup
         if a.mode=='A':d.wait(lambda:d.request('core:launcher:status')['status']=='ready',120)
         result.update(pid=d.pid,ready_ms=d.ready_ms,indexed_counts=counts(root))
+        if a.mode in ['A','B']:
+            result['pre_sample_steps']=['show']
+            d.command('show')
+            if a.condition=='retained':
+                result['open_timings']=open_timings(d)
+                result['pre_sample_steps']+=['hide','show','opening frame receipt','fixed query workload']
+            elif a.condition=='visible':result['pre_sample_steps']+=['query doc','results committed']
+            else:result['pre_sample_steps']+=['hide']
         if a.mode=='B':
-            result['open_timings']=open_timings(d)
-            d.command('show');ack=d.command('query',text='doc');s=settled(d,ack['expected_generation']);result['smoke_status']=s
             if a.condition=='retained' or a.smoke:result['latencies']=latency(d,1 if a.smoke else 10)
             # Exercise exactly one safe synthetic note write. No copy/open during smoke.
             if a.smoke:
@@ -149,18 +161,16 @@ def main():
                 with sqlite3.connect(root/'data/search/index.sqlite3') as db:before_clicks=db.execute('SELECT count(*) FROM click_events').fetchone()[0]
                 d.command('select',index=index);d.command('activation');wait(lambda:not d.command('status')['visible'])
                 with sqlite3.connect(root/'data/search/index.sqlite3') as db:after_clicks=db.execute('SELECT count(*) FROM click_events').fetchone()[0]
-                assert after_clicks-before_clicks==1;result['activation_click_records']=after_clicks-before_clicks
+                assert after_clicks-before_clicks==1;result['activation_click_records']=after_clicks-before_clicks;result['smoke_extra_work']='synthetic query workload and exactly-once add-note activation; not comparable idle evidence'
             if a.condition=='visible':
-                d.command('show')
+                if a.smoke:d.command('show')
                 ack=d.command('query',text='doc');settled(d,ack['expected_generation'])
             else:d.command('hide')
         elif a.mode=='A':
             if a.condition=='visible':
-                d.command('show')
                 d.js("const e=document.querySelector('#command-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'doc');e.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);return true")
-            else:d.command('show');d.command('hide')
+            elif a.condition=='hidden':d.command('hide')
             if a.condition=='retained':
-                d.command('show')
                 import importlib.util
                 spec=importlib.util.spec_from_file_location('native_responsiveness',REPO/'docs/performance/responsiveness-desktop.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
                 d.js(module.INSTALL);observations=[]
