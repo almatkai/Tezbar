@@ -22,6 +22,7 @@ pub struct LauncherView {
     ready: bool,
     error: Option<String>,
     message: Option<String>,
+    message_error: bool,
     visible: bool,
     started: Instant,
     committed: Instant,
@@ -72,6 +73,7 @@ impl LauncherView {
             ready: false,
             error: None,
             message: None,
+            message_error: false,
             visible: show,
             started: Instant::now(),
             committed: Instant::now(),
@@ -92,18 +94,18 @@ impl LauncherView {
             icons: HashMap::new(),
             lru: VecDeque::new(),
             _subscriptions: vec![subscription, active, appearance, quit],
-            last_pointer: None,
+            last_pointer: Some(window.mouse_position()),
         };
         let ready = Tokio::spawn(cx, async move { core.ready().await });
         view.search_task = Some(cx.spawn_in(window, async move |this, cx| {
-            let result = ready.await;
+            let result = ready.await.map_err(|e| e.to_string()).and_then(|r| r);
             let _ = this.update_in(cx, |this, w, cx| match result {
-                Ok(Ok(())) => {
+                Ok(()) => {
                     this.ready = true;
                     this.commit(this.input.read(cx).content.to_string(), w, cx)
                 }
-                other => {
-                    this.error = Some(format!("Search couldn't start: {other:?}"));
+                Err(error) => {
+                    this.error = Some(format!("Search couldn't start: {error}"));
                     cx.notify();
                 }
             });
@@ -117,6 +119,7 @@ impl LauncherView {
         self.session.commit(text, self.now());
         self.committed = Instant::now();
         self.message = None;
+        self.message_error = false;
         self.error = None;
         self.enter_timer = None;
         let g = self.session.generation;
@@ -163,16 +166,19 @@ impl LauncherView {
             (response, started.elapsed().as_secs_f64() * 1000.)
         });
         self.search_task = Some(cx.spawn_in(w, async move |this, cx| {
-            let result = task.await;
+            let result = task
+                .await
+                .map_err(|e| e.to_string())
+                .and_then(|(response, ms)| response.map(|rows| (rows, ms)));
             let ms = result.as_ref().map(|(_, ms)| *ms).unwrap_or(0.);
             let _ = this.update_in(cx, |this, w, cx| {
                 let now = this.now();
                 let applied = match result {
-                    Ok((Ok(rows), _)) => this.session.complete(g, rows, now),
-                    other => {
+                    Ok((rows, _)) => this.session.complete(g, rows, now),
+                    Err(error) => {
                         let applied = this.session.fail(g, now);
                         if applied {
-                            this.error = Some(format!("Search failed: {other:?}"));
+                            this.error = Some(format!("Search failed: {error}"));
                         }
                         applied
                     }
@@ -267,6 +273,8 @@ impl LauncherView {
         }
     }
     fn activate(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        self.message = None;
+        self.message_error = false;
         let Some(row) = self.session.rows.get(self.session.selected) else {
             self.session.activation_finished();
             return;
@@ -298,7 +306,17 @@ impl LauncherView {
                 this.session.activation_finished();
                 match result {
                     Ok(Activation::Done) => this.hide(w, cx),
-                    other => this.message = Some(format!("Couldn't open {title}: {other:?}")),
+                    Ok(Activation::Failed(error)) => {
+                        this.message_error = true;
+                        this.message = Some(format!("Couldn't open {title}: {error}"));
+                    }
+                    Ok(Activation::Unsupported) => {
+                        this.message = Some(format!("{title} isn't available in the prototype"));
+                    }
+                    Err(error) => {
+                        this.message_error = true;
+                        this.message = Some(format!("Couldn't open {title}: {error}"));
+                    }
                 };
                 eprintln!(
                     "activation_response_ms={:.3}",
@@ -493,6 +511,8 @@ impl Render for LauncherView {
         let t = theme::tokens(w);
         let message = if let Some(m) = &self.message {
             m.clone()
+        } else if !self.ready && self.error.is_some() {
+            String::new()
         } else if !self.ready {
             "Starting search…".into()
         } else if self.session.activating {
@@ -764,7 +784,18 @@ impl Render for LauncherView {
                     .justify_between()
                     .text_size(px(11.))
                     .text_color(t.text3)
-                    .child(div().flex_1().min_w_0().truncate().child(message))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(if self.message_error {
+                                t.danger
+                            } else {
+                                t.text3
+                            })
+                            .child(message),
+                    )
                     .child(
                         div()
                             .flex()
