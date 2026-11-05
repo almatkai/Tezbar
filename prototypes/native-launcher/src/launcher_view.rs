@@ -33,6 +33,7 @@ pub struct LauncherView {
     frames: u64,
     enter_timer: Option<Task<()>>,
     activation_started: Option<Instant>,
+    activation_title: Option<String>,
     activation_ms: f64,
     search_task: Option<Task<()>>,
     pump: Option<Task<()>>,
@@ -84,6 +85,7 @@ impl LauncherView {
             frames: 0,
             enter_timer: None,
             activation_started: None,
+            activation_title: None,
             activation_ms: 0.,
             search_task: None,
             pump: None,
@@ -307,6 +309,7 @@ impl LauncherView {
             return;
         }
         let title = row.title.clone();
+        self.activation_title = Some(title.clone());
         let ticket = row.ticket(&self.session.query, self.session.selected + 1);
         let core = self.core.clone();
         let task = Tokio::spawn(cx, async move { core.activate(ticket).await });
@@ -317,6 +320,7 @@ impl LauncherView {
             let _ = this.update_in(cx, |this, w, cx| {
                 this.activation_ms = started.elapsed().as_secs_f64() * 1000.;
                 this.activation_started = None;
+                this.activation_title = None;
                 let current = this.session.activation_finished(generation);
                 if current {
                     match result {
@@ -546,11 +550,7 @@ impl Render for LauncherView {
             {
                 format!(
                     "Opening {}…",
-                    self.session
-                        .rows
-                        .get(self.session.selected)
-                        .map(|r| r.title.as_str())
-                        .unwrap_or("")
+                    self.activation_title.as_deref().unwrap_or("")
                 )
             } else {
                 String::new()
@@ -634,8 +634,7 @@ impl Render for LauncherView {
                                 .on_mouse_down(
                                     MouseButton::Left,
                                     cx.listener(move |this, _, w, cx| {
-                                        this.session.selected = ix;
-                                        if this.session.enter(this.now(), false) {
+                                        if this.session.click(ix) {
                                             this.activate(w, cx);
                                         }
                                     }),

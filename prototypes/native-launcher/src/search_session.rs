@@ -84,6 +84,13 @@ impl<R> SearchSession<R> {
             .saturating_add_signed(delta)
             .min(self.rows.len().saturating_sub(1));
     }
+    pub fn click(&mut self, index: usize) -> bool {
+        if self.activating || self.pending() || self.rows.get(index).is_none() {
+            return false;
+        }
+        self.selected = index;
+        self.begin_activation()
+    }
     pub fn enter(&mut self, now: u64, repeat: bool) -> bool {
         if repeat || self.activating {
             return false;
@@ -180,6 +187,18 @@ mod tests {
         s.activation_finished(2);
         s.hide();
         assert!(!s.enter(33, true));
+    }
+    #[test]
+    fn click_on_stale_rows_never_queues_a_different_result() {
+        let mut s = SearchSession::default();
+        s.commit("a".into(), 0);
+        s.complete(1, vec![1], 10);
+        s.commit("b".into(), 20);
+        assert!(!s.click(0));
+        s.complete(2, vec![2], 30);
+        assert!(!s.deferred_enter(30));
+        assert!(s.click(0));
+        assert!(!s.click(0));
     }
     #[test]
     fn late_activation_releases_ownership_without_clobbering_new_session() {
