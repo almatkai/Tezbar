@@ -1,0 +1,6198 @@
+[
+  {
+    "char": "😀",
+    "name": "grinning face",
+    "category": "Smileys",
+    "keywords": [
+      "happy",
+      "smile",
+      "joy",
+      "cheerful",
+      "positive",
+      "friendly",
+      "yellow",
+      "face",
+      "good",
+      "glad",
+      "yay"
+    ]
+  },
+  {
+    "char": "😃",
+    "name": "grinning face with big eyes",
+    "category": "Smileys",
+    "keywords": [
+      "happy",
+      "excited",
+      "smile",
+      "joyful",
+      "bright",
+      "yellow",
+      "face",
+      "delighted",
+      "upbeat",
+      "pleased"
+    ]
+  },
+  {
+    "char": "😄",
+    "name": "grinning face with smiling eyes",
+    "category": "Smileys",
+    "keywords": [
+      "laugh",
+      "lol",
+      "happy",
+      "smile",
+      "joy",
+      "fun",
+      "bright",
+      "yellow",
+      "face",
+      "cheery"
+    ]
+  },
+  {
+    "char": "😁",
+    "name": "beaming face with smiling eyes",
+    "category": "Smileys",
+    "keywords": [
+      "grin",
+      "teeth",
+      "smile",
+      "excited",
+      "delight",
+      "yellow",
+      "face",
+      "very happy",
+      "yay"
+    ]
+  },
+  {
+    "char": "😆",
+    "name": "grinning squinting face",
+    "category": "Smileys",
+    "keywords": [
+      "lol",
+      "laughing",
+      "funny",
+      "haha",
+      "joke",
+      "joy",
+      "face",
+      "yellow",
+      "comedy",
+      "lmao"
+    ]
+  },
+  {
+    "char": "😅",
+    "name": "grinning face with sweat",
+    "category": "Smileys",
+    "keywords": [
+      "nervous laugh",
+      "awkward",
+      "whew",
+      "relief",
+      "sweat",
+      "face",
+      "yellow",
+      "oops",
+      "close call"
+    ]
+  },
+  {
+    "char": "🤣",
+    "name": "rolling on the floor laughing",
+    "category": "Smileys",
+    "keywords": [
+      "rofl",
+      "lol",
+      "lmao",
+      "hilarious",
+      "funny",
+      "joke",
+      "cry laughing",
+      "face",
+      "comedy"
+    ]
+  },
+  {
+    "char": "😂",
+    "name": "face with tears of joy",
+    "category": "Smileys",
+    "keywords": [
+      "lol",
+      "laugh",
+      "haha",
+      "funny",
+      "joy",
+      "tears",
+      "cry",
+      "face",
+      "meme"
+    ]
+  },
+  {
+    "char": "🙂",
+    "name": "slightly smiling face",
+    "category": "Smileys",
+    "keywords": [
+      "smile",
+      "polite",
+      "nice",
+      "gentle",
+      "friendly",
+      "yellow",
+      "face",
+      "calm"
+    ]
+  },
+  {
+    "char": "🙃",
+    "name": "upside-down face",
+    "category": "Smileys",
+    "keywords": [
+      "sarcasm",
+      "irony",
+      "silly",
+      "goofy",
+      "playful",
+      "flip",
+      "yellow",
+      "face"
+    ]
+  },
+  {
+    "char": "😉",
+    "name": "winking face",
+    "category": "Smileys",
+    "keywords": [
+      "wink",
+      "flirt",
+      "joke",
+      "playful",
+      "tease",
+      "yellow",
+      "face",
+      "hint"
+    ]
+  },
+  {
+    "char": "😊",
+    "name": "smiling face with smiling eyes",
+    "category": "Smileys",
+    "keywords": [
+      "happy",
+      "blush",
+      "warm",
+      "kind",
+      "sweet",
+      "friendly",
+      "yellow",
+      "face"
+    ]
+  },
+  {
+    "char": "😇",
+    "name": "smiling face with halo",
+    "category": "Smileys",
+    "keywords": [
+      "angel",
+      "innocent",
+      "good",
+      "blessed",
+      "pure",
+      "holy",
+      "face",
+      "yellow"
+    ]
+  },
+  {
+    "char": "🥰",
+    "name": "smiling face with hearts",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "adore",
+      "affection",
+      "romance",
+      "cute",
+      "heart",
+      "crush",
+      "face"
+    ]
+  },
+  {
+    "char": "😍",
+    "name": "smiling face with heart eyes",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "heart eyes",
+      "crush",
+      "adore",
+      "romance",
+      "attracted",
+      "face"
+    ]
+  },
+  {
+    "char": "🤩",
+    "name": "star-struck",
+    "category": "Smileys",
+    "keywords": [
+      "amazed",
+      "wow",
+      "excited",
+      "impressed",
+      "star eyes",
+      "fan",
+      "hype",
+      "face"
+    ]
+  },
+  {
+    "char": "😘",
+    "name": "face blowing a kiss",
+    "category": "Smileys",
+    "keywords": [
+      "kiss",
+      "love",
+      "romance",
+      "affection",
+      "flirt",
+      "mwah",
+      "face"
+    ]
+  },
+  {
+    "char": "😗",
+    "name": "kissing face",
+    "category": "Smileys",
+    "keywords": [
+      "kiss",
+      "peck",
+      "love",
+      "romance",
+      "face",
+      "affection"
+    ]
+  },
+  {
+    "char": "😚",
+    "name": "kissing face with closed eyes",
+    "category": "Smileys",
+    "keywords": [
+      "kiss",
+      "love",
+      "romantic",
+      "sweet",
+      "affection",
+      "face"
+    ]
+  },
+  {
+    "char": "😙",
+    "name": "kissing face with smiling eyes",
+    "category": "Smileys",
+    "keywords": [
+      "kiss",
+      "happy",
+      "love",
+      "affection",
+      "face",
+      "romance"
+    ]
+  },
+  {
+    "char": "🥲",
+    "name": "smiling face with tear",
+    "category": "Smileys",
+    "keywords": [
+      "touched",
+      "emotional",
+      "happy cry",
+      "bittersweet",
+      "sad happy",
+      "face"
+    ]
+  },
+  {
+    "char": "😋",
+    "name": "face savoring food",
+    "category": "Smileys",
+    "keywords": [
+      "yum",
+      "delicious",
+      "tasty",
+      "hungry",
+      "food",
+      "lick",
+      "face"
+    ]
+  },
+  {
+    "char": "😛",
+    "name": "face with tongue",
+    "category": "Smileys",
+    "keywords": [
+      "silly",
+      "tease",
+      "playful",
+      "goofy",
+      "tongue out",
+      "face"
+    ]
+  },
+  {
+    "char": "😜",
+    "name": "winking face with tongue",
+    "category": "Smileys",
+    "keywords": [
+      "silly",
+      "joking",
+      "tease",
+      "fun",
+      "goofy",
+      "face"
+    ]
+  },
+  {
+    "char": "🤪",
+    "name": "zany face",
+    "category": "Smileys",
+    "keywords": [
+      "crazy",
+      "wild",
+      "goofy",
+      "chaotic",
+      "silly",
+      "weird",
+      "face"
+    ]
+  },
+  {
+    "char": "😝",
+    "name": "squinting face with tongue",
+    "category": "Smileys",
+    "keywords": [
+      "funny",
+      "silly",
+      "joke",
+      "playful",
+      "tease",
+      "face"
+    ]
+  },
+  {
+    "char": "🫠",
+    "name": "melting face",
+    "category": "Smileys",
+    "keywords": [
+      "hot",
+      "embarrassed",
+      "awkward",
+      "cringe",
+      "sweat",
+      "face",
+      "overwhelmed"
+    ]
+  },
+  {
+    "char": "🤗",
+    "name": "hugging face",
+    "category": "Smileys",
+    "keywords": [
+      "hug",
+      "support",
+      "care",
+      "comfort",
+      "warmth",
+      "friendly",
+      "face"
+    ]
+  },
+  {
+    "char": "🫡",
+    "name": "saluting face",
+    "category": "Smileys",
+    "keywords": [
+      "respect",
+      "sir",
+      "acknowledge",
+      "yes captain",
+      "military",
+      "face"
+    ]
+  },
+  {
+    "char": "🤔",
+    "name": "thinking face",
+    "category": "Smileys",
+    "keywords": [
+      "hmm",
+      "question",
+      "ponder",
+      "consider",
+      "unsure",
+      "face",
+      "idea"
+    ]
+  },
+  {
+    "char": "🫢",
+    "name": "face with open eyes and hand over mouth",
+    "category": "Smileys",
+    "keywords": [
+      "surprised",
+      "oops",
+      "shock",
+      "gasp",
+      "secret",
+      "face"
+    ]
+  },
+  {
+    "char": "🤭",
+    "name": "face with hand over mouth",
+    "category": "Smileys",
+    "keywords": [
+      "giggle",
+      "oops",
+      "secret",
+      "cute",
+      "oopsie",
+      "face"
+    ]
+  },
+  {
+    "char": "🤫",
+    "name": "shushing face",
+    "category": "Smileys",
+    "keywords": [
+      "quiet",
+      "shh",
+      "secret",
+      "silence",
+      "hush",
+      "face"
+    ]
+  },
+  {
+    "char": "🤥",
+    "name": "lying face",
+    "category": "Smileys",
+    "keywords": [
+      "lie",
+      "dishonest",
+      "pinocchio",
+      "fake",
+      "sus",
+      "face"
+    ]
+  },
+  {
+    "char": "😶",
+    "name": "face without mouth",
+    "category": "Smileys",
+    "keywords": [
+      "speechless",
+      "silent",
+      "blank",
+      "mute",
+      "face"
+    ]
+  },
+  {
+    "char": "😐",
+    "name": "neutral face",
+    "category": "Smileys",
+    "keywords": [
+      "meh",
+      "indifferent",
+      "blank",
+      "neutral",
+      "face"
+    ]
+  },
+  {
+    "char": "🫤",
+    "name": "face with diagonal mouth",
+    "category": "Smileys",
+    "keywords": [
+      "unsure",
+      "confused",
+      "meh",
+      "awkward",
+      "face"
+    ]
+  },
+  {
+    "char": "😑",
+    "name": "expressionless face",
+    "category": "Smileys",
+    "keywords": [
+      "blank",
+      "deadpan",
+      "unimpressed",
+      "meh",
+      "face"
+    ]
+  },
+  {
+    "char": "😬",
+    "name": "grimacing face",
+    "category": "Smileys",
+    "keywords": [
+      "awkward",
+      "yikes",
+      "cringe",
+      "nervous",
+      "teeth",
+      "face"
+    ]
+  },
+  {
+    "char": "🙄",
+    "name": "face with rolling eyes",
+    "category": "Smileys",
+    "keywords": [
+      "eyeroll",
+      "annoyed",
+      "whatever",
+      "sarcasm",
+      "face"
+    ]
+  },
+  {
+    "char": "😌",
+    "name": "relieved face",
+    "category": "Smileys",
+    "keywords": [
+      "calm",
+      "content",
+      "peaceful",
+      "relax",
+      "face"
+    ]
+  },
+  {
+    "char": "😔",
+    "name": "pensive face",
+    "category": "Smileys",
+    "keywords": [
+      "sad",
+      "thinking",
+      "down",
+      "upset",
+      "face"
+    ]
+  },
+  {
+    "char": "😪",
+    "name": "sleepy face",
+    "category": "Smileys",
+    "keywords": [
+      "sleepy",
+      "tired",
+      "drowsy",
+      "yawn",
+      "face"
+    ]
+  },
+  {
+    "char": "🤤",
+    "name": "drooling face",
+    "category": "Smileys",
+    "keywords": [
+      "hungry",
+      "want",
+      "desire",
+      "food",
+      "crave",
+      "face"
+    ]
+  },
+  {
+    "char": "😴",
+    "name": "sleeping face",
+    "category": "Smileys",
+    "keywords": [
+      "sleep",
+      "zzz",
+      "tired",
+      "nap",
+      "face"
+    ]
+  },
+  {
+    "char": "😷",
+    "name": "face with medical mask",
+    "category": "Smileys",
+    "keywords": [
+      "mask",
+      "sick",
+      "health",
+      "doctor",
+      "face"
+    ]
+  },
+  {
+    "char": "🤒",
+    "name": "face with thermometer",
+    "category": "Smileys",
+    "keywords": [
+      "sick",
+      "fever",
+      "ill",
+      "unwell",
+      "face"
+    ]
+  },
+  {
+    "char": "🤕",
+    "name": "face with head bandage",
+    "category": "Smileys",
+    "keywords": [
+      "injured",
+      "hurt",
+      "ouch",
+      "pain",
+      "face"
+    ]
+  },
+  {
+    "char": "🤢",
+    "name": "nauseated face",
+    "category": "Smileys",
+    "keywords": [
+      "sick",
+      "gross",
+      "disgust",
+      "vomit",
+      "face"
+    ]
+  },
+  {
+    "char": "🤮",
+    "name": "face vomiting",
+    "category": "Smileys",
+    "keywords": [
+      "vomit",
+      "gross",
+      "sick",
+      "ill",
+      "face"
+    ]
+  },
+  {
+    "char": "🤧",
+    "name": "sneezing face",
+    "category": "Smileys",
+    "keywords": [
+      "sneeze",
+      "cold",
+      "allergy",
+      "achoo",
+      "face"
+    ]
+  },
+  {
+    "char": "🥵",
+    "name": "hot face",
+    "category": "Smileys",
+    "keywords": [
+      "hot",
+      "heat",
+      "sweat",
+      "summer",
+      "overheated",
+      "face"
+    ]
+  },
+  {
+    "char": "🥶",
+    "name": "cold face",
+    "category": "Smileys",
+    "keywords": [
+      "cold",
+      "freezing",
+      "winter",
+      "chill",
+      "face"
+    ]
+  },
+  {
+    "char": "🥴",
+    "name": "woozy face",
+    "category": "Smileys",
+    "keywords": [
+      "dizzy",
+      "drunk",
+      "confused",
+      "off",
+      "face"
+    ]
+  },
+  {
+    "char": "😵",
+    "name": "face with crossed-out eyes",
+    "category": "Smileys",
+    "keywords": [
+      "dizzy",
+      "dead",
+      "knocked out",
+      "faint",
+      "face"
+    ]
+  },
+  {
+    "char": "🤯",
+    "name": "exploding head",
+    "category": "Smileys",
+    "keywords": [
+      "mind blown",
+      "wow",
+      "shock",
+      "amazed",
+      "face"
+    ]
+  },
+  {
+    "char": "🤠",
+    "name": "cowboy hat face",
+    "category": "Smileys",
+    "keywords": [
+      "cowboy",
+      "yeehaw",
+      "country",
+      "western",
+      "face"
+    ]
+  },
+  {
+    "char": "🥳",
+    "name": "partying face",
+    "category": "Smileys",
+    "keywords": [
+      "party",
+      "celebrate",
+      "birthday",
+      "fun",
+      "face"
+    ]
+  },
+  {
+    "char": "😎",
+    "name": "smiling face with sunglasses",
+    "category": "Smileys",
+    "keywords": [
+      "cool",
+      "chill",
+      "swag",
+      "sun",
+      "face",
+      "awesome"
+    ]
+  },
+  {
+    "char": "🤓",
+    "name": "nerd face",
+    "category": "Smileys",
+    "keywords": [
+      "geek",
+      "smart",
+      "study",
+      "glasses",
+      "face"
+    ]
+  },
+  {
+    "char": "🧐",
+    "name": "face with monocle",
+    "category": "Smileys",
+    "keywords": [
+      "inspect",
+      "fancy",
+      "curious",
+      "hmm",
+      "face"
+    ]
+  },
+  {
+    "char": "😕",
+    "name": "confused face",
+    "category": "Smileys",
+    "keywords": [
+      "confused",
+      "huh",
+      "unsure",
+      "puzzled",
+      "face"
+    ]
+  },
+  {
+    "char": "😟",
+    "name": "worried face",
+    "category": "Smileys",
+    "keywords": [
+      "worried",
+      "anxious",
+      "concern",
+      "stress",
+      "face"
+    ]
+  },
+  {
+    "char": "🙁",
+    "name": "slightly frowning face",
+    "category": "Smileys",
+    "keywords": [
+      "sad",
+      "unhappy",
+      "down",
+      "face"
+    ]
+  },
+  {
+    "char": "☹️",
+    "name": "frowning face",
+    "category": "Smileys",
+    "keywords": [
+      "sad",
+      "upset",
+      "unhappy",
+      "face"
+    ]
+  },
+  {
+    "char": "😮",
+    "name": "face with open mouth",
+    "category": "Smileys",
+    "keywords": [
+      "surprised",
+      "wow",
+      "shock",
+      "gasp",
+      "face"
+    ]
+  },
+  {
+    "char": "😯",
+    "name": "hushed face",
+    "category": "Smileys",
+    "keywords": [
+      "surprised",
+      "silent",
+      "wow",
+      "face"
+    ]
+  },
+  {
+    "char": "😲",
+    "name": "astonished face",
+    "category": "Smileys",
+    "keywords": [
+      "shock",
+      "surprised",
+      "wow",
+      "face"
+    ]
+  },
+  {
+    "char": "😳",
+    "name": "flushed face",
+    "category": "Smileys",
+    "keywords": [
+      "embarrassed",
+      "blush",
+      "shy",
+      "awkward",
+      "face"
+    ]
+  },
+  {
+    "char": "🥺",
+    "name": "pleading face",
+    "category": "Smileys",
+    "keywords": [
+      "please",
+      "puppy eyes",
+      "beg",
+      "cute",
+      "face"
+    ]
+  },
+  {
+    "char": "😦",
+    "name": "frowning face with open mouth",
+    "category": "Smileys",
+    "keywords": [
+      "anxious",
+      "concerned",
+      "worried",
+      "face"
+    ]
+  },
+  {
+    "char": "😧",
+    "name": "anguished face",
+    "category": "Smileys",
+    "keywords": [
+      "pain",
+      "sad",
+      "worried",
+      "distress",
+      "face"
+    ]
+  },
+  {
+    "char": "😨",
+    "name": "fearful face",
+    "category": "Smileys",
+    "keywords": [
+      "scared",
+      "fear",
+      "afraid",
+      "anxious",
+      "face"
+    ]
+  },
+  {
+    "char": "😰",
+    "name": "anxious face with sweat",
+    "category": "Smileys",
+    "keywords": [
+      "nervous",
+      "stress",
+      "worry",
+      "sweat",
+      "face"
+    ]
+  },
+  {
+    "char": "😥",
+    "name": "sad but relieved face",
+    "category": "Smileys",
+    "keywords": [
+      "relief",
+      "sad",
+      "whew",
+      "face"
+    ]
+  },
+  {
+    "char": "😢",
+    "name": "crying face",
+    "category": "Smileys",
+    "keywords": [
+      "sad",
+      "cry",
+      "tears",
+      "upset",
+      "face"
+    ]
+  },
+  {
+    "char": "😭",
+    "name": "loudly crying face",
+    "category": "Smileys",
+    "keywords": [
+      "sob",
+      "crying",
+      "tears",
+      "very sad",
+      "face"
+    ]
+  },
+  {
+    "char": "😱",
+    "name": "face screaming in fear",
+    "category": "Smileys",
+    "keywords": [
+      "scared",
+      "scream",
+      "shock",
+      "horror",
+      "face"
+    ]
+  },
+  {
+    "char": "😖",
+    "name": "confounded face",
+    "category": "Smileys",
+    "keywords": [
+      "frustrated",
+      "pain",
+      "annoyed",
+      "face"
+    ]
+  },
+  {
+    "char": "😣",
+    "name": "persevering face",
+    "category": "Smileys",
+    "keywords": [
+      "struggling",
+      "stress",
+      "endure",
+      "face"
+    ]
+  },
+  {
+    "char": "😞",
+    "name": "disappointed face",
+    "category": "Smileys",
+    "keywords": [
+      "sad",
+      "letdown",
+      "unhappy",
+      "face"
+    ]
+  },
+  {
+    "char": "😓",
+    "name": "downcast face with sweat",
+    "category": "Smileys",
+    "keywords": [
+      "sad",
+      "stress",
+      "worry",
+      "face"
+    ]
+  },
+  {
+    "char": "😩",
+    "name": "weary face",
+    "category": "Smileys",
+    "keywords": [
+      "tired",
+      "exhausted",
+      "ugh",
+      "done",
+      "face"
+    ]
+  },
+  {
+    "char": "😫",
+    "name": "tired face",
+    "category": "Smileys",
+    "keywords": [
+      "exhausted",
+      "fatigue",
+      "drained",
+      "face"
+    ]
+  },
+  {
+    "char": "🥱",
+    "name": "yawning face",
+    "category": "Smileys",
+    "keywords": [
+      "yawn",
+      "sleepy",
+      "bored",
+      "tired",
+      "face"
+    ]
+  },
+  {
+    "char": "😤",
+    "name": "face with steam from nose",
+    "category": "Smileys",
+    "keywords": [
+      "angry",
+      "frustrated",
+      "mad",
+      "huff",
+      "face"
+    ]
+  },
+  {
+    "char": "😡",
+    "name": "pouting face",
+    "category": "Smileys",
+    "keywords": [
+      "angry",
+      "mad",
+      "rage",
+      "annoyed",
+      "furious",
+      "face"
+    ]
+  },
+  {
+    "char": "😠",
+    "name": "angry face",
+    "category": "Smileys",
+    "keywords": [
+      "angry",
+      "mad",
+      "upset",
+      "annoyed",
+      "face"
+    ]
+  },
+  {
+    "char": "🤬",
+    "name": "face with symbols on mouth",
+    "category": "Smileys",
+    "keywords": [
+      "swear",
+      "curse",
+      "angry",
+      "rage",
+      "face"
+    ]
+  },
+  {
+    "char": "😈",
+    "name": "smiling face with horns",
+    "category": "Smileys",
+    "keywords": [
+      "devil",
+      "mischief",
+      "evil",
+      "face"
+    ]
+  },
+  {
+    "char": "👿",
+    "name": "angry face with horns",
+    "category": "Smileys",
+    "keywords": [
+      "devil",
+      "evil",
+      "angry",
+      "demon",
+      "face"
+    ]
+  },
+  {
+    "char": "💀",
+    "name": "skull",
+    "category": "Smileys",
+    "keywords": [
+      "dead",
+      "death",
+      "bones",
+      "spooky",
+      "halloween"
+    ]
+  },
+  {
+    "char": "☠️",
+    "name": "skull and crossbones",
+    "category": "Smileys",
+    "keywords": [
+      "danger",
+      "poison",
+      "pirate",
+      "death",
+      "warning"
+    ]
+  },
+  {
+    "char": "💩",
+    "name": "pile of poo",
+    "category": "Smileys",
+    "keywords": [
+      "poop",
+      "shit",
+      "funny",
+      "crap",
+      "brown"
+    ]
+  },
+  {
+    "char": "🤡",
+    "name": "clown face",
+    "category": "Smileys",
+    "keywords": [
+      "clown",
+      "circus",
+      "silly",
+      "joker",
+      "face"
+    ]
+  },
+  {
+    "char": "👻",
+    "name": "ghost",
+    "category": "Smileys",
+    "keywords": [
+      "spooky",
+      "halloween",
+      "boo",
+      "spirit",
+      "white"
+    ]
+  },
+  {
+    "char": "👽",
+    "name": "alien",
+    "category": "Smileys",
+    "keywords": [
+      "ufo",
+      "space",
+      "extraterrestrial",
+      "green"
+    ]
+  },
+  {
+    "char": "👾",
+    "name": "alien monster",
+    "category": "Smileys",
+    "keywords": [
+      "game",
+      "retro",
+      "space invader",
+      "pixel"
+    ]
+  },
+  {
+    "char": "🤖",
+    "name": "robot",
+    "category": "Smileys",
+    "keywords": [
+      "bot",
+      "ai",
+      "machine",
+      "tech",
+      "android"
+    ]
+  },
+  {
+    "char": "😺",
+    "name": "grinning cat",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "happy",
+      "smile",
+      "pet",
+      "feline"
+    ]
+  },
+  {
+    "char": "😸",
+    "name": "grinning cat with smiling eyes",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "happy",
+      "lol",
+      "pet"
+    ]
+  },
+  {
+    "char": "😹",
+    "name": "cat with tears of joy",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "lol",
+      "laugh",
+      "pet"
+    ]
+  },
+  {
+    "char": "😻",
+    "name": "smiling cat with heart eyes",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "love",
+      "pet",
+      "heart eyes"
+    ]
+  },
+  {
+    "char": "😼",
+    "name": "cat with wry smile",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "smirk",
+      "pet",
+      "sly"
+    ]
+  },
+  {
+    "char": "😽",
+    "name": "kissing cat",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "kiss",
+      "pet",
+      "love"
+    ]
+  },
+  {
+    "char": "🙀",
+    "name": "weary cat",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "shock",
+      "scared",
+      "pet"
+    ]
+  },
+  {
+    "char": "😿",
+    "name": "crying cat",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "sad",
+      "cry",
+      "pet"
+    ]
+  },
+  {
+    "char": "😾",
+    "name": "pouting cat",
+    "category": "Smileys",
+    "keywords": [
+      "cat",
+      "angry",
+      "mad",
+      "pet"
+    ]
+  },
+  {
+    "char": "❤️",
+    "name": "red heart",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "heart",
+      "romance",
+      "affection",
+      "like",
+      "favorite"
+    ]
+  },
+  {
+    "char": "🧡",
+    "name": "orange heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "love",
+      "care",
+      "warmth"
+    ]
+  },
+  {
+    "char": "💛",
+    "name": "yellow heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "friendship",
+      "joy",
+      "care"
+    ]
+  },
+  {
+    "char": "💚",
+    "name": "green heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "nature",
+      "healthy",
+      "growth"
+    ]
+  },
+  {
+    "char": "💙",
+    "name": "blue heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "trust",
+      "calm",
+      "support"
+    ]
+  },
+  {
+    "char": "💜",
+    "name": "purple heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "compassion",
+      "care",
+      "love"
+    ]
+  },
+  {
+    "char": "🖤",
+    "name": "black heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "dark",
+      "goth",
+      "emo"
+    ]
+  },
+  {
+    "char": "🤍",
+    "name": "white heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "pure",
+      "peace",
+      "clean"
+    ]
+  },
+  {
+    "char": "🤎",
+    "name": "brown heart",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "earth",
+      "warm",
+      "support"
+    ]
+  },
+  {
+    "char": "💔",
+    "name": "broken heart",
+    "category": "Smileys",
+    "keywords": [
+      "heartbreak",
+      "sad",
+      "breakup",
+      "pain"
+    ]
+  },
+  {
+    "char": "❣️",
+    "name": "heart exclamation",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "heart",
+      "exclamation",
+      "attention"
+    ]
+  },
+  {
+    "char": "💕",
+    "name": "two hearts",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "romance",
+      "affection",
+      "hearts"
+    ]
+  },
+  {
+    "char": "💞",
+    "name": "revolving hearts",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "hearts",
+      "romance",
+      "relationship"
+    ]
+  },
+  {
+    "char": "💓",
+    "name": "beating heart",
+    "category": "Smileys",
+    "keywords": [
+      "heartbeat",
+      "love",
+      "heart",
+      "pulse"
+    ]
+  },
+  {
+    "char": "💗",
+    "name": "growing heart",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "heart",
+      "growing",
+      "romance"
+    ]
+  },
+  {
+    "char": "💖",
+    "name": "sparkling heart",
+    "category": "Smileys",
+    "keywords": [
+      "love",
+      "heart",
+      "sparkle",
+      "shiny"
+    ]
+  },
+  {
+    "char": "💘",
+    "name": "heart with arrow",
+    "category": "Smileys",
+    "keywords": [
+      "cupid",
+      "love",
+      "romance",
+      "crush"
+    ]
+  },
+  {
+    "char": "💝",
+    "name": "heart with ribbon",
+    "category": "Smileys",
+    "keywords": [
+      "gift",
+      "love",
+      "present",
+      "heart"
+    ]
+  },
+  {
+    "char": "💟",
+    "name": "heart decoration",
+    "category": "Smileys",
+    "keywords": [
+      "heart",
+      "symbol",
+      "love"
+    ]
+  },
+  {
+    "char": "👍",
+    "name": "thumbs up",
+    "category": "People",
+    "keywords": [
+      "thumb up",
+      "like",
+      "yes",
+      "approve",
+      "good",
+      "ok",
+      "cool",
+      "agree"
+    ]
+  },
+  {
+    "char": "👎",
+    "name": "thumbs down",
+    "category": "People",
+    "keywords": [
+      "dislike",
+      "no",
+      "bad",
+      "reject",
+      "boo"
+    ]
+  },
+  {
+    "char": "👌",
+    "name": "ok hand",
+    "category": "People",
+    "keywords": [
+      "ok",
+      "perfect",
+      "fine",
+      "good",
+      "agree"
+    ]
+  },
+  {
+    "char": "👊",
+    "name": "oncoming fist",
+    "category": "People",
+    "keywords": [
+      "fist bump",
+      "punch",
+      "bro",
+      "solid"
+    ]
+  },
+  {
+    "char": "✊",
+    "name": "raised fist",
+    "category": "People",
+    "keywords": [
+      "power",
+      "solidarity",
+      "protest",
+      "fist"
+    ]
+  },
+  {
+    "char": "🤛",
+    "name": "left-facing fist",
+    "category": "People",
+    "keywords": [
+      "fist bump",
+      "left fist",
+      "bro"
+    ]
+  },
+  {
+    "char": "🤜",
+    "name": "right-facing fist",
+    "category": "People",
+    "keywords": [
+      "fist bump",
+      "right fist",
+      "bro"
+    ]
+  },
+  {
+    "char": "👏",
+    "name": "clapping hands",
+    "category": "People",
+    "keywords": [
+      "clap",
+      "applause",
+      "bravo",
+      "well done"
+    ]
+  },
+  {
+    "char": "🙌",
+    "name": "raising hands",
+    "category": "People",
+    "keywords": [
+      "hooray",
+      "celebrate",
+      "praise",
+      "yay"
+    ]
+  },
+  {
+    "char": "🫶",
+    "name": "heart hands",
+    "category": "People",
+    "keywords": [
+      "love",
+      "support",
+      "care",
+      "heart"
+    ]
+  },
+  {
+    "char": "👐",
+    "name": "open hands",
+    "category": "People",
+    "keywords": [
+      "hug",
+      "open",
+      "welcome",
+      "hands"
+    ]
+  },
+  {
+    "char": "🤲",
+    "name": "palms up together",
+    "category": "People",
+    "keywords": [
+      "please",
+      "offering",
+      "prayer",
+      "hands"
+    ]
+  },
+  {
+    "char": "🤝",
+    "name": "handshake",
+    "category": "People",
+    "keywords": [
+      "deal",
+      "agreement",
+      "partnership",
+      "shake"
+    ]
+  },
+  {
+    "char": "🙏",
+    "name": "folded hands",
+    "category": "People",
+    "keywords": [
+      "pray",
+      "thanks",
+      "please",
+      "gratitude"
+    ]
+  },
+  {
+    "char": "✍️",
+    "name": "writing hand",
+    "category": "People",
+    "keywords": [
+      "write",
+      "note",
+      "sign",
+      "pen"
+    ]
+  },
+  {
+    "char": "💅",
+    "name": "nail polish",
+    "category": "People",
+    "keywords": [
+      "nails",
+      "beauty",
+      "self care",
+      "slay"
+    ]
+  },
+  {
+    "char": "🤳",
+    "name": "selfie",
+    "category": "People",
+    "keywords": [
+      "photo",
+      "camera",
+      "self portrait",
+      "phone"
+    ]
+  },
+  {
+    "char": "💪",
+    "name": "flexed biceps",
+    "category": "People",
+    "keywords": [
+      "strong",
+      "muscle",
+      "gym",
+      "power"
+    ]
+  },
+  {
+    "char": "🦾",
+    "name": "mechanical arm",
+    "category": "People",
+    "keywords": [
+      "robot arm",
+      "bionic",
+      "strength",
+      "cyborg"
+    ]
+  },
+  {
+    "char": "🦿",
+    "name": "mechanical leg",
+    "category": "People",
+    "keywords": [
+      "bionic leg",
+      "robot",
+      "cyborg"
+    ]
+  },
+  {
+    "char": "🦵",
+    "name": "leg",
+    "category": "People",
+    "keywords": [
+      "kick",
+      "walk",
+      "body",
+      "limb"
+    ]
+  },
+  {
+    "char": "🦶",
+    "name": "foot",
+    "category": "People",
+    "keywords": [
+      "feet",
+      "walk",
+      "step"
+    ]
+  },
+  {
+    "char": "👂",
+    "name": "ear",
+    "category": "People",
+    "keywords": [
+      "listen",
+      "hearing",
+      "sound"
+    ]
+  },
+  {
+    "char": "🦻",
+    "name": "ear with hearing aid",
+    "category": "People",
+    "keywords": [
+      "hearing aid",
+      "accessibility",
+      "listen"
+    ]
+  },
+  {
+    "char": "👃",
+    "name": "nose",
+    "category": "People",
+    "keywords": [
+      "smell",
+      "sniff",
+      "face"
+    ]
+  },
+  {
+    "char": "🧠",
+    "name": "brain",
+    "category": "People",
+    "keywords": [
+      "smart",
+      "mind",
+      "think",
+      "intelligence"
+    ]
+  },
+  {
+    "char": "🫀",
+    "name": "anatomical heart",
+    "category": "People",
+    "keywords": [
+      "heart organ",
+      "health",
+      "medical"
+    ]
+  },
+  {
+    "char": "🫁",
+    "name": "lungs",
+    "category": "People",
+    "keywords": [
+      "breath",
+      "respiratory",
+      "health"
+    ]
+  },
+  {
+    "char": "🦷",
+    "name": "tooth",
+    "category": "People",
+    "keywords": [
+      "dentist",
+      "teeth",
+      "dental"
+    ]
+  },
+  {
+    "char": "🦴",
+    "name": "bone",
+    "category": "People",
+    "keywords": [
+      "skeleton",
+      "orthopedic",
+      "body"
+    ]
+  },
+  {
+    "char": "👀",
+    "name": "eyes",
+    "category": "People",
+    "keywords": [
+      "look",
+      "watching",
+      "see",
+      "stare"
+    ]
+  },
+  {
+    "char": "👁️",
+    "name": "eye",
+    "category": "People",
+    "keywords": [
+      "look",
+      "watch",
+      "vision"
+    ]
+  },
+  {
+    "char": "👅",
+    "name": "tongue",
+    "category": "People",
+    "keywords": [
+      "taste",
+      "lick",
+      "mouth"
+    ]
+  },
+  {
+    "char": "👄",
+    "name": "mouth",
+    "category": "People",
+    "keywords": [
+      "lips",
+      "speak",
+      "kiss"
+    ]
+  },
+  {
+    "char": "👶",
+    "name": "baby",
+    "category": "People",
+    "keywords": [
+      "infant",
+      "child",
+      "newborn"
+    ]
+  },
+  {
+    "char": "🧒",
+    "name": "child",
+    "category": "People",
+    "keywords": [
+      "kid",
+      "young",
+      "boy",
+      "girl"
+    ]
+  },
+  {
+    "char": "👦",
+    "name": "boy",
+    "category": "People",
+    "keywords": [
+      "male child",
+      "kid"
+    ]
+  },
+  {
+    "char": "👧",
+    "name": "girl",
+    "category": "People",
+    "keywords": [
+      "female child",
+      "kid"
+    ]
+  },
+  {
+    "char": "🧑",
+    "name": "person",
+    "category": "People",
+    "keywords": [
+      "adult",
+      "human",
+      "someone"
+    ]
+  },
+  {
+    "char": "👨",
+    "name": "man",
+    "category": "People",
+    "keywords": [
+      "male",
+      "adult"
+    ]
+  },
+  {
+    "char": "👩",
+    "name": "woman",
+    "category": "People",
+    "keywords": [
+      "female",
+      "adult"
+    ]
+  },
+  {
+    "char": "🧔",
+    "name": "person beard",
+    "category": "People",
+    "keywords": [
+      "beard",
+      "facial hair",
+      "man"
+    ]
+  },
+  {
+    "char": "👱",
+    "name": "person blond hair",
+    "category": "People",
+    "keywords": [
+      "blond",
+      "hair",
+      "person"
+    ]
+  },
+  {
+    "char": "👴",
+    "name": "old man",
+    "category": "People",
+    "keywords": [
+      "elderly",
+      "grandpa",
+      "senior"
+    ]
+  },
+  {
+    "char": "👵",
+    "name": "old woman",
+    "category": "People",
+    "keywords": [
+      "elderly",
+      "grandma",
+      "senior"
+    ]
+  },
+  {
+    "char": "🧓",
+    "name": "older person",
+    "category": "People",
+    "keywords": [
+      "senior",
+      "elderly",
+      "old"
+    ]
+  },
+  {
+    "char": "👮",
+    "name": "police officer",
+    "category": "People",
+    "keywords": [
+      "cop",
+      "law",
+      "security"
+    ]
+  },
+  {
+    "char": "🕵️",
+    "name": "detective",
+    "category": "People",
+    "keywords": [
+      "spy",
+      "investigate",
+      "sleuth"
+    ]
+  },
+  {
+    "char": "💂",
+    "name": "guard",
+    "category": "People",
+    "keywords": [
+      "royal guard",
+      "security",
+      "soldier"
+    ]
+  },
+  {
+    "char": "👷",
+    "name": "construction worker",
+    "category": "People",
+    "keywords": [
+      "builder",
+      "helmet",
+      "work"
+    ]
+  },
+  {
+    "char": "🤴",
+    "name": "prince",
+    "category": "People",
+    "keywords": [
+      "royal",
+      "kingdom",
+      "crown"
+    ]
+  },
+  {
+    "char": "👸",
+    "name": "princess",
+    "category": "People",
+    "keywords": [
+      "royal",
+      "queen",
+      "crown"
+    ]
+  },
+  {
+    "char": "👳",
+    "name": "person wearing turban",
+    "category": "People",
+    "keywords": [
+      "turban",
+      "headwear",
+      "person"
+    ]
+  },
+  {
+    "char": "👲",
+    "name": "person with skullcap",
+    "category": "People",
+    "keywords": [
+      "cap",
+      "person"
+    ]
+  },
+  {
+    "char": "🧕",
+    "name": "woman with headscarf",
+    "category": "People",
+    "keywords": [
+      "hijab",
+      "headscarf",
+      "woman"
+    ]
+  },
+  {
+    "char": "🤵",
+    "name": "person in tuxedo",
+    "category": "People",
+    "keywords": [
+      "wedding",
+      "formal",
+      "suit"
+    ]
+  },
+  {
+    "char": "👰",
+    "name": "person with veil",
+    "category": "People",
+    "keywords": [
+      "bride",
+      "wedding",
+      "marriage"
+    ]
+  },
+  {
+    "char": "🤰",
+    "name": "pregnant woman",
+    "category": "People",
+    "keywords": [
+      "pregnant",
+      "baby",
+      "maternity"
+    ]
+  },
+  {
+    "char": "🫃",
+    "name": "pregnant man",
+    "category": "People",
+    "keywords": [
+      "pregnant",
+      "parenthood"
+    ]
+  },
+  {
+    "char": "🫄",
+    "name": "pregnant person",
+    "category": "People",
+    "keywords": [
+      "pregnant",
+      "parenthood"
+    ]
+  },
+  {
+    "char": "🤱",
+    "name": "breast-feeding",
+    "category": "People",
+    "keywords": [
+      "mother",
+      "baby",
+      "feeding"
+    ]
+  },
+  {
+    "char": "👼",
+    "name": "baby angel",
+    "category": "People",
+    "keywords": [
+      "angel",
+      "halo",
+      "baby"
+    ]
+  },
+  {
+    "char": "🎅",
+    "name": "santa claus",
+    "category": "People",
+    "keywords": [
+      "christmas",
+      "holiday",
+      "xmas"
+    ]
+  },
+  {
+    "char": "🤶",
+    "name": "mrs claus",
+    "category": "People",
+    "keywords": [
+      "christmas",
+      "holiday",
+      "xmas"
+    ]
+  },
+  {
+    "char": "🧑‍🎄",
+    "name": "mx claus",
+    "category": "People",
+    "keywords": [
+      "christmas",
+      "holiday",
+      "xmas"
+    ]
+  },
+  {
+    "char": "🦸",
+    "name": "superhero",
+    "category": "People",
+    "keywords": [
+      "hero",
+      "cape",
+      "power"
+    ]
+  },
+  {
+    "char": "🦹",
+    "name": "supervillain",
+    "category": "People",
+    "keywords": [
+      "villain",
+      "evil",
+      "cape"
+    ]
+  },
+  {
+    "char": "🧙",
+    "name": "mage",
+    "category": "People",
+    "keywords": [
+      "wizard",
+      "magic",
+      "sorcerer"
+    ]
+  },
+  {
+    "char": "🧚",
+    "name": "fairy",
+    "category": "People",
+    "keywords": [
+      "magic",
+      "fantasy",
+      "wings"
+    ]
+  },
+  {
+    "char": "🧛",
+    "name": "vampire",
+    "category": "People",
+    "keywords": [
+      "halloween",
+      "undead",
+      "fangs"
+    ]
+  },
+  {
+    "char": "🧜",
+    "name": "merperson",
+    "category": "People",
+    "keywords": [
+      "mermaid",
+      "ocean",
+      "myth"
+    ]
+  },
+  {
+    "char": "🧝",
+    "name": "elf",
+    "category": "People",
+    "keywords": [
+      "fantasy",
+      "myth",
+      "magic"
+    ]
+  },
+  {
+    "char": "🧞",
+    "name": "genie",
+    "category": "People",
+    "keywords": [
+      "wish",
+      "magic",
+      "lamp"
+    ]
+  },
+  {
+    "char": "🧟",
+    "name": "zombie",
+    "category": "People",
+    "keywords": [
+      "undead",
+      "halloween",
+      "horror"
+    ]
+  },
+  {
+    "char": "💆",
+    "name": "person getting massage",
+    "category": "People",
+    "keywords": [
+      "spa",
+      "relax",
+      "self care"
+    ]
+  },
+  {
+    "char": "💇",
+    "name": "person getting haircut",
+    "category": "People",
+    "keywords": [
+      "hair",
+      "salon",
+      "style"
+    ]
+  },
+  {
+    "char": "🚶",
+    "name": "person walking",
+    "category": "People",
+    "keywords": [
+      "walk",
+      "step",
+      "move"
+    ]
+  },
+  {
+    "char": "🧍",
+    "name": "person standing",
+    "category": "People",
+    "keywords": [
+      "stand",
+      "wait",
+      "still"
+    ]
+  },
+  {
+    "char": "🧎",
+    "name": "person kneeling",
+    "category": "People",
+    "keywords": [
+      "kneel",
+      "pose",
+      "ground"
+    ]
+  },
+  {
+    "char": "🏃",
+    "name": "person running",
+    "category": "People",
+    "keywords": [
+      "run",
+      "jog",
+      "fast",
+      "exercise"
+    ]
+  },
+  {
+    "char": "💃",
+    "name": "woman dancing",
+    "category": "People",
+    "keywords": [
+      "dance",
+      "party",
+      "fun"
+    ]
+  },
+  {
+    "char": "🕺",
+    "name": "man dancing",
+    "category": "People",
+    "keywords": [
+      "dance",
+      "party",
+      "fun"
+    ]
+  },
+  {
+    "char": "🐶",
+    "name": "dog face",
+    "category": "Animals",
+    "keywords": [
+      "dog",
+      "pet",
+      "puppy",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐱",
+    "name": "cat face",
+    "category": "Animals",
+    "keywords": [
+      "cat",
+      "pet",
+      "kitty",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐭",
+    "name": "mouse face",
+    "category": "Animals",
+    "keywords": [
+      "mouse",
+      "rodent",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐹",
+    "name": "hamster face",
+    "category": "Animals",
+    "keywords": [
+      "hamster",
+      "pet",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐰",
+    "name": "rabbit face",
+    "category": "Animals",
+    "keywords": [
+      "bunny",
+      "rabbit",
+      "animal"
+    ]
+  },
+  {
+    "char": "🦊",
+    "name": "fox",
+    "category": "Animals",
+    "keywords": [
+      "fox",
+      "animal",
+      "wild"
+    ]
+  },
+  {
+    "char": "🐻",
+    "name": "bear",
+    "category": "Animals",
+    "keywords": [
+      "bear",
+      "animal",
+      "wild"
+    ]
+  },
+  {
+    "char": "🐼",
+    "name": "panda",
+    "category": "Animals",
+    "keywords": [
+      "panda",
+      "animal",
+      "cute"
+    ]
+  },
+  {
+    "char": "🐨",
+    "name": "koala",
+    "category": "Animals",
+    "keywords": [
+      "koala",
+      "animal",
+      "australia"
+    ]
+  },
+  {
+    "char": "🐯",
+    "name": "tiger face",
+    "category": "Animals",
+    "keywords": [
+      "tiger",
+      "animal",
+      "wild"
+    ]
+  },
+  {
+    "char": "🦁",
+    "name": "lion",
+    "category": "Animals",
+    "keywords": [
+      "lion",
+      "animal",
+      "king"
+    ]
+  },
+  {
+    "char": "🐮",
+    "name": "cow face",
+    "category": "Animals",
+    "keywords": [
+      "cow",
+      "farm",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐷",
+    "name": "pig face",
+    "category": "Animals",
+    "keywords": [
+      "pig",
+      "farm",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐸",
+    "name": "frog",
+    "category": "Animals",
+    "keywords": [
+      "frog",
+      "animal",
+      "green"
+    ]
+  },
+  {
+    "char": "🐵",
+    "name": "monkey face",
+    "category": "Animals",
+    "keywords": [
+      "monkey",
+      "animal",
+      "primate"
+    ]
+  },
+  {
+    "char": "🙈",
+    "name": "see-no-evil monkey",
+    "category": "Animals",
+    "keywords": [
+      "monkey",
+      "evil",
+      "cute"
+    ]
+  },
+  {
+    "char": "🙉",
+    "name": "hear-no-evil monkey",
+    "category": "Animals",
+    "keywords": [
+      "monkey",
+      "evil",
+      "cute"
+    ]
+  },
+  {
+    "char": "🙊",
+    "name": "speak-no-evil monkey",
+    "category": "Animals",
+    "keywords": [
+      "monkey",
+      "evil",
+      "cute"
+    ]
+  },
+  {
+    "char": "🐒",
+    "name": "monkey",
+    "category": "Animals",
+    "keywords": [
+      "animal",
+      "primate",
+      "jungle"
+    ]
+  },
+  {
+    "char": "🐔",
+    "name": "chicken",
+    "category": "Animals",
+    "keywords": [
+      "bird",
+      "farm",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐧",
+    "name": "penguin",
+    "category": "Animals",
+    "keywords": [
+      "penguin",
+      "bird",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐦",
+    "name": "bird",
+    "category": "Animals",
+    "keywords": [
+      "bird",
+      "animal",
+      "fly"
+    ]
+  },
+  {
+    "char": "🐤",
+    "name": "baby chick",
+    "category": "Animals",
+    "keywords": [
+      "chick",
+      "bird",
+      "cute"
+    ]
+  },
+  {
+    "char": "🦆",
+    "name": "duck",
+    "category": "Animals",
+    "keywords": [
+      "duck",
+      "bird",
+      "animal"
+    ]
+  },
+  {
+    "char": "🦅",
+    "name": "eagle",
+    "category": "Animals",
+    "keywords": [
+      "eagle",
+      "bird",
+      "animal"
+    ]
+  },
+  {
+    "char": "🦉",
+    "name": "owl",
+    "category": "Animals",
+    "keywords": [
+      "owl",
+      "bird",
+      "animal",
+      "night"
+    ]
+  },
+  {
+    "char": "🦇",
+    "name": "bat",
+    "category": "Animals",
+    "keywords": [
+      "bat",
+      "animal",
+      "night",
+      "halloween"
+    ]
+  },
+  {
+    "char": "🐺",
+    "name": "wolf",
+    "category": "Animals",
+    "keywords": [
+      "wolf",
+      "animal",
+      "wild"
+    ]
+  },
+  {
+    "char": "🐗",
+    "name": "boar",
+    "category": "Animals",
+    "keywords": [
+      "boar",
+      "pig",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐴",
+    "name": "horse face",
+    "category": "Animals",
+    "keywords": [
+      "horse",
+      "animal",
+      "stable"
+    ]
+  },
+  {
+    "char": "🦄",
+    "name": "unicorn",
+    "category": "Animals",
+    "keywords": [
+      "unicorn",
+      "magic",
+      "fantasy"
+    ]
+  },
+  {
+    "char": "🐝",
+    "name": "honeybee",
+    "category": "Animals",
+    "keywords": [
+      "bee",
+      "insect",
+      "honey"
+    ]
+  },
+  {
+    "char": "🪲",
+    "name": "beetle",
+    "category": "Animals",
+    "keywords": [
+      "bug",
+      "insect",
+      "animal"
+    ]
+  },
+  {
+    "char": "🦋",
+    "name": "butterfly",
+    "category": "Animals",
+    "keywords": [
+      "butterfly",
+      "insect",
+      "nature"
+    ]
+  },
+  {
+    "char": "🐌",
+    "name": "snail",
+    "category": "Animals",
+    "keywords": [
+      "snail",
+      "slow",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐞",
+    "name": "lady beetle",
+    "category": "Animals",
+    "keywords": [
+      "ladybug",
+      "insect",
+      "bug"
+    ]
+  },
+  {
+    "char": "🐜",
+    "name": "ant",
+    "category": "Animals",
+    "keywords": [
+      "ant",
+      "insect",
+      "bug"
+    ]
+  },
+  {
+    "char": "🪰",
+    "name": "fly",
+    "category": "Animals",
+    "keywords": [
+      "fly",
+      "insect",
+      "bug"
+    ]
+  },
+  {
+    "char": "🪱",
+    "name": "worm",
+    "category": "Animals",
+    "keywords": [
+      "worm",
+      "insect",
+      "soil"
+    ]
+  },
+  {
+    "char": "🐢",
+    "name": "turtle",
+    "category": "Animals",
+    "keywords": [
+      "turtle",
+      "animal",
+      "slow"
+    ]
+  },
+  {
+    "char": "🐍",
+    "name": "snake",
+    "category": "Animals",
+    "keywords": [
+      "snake",
+      "animal",
+      "reptile"
+    ]
+  },
+  {
+    "char": "🦎",
+    "name": "lizard",
+    "category": "Animals",
+    "keywords": [
+      "lizard",
+      "reptile",
+      "animal"
+    ]
+  },
+  {
+    "char": "🦂",
+    "name": "scorpion",
+    "category": "Animals",
+    "keywords": [
+      "scorpion",
+      "animal",
+      "danger"
+    ]
+  },
+  {
+    "char": "🦀",
+    "name": "crab",
+    "category": "Animals",
+    "keywords": [
+      "crab",
+      "seafood",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐙",
+    "name": "octopus",
+    "category": "Animals",
+    "keywords": [
+      "octopus",
+      "ocean",
+      "animal"
+    ]
+  },
+  {
+    "char": "🦑",
+    "name": "squid",
+    "category": "Animals",
+    "keywords": [
+      "squid",
+      "ocean",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐠",
+    "name": "tropical fish",
+    "category": "Animals",
+    "keywords": [
+      "fish",
+      "ocean",
+      "animal"
+    ]
+  },
+  {
+    "char": "🐳",
+    "name": "spouting whale",
+    "category": "Animals",
+    "keywords": [
+      "whale",
+      "ocean",
+      "animal"
+    ]
+  },
+  {
+    "char": "🦈",
+    "name": "shark",
+    "category": "Animals",
+    "keywords": [
+      "shark",
+      "ocean",
+      "animal"
+    ]
+  },
+  {
+    "char": "🍎",
+    "name": "red apple",
+    "category": "Food",
+    "keywords": [
+      "apple",
+      "fruit",
+      "food",
+      "healthy"
+    ]
+  },
+  {
+    "char": "🍌",
+    "name": "banana",
+    "category": "Food",
+    "keywords": [
+      "banana",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🍇",
+    "name": "grapes",
+    "category": "Food",
+    "keywords": [
+      "grape",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🍓",
+    "name": "strawberry",
+    "category": "Food",
+    "keywords": [
+      "strawberry",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🍒",
+    "name": "cherries",
+    "category": "Food",
+    "keywords": [
+      "cherry",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🍑",
+    "name": "peach",
+    "category": "Food",
+    "keywords": [
+      "peach",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🍍",
+    "name": "pineapple",
+    "category": "Food",
+    "keywords": [
+      "pineapple",
+      "fruit",
+      "food",
+      "tropical"
+    ]
+  },
+  {
+    "char": "🥭",
+    "name": "mango",
+    "category": "Food",
+    "keywords": [
+      "mango",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🍉",
+    "name": "watermelon",
+    "category": "Food",
+    "keywords": [
+      "watermelon",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🥝",
+    "name": "kiwi fruit",
+    "category": "Food",
+    "keywords": [
+      "kiwi",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🍋",
+    "name": "lemon",
+    "category": "Food",
+    "keywords": [
+      "lemon",
+      "fruit",
+      "food",
+      "sour"
+    ]
+  },
+  {
+    "char": "🍊",
+    "name": "tangerine",
+    "category": "Food",
+    "keywords": [
+      "orange",
+      "fruit",
+      "food"
+    ]
+  },
+  {
+    "char": "🥑",
+    "name": "avocado",
+    "category": "Food",
+    "keywords": [
+      "avocado",
+      "food",
+      "healthy"
+    ]
+  },
+  {
+    "char": "🍅",
+    "name": "tomato",
+    "category": "Food",
+    "keywords": [
+      "tomato",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🥕",
+    "name": "carrot",
+    "category": "Food",
+    "keywords": [
+      "carrot",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🌽",
+    "name": "ear of corn",
+    "category": "Food",
+    "keywords": [
+      "corn",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🥦",
+    "name": "broccoli",
+    "category": "Food",
+    "keywords": [
+      "broccoli",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🥬",
+    "name": "leafy green",
+    "category": "Food",
+    "keywords": [
+      "lettuce",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🥔",
+    "name": "potato",
+    "category": "Food",
+    "keywords": [
+      "potato",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🍆",
+    "name": "eggplant",
+    "category": "Food",
+    "keywords": [
+      "eggplant",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🌶️",
+    "name": "hot pepper",
+    "category": "Food",
+    "keywords": [
+      "pepper",
+      "spicy",
+      "food"
+    ]
+  },
+  {
+    "char": "🫑",
+    "name": "bell pepper",
+    "category": "Food",
+    "keywords": [
+      "pepper",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🥒",
+    "name": "cucumber",
+    "category": "Food",
+    "keywords": [
+      "cucumber",
+      "vegetable",
+      "food"
+    ]
+  },
+  {
+    "char": "🍞",
+    "name": "bread",
+    "category": "Food",
+    "keywords": [
+      "bread",
+      "food",
+      "bakery"
+    ]
+  },
+  {
+    "char": "🥐",
+    "name": "croissant",
+    "category": "Food",
+    "keywords": [
+      "croissant",
+      "pastry",
+      "food"
+    ]
+  },
+  {
+    "char": "🥖",
+    "name": "baguette bread",
+    "category": "Food",
+    "keywords": [
+      "baguette",
+      "bread",
+      "food"
+    ]
+  },
+  {
+    "char": "🧀",
+    "name": "cheese wedge",
+    "category": "Food",
+    "keywords": [
+      "cheese",
+      "food",
+      "dairy"
+    ]
+  },
+  {
+    "char": "🥚",
+    "name": "egg",
+    "category": "Food",
+    "keywords": [
+      "egg",
+      "food",
+      "breakfast"
+    ]
+  },
+  {
+    "char": "🍳",
+    "name": "cooking",
+    "category": "Food",
+    "keywords": [
+      "fried egg",
+      "pan",
+      "breakfast",
+      "food"
+    ]
+  },
+  {
+    "char": "🥓",
+    "name": "bacon",
+    "category": "Food",
+    "keywords": [
+      "bacon",
+      "breakfast",
+      "food"
+    ]
+  },
+  {
+    "char": "🥞",
+    "name": "pancakes",
+    "category": "Food",
+    "keywords": [
+      "pancake",
+      "breakfast",
+      "food"
+    ]
+  },
+  {
+    "char": "🧇",
+    "name": "waffle",
+    "category": "Food",
+    "keywords": [
+      "waffle",
+      "breakfast",
+      "food"
+    ]
+  },
+  {
+    "char": "🍗",
+    "name": "poultry leg",
+    "category": "Food",
+    "keywords": [
+      "chicken",
+      "meat",
+      "food"
+    ]
+  },
+  {
+    "char": "🍖",
+    "name": "meat on bone",
+    "category": "Food",
+    "keywords": [
+      "meat",
+      "food",
+      "bbq"
+    ]
+  },
+  {
+    "char": "🌭",
+    "name": "hot dog",
+    "category": "Food",
+    "keywords": [
+      "hotdog",
+      "sausage",
+      "food"
+    ]
+  },
+  {
+    "char": "🍔",
+    "name": "hamburger",
+    "category": "Food",
+    "keywords": [
+      "burger",
+      "food",
+      "fast food"
+    ]
+  },
+  {
+    "char": "🍟",
+    "name": "french fries",
+    "category": "Food",
+    "keywords": [
+      "fries",
+      "food",
+      "snack"
+    ]
+  },
+  {
+    "char": "🍕",
+    "name": "pizza",
+    "category": "Food",
+    "keywords": [
+      "pizza",
+      "food",
+      "slice"
+    ]
+  },
+  {
+    "char": "🥪",
+    "name": "sandwich",
+    "category": "Food",
+    "keywords": [
+      "sandwich",
+      "food",
+      "lunch"
+    ]
+  },
+  {
+    "char": "🌮",
+    "name": "taco",
+    "category": "Food",
+    "keywords": [
+      "taco",
+      "food",
+      "mexican"
+    ]
+  },
+  {
+    "char": "🌯",
+    "name": "burrito",
+    "category": "Food",
+    "keywords": [
+      "burrito",
+      "food",
+      "mexican"
+    ]
+  },
+  {
+    "char": "🍜",
+    "name": "steaming bowl",
+    "category": "Food",
+    "keywords": [
+      "ramen",
+      "noodles",
+      "soup",
+      "food"
+    ]
+  },
+  {
+    "char": "🍣",
+    "name": "sushi",
+    "category": "Food",
+    "keywords": [
+      "sushi",
+      "food",
+      "japanese"
+    ]
+  },
+  {
+    "char": "🍱",
+    "name": "bento box",
+    "category": "Food",
+    "keywords": [
+      "bento",
+      "lunch",
+      "food"
+    ]
+  },
+  {
+    "char": "🍛",
+    "name": "curry rice",
+    "category": "Food",
+    "keywords": [
+      "curry",
+      "rice",
+      "food"
+    ]
+  },
+  {
+    "char": "🍚",
+    "name": "cooked rice",
+    "category": "Food",
+    "keywords": [
+      "rice",
+      "food"
+    ]
+  },
+  {
+    "char": "🍦",
+    "name": "soft ice cream",
+    "category": "Food",
+    "keywords": [
+      "ice cream",
+      "dessert",
+      "food"
+    ]
+  },
+  {
+    "char": "🍩",
+    "name": "doughnut",
+    "category": "Food",
+    "keywords": [
+      "donut",
+      "dessert",
+      "food"
+    ]
+  },
+  {
+    "char": "🍪",
+    "name": "cookie",
+    "category": "Food",
+    "keywords": [
+      "cookie",
+      "dessert",
+      "food"
+    ]
+  },
+  {
+    "char": "🎂",
+    "name": "birthday cake",
+    "category": "Food",
+    "keywords": [
+      "cake",
+      "birthday",
+      "dessert"
+    ]
+  },
+  {
+    "char": "🍫",
+    "name": "chocolate bar",
+    "category": "Food",
+    "keywords": [
+      "chocolate",
+      "dessert",
+      "sweet"
+    ]
+  },
+  {
+    "char": "🍿",
+    "name": "popcorn",
+    "category": "Food",
+    "keywords": [
+      "popcorn",
+      "movie",
+      "snack"
+    ]
+  },
+  {
+    "char": "☕",
+    "name": "hot beverage",
+    "category": "Food",
+    "keywords": [
+      "coffee",
+      "tea",
+      "drink"
+    ]
+  },
+  {
+    "char": "🧋",
+    "name": "bubble tea",
+    "category": "Food",
+    "keywords": [
+      "boba",
+      "tea",
+      "drink"
+    ]
+  },
+  {
+    "char": "🥤",
+    "name": "cup with straw",
+    "category": "Food",
+    "keywords": [
+      "soda",
+      "drink",
+      "juice"
+    ]
+  },
+  {
+    "char": "🧃",
+    "name": "beverage box",
+    "category": "Food",
+    "keywords": [
+      "juice box",
+      "drink"
+    ]
+  },
+  {
+    "char": "⚽",
+    "name": "soccer ball",
+    "category": "Activities",
+    "keywords": [
+      "football",
+      "soccer",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🏀",
+    "name": "basketball",
+    "category": "Activities",
+    "keywords": [
+      "basketball",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🏈",
+    "name": "american football",
+    "category": "Activities",
+    "keywords": [
+      "football",
+      "nfl",
+      "sport"
+    ]
+  },
+  {
+    "char": "⚾",
+    "name": "baseball",
+    "category": "Activities",
+    "keywords": [
+      "baseball",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🥎",
+    "name": "softball",
+    "category": "Activities",
+    "keywords": [
+      "softball",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🎾",
+    "name": "tennis",
+    "category": "Activities",
+    "keywords": [
+      "tennis",
+      "sport",
+      "racket"
+    ]
+  },
+  {
+    "char": "🏐",
+    "name": "volleyball",
+    "category": "Activities",
+    "keywords": [
+      "volleyball",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🏉",
+    "name": "rugby football",
+    "category": "Activities",
+    "keywords": [
+      "rugby",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🥏",
+    "name": "flying disc",
+    "category": "Activities",
+    "keywords": [
+      "frisbee",
+      "sport",
+      "disc"
+    ]
+  },
+  {
+    "char": "🎱",
+    "name": "pool 8 ball",
+    "category": "Activities",
+    "keywords": [
+      "billiards",
+      "pool",
+      "game"
+    ]
+  },
+  {
+    "char": "🏓",
+    "name": "ping pong",
+    "category": "Activities",
+    "keywords": [
+      "table tennis",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🏸",
+    "name": "badminton",
+    "category": "Activities",
+    "keywords": [
+      "badminton",
+      "sport",
+      "racket"
+    ]
+  },
+  {
+    "char": "🥊",
+    "name": "boxing glove",
+    "category": "Activities",
+    "keywords": [
+      "boxing",
+      "fight",
+      "sport"
+    ]
+  },
+  {
+    "char": "🥋",
+    "name": "martial arts uniform",
+    "category": "Activities",
+    "keywords": [
+      "karate",
+      "martial arts",
+      "sport"
+    ]
+  },
+  {
+    "char": "⛳",
+    "name": "flag in hole",
+    "category": "Activities",
+    "keywords": [
+      "golf",
+      "sport",
+      "course"
+    ]
+  },
+  {
+    "char": "⛸️",
+    "name": "ice skate",
+    "category": "Activities",
+    "keywords": [
+      "skate",
+      "winter sport",
+      "ice"
+    ]
+  },
+  {
+    "char": "🎣",
+    "name": "fishing pole",
+    "category": "Activities",
+    "keywords": [
+      "fishing",
+      "sport",
+      "water"
+    ]
+  },
+  {
+    "char": "🤿",
+    "name": "diving mask",
+    "category": "Activities",
+    "keywords": [
+      "scuba",
+      "diving",
+      "water"
+    ]
+  },
+  {
+    "char": "🎽",
+    "name": "running shirt",
+    "category": "Activities",
+    "keywords": [
+      "running",
+      "sport",
+      "race"
+    ]
+  },
+  {
+    "char": "🎿",
+    "name": "skis",
+    "category": "Activities",
+    "keywords": [
+      "ski",
+      "winter",
+      "sport"
+    ]
+  },
+  {
+    "char": "🛷",
+    "name": "sled",
+    "category": "Activities",
+    "keywords": [
+      "sled",
+      "winter",
+      "sport"
+    ]
+  },
+  {
+    "char": "🏂",
+    "name": "snowboarder",
+    "category": "Activities",
+    "keywords": [
+      "snowboard",
+      "winter sport"
+    ]
+  },
+  {
+    "char": "🏋️",
+    "name": "person lifting weights",
+    "category": "Activities",
+    "keywords": [
+      "gym",
+      "fitness",
+      "workout"
+    ]
+  },
+  {
+    "char": "🤼",
+    "name": "people wrestling",
+    "category": "Activities",
+    "keywords": [
+      "wrestling",
+      "sport",
+      "fight"
+    ]
+  },
+  {
+    "char": "🤸",
+    "name": "person cartwheeling",
+    "category": "Activities",
+    "keywords": [
+      "gymnastics",
+      "sport",
+      "move"
+    ]
+  },
+  {
+    "char": "⛹️",
+    "name": "person bouncing ball",
+    "category": "Activities",
+    "keywords": [
+      "basketball",
+      "sport"
+    ]
+  },
+  {
+    "char": "🤺",
+    "name": "person fencing",
+    "category": "Activities",
+    "keywords": [
+      "fencing",
+      "sport",
+      "sword"
+    ]
+  },
+  {
+    "char": "🏇",
+    "name": "horse racing",
+    "category": "Activities",
+    "keywords": [
+      "horse",
+      "race",
+      "sport"
+    ]
+  },
+  {
+    "char": "🧘",
+    "name": "person in lotus position",
+    "category": "Activities",
+    "keywords": [
+      "meditation",
+      "yoga",
+      "calm"
+    ]
+  },
+  {
+    "char": "🎮",
+    "name": "video game",
+    "category": "Activities",
+    "keywords": [
+      "gaming",
+      "controller",
+      "play"
+    ]
+  },
+  {
+    "char": "🕹️",
+    "name": "joystick",
+    "category": "Activities",
+    "keywords": [
+      "arcade",
+      "game",
+      "retro"
+    ]
+  },
+  {
+    "char": "🎲",
+    "name": "game die",
+    "category": "Activities",
+    "keywords": [
+      "dice",
+      "board game",
+      "luck"
+    ]
+  },
+  {
+    "char": "♟️",
+    "name": "chess pawn",
+    "category": "Activities",
+    "keywords": [
+      "chess",
+      "strategy",
+      "game"
+    ]
+  },
+  {
+    "char": "🧩",
+    "name": "puzzle piece",
+    "category": "Activities",
+    "keywords": [
+      "puzzle",
+      "solve",
+      "game"
+    ]
+  },
+  {
+    "char": "🎯",
+    "name": "direct hit",
+    "category": "Activities",
+    "keywords": [
+      "target",
+      "bullseye",
+      "goal"
+    ]
+  },
+  {
+    "char": "🎳",
+    "name": "bowling",
+    "category": "Activities",
+    "keywords": [
+      "bowling",
+      "sport",
+      "game"
+    ]
+  },
+  {
+    "char": "🎰",
+    "name": "slot machine",
+    "category": "Activities",
+    "keywords": [
+      "casino",
+      "slots",
+      "luck"
+    ]
+  },
+  {
+    "char": "🎨",
+    "name": "artist palette",
+    "category": "Activities",
+    "keywords": [
+      "art",
+      "paint",
+      "creative"
+    ]
+  },
+  {
+    "char": "🎭",
+    "name": "performing arts",
+    "category": "Activities",
+    "keywords": [
+      "theater",
+      "drama",
+      "mask"
+    ]
+  },
+  {
+    "char": "🎤",
+    "name": "microphone",
+    "category": "Activities",
+    "keywords": [
+      "singing",
+      "karaoke",
+      "music"
+    ]
+  },
+  {
+    "char": "🎧",
+    "name": "headphone",
+    "category": "Activities",
+    "keywords": [
+      "music",
+      "audio",
+      "listen"
+    ]
+  },
+  {
+    "char": "🎼",
+    "name": "musical score",
+    "category": "Activities",
+    "keywords": [
+      "music",
+      "sheet",
+      "notes"
+    ]
+  },
+  {
+    "char": "🎹",
+    "name": "musical keyboard",
+    "category": "Activities",
+    "keywords": [
+      "piano",
+      "music",
+      "instrument"
+    ]
+  },
+  {
+    "char": "🥁",
+    "name": "drum",
+    "category": "Activities",
+    "keywords": [
+      "drums",
+      "music",
+      "instrument"
+    ]
+  },
+  {
+    "char": "🎸",
+    "name": "guitar",
+    "category": "Activities",
+    "keywords": [
+      "music",
+      "instrument",
+      "rock"
+    ]
+  },
+  {
+    "char": "🎷",
+    "name": "saxophone",
+    "category": "Activities",
+    "keywords": [
+      "music",
+      "instrument",
+      "jazz"
+    ]
+  },
+  {
+    "char": "🎺",
+    "name": "trumpet",
+    "category": "Activities",
+    "keywords": [
+      "music",
+      "instrument",
+      "brass"
+    ]
+  },
+  {
+    "char": "🎻",
+    "name": "violin",
+    "category": "Activities",
+    "keywords": [
+      "music",
+      "instrument",
+      "string"
+    ]
+  },
+  {
+    "char": "🚗",
+    "name": "automobile",
+    "category": "Travel",
+    "keywords": [
+      "car",
+      "drive",
+      "vehicle",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚕",
+    "name": "taxi",
+    "category": "Travel",
+    "keywords": [
+      "cab",
+      "car",
+      "ride"
+    ]
+  },
+  {
+    "char": "🚙",
+    "name": "sport utility vehicle",
+    "category": "Travel",
+    "keywords": [
+      "suv",
+      "car",
+      "vehicle"
+    ]
+  },
+  {
+    "char": "🚌",
+    "name": "bus",
+    "category": "Travel",
+    "keywords": [
+      "bus",
+      "public transport",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚎",
+    "name": "trolleybus",
+    "category": "Travel",
+    "keywords": [
+      "bus",
+      "transport",
+      "city"
+    ]
+  },
+  {
+    "char": "🏎️",
+    "name": "racing car",
+    "category": "Travel",
+    "keywords": [
+      "race",
+      "car",
+      "speed"
+    ]
+  },
+  {
+    "char": "🚓",
+    "name": "police car",
+    "category": "Travel",
+    "keywords": [
+      "police",
+      "car",
+      "emergency"
+    ]
+  },
+  {
+    "char": "🚑",
+    "name": "ambulance",
+    "category": "Travel",
+    "keywords": [
+      "ambulance",
+      "medical",
+      "emergency"
+    ]
+  },
+  {
+    "char": "🚒",
+    "name": "fire engine",
+    "category": "Travel",
+    "keywords": [
+      "fire truck",
+      "emergency",
+      "vehicle"
+    ]
+  },
+  {
+    "char": "🚐",
+    "name": "minibus",
+    "category": "Travel",
+    "keywords": [
+      "van",
+      "vehicle",
+      "travel"
+    ]
+  },
+  {
+    "char": "🛻",
+    "name": "pickup truck",
+    "category": "Travel",
+    "keywords": [
+      "truck",
+      "vehicle",
+      "utility"
+    ]
+  },
+  {
+    "char": "🚚",
+    "name": "delivery truck",
+    "category": "Travel",
+    "keywords": [
+      "truck",
+      "shipping",
+      "delivery"
+    ]
+  },
+  {
+    "char": "🚛",
+    "name": "articulated lorry",
+    "category": "Travel",
+    "keywords": [
+      "truck",
+      "cargo",
+      "transport"
+    ]
+  },
+  {
+    "char": "🚜",
+    "name": "tractor",
+    "category": "Travel",
+    "keywords": [
+      "farm",
+      "vehicle",
+      "agriculture"
+    ]
+  },
+  {
+    "char": "🏍️",
+    "name": "motorcycle",
+    "category": "Travel",
+    "keywords": [
+      "motorbike",
+      "bike",
+      "vehicle"
+    ]
+  },
+  {
+    "char": "🛵",
+    "name": "motor scooter",
+    "category": "Travel",
+    "keywords": [
+      "scooter",
+      "vehicle",
+      "ride"
+    ]
+  },
+  {
+    "char": "🚲",
+    "name": "bicycle",
+    "category": "Travel",
+    "keywords": [
+      "bike",
+      "cycling",
+      "ride"
+    ]
+  },
+  {
+    "char": "🛴",
+    "name": "kick scooter",
+    "category": "Travel",
+    "keywords": [
+      "scooter",
+      "ride",
+      "street"
+    ]
+  },
+  {
+    "char": "🚏",
+    "name": "bus stop",
+    "category": "Travel",
+    "keywords": [
+      "bus stop",
+      "transport",
+      "station"
+    ]
+  },
+  {
+    "char": "🛣️",
+    "name": "motorway",
+    "category": "Travel",
+    "keywords": [
+      "highway",
+      "road",
+      "travel"
+    ]
+  },
+  {
+    "char": "🛤️",
+    "name": "railway track",
+    "category": "Travel",
+    "keywords": [
+      "train tracks",
+      "rail",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚦",
+    "name": "vertical traffic light",
+    "category": "Travel",
+    "keywords": [
+      "traffic",
+      "signal",
+      "road"
+    ]
+  },
+  {
+    "char": "🛑",
+    "name": "stop sign",
+    "category": "Travel",
+    "keywords": [
+      "stop",
+      "traffic",
+      "road"
+    ]
+  },
+  {
+    "char": "🚧",
+    "name": "construction",
+    "category": "Travel",
+    "keywords": [
+      "roadwork",
+      "warning",
+      "barrier"
+    ]
+  },
+  {
+    "char": "⚓",
+    "name": "anchor",
+    "category": "Travel",
+    "keywords": [
+      "ship",
+      "boat",
+      "sea"
+    ]
+  },
+  {
+    "char": "⛵",
+    "name": "sailboat",
+    "category": "Travel",
+    "keywords": [
+      "boat",
+      "sailing",
+      "sea"
+    ]
+  },
+  {
+    "char": "🛶",
+    "name": "canoe",
+    "category": "Travel",
+    "keywords": [
+      "boat",
+      "water",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚤",
+    "name": "speedboat",
+    "category": "Travel",
+    "keywords": [
+      "boat",
+      "water",
+      "fast"
+    ]
+  },
+  {
+    "char": "🛳️",
+    "name": "passenger ship",
+    "category": "Travel",
+    "keywords": [
+      "ship",
+      "cruise",
+      "boat"
+    ]
+  },
+  {
+    "char": "⛴️",
+    "name": "ferry",
+    "category": "Travel",
+    "keywords": [
+      "boat",
+      "ship",
+      "transport"
+    ]
+  },
+  {
+    "char": "🚢",
+    "name": "ship",
+    "category": "Travel",
+    "keywords": [
+      "boat",
+      "ocean",
+      "travel"
+    ]
+  },
+  {
+    "char": "✈️",
+    "name": "airplane",
+    "category": "Travel",
+    "keywords": [
+      "plane",
+      "flight",
+      "travel"
+    ]
+  },
+  {
+    "char": "🛩️",
+    "name": "small airplane",
+    "category": "Travel",
+    "keywords": [
+      "plane",
+      "flight",
+      "travel"
+    ]
+  },
+  {
+    "char": "🛫",
+    "name": "airplane departure",
+    "category": "Travel",
+    "keywords": [
+      "flight",
+      "takeoff",
+      "airport"
+    ]
+  },
+  {
+    "char": "🛬",
+    "name": "airplane arrival",
+    "category": "Travel",
+    "keywords": [
+      "flight",
+      "landing",
+      "airport"
+    ]
+  },
+  {
+    "char": "🪂",
+    "name": "parachute",
+    "category": "Travel",
+    "keywords": [
+      "skydiving",
+      "air",
+      "sport"
+    ]
+  },
+  {
+    "char": "💺",
+    "name": "seat",
+    "category": "Travel",
+    "keywords": [
+      "airline seat",
+      "travel",
+      "chair"
+    ]
+  },
+  {
+    "char": "🚁",
+    "name": "helicopter",
+    "category": "Travel",
+    "keywords": [
+      "heli",
+      "air",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚂",
+    "name": "locomotive",
+    "category": "Travel",
+    "keywords": [
+      "train",
+      "rail",
+      "transport"
+    ]
+  },
+  {
+    "char": "🚆",
+    "name": "train",
+    "category": "Travel",
+    "keywords": [
+      "railway",
+      "transport",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚇",
+    "name": "metro",
+    "category": "Travel",
+    "keywords": [
+      "subway",
+      "train",
+      "city"
+    ]
+  },
+  {
+    "char": "🚉",
+    "name": "station",
+    "category": "Travel",
+    "keywords": [
+      "train station",
+      "rail",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚊",
+    "name": "tram",
+    "category": "Travel",
+    "keywords": [
+      "tram",
+      "city transport",
+      "rail"
+    ]
+  },
+  {
+    "char": "🚝",
+    "name": "monorail",
+    "category": "Travel",
+    "keywords": [
+      "train",
+      "transport",
+      "rail"
+    ]
+  },
+  {
+    "char": "🚞",
+    "name": "mountain railway",
+    "category": "Travel",
+    "keywords": [
+      "train",
+      "mountain",
+      "travel"
+    ]
+  },
+  {
+    "char": "🚋",
+    "name": "tram car",
+    "category": "Travel",
+    "keywords": [
+      "tram",
+      "city",
+      "transport"
+    ]
+  },
+  {
+    "char": "🗺️",
+    "name": "world map",
+    "category": "Travel",
+    "keywords": [
+      "map",
+      "travel",
+      "navigation"
+    ]
+  },
+  {
+    "char": "🧭",
+    "name": "compass",
+    "category": "Travel",
+    "keywords": [
+      "navigation",
+      "direction",
+      "travel"
+    ]
+  },
+  {
+    "char": "🏔️",
+    "name": "snow-capped mountain",
+    "category": "Travel",
+    "keywords": [
+      "mountain",
+      "nature",
+      "travel"
+    ]
+  },
+  {
+    "char": "🏝️",
+    "name": "desert island",
+    "category": "Travel",
+    "keywords": [
+      "island",
+      "beach",
+      "vacation"
+    ]
+  },
+  {
+    "char": "⌚",
+    "name": "watch",
+    "category": "Objects",
+    "keywords": [
+      "watch",
+      "time",
+      "clock"
+    ]
+  },
+  {
+    "char": "📱",
+    "name": "mobile phone",
+    "category": "Objects",
+    "keywords": [
+      "phone",
+      "smartphone",
+      "device"
+    ]
+  },
+  {
+    "char": "📲",
+    "name": "mobile phone with arrow",
+    "category": "Objects",
+    "keywords": [
+      "phone",
+      "incoming",
+      "call"
+    ]
+  },
+  {
+    "char": "💻",
+    "name": "laptop",
+    "category": "Objects",
+    "keywords": [
+      "computer",
+      "work",
+      "device"
+    ]
+  },
+  {
+    "char": "⌨️",
+    "name": "keyboard",
+    "category": "Objects",
+    "keywords": [
+      "keyboard",
+      "computer",
+      "typing"
+    ]
+  },
+  {
+    "char": "🖥️",
+    "name": "desktop computer",
+    "category": "Objects",
+    "keywords": [
+      "computer",
+      "desktop",
+      "pc"
+    ]
+  },
+  {
+    "char": "🖨️",
+    "name": "printer",
+    "category": "Objects",
+    "keywords": [
+      "printer",
+      "office",
+      "paper"
+    ]
+  },
+  {
+    "char": "🖱️",
+    "name": "computer mouse",
+    "category": "Objects",
+    "keywords": [
+      "mouse",
+      "computer",
+      "click"
+    ]
+  },
+  {
+    "char": "🖲️",
+    "name": "trackball",
+    "category": "Objects",
+    "keywords": [
+      "trackball",
+      "computer",
+      "device"
+    ]
+  },
+  {
+    "char": "🧮",
+    "name": "abacus",
+    "category": "Objects",
+    "keywords": [
+      "calculator",
+      "math",
+      "count"
+    ]
+  },
+  {
+    "char": "🎥",
+    "name": "movie camera",
+    "category": "Objects",
+    "keywords": [
+      "camera",
+      "video",
+      "film"
+    ]
+  },
+  {
+    "char": "📷",
+    "name": "camera",
+    "category": "Objects",
+    "keywords": [
+      "photo",
+      "picture",
+      "lens"
+    ]
+  },
+  {
+    "char": "📸",
+    "name": "camera with flash",
+    "category": "Objects",
+    "keywords": [
+      "photo",
+      "camera",
+      "flash"
+    ]
+  },
+  {
+    "char": "📹",
+    "name": "video camera",
+    "category": "Objects",
+    "keywords": [
+      "video",
+      "camera",
+      "record"
+    ]
+  },
+  {
+    "char": "📼",
+    "name": "videocassette",
+    "category": "Objects",
+    "keywords": [
+      "vhs",
+      "tape",
+      "retro"
+    ]
+  },
+  {
+    "char": "🔍",
+    "name": "magnifying glass tilted left",
+    "category": "Objects",
+    "keywords": [
+      "search",
+      "find",
+      "zoom"
+    ]
+  },
+  {
+    "char": "🔎",
+    "name": "magnifying glass tilted right",
+    "category": "Objects",
+    "keywords": [
+      "search",
+      "find",
+      "zoom"
+    ]
+  },
+  {
+    "char": "🕯️",
+    "name": "candle",
+    "category": "Objects",
+    "keywords": [
+      "candle",
+      "light",
+      "wax"
+    ]
+  },
+  {
+    "char": "💡",
+    "name": "light bulb",
+    "category": "Objects",
+    "keywords": [
+      "idea",
+      "light",
+      "inspiration"
+    ]
+  },
+  {
+    "char": "🔦",
+    "name": "flashlight",
+    "category": "Objects",
+    "keywords": [
+      "torch",
+      "light",
+      "dark"
+    ]
+  },
+  {
+    "char": "🏮",
+    "name": "red paper lantern",
+    "category": "Objects",
+    "keywords": [
+      "lantern",
+      "light",
+      "festival"
+    ]
+  },
+  {
+    "char": "🪔",
+    "name": "diya lamp",
+    "category": "Objects",
+    "keywords": [
+      "lamp",
+      "light",
+      "festival"
+    ]
+  },
+  {
+    "char": "📔",
+    "name": "notebook with decorative cover",
+    "category": "Objects",
+    "keywords": [
+      "notebook",
+      "notes",
+      "book"
+    ]
+  },
+  {
+    "char": "📕",
+    "name": "closed book",
+    "category": "Objects",
+    "keywords": [
+      "book",
+      "read",
+      "study"
+    ]
+  },
+  {
+    "char": "📖",
+    "name": "open book",
+    "category": "Objects",
+    "keywords": [
+      "book",
+      "read",
+      "study"
+    ]
+  },
+  {
+    "char": "📗",
+    "name": "green book",
+    "category": "Objects",
+    "keywords": [
+      "book",
+      "read",
+      "study"
+    ]
+  },
+  {
+    "char": "📘",
+    "name": "blue book",
+    "category": "Objects",
+    "keywords": [
+      "book",
+      "read",
+      "study"
+    ]
+  },
+  {
+    "char": "📙",
+    "name": "orange book",
+    "category": "Objects",
+    "keywords": [
+      "book",
+      "read",
+      "study"
+    ]
+  },
+  {
+    "char": "📚",
+    "name": "books",
+    "category": "Objects",
+    "keywords": [
+      "books",
+      "library",
+      "study"
+    ]
+  },
+  {
+    "char": "📓",
+    "name": "notebook",
+    "category": "Objects",
+    "keywords": [
+      "notes",
+      "book",
+      "write"
+    ]
+  },
+  {
+    "char": "📒",
+    "name": "ledger",
+    "category": "Objects",
+    "keywords": [
+      "accounting",
+      "book",
+      "notes"
+    ]
+  },
+  {
+    "char": "📃",
+    "name": "page with curl",
+    "category": "Objects",
+    "keywords": [
+      "document",
+      "page",
+      "file"
+    ]
+  },
+  {
+    "char": "📄",
+    "name": "page facing up",
+    "category": "Objects",
+    "keywords": [
+      "document",
+      "paper",
+      "file"
+    ]
+  },
+  {
+    "char": "📰",
+    "name": "newspaper",
+    "category": "Objects",
+    "keywords": [
+      "news",
+      "paper",
+      "media"
+    ]
+  },
+  {
+    "char": "📑",
+    "name": "bookmark tabs",
+    "category": "Objects",
+    "keywords": [
+      "tabs",
+      "document",
+      "index"
+    ]
+  },
+  {
+    "char": "🔖",
+    "name": "bookmark",
+    "category": "Objects",
+    "keywords": [
+      "bookmark",
+      "save",
+      "mark"
+    ]
+  },
+  {
+    "char": "🏷️",
+    "name": "label",
+    "category": "Objects",
+    "keywords": [
+      "tag",
+      "price",
+      "sticker"
+    ]
+  },
+  {
+    "char": "💰",
+    "name": "money bag",
+    "category": "Objects",
+    "keywords": [
+      "money",
+      "cash",
+      "wealth"
+    ]
+  },
+  {
+    "char": "🪙",
+    "name": "coin",
+    "category": "Objects",
+    "keywords": [
+      "money",
+      "cash",
+      "currency"
+    ]
+  },
+  {
+    "char": "💳",
+    "name": "credit card",
+    "category": "Objects",
+    "keywords": [
+      "card",
+      "payment",
+      "bank"
+    ]
+  },
+  {
+    "char": "💎",
+    "name": "gem stone",
+    "category": "Objects",
+    "keywords": [
+      "diamond",
+      "gem",
+      "jewel"
+    ]
+  },
+  {
+    "char": "⚖️",
+    "name": "balance scale",
+    "category": "Objects",
+    "keywords": [
+      "justice",
+      "law",
+      "scale"
+    ]
+  },
+  {
+    "char": "🔧",
+    "name": "wrench",
+    "category": "Objects",
+    "keywords": [
+      "tool",
+      "fix",
+      "repair"
+    ]
+  },
+  {
+    "char": "🔨",
+    "name": "hammer",
+    "category": "Objects",
+    "keywords": [
+      "tool",
+      "build",
+      "repair"
+    ]
+  },
+  {
+    "char": "🛠️",
+    "name": "hammer and wrench",
+    "category": "Objects",
+    "keywords": [
+      "tools",
+      "build",
+      "repair"
+    ]
+  },
+  {
+    "char": "⛏️",
+    "name": "pick",
+    "category": "Objects",
+    "keywords": [
+      "tool",
+      "mine",
+      "dig"
+    ]
+  },
+  {
+    "char": "🪓",
+    "name": "axe",
+    "category": "Objects",
+    "keywords": [
+      "tool",
+      "chop",
+      "wood"
+    ]
+  },
+  {
+    "char": "🪚",
+    "name": "carpentry saw",
+    "category": "Objects",
+    "keywords": [
+      "saw",
+      "tool",
+      "woodwork"
+    ]
+  },
+  {
+    "char": "⚙️",
+    "name": "gear",
+    "category": "Objects",
+    "keywords": [
+      "settings",
+      "config",
+      "system"
+    ]
+  },
+  {
+    "char": "🧰",
+    "name": "toolbox",
+    "category": "Objects",
+    "keywords": [
+      "tools",
+      "repair",
+      "kit"
+    ]
+  },
+  {
+    "char": "🧲",
+    "name": "magnet",
+    "category": "Objects",
+    "keywords": [
+      "magnet",
+      "science",
+      "metal"
+    ]
+  },
+  {
+    "char": "🧪",
+    "name": "test tube",
+    "category": "Objects",
+    "keywords": [
+      "science",
+      "lab",
+      "experiment"
+    ]
+  },
+  {
+    "char": "🧫",
+    "name": "petri dish",
+    "category": "Objects",
+    "keywords": [
+      "science",
+      "lab",
+      "biology"
+    ]
+  },
+  {
+    "char": "🧬",
+    "name": "dna",
+    "category": "Objects",
+    "keywords": [
+      "science",
+      "genetics",
+      "biology"
+    ]
+  },
+  {
+    "char": "🔬",
+    "name": "microscope",
+    "category": "Objects",
+    "keywords": [
+      "science",
+      "lab",
+      "research"
+    ]
+  },
+  {
+    "char": "🔭",
+    "name": "telescope",
+    "category": "Objects",
+    "keywords": [
+      "space",
+      "science",
+      "observe"
+    ]
+  },
+  {
+    "char": "📡",
+    "name": "satellite antenna",
+    "category": "Objects",
+    "keywords": [
+      "signal",
+      "broadcast",
+      "communication"
+    ]
+  },
+  {
+    "char": "💉",
+    "name": "syringe",
+    "category": "Objects",
+    "keywords": [
+      "medicine",
+      "vaccine",
+      "health"
+    ]
+  },
+  {
+    "char": "🩺",
+    "name": "stethoscope",
+    "category": "Objects",
+    "keywords": [
+      "doctor",
+      "medical",
+      "health"
+    ]
+  },
+  {
+    "char": "🚪",
+    "name": "door",
+    "category": "Objects",
+    "keywords": [
+      "door",
+      "entry",
+      "exit"
+    ]
+  },
+  {
+    "char": "🪑",
+    "name": "chair",
+    "category": "Objects",
+    "keywords": [
+      "chair",
+      "furniture",
+      "seat"
+    ]
+  },
+  {
+    "char": "🛏️",
+    "name": "bed",
+    "category": "Objects",
+    "keywords": [
+      "sleep",
+      "furniture",
+      "rest"
+    ]
+  },
+  {
+    "char": "🛋️",
+    "name": "couch and lamp",
+    "category": "Objects",
+    "keywords": [
+      "sofa",
+      "living room",
+      "furniture"
+    ]
+  },
+  {
+    "char": "🚽",
+    "name": "toilet",
+    "category": "Objects",
+    "keywords": [
+      "bathroom",
+      "wc",
+      "restroom"
+    ]
+  },
+  {
+    "char": "🧻",
+    "name": "roll of paper",
+    "category": "Objects",
+    "keywords": [
+      "toilet paper",
+      "paper",
+      "bathroom"
+    ]
+  },
+  {
+    "char": "🪞",
+    "name": "mirror",
+    "category": "Objects",
+    "keywords": [
+      "mirror",
+      "reflection",
+      "glass"
+    ]
+  },
+  {
+    "char": "✅",
+    "name": "check mark button",
+    "category": "Symbols",
+    "keywords": [
+      "check",
+      "done",
+      "success",
+      "ok",
+      "yes"
+    ]
+  },
+  {
+    "char": "☑️",
+    "name": "check box with check",
+    "category": "Symbols",
+    "keywords": [
+      "checkbox",
+      "check",
+      "selected"
+    ]
+  },
+  {
+    "char": "✔️",
+    "name": "check mark",
+    "category": "Symbols",
+    "keywords": [
+      "check",
+      "tick",
+      "yes",
+      "correct"
+    ]
+  },
+  {
+    "char": "✖️",
+    "name": "multiply",
+    "category": "Symbols",
+    "keywords": [
+      "x",
+      "close",
+      "cancel",
+      "wrong"
+    ]
+  },
+  {
+    "char": "❌",
+    "name": "cross mark",
+    "category": "Symbols",
+    "keywords": [
+      "x",
+      "no",
+      "close",
+      "error"
+    ]
+  },
+  {
+    "char": "❎",
+    "name": "cross mark button",
+    "category": "Symbols",
+    "keywords": [
+      "x",
+      "cancel",
+      "no"
+    ]
+  },
+  {
+    "char": "➕",
+    "name": "plus",
+    "category": "Symbols",
+    "keywords": [
+      "plus",
+      "add",
+      "math"
+    ]
+  },
+  {
+    "char": "➖",
+    "name": "minus",
+    "category": "Symbols",
+    "keywords": [
+      "minus",
+      "subtract",
+      "math"
+    ]
+  },
+  {
+    "char": "➗",
+    "name": "divide",
+    "category": "Symbols",
+    "keywords": [
+      "divide",
+      "math",
+      "split"
+    ]
+  },
+  {
+    "char": "➰",
+    "name": "curly loop",
+    "category": "Symbols",
+    "keywords": [
+      "loop",
+      "repeat",
+      "swirl"
+    ]
+  },
+  {
+    "char": "➿",
+    "name": "double curly loop",
+    "category": "Symbols",
+    "keywords": [
+      "loop",
+      "repeat",
+      "swirl"
+    ]
+  },
+  {
+    "char": "⭕",
+    "name": "hollow red circle",
+    "category": "Symbols",
+    "keywords": [
+      "circle",
+      "mark",
+      "target"
+    ]
+  },
+  {
+    "char": "🔴",
+    "name": "red circle",
+    "category": "Symbols",
+    "keywords": [
+      "red",
+      "dot",
+      "record"
+    ]
+  },
+  {
+    "char": "🟠",
+    "name": "orange circle",
+    "category": "Symbols",
+    "keywords": [
+      "orange",
+      "dot",
+      "indicator"
+    ]
+  },
+  {
+    "char": "🟡",
+    "name": "yellow circle",
+    "category": "Symbols",
+    "keywords": [
+      "yellow",
+      "dot",
+      "indicator"
+    ]
+  },
+  {
+    "char": "🟢",
+    "name": "green circle",
+    "category": "Symbols",
+    "keywords": [
+      "green",
+      "dot",
+      "online"
+    ]
+  },
+  {
+    "char": "🔵",
+    "name": "blue circle",
+    "category": "Symbols",
+    "keywords": [
+      "blue",
+      "dot",
+      "indicator"
+    ]
+  },
+  {
+    "char": "🟣",
+    "name": "purple circle",
+    "category": "Symbols",
+    "keywords": [
+      "purple",
+      "dot",
+      "indicator"
+    ]
+  },
+  {
+    "char": "⚫",
+    "name": "black circle",
+    "category": "Symbols",
+    "keywords": [
+      "black",
+      "dot",
+      "indicator"
+    ]
+  },
+  {
+    "char": "⚪",
+    "name": "white circle",
+    "category": "Symbols",
+    "keywords": [
+      "white",
+      "dot",
+      "indicator"
+    ]
+  },
+  {
+    "char": "🟥",
+    "name": "red square",
+    "category": "Symbols",
+    "keywords": [
+      "red",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "🟩",
+    "name": "green square",
+    "category": "Symbols",
+    "keywords": [
+      "green",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "🟦",
+    "name": "blue square",
+    "category": "Symbols",
+    "keywords": [
+      "blue",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "🟨",
+    "name": "yellow square",
+    "category": "Symbols",
+    "keywords": [
+      "yellow",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "🟧",
+    "name": "orange square",
+    "category": "Symbols",
+    "keywords": [
+      "orange",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "🟪",
+    "name": "purple square",
+    "category": "Symbols",
+    "keywords": [
+      "purple",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "⬛",
+    "name": "black large square",
+    "category": "Symbols",
+    "keywords": [
+      "black",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "⬜",
+    "name": "white large square",
+    "category": "Symbols",
+    "keywords": [
+      "white",
+      "square",
+      "shape"
+    ]
+  },
+  {
+    "char": "⭐",
+    "name": "star",
+    "category": "Symbols",
+    "keywords": [
+      "star",
+      "favorite",
+      "highlight",
+      "rating"
+    ]
+  },
+  {
+    "char": "🌟",
+    "name": "glowing star",
+    "category": "Symbols",
+    "keywords": [
+      "star",
+      "sparkle",
+      "special"
+    ]
+  },
+  {
+    "char": "✨",
+    "name": "sparkles",
+    "category": "Symbols",
+    "keywords": [
+      "sparkle",
+      "magic",
+      "shiny",
+      "clean"
+    ]
+  },
+  {
+    "char": "⚡",
+    "name": "high voltage",
+    "category": "Symbols",
+    "keywords": [
+      "lightning",
+      "electric",
+      "fast",
+      "energy"
+    ]
+  },
+  {
+    "char": "🔥",
+    "name": "fire",
+    "category": "Symbols",
+    "keywords": [
+      "fire",
+      "hot",
+      "lit",
+      "cool",
+      "trending"
+    ]
+  },
+  {
+    "char": "💥",
+    "name": "collision",
+    "category": "Symbols",
+    "keywords": [
+      "boom",
+      "explosion",
+      "impact"
+    ]
+  },
+  {
+    "char": "💫",
+    "name": "dizzy",
+    "category": "Symbols",
+    "keywords": [
+      "sparkle",
+      "star",
+      "magic"
+    ]
+  },
+  {
+    "char": "💦",
+    "name": "sweat droplets",
+    "category": "Symbols",
+    "keywords": [
+      "water",
+      "splash",
+      "drops"
+    ]
+  },
+  {
+    "char": "💨",
+    "name": "dashing away",
+    "category": "Symbols",
+    "keywords": [
+      "fast",
+      "speed",
+      "wind"
+    ]
+  },
+  {
+    "char": "🕳️",
+    "name": "hole",
+    "category": "Symbols",
+    "keywords": [
+      "hole",
+      "empty",
+      "void"
+    ]
+  },
+  {
+    "char": "💬",
+    "name": "speech balloon",
+    "category": "Symbols",
+    "keywords": [
+      "chat",
+      "message",
+      "talk"
+    ]
+  },
+  {
+    "char": "🗨️",
+    "name": "left speech bubble",
+    "category": "Symbols",
+    "keywords": [
+      "speech",
+      "chat",
+      "message"
+    ]
+  },
+  {
+    "char": "🗯️",
+    "name": "right anger bubble",
+    "category": "Symbols",
+    "keywords": [
+      "anger",
+      "comic",
+      "mad"
+    ]
+  },
+  {
+    "char": "💭",
+    "name": "thought balloon",
+    "category": "Symbols",
+    "keywords": [
+      "thought",
+      "thinking",
+      "idea"
+    ]
+  },
+  {
+    "char": "💤",
+    "name": "zzz",
+    "category": "Symbols",
+    "keywords": [
+      "sleep",
+      "tired",
+      "snore"
+    ]
+  },
+  {
+    "char": "🚨",
+    "name": "police car light",
+    "category": "Symbols",
+    "keywords": [
+      "alert",
+      "emergency",
+      "siren"
+    ]
+  },
+  {
+    "char": "🔔",
+    "name": "bell",
+    "category": "Symbols",
+    "keywords": [
+      "notification",
+      "alert",
+      "ring"
+    ]
+  },
+  {
+    "char": "🔕",
+    "name": "bell with slash",
+    "category": "Symbols",
+    "keywords": [
+      "mute",
+      "notifications off",
+      "silent"
+    ]
+  },
+  {
+    "char": "📣",
+    "name": "megaphone",
+    "category": "Symbols",
+    "keywords": [
+      "announce",
+      "loud",
+      "broadcast"
+    ]
+  },
+  {
+    "char": "🔈",
+    "name": "speaker low volume",
+    "category": "Symbols",
+    "keywords": [
+      "volume",
+      "sound",
+      "audio"
+    ]
+  },
+  {
+    "char": "🔉",
+    "name": "speaker medium volume",
+    "category": "Symbols",
+    "keywords": [
+      "volume",
+      "sound",
+      "audio"
+    ]
+  },
+  {
+    "char": "🔊",
+    "name": "speaker high volume",
+    "category": "Symbols",
+    "keywords": [
+      "volume",
+      "sound",
+      "audio",
+      "loud"
+    ]
+  },
+  {
+    "char": "🔇",
+    "name": "muted speaker",
+    "category": "Symbols",
+    "keywords": [
+      "mute",
+      "silent",
+      "audio off"
+    ]
+  },
+  {
+    "char": "♻️",
+    "name": "recycling symbol",
+    "category": "Symbols",
+    "keywords": [
+      "recycle",
+      "eco",
+      "green"
+    ]
+  },
+  {
+    "char": "⚠️",
+    "name": "warning",
+    "category": "Symbols",
+    "keywords": [
+      "warning",
+      "caution",
+      "alert"
+    ]
+  },
+  {
+    "char": "🚫",
+    "name": "prohibited",
+    "category": "Symbols",
+    "keywords": [
+      "no",
+      "forbidden",
+      "ban",
+      "stop"
+    ]
+  },
+  {
+    "char": "⛔",
+    "name": "no entry",
+    "category": "Symbols",
+    "keywords": [
+      "stop",
+      "forbidden",
+      "no"
+    ]
+  },
+  {
+    "char": "🔞",
+    "name": "no one under eighteen",
+    "category": "Symbols",
+    "keywords": [
+      "18+",
+      "adult",
+      "age"
+    ]
+  },
+  {
+    "char": "📵",
+    "name": "no mobile phones",
+    "category": "Symbols",
+    "keywords": [
+      "no phone",
+      "forbidden",
+      "rule"
+    ]
+  },
+  {
+    "char": "❗",
+    "name": "red exclamation mark",
+    "category": "Symbols",
+    "keywords": [
+      "exclamation",
+      "important",
+      "alert"
+    ]
+  },
+  {
+    "char": "❓",
+    "name": "red question mark",
+    "category": "Symbols",
+    "keywords": [
+      "question",
+      "help",
+      "unknown"
+    ]
+  },
+  {
+    "char": "‼️",
+    "name": "double exclamation mark",
+    "category": "Symbols",
+    "keywords": [
+      "alert",
+      "important",
+      "urgent"
+    ]
+  },
+  {
+    "char": "⁉️",
+    "name": "exclamation question mark",
+    "category": "Symbols",
+    "keywords": [
+      "what",
+      "confused",
+      "question"
+    ]
+  },
+  {
+    "char": "🔁",
+    "name": "repeat button",
+    "category": "Symbols",
+    "keywords": [
+      "repeat",
+      "loop",
+      "again"
+    ]
+  },
+  {
+    "char": "🔂",
+    "name": "repeat single button",
+    "category": "Symbols",
+    "keywords": [
+      "repeat one",
+      "loop",
+      "song"
+    ]
+  },
+  {
+    "char": "▶️",
+    "name": "play button",
+    "category": "Symbols",
+    "keywords": [
+      "play",
+      "start",
+      "media"
+    ]
+  },
+  {
+    "char": "⏸️",
+    "name": "pause button",
+    "category": "Symbols",
+    "keywords": [
+      "pause",
+      "stop",
+      "media"
+    ]
+  },
+  {
+    "char": "⏹️",
+    "name": "stop button",
+    "category": "Symbols",
+    "keywords": [
+      "stop",
+      "media",
+      "end"
+    ]
+  },
+  {
+    "char": "⏭️",
+    "name": "next track button",
+    "category": "Symbols",
+    "keywords": [
+      "next",
+      "skip",
+      "media"
+    ]
+  },
+  {
+    "char": "⏮️",
+    "name": "last track button",
+    "category": "Symbols",
+    "keywords": [
+      "previous",
+      "back",
+      "media"
+    ]
+  },
+  {
+    "char": "🔀",
+    "name": "shuffle tracks button",
+    "category": "Symbols",
+    "keywords": [
+      "shuffle",
+      "random",
+      "music"
+    ]
+  },
+  {
+    "char": "🔚",
+    "name": "end arrow",
+    "category": "Symbols",
+    "keywords": [
+      "end",
+      "finish",
+      "arrow"
+    ]
+  },
+  {
+    "char": "🔙",
+    "name": "back arrow",
+    "category": "Symbols",
+    "keywords": [
+      "back",
+      "return",
+      "arrow"
+    ]
+  },
+  {
+    "char": "🔛",
+    "name": "on arrow",
+    "category": "Symbols",
+    "keywords": [
+      "on",
+      "switch",
+      "arrow"
+    ]
+  },
+  {
+    "char": "🔝",
+    "name": "top arrow",
+    "category": "Symbols",
+    "keywords": [
+      "top",
+      "up",
+      "arrow"
+    ]
+  },
+  {
+    "char": "🛐",
+    "name": "place of worship",
+    "category": "Symbols",
+    "keywords": [
+      "religion",
+      "prayer",
+      "faith"
+    ]
+  },
+  {
+    "char": "♈",
+    "name": "aries",
+    "category": "Symbols",
+    "keywords": [
+      "zodiac",
+      "astrology",
+      "sign"
+    ]
+  },
+  {
+    "char": "♉",
+    "name": "taurus",
+    "category": "Symbols",
+    "keywords": [
+      "zodiac",
+      "astrology",
+      "sign"
+    ]
+  },
+  {
+    "char": "♊",
+    "name": "gemini",
+    "category": "Symbols",
+    "keywords": [
+      "zodiac",
+      "astrology",
+      "sign"
+    ]
+  },
+  {
+    "char": "🏳️",
+    "name": "white flag",
+    "category": "Flags",
+    "keywords": [
+      "flag",
+      "surrender",
+      "truce"
+    ]
+  },
+  {
+    "char": "🏴",
+    "name": "black flag",
+    "category": "Flags",
+    "keywords": [
+      "flag",
+      "pirate",
+      "dark"
+    ]
+  },
+  {
+    "char": "🏁",
+    "name": "chequered flag",
+    "category": "Flags",
+    "keywords": [
+      "finish",
+      "race",
+      "flag"
+    ]
+  },
+  {
+    "char": "🚩",
+    "name": "triangular flag",
+    "category": "Flags",
+    "keywords": [
+      "flag",
+      "marker",
+      "location"
+    ]
+  },
+  {
+    "char": "🏳️‍🌈",
+    "name": "rainbow flag",
+    "category": "Flags",
+    "keywords": [
+      "pride",
+      "lgbtq",
+      "rainbow",
+      "flag"
+    ]
+  },
+  {
+    "char": "🏳️‍⚧️",
+    "name": "transgender flag",
+    "category": "Flags",
+    "keywords": [
+      "trans",
+      "pride",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇺🇸",
+    "name": "flag united states",
+    "category": "Flags",
+    "keywords": [
+      "usa",
+      "us",
+      "america",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇬🇧",
+    "name": "flag united kingdom",
+    "category": "Flags",
+    "keywords": [
+      "uk",
+      "britain",
+      "england",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇨🇦",
+    "name": "flag canada",
+    "category": "Flags",
+    "keywords": [
+      "canada",
+      "ca",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇩🇪",
+    "name": "flag germany",
+    "category": "Flags",
+    "keywords": [
+      "germany",
+      "de",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇫🇷",
+    "name": "flag france",
+    "category": "Flags",
+    "keywords": [
+      "france",
+      "fr",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇪🇸",
+    "name": "flag spain",
+    "category": "Flags",
+    "keywords": [
+      "spain",
+      "es",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇮🇹",
+    "name": "flag italy",
+    "category": "Flags",
+    "keywords": [
+      "italy",
+      "it",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇯🇵",
+    "name": "flag japan",
+    "category": "Flags",
+    "keywords": [
+      "japan",
+      "jp",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇰🇷",
+    "name": "flag south korea",
+    "category": "Flags",
+    "keywords": [
+      "korea",
+      "kr",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇨🇳",
+    "name": "flag china",
+    "category": "Flags",
+    "keywords": [
+      "china",
+      "cn",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇮🇳",
+    "name": "flag india",
+    "category": "Flags",
+    "keywords": [
+      "india",
+      "in",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇰🇿",
+    "name": "flag kazakhstan",
+    "category": "Flags",
+    "keywords": [
+      "kazakhstan",
+      "kz",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇧🇷",
+    "name": "flag brazil",
+    "category": "Flags",
+    "keywords": [
+      "brazil",
+      "br",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇦🇺",
+    "name": "flag australia",
+    "category": "Flags",
+    "keywords": [
+      "australia",
+      "au",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇳🇿",
+    "name": "flag new zealand",
+    "category": "Flags",
+    "keywords": [
+      "new zealand",
+      "nz",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇲🇽",
+    "name": "flag mexico",
+    "category": "Flags",
+    "keywords": [
+      "mexico",
+      "mx",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇹🇷",
+    "name": "flag turkey",
+    "category": "Flags",
+    "keywords": [
+      "turkey",
+      "tr",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇺🇦",
+    "name": "flag ukraine",
+    "category": "Flags",
+    "keywords": [
+      "ukraine",
+      "ua",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇵🇱",
+    "name": "flag poland",
+    "category": "Flags",
+    "keywords": [
+      "poland",
+      "pl",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇸🇪",
+    "name": "flag sweden",
+    "category": "Flags",
+    "keywords": [
+      "sweden",
+      "se",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇳🇴",
+    "name": "flag norway",
+    "category": "Flags",
+    "keywords": [
+      "norway",
+      "no",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇫🇮",
+    "name": "flag finland",
+    "category": "Flags",
+    "keywords": [
+      "finland",
+      "fi",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇳🇱",
+    "name": "flag netherlands",
+    "category": "Flags",
+    "keywords": [
+      "netherlands",
+      "nl",
+      "flag"
+    ]
+  },
+  {
+    "char": "🇨🇭",
+    "name": "flag switzerland",
+    "category": "Flags",
+    "keywords": [
+      "switzerland",
+      "ch",
+      "flag"
+    ]
+  }
+]

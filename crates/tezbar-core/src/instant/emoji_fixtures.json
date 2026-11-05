@@ -1,0 +1,495 @@
+[
+  {
+    "query": "",
+    "category": "All",
+    "expected": [
+      "😀",
+      "😃",
+      "😄",
+      "😁",
+      "😆",
+      "😅",
+      "🤣",
+      "😂",
+      "🙂",
+      "🙃",
+      "😉",
+      "😊",
+      "😇",
+      "🥰",
+      "😍",
+      "🤩",
+      "😘",
+      "😗",
+      "😚",
+      "😙"
+    ]
+  },
+  {
+    "query": "",
+    "category": "Smileys",
+    "expected": [
+      "😀",
+      "😃",
+      "😄",
+      "😁",
+      "😆",
+      "😅",
+      "🤣",
+      "😂",
+      "🙂",
+      "🙃",
+      "😉",
+      "😊",
+      "😇",
+      "🥰",
+      "😍",
+      "🤩",
+      "😘",
+      "😗",
+      "😚",
+      "😙"
+    ]
+  },
+  {
+    "query": "",
+    "category": "Flags",
+    "expected": [
+      "🏳️",
+      "🏴",
+      "🏁",
+      "🚩",
+      "🏳️‍🌈",
+      "🏳️‍⚧️",
+      "🇺🇸",
+      "🇬🇧",
+      "🇨🇦",
+      "🇩🇪",
+      "🇫🇷",
+      "🇪🇸",
+      "🇮🇹",
+      "🇯🇵",
+      "🇰🇷",
+      "🇨🇳",
+      "🇮🇳",
+      "🇰🇿",
+      "🇧🇷",
+      "🇦🇺"
+    ]
+  },
+  {
+    "query": "happy",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "happy",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "happy",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "sad",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "sad",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "sad",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "love",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "love",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "love",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "cool",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "cool",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "cool",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "sus",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "sus",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "sus",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "laugh",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "laugh",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "laugh",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "party",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "party",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "party",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "tired",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "tired",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "tired",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "scared",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "scared",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "scared",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "fire",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "fire",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "fire",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "the",
+    "category": "All",
+    "expected": [
+      "😀",
+      "😃",
+      "😄",
+      "😁",
+      "😆",
+      "😅",
+      "🤣",
+      "😂",
+      "🙂",
+      "🙃",
+      "😉",
+      "😊",
+      "😇",
+      "🥰",
+      "😍",
+      "🤩",
+      "😘",
+      "😗",
+      "😚",
+      "😙"
+    ]
+  },
+  {
+    "query": "the",
+    "category": "Smileys",
+    "expected": [
+      "😀",
+      "😃",
+      "😄",
+      "😁",
+      "😆",
+      "😅",
+      "🤣",
+      "😂",
+      "🙂",
+      "🙃",
+      "😉",
+      "😊",
+      "😇",
+      "🥰",
+      "😍",
+      "🤩",
+      "😘",
+      "😗",
+      "😚",
+      "😙"
+    ]
+  },
+  {
+    "query": "the",
+    "category": "Flags",
+    "expected": [
+      "🏳️",
+      "🏴",
+      "🏁",
+      "🚩",
+      "🏳️‍🌈",
+      "🏳️‍⚧️",
+      "🇺🇸",
+      "🇬🇧",
+      "🇨🇦",
+      "🇩🇪",
+      "🇫🇷",
+      "🇪🇸",
+      "🇮🇹",
+      "🇯🇵",
+      "🇰🇷",
+      "🇨🇳",
+      "🇮🇳",
+      "🇰🇿",
+      "🇧🇷",
+      "🇦🇺"
+    ]
+  },
+  {
+    "query": "smiling",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "smiling",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "smiling",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "celebrating",
+    "category": "All",
+    "expected": []
+  },
+  {
+    "query": "celebrating",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "celebrating",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "HEART",
+    "category": "All",
+    "expected": [
+      "💓",
+      "❣️",
+      "💟",
+      "🫶",
+      "💚",
+      "🤎",
+      "💝",
+      "❤️",
+      "🧡",
+      "💛",
+      "💙",
+      "💜",
+      "🖤",
+      "🤍",
+      "💗",
+      "💖",
+      "🥰",
+      "💔",
+      "💕",
+      "💞"
+    ]
+  },
+  {
+    "query": "HEART",
+    "category": "Smileys",
+    "expected": [
+      "💓",
+      "❣️",
+      "💟",
+      "💚",
+      "🤎",
+      "💝",
+      "❤️",
+      "🧡",
+      "💛",
+      "💙",
+      "💜",
+      "🖤",
+      "🤍",
+      "💗",
+      "💖",
+      "🥰",
+      "💔",
+      "💕",
+      "💞",
+      "😍"
+    ]
+  },
+  {
+    "query": "HEART",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "café",
+    "category": "All",
+    "expected": [
+      "🥞",
+      "🎂",
+      "🎥",
+      "📹",
+      "⚖️",
+      "📸",
+      "🤗",
+      "😨",
+      "😱",
+      "🙀",
+      "🧡",
+      "💛",
+      "💜",
+      "🫶",
+      "🤳",
+      "🦸",
+      "🦹",
+      "🕹️",
+      "📷",
+      "💅"
+    ]
+  },
+  {
+    "query": "café",
+    "category": "Smileys",
+    "expected": [
+      "🤗",
+      "😨",
+      "😱",
+      "🙀",
+      "🧡",
+      "💛",
+      "💜"
+    ]
+  },
+  {
+    "query": "café",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "flag kazakhstan",
+    "category": "All",
+    "expected": [
+      "🇰🇿"
+    ]
+  },
+  {
+    "query": "flag kazakhstan",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "flag kazakhstan",
+    "category": "Flags",
+    "expected": [
+      "🇰🇿"
+    ]
+  },
+  {
+    "query": "dog",
+    "category": "All",
+    "expected": [
+      "🐶",
+      "🌭"
+    ]
+  },
+  {
+    "query": "dog",
+    "category": "Smileys",
+    "expected": []
+  },
+  {
+    "query": "dog",
+    "category": "Flags",
+    "expected": []
+  },
+  {
+    "query": "roket",
+    "category": "All",
+    "expected": [
+      "💔"
+    ]
+  },
+  {
+    "query": "roket",
+    "category": "Smileys",
+    "expected": [
+      "💔"
+    ]
+  },
+  {
+    "query": "roket",
+    "category": "Flags",
+    "expected": []
+  }
+]

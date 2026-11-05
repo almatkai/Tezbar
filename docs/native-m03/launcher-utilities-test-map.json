@@ -1,0 +1,1614 @@
+{
+  "schema_version": 1,
+  "status": "Rust-model-ready; native views pending",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "original_ts_cases": 170,
+  "distinct_mapped_rust_harnesses": 169,
+  "prototype_session_cases": 6,
+  "emoji_fixture_cases": 57,
+  "original_ts_result": "170 passed, 19 files, 0 skips",
+  "cases": [
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "formats valid JSON with 2-space indent by default",
+      "rust_test": "instant::transform::tests::transformers_01_formats_valid_json_with_2_space_indent_by_default",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "minifies valid JSON",
+      "rust_test": "instant::transform::tests::transformers_02_minifies_valid_json",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "round-trips format → minify",
+      "rust_test": "instant::transform::tests::transformers_03_round_trips_format_minify",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "reports invalid JSON with the parse error",
+      "rust_test": "instant::transform::tests::transformers_04_reports_invalid_json_with_the_parse_error",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects empty input without calling JSON.parse",
+      "rust_test": "instant::transform::tests::transformers_05_rejects_empty_input_without_calling_json_parse",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "encodes ASCII",
+      "rust_test": "instant::transform::tests::transformers_06_encodes_ascii",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "encodes UTF-8 (emoji, CJK) without data loss",
+      "rust_test": "instant::transform::tests::transformers_07_encodes_utf_8_emoji_cjk_without_data_loss",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "decodes standard base64",
+      "rust_test": "instant::transform::tests::transformers_08_decodes_standard_base64",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "accepts URL-safe base64 and missing padding",
+      "rust_test": "instant::transform::tests::transformers_09_accepts_url_safe_base64_and_missing_padding",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects malformed base64",
+      "rust_test": "instant::transform::tests::transformers_10_rejects_malformed_base64",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "encodes reserved characters",
+      "rust_test": "instant::transform::tests::transformers_11_encodes_reserved_characters",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "encodes unicode",
+      "rust_test": "instant::transform::tests::transformers_12_encodes_unicode",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "round-trips",
+      "rust_test": "instant::transform::tests::transformers_13_round_trips",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "decodes plus-as-space for form-encoded strings",
+      "rust_test": "instant::transform::tests::transformers_14_decodes_plus_as_space_for_form_encoded_strings",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects malformed percent-encoding",
+      "rust_test": "instant::transform::tests::transformers_15_rejects_malformed_percent_encoding",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "computes md5",
+      "rust_test": "instant::transform::tests::transformers_16_computes_md5",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "computes sha256 via WebCrypto",
+      "rust_test": "instant::transform::tests::transformers_17_computes_sha256_via_webcrypto",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "computes sha512 via WebCrypto",
+      "rust_test": "instant::transform::tests::transformers_18_computes_sha512_via_webcrypto",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "computes md5 through the uniform async hash API",
+      "rust_test": "instant::transform::tests::transformers_19_computes_md5_through_the_uniform_async_hash_api",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "handles unicode input",
+      "rust_test": "instant::transform::tests::transformers_20_handles_unicode_input",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects empty input",
+      "rust_test": "instant::transform::tests::transformers_21_rejects_empty_input",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "counts words, characters, sentences, paragraphs, lines",
+      "rust_test": "instant::transform::tests::transformers_22_counts_words_characters_sentences_paragraphs_lines",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "handles contractions as a single word",
+      "rust_test": "instant::transform::tests::transformers_23_handles_contractions_as_a_single_word",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "counts unicode words",
+      "rust_test": "instant::transform::tests::transformers_24_counts_unicode_words",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "counts characters as code points (not UTF-16 units)",
+      "rust_test": "instant::transform::tests::transformers_25_counts_characters_as_code_points_not_utf_16_units",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "formats the report",
+      "rust_test": "instant::transform::tests::transformers_26_formats_the_report",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects empty input",
+      "rust_test": "instant::transform::tests::transformers_27_rejects_empty_input",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "splits on spaces",
+      "rust_test": "instant::transform::tests::transformers_28_splits_on_spaces",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "splits camelCase and PascalCase",
+      "rust_test": "instant::transform::tests::transformers_29_splits_camelcase_and_pascalcase",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "splits snake_case and kebab-case",
+      "rust_test": "instant::transform::tests::transformers_30_splits_snake_case_and_kebab_case",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "handles acronym word boundaries",
+      "rust_test": "instant::transform::tests::transformers_31_handles_acronym_word_boundaries",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "converts to camelCase",
+      "rust_test": "instant::transform::tests::transformers_32_converts_to_camelcase",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "converts to snake_case",
+      "rust_test": "instant::transform::tests::transformers_33_converts_to_snake_case",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "converts to kebab-case",
+      "rust_test": "instant::transform::tests::transformers_34_converts_to_kebab_case",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "converts to CONSTANT_CASE",
+      "rust_test": "instant::transform::tests::transformers_35_converts_to_constant_case",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "converts to Title Case",
+      "rust_test": "instant::transform::tests::transformers_36_converts_to_title_case",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "converts to lower and UPPER",
+      "rust_test": "instant::transform::tests::transformers_37_converts_to_lower_and_upper",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "round-trips camel ↔ snake",
+      "rust_test": "instant::transform::tests::transformers_38_round_trips_camel_snake",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects empty input",
+      "rust_test": "instant::transform::tests::transformers_39_rejects_empty_input",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "parses a unix-ms timestamp",
+      "rust_test": "instant::transform::tests::transformers_40_parses_a_unix_ms_timestamp",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "auto-detects unix seconds",
+      "rust_test": "instant::transform::tests::transformers_41_auto_detects_unix_seconds",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects non-numeric input",
+      "rust_test": "instant::transform::tests::transformers_42_rejects_non_numeric_input",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects empty input",
+      "rust_test": "instant::transform::tests::transformers_43_rejects_empty_input",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "returns a base64 SVG data URL",
+      "rust_test": "instant::transform::tests::transformers_44_returns_a_base64_svg_data_url",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "is deterministic — same input, same data URL",
+      "rust_test": "instant::transform::tests::transformers_45_is_deterministic_same_input_same_data_url",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "produces different output for different inputs",
+      "rust_test": "instant::transform::tests::transformers_46_produces_different_output_for_different_inputs",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects empty input",
+      "rust_test": "instant::transform::tests::transformers_47_rejects_empty_input",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "encodes longer payloads (v2+ path)",
+      "rust_test": "instant::transform::tests::transformers_48_encodes_longer_payloads_v2_path",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "rejects payloads too large for version 10",
+      "rust_test": "instant::transform::tests::transformers_49_rejects_payloads_too_large_for_version_10",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "round-trips short inputs",
+      "rust_test": "instant::transform::tests::transformers_50_round_trips_short_inputs",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "round-trips longer inputs (forces multi-block RS, alignment patterns)",
+      "rust_test": "instant::transform::tests::transformers_51_round_trips_longer_inputs_forces_multi_block_rs_alignment_patterns",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransformers.test.ts",
+      "ts_case": "round-trips unicode payloads",
+      "rust_test": "instant::transform::tests::transformers_52_round_trips_unicode_payloads",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "formats JSON",
+      "rust_test": "instant::transform::tests::clipboard_01_formats_json",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "encodes then decodes base64",
+      "rust_test": "instant::transform::tests::clipboard_02_encodes_then_decodes_base64",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "url-encodes and decodes",
+      "rust_test": "instant::transform::tests::clipboard_03_url_encodes_and_decodes",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "counts words/chars/lines",
+      "rust_test": "instant::transform::tests::clipboard_04_counts_words_chars_lines",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "flips case",
+      "rust_test": "instant::transform::tests::clipboard_05_flips_case",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "hashes with sha256",
+      "rust_test": "instant::transform::tests::clipboard_06_hashes_with_sha256",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "generates QR data URL",
+      "rust_test": "instant::transform::tests::clipboard_07_generates_qr_data_url",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/textTransform.test.ts",
+      "ts_case": "generates QR for whitespace-only input (renderer handles trimming)",
+      "rust_test": "instant::transform::tests::clipboard_08_generates_qr_for_whitespace_only_input_renderer_handles_trimming",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/commandBarInputMode.test.ts",
+      "ts_case": "gives AI mode priority over slash-path completion after double Space",
+      "rust_test": "launcher::ts_cases::ts_000_gives_ai_mode_priority_over_slash_path_completion_after_double_space",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/commandBarInputMode.test.ts",
+      "ts_case": "keeps AI mode active and searches chats after typing beyond the double-Space switch",
+      "rust_test": "launcher::ts_cases::ts_001_keeps_ai_mode_active_and_searches_chats_after_typing_beyond_the_double_space_switch",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/commandBarInputMode.test.ts",
+      "ts_case": "preserves regular AI activation when two spaces are trailing",
+      "rust_test": "launcher::ts_cases::ts_002_preserves_regular_ai_activation_when_two_spaces_are_trailing",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/commandBarInputMode.test.ts",
+      "ts_case": "does not treat an ordinary internal double-space query as AI mode",
+      "rust_test": "launcher::ts_cases::ts_003_does_not_treat_an_ordinary_internal_double_space_query_as_ai_mode",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/commandBarInputMode.test.ts",
+      "ts_case": "preserves leading-Space AI prompts without treating them as directories",
+      "rust_test": "launcher::ts_cases::ts_004_preserves_leading_space_ai_prompts_without_treating_them_as_directories",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/commandBarInputMode.test.ts",
+      "ts_case": "returns null boot for empty AI mode prompt so newChat can be opened",
+      "rust_test": "launcher::ts_cases::ts_005_returns_null_boot_for_empty_ai_mode_prompt_so_newchat_can_be_opened",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherArgument.test.ts",
+      "ts_case": "retains numeric input filtering and range validation",
+      "rust_test": "launcher::ts_cases::ts_006_retains_numeric_input_filtering_and_range_validation",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/optimisticSearch.test.ts",
+      "ts_case": "puts the matching app and extension surface above generic files",
+      "rust_test": "launcher::ts_cases::ts_007_puts_the_matching_app_and_extension_surface_above_generic_files",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/optimisticSearch.test.ts",
+      "ts_case": "matches corrected layouts in the first frame without unrelated cached results",
+      "rust_test": "launcher::ts_cases::ts_008_matches_corrected_layouts_in_the_first_frame_without_unrelated_cached_results",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/optimisticSearch.test.ts",
+      "ts_case": "preserves literal Russian matches and supports the reverse layout",
+      "rust_test": "launcher::ts_cases::ts_009_preserves_literal_russian_matches_and_supports_the_reverse_layout",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/optimisticSearch.test.ts",
+      "ts_case": "prefers a literal match over an equally relevant corrected match",
+      "rust_test": "launcher::ts_cases::ts_010_prefers_a_literal_match_over_an_equally_relevant_corrected_match",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/optimisticSearch.test.ts",
+      "ts_case": "does not carry an unrelated high-score result into a typed query",
+      "rust_test": "launcher::ts_cases::ts_011_does_not_carry_an_unrelated_high_score_result_into_a_typed_query",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "records a submitted launcher query without surrounding whitespace",
+      "rust_test": "launcher::ts_cases::ts_012_records_a_submitted_launcher_query_without_surrounding_whitespace",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "preserves AI mode when normalizing a recalled prompt",
+      "rust_test": "launcher::ts_cases::ts_013_preserves_ai_mode_when_normalizing_a_recalled_prompt",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "leaves terminal commands to terminal history",
+      "rust_test": "launcher::ts_cases::ts_014_leaves_terminal_commands_to_terminal_history",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "keeps only the latest query",
+      "rust_test": "launcher::ts_cases::ts_015_keeps_only_the_latest_query",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "only recalls the last query after ArrowUp reaches the top search result",
+      "rust_test": "launcher::ts_cases::ts_016_only_recalls_the_last_query_after_arrowup_reaches_the_top_search_result",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "leaves ArrowDown for result navigation",
+      "rust_test": "launcher::ts_cases::ts_017_leaves_arrowdown_for_result_navigation",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "never recalls a launcher query from Deep Search mode",
+      "rust_test": "launcher::ts_cases::ts_018_never_recalls_a_launcher_query_from_deep_search_mode",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+      "ts_case": "safely parses persisted history",
+      "rust_test": "launcher::ts_cases::ts_019_safely_parses_persisted_history",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "treats a leading bang as deep search and removes it from the indexed query",
+      "rust_test": "launcher::ts_cases::ts_020_treats_a_leading_bang_as_deep_search_and_removes_it_from_the_indexed_query",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "does not change the backend query for trailing whitespace",
+      "rust_test": "launcher::ts_cases::ts_021_does_not_change_the_backend_query_for_trailing_whitespace",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "accepts a complete metadata match",
+      "rust_test": "launcher::ts_cases::ts_022_accepts_a_complete_metadata_match",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "recommends deep search for weak partial matches and ignores synthetic rows",
+      "rust_test": "launcher::ts_cases::ts_023_recommends_deep_search_for_weak_partial_matches_and_ignores_synthetic_rows",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "does not treat short path fragments as a match for a punctuated Unicode query",
+      "rust_test": "launcher::ts_cases::ts_024_does_not_treat_short_path_fragments_as_a_match_for_a_punctuated_unicode_query",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "still accepts a substantial reverse-prefix metadata match",
+      "rust_test": "launcher::ts_cases::ts_025_still_accepts_a_substantial_reverse_prefix_metadata_match",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "builds an immediate recommendation above weak local candidates",
+      "rust_test": "launcher::ts_cases::ts_026_builds_an_immediate_recommendation_above_weak_local_candidates",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "keeps a matching app ahead of Deep Search for сркщьу",
+      "rust_test": "launcher::ts_cases::ts_027_keeps_a_matching_app_ahead_of_deep_search_for",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "keeps a matching app ahead of Deep Search for СРКЩЬУ",
+      "rust_test": "launcher::ts_cases::ts_028_keeps_a_matching_app_ahead_of_deep_search_for",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "keeps a matching app ahead of Deep Search for chrome",
+      "rust_test": "launcher::ts_cases::ts_029_keeps_a_matching_app_ahead_of_deep_search_for_chrome",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "recognizes the real Visual Studio Code name for vs code",
+      "rust_test": "launcher::ts_cases::ts_030_recognizes_the_real_visual_studio_code_name_for_vs_code",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "recognizes the real Visual Studio Code name for мы сщву",
+      "rust_test": "launcher::ts_cases::ts_031_recognizes_the_real_visual_studio_code_name_for",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "recognizes the real Visual Studio Code name for vs сщву",
+      "rust_test": "launcher::ts_cases::ts_032_recognizes_the_real_visual_studio_code_name_for_vs",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "recognizes the real Visual Studio Code name for мы code",
+      "rust_test": "launcher::ts_cases::ts_033_recognizes_the_real_visual_studio_code_name_for_code",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "recognizes the real Visual Studio Code name for вс код",
+      "rust_test": "launcher::ts_cases::ts_034_recognizes_the_real_visual_studio_code_name_for",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchMode.test.ts",
+      "ts_case": "does not recommend Deep Search when local metadata is already close",
+      "rust_test": "launcher::ts_cases::ts_035_does_not_recommend_deep_search_when_local_metadata_is_already_close",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchQueryVariants.test.ts",
+      "ts_case": "corrects Russian keys to English without discarding the literal query",
+      "rust_test": "launcher::ts_cases::ts_036_corrects_russian_keys_to_english_without_discarding_the_literal_query",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchQueryVariants.test.ts",
+      "ts_case": "also corrects English keys to Russian",
+      "rust_test": "launcher::ts_cases::ts_037_also_corrects_english_keys_to_russian",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchQueryVariants.test.ts",
+      "ts_case": "retains already-correct words in mixed-layout input",
+      "rust_test": "launcher::ts_cases::ts_038_retains_already_correct_words_in_mixed_layout_input",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchQueryVariants.test.ts",
+      "ts_case": "handles Russian letter keys on punctuation positions",
+      "rust_test": "launcher::ts_cases::ts_039_handles_russian_letter_keys_on_punctuation_positions",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchQueryVariants.test.ts",
+      "ts_case": "does not expand empty, numeric, or punctuation-only queries",
+      "rust_test": "launcher::ts_cases::ts_040_does_not_expand_empty_numeric_or_punctuation_only_queries",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/searchQueryVariants.test.ts",
+      "ts_case": "keeps real Russian and English queries as the first choice",
+      "rust_test": "launcher::ts_cases::ts_041_keeps_real_russian_and_english_queries_as_the_first_choice",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "recognizes Visual Studio Code by the alias vs code",
+      "rust_test": "launcher::ts_cases::ts_042_recognizes_visual_studio_code_by_the_alias_vs_code",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "recognizes Visual Studio Code by the alias vscode",
+      "rust_test": "launcher::ts_cases::ts_043_recognizes_visual_studio_code_by_the_alias_vscode",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "recognizes Visual Studio Code by the alias вс код",
+      "rust_test": "launcher::ts_cases::ts_044_recognizes_visual_studio_code_by_the_alias",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "recognizes Google Chrome by the alias хром",
+      "rust_test": "launcher::ts_cases::ts_045_recognizes_google_chrome_by_the_alias",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "recognizes Telegram by the alias телеграм",
+      "rust_test": "launcher::ts_cases::ts_046_recognizes_telegram_by_the_alias",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "recognizes Discord by the alias дискорд",
+      "rust_test": "launcher::ts_cases::ts_047_recognizes_discord_by_the_alias",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "recognizes Safari by the alias сафари",
+      "rust_test": "launcher::ts_cases::ts_048_recognizes_safari_by_the_alias",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "matches complete name tokens, including partial typing, without dropping terms",
+      "rust_test": "launcher::ts_cases::ts_049_matches_complete_name_tokens_including_partial_typing_without_dropping_terms",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/applicationSearch.test.ts",
+      "ts_case": "does not inherit object keys or add aliases to unknown applications",
+      "rust_test": "launcher::ts_cases::ts_050_does_not_inherit_object_keys_or_add_aliases_to_unknown_applications",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "assigns 1-based sequential slot numbers",
+      "rust_test": "ui_state::tests::assigns_1_based_sequential_slot_numbers",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "caps pins at MAX_PINNED_COMMANDS",
+      "rust_test": "ui_state::tests::caps_pins_at_max_pinned_commands",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "appends a new pin to the bottom by default (preserving existing pins)",
+      "rust_test": "ui_state::tests::appends_new_pin_to_bottom",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "appends a third pin to the bottom as slot 3",
+      "rust_test": "ui_state::tests::appends_third_pin_as_slot_3",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "supports explicit insertIndex for drag and drop insertion",
+      "rust_test": "ui_state::tests::explicit_insert_index",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "returns the same array if draggedId is not found",
+      "rust_test": "ui_state::tests::missing_dragged_id_is_unchanged",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "moves an item and normalizes slots",
+      "rust_test": "ui_state::tests::moves_item_and_normalizes_slots",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "parses digit keys into slot numbers",
+      "rust_test": "ui_state::tests::parses_digit_keys_into_slot_numbers",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "formats slot shortcut keys",
+      "rust_test": "ui_state::tests::formats_slot_shortcut_keys",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "allows regular commands and extensions",
+      "rust_test": "ui_state::tests::allows_regular_commands_and_extensions",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "rejects calculator, color-converter, and deep-search results",
+      "rust_test": "ui_state::tests::rejects_calculator_color_and_deep_results",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "reads and writes pinned commands roundtrip",
+      "rust_test": "ui_state::tests::pins_storage_roundtrip",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/pinnedCommands.test.ts",
+      "ts_case": "returns empty array on empty or corrupt storage",
+      "rust_test": "ui_state::tests::empty_or_corrupt_storage",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/calculator.test.ts",
+      "ts_case": "evaluates basic arithmetic",
+      "rust_test": "instant::calculator::tests::evaluates_basic_arithmetic",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/calculator.test.ts",
+      "ts_case": "evaluates functions",
+      "rust_test": "instant::calculator::tests::evaluates_functions",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/calculator.test.ts",
+      "ts_case": "evaluates percent of",
+      "rust_test": "instant::calculator::tests::evaluates_percent_of",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/calculator.test.ts",
+      "ts_case": "evaluates unit conversions",
+      "rust_test": "instant::calculator::tests::evaluates_unit_conversions",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/calculator.test.ts",
+      "ts_case": "rejects plain words and non-math inputs",
+      "rust_test": "instant::calculator::tests::rejects_plain_words_and_non_math_inputs",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/calculator.test.ts",
+      "ts_case": "rejects shell metacharacters",
+      "rust_test": "instant::calculator::tests::rejects_shell_metacharacters",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "parses amount + dollar to default currency",
+      "rust_test": "instant::currency::tests::parses_amount_dollar_default",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "parses Russian preposition and fuzzy ruble",
+      "rust_test": "instant::currency::tests::parses_russian_preposition_fuzzy_ruble",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "parses English in + code",
+      "rust_test": "instant::currency::tests::parses_english_in_code",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "parses 100$ to rub",
+      "rust_test": "instant::currency::tests::parses_100_dollar_to_rub",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "parses explicit usd to eur",
+      "rust_test": "instant::currency::tests::parses_explicit_usd_to_eur",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "parses amount + eur to default when no target",
+      "rust_test": "instant::currency::tests::parses_amount_eur_default",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "rejects pure arithmetic",
+      "rust_test": "instant::currency::tests::rejects_pure_arithmetic",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "rejects percentage phrases even with preposition + currency word",
+      "rust_test": "instant::currency::tests::rejects_percentage_phrases",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "detects math-only buffers",
+      "rust_test": "instant::currency::tests::detects_math_only_buffers",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "ts_case": "allows currency hints through",
+      "rust_test": "instant::currency::tests::allows_currency_hints_through",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/currencyPreferences.test.ts",
+      "ts_case": "starts with the initial default and no usage",
+      "rust_test": "instant::currency::tests::starts_with_initial_default_no_usage",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/currencyPreferences.test.ts",
+      "ts_case": "ranks targets by usage frequency",
+      "rust_test": "instant::currency::tests::ranks_targets_by_usage_frequency",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/currencyPreferences.test.ts",
+      "ts_case": "pinned override wins over usage",
+      "rust_test": "instant::currency::tests::pinned_override_wins",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/currency/currencyPreferences.test.ts",
+      "ts_case": "ignores invalid codes",
+      "rust_test": "instant::currency::tests::ignores_invalid_codes",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/theme.test.ts",
+      "ts_case": "keeps explicit White and Dark modes",
+      "rust_test": "ui_state::tests::theme_resolves_explicit_preferences",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/theme.test.ts",
+      "ts_case": "resolves System from the operating system appearance",
+      "rust_test": "ui_state::tests::theme_resolves_system_preferences",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/theme.test.ts",
+      "ts_case": "rejects unknown persisted values",
+      "rust_test": "ui_state::tests::theme_recognizes_preferences",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/stringCache.test.ts",
+      "ts_case": "evicts least recently used icons, including cached misses",
+      "rust_test": "utilities::cache_tests::evicts_least_recently_used_including_cached_misses",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/shared/stringCache.test.ts",
+      "ts_case": "bounds retained bytes and accounts for replacement, deletion and clear",
+      "rust_test": "utilities::cache_tests::bounds_bytes_replacement_deletion_clear",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/newItemShortcut.test.ts",
+      "ts_case": "creates a vault secret while the Vault is open",
+      "rust_test": "router::tests::new_item_routing",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/newItemShortcut.test.ts",
+      "ts_case": "keeps the existing targets for other surfaces",
+      "rust_test": "router::tests::new_item_routing",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/qrImage.test.ts",
+      "ts_case": "rasterizes the generated SVG into a PNG-backed canvas image",
+      "rust_test": "instant::transform::tests::qr_png_raster_is_512_and_error_is_explicit",
+      "status": "model-ready",
+      "package": "tezbar-core",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "shows the notes bundled with the installed app without a network request",
+      "rust_test": "notes::tests::installed_notes_without_network",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "does not substitute remote release descriptions when the installed notes are missing",
+      "rust_test": "notes::tests::missing_installed_notes_never_substitute_remote",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "fetches the exact tag and preserves Markdown without truncation",
+      "rust_test": "notes::tests::exact_tag_preserves_markdown",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "rejects notes for a different version",
+      "rust_test": "notes::tests::rejects_wrong_version",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "handles missing releases without pretending there are notes",
+      "rust_test": "notes::tests::missing_release_is_error",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "skips a fresh install and records its version",
+      "rust_test": "notes::tests::fresh_install_records_version",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "shows an upgraded version until the user dismisses it",
+      "rust_test": "notes::tests::upgrade_unread_until_dismissed",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "shows notes to existing users upgrading from before version tracking",
+      "rust_test": "notes::tests::existing_before_tracking",
+      "status": "model-ready",
+      "package": "tezbar-update",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "puts unread app notes first, ahead of the updater command",
+      "rust_test": "launcher::notes_row_tests::unread_notes_first_ahead_of_updater",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "keeps the home list unchanged after notes have been read",
+      "rust_test": "launcher::notes_row_tests::home_unchanged_after_read",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "lets users find the notes again by searching",
+      "rust_test": "launcher::notes_row_tests::searchable_after_read",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "does not interfere with file, deep, or unrelated searches",
+      "rust_test": "launcher::notes_row_tests::unrelated_file_deep_app_queries_unchanged",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/releaseNotes.test.ts",
+      "ts_case": "does not duplicate an existing release-notes command",
+      "rust_test": "launcher::notes_row_tests::no_duplicate_release_notes",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/searchResultPreview.test.ts",
+      "ts_case": "returns paths only for file-backed results that Quick Look supports",
+      "rust_test": "launcher::preview_tests::returns_only_previewable_file_paths",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/searchResultPreview.test.ts",
+      "ts_case": "recognizes only an unmodified Space key",
+      "rust_test": "launcher::notes_row_tests::recognizes_only_unmodified_space",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/searchResultPreview.test.ts",
+      "ts_case": "allows a sole previewable result without requiring arrow-key navigation",
+      "rust_test": "launcher::preview_tests::sole_result_needs_no_navigation",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/searchResultPreview.test.ts",
+      "ts_case": "toggles Deep Search between an unselected input and the first result",
+      "rust_test": "launcher::preview_tests::toggle_deep_navigation_state",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    },
+    {
+      "ts_file": "src/renderer/searchResultPreview.test.ts",
+      "ts_case": "orders previewable results from the selected item for native navigation",
+      "rust_test": "launcher::preview_tests::preview_navigation_starts_at_selection",
+      "status": "model-ready",
+      "package": "tezbar-ui-model",
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+    }
+  ],
+  "prototype_cases": [
+    {
+      "source": "prototypes/native-launcher/src/search_session.rs",
+      "case": "latest_pending_coalesces_without_extending_deadline",
+      "rust_test": "launcher::session::tests::latest_pending_coalesces_without_extending_deadline",
+      "status": "model-ready"
+    },
+    {
+      "source": "prototypes/native-launcher/src/search_session.rs",
+      "case": "enter_waits_for_exact_generation_and_never_replays",
+      "rust_test": "launcher::session::tests::enter_waits_for_exact_generation_and_never_replays",
+      "status": "model-ready"
+    },
+    {
+      "source": "prototypes/native-launcher/src/search_session.rs",
+      "case": "click_on_stale_rows_never_queues_a_different_result",
+      "rust_test": "launcher::session::tests::click_on_stale_rows_never_queues_a_different_result",
+      "status": "model-ready"
+    },
+    {
+      "source": "prototypes/native-launcher/src/search_session.rs",
+      "case": "late_activation_releases_ownership_without_clobbering_new_session",
+      "rust_test": "launcher::session::tests::late_activation_releases_ownership_without_clobbering_new_session",
+      "status": "model-ready"
+    },
+    {
+      "source": "prototypes/native-launcher/src/search_session.rs",
+      "case": "timeout_and_hide_drop_deferred_activation",
+      "rust_test": "launcher::session::tests::timeout_and_hide_drop_deferred_activation",
+      "status": "model-ready"
+    },
+    {
+      "source": "prototypes/native-launcher/src/search_session.rs",
+      "case": "selection_stops_at_edges_and_resets_for_new_results",
+      "rust_test": "launcher::session::tests::selection_stops_at_edges_and_resets_for_new_results",
+      "status": "model-ready"
+    }
+  ],
+  "provenance": [
+    {
+      "file": "src/renderer/calculator.test.ts",
+      "sha256": "0e37c49c34fa972781be76329b1be298dbc2a8caee86db7348657563c5774e98"
+    },
+    {
+      "file": "src/renderer/commandBarInputMode.test.ts",
+      "sha256": "99c070918322a3ecea17587f6a8e735fd1018fd9b46dd900b0499d22d67f6832"
+    },
+    {
+      "file": "src/renderer/currency/currencyPreferences.test.ts",
+      "sha256": "af7887d05f1ecac230fdbddf14cddf315b2ff785b1af7560ab3b194373d5e9be"
+    },
+    {
+      "file": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "sha256": "58b183e58ad710f54b8df4ea3559ac3f089a860cd87247d98b8dd652839c64c2"
+    },
+    {
+      "file": "src/renderer/launcherArgument.test.ts",
+      "sha256": "4f27fc723e20a53db3a3414ba825b4f8c2a9438c8c1e99580c51e4787690b754"
+    },
+    {
+      "file": "src/renderer/launcherQueryHistory.test.ts",
+      "sha256": "83c4b247d68f97f37dc1297134e5648f9cb2906a9cb62e72043dabf610bc3ffe"
+    },
+    {
+      "file": "src/renderer/newItemShortcut.test.ts",
+      "sha256": "bbbd526890a4acba968b9d92ef110f0f908e5ec3dba946b187dcf0b522425e77"
+    },
+    {
+      "file": "src/renderer/optimisticSearch.test.ts",
+      "sha256": "befbc67781e1f5c02cf91de7b7abfbed90ff5022f90bb24a3cafe2f31666e5bf"
+    },
+    {
+      "file": "src/renderer/pinnedCommands.test.ts",
+      "sha256": "8f92aa9054a84de2ae4604fbf656a7cfa9ffed3479ba0945ea0b14b4ae121fbe"
+    },
+    {
+      "file": "src/renderer/qrImage.test.ts",
+      "sha256": "42bc47de32e5afb66beeee2d7513cd2769c47e0cb76b99f406a681ffe1a653f5"
+    },
+    {
+      "file": "src/renderer/releaseNotes.test.ts",
+      "sha256": "d134d6b1bcbaea5991af84b25be95043931f86f8263ffbc78a765b0df62df436"
+    },
+    {
+      "file": "src/renderer/searchResultPreview.test.ts",
+      "sha256": "d6b0e5970695d2188811fb5b9d03efef3c843c4cd65faa413dcac0840bc8a6de"
+    },
+    {
+      "file": "src/renderer/theme.test.ts",
+      "sha256": "a3caf271492c5b7ec210047215417bcd8456ab3814b8a5e5b659b456583dd101"
+    },
+    {
+      "file": "src/shared/applicationSearch.test.ts",
+      "sha256": "6924ed4a26fcd571c5d41562479ee48979017f8d44e9a31d87beb1b5b58004f8"
+    },
+    {
+      "file": "src/shared/searchMode.test.ts",
+      "sha256": "4c9809e704447006f16e5faedbdee1f7b06aa474b81e5e281c094c0c93e52a9d"
+    },
+    {
+      "file": "src/shared/searchQueryVariants.test.ts",
+      "sha256": "852502f23dcc4a3fe60f1a3bc604f7b9cf6de73e2513d31108c0827528aff44f"
+    },
+    {
+      "file": "src/shared/stringCache.test.ts",
+      "sha256": "e054741dc12f268133ab2047584f230ff8d2883b50295ad248e1d04e14bd10b1"
+    },
+    {
+      "file": "src/shared/textTransform.test.ts",
+      "sha256": "47ce60a7b24ee52761ff7e886873e73d5e5f717ff53ae6956e2d1c42ef05305b"
+    },
+    {
+      "file": "src/shared/textTransformers.test.ts",
+      "sha256": "85da95d1049a92903a3cacfce1f9ca4bdec4b241c730ab98b14f003ebe6ac467"
+    },
+    {
+      "file": "src/renderer/emoji/emojiData.ts",
+      "sha256": "560b8d0fcb3feb75c309e2ae49ece6779372e40a8321ac7ac99dd43a10912df8"
+    },
+    {
+      "file": "src/renderer/emoji/emojiSearch.ts",
+      "sha256": "8ade53ff1b4eb29cbc8ddd577d6640b827cbeba934fa9efe4e1827a176ffec58"
+    },
+    {
+      "file": "src/renderer/currency/currencySynonyms.ts",
+      "sha256": "c6845c49bce6cd65ae1f4b009d508a5ca77dcc8b10305593e41407805b216fc3"
+    },
+    {
+      "file": "node_modules/fuse.js/dist/fuse.cjs",
+      "sha256": "a66df1da1de091af940216f63ad414edb4eb7c2b70ca3f8ba01cb26cdb4c92db"
+    },
+    {
+      "file": "node_modules/fuse.js/LICENSE",
+      "sha256": "cc807e3caa26cdee316bab2ff6fdb508a2f619b74959fe59e513ef6e61635ebe"
+    }
+  ],
+  "owned_files": [
+    "crates/tezbar-core/src/instant/calculator.rs",
+    "crates/tezbar-core/src/instant/color.rs",
+    "crates/tezbar-core/src/instant/currency.rs",
+    "crates/tezbar-core/src/instant/currency_synonyms.json",
+    "crates/tezbar-core/src/instant/emoji.rs",
+    "crates/tezbar-core/src/instant/emoji_data.json",
+    "crates/tezbar-core/src/instant/emoji_fixtures.json",
+    "crates/tezbar-core/src/instant/fuse-license.txt",
+    "crates/tezbar-core/src/instant/fuzzy.rs",
+    "crates/tezbar-core/src/instant/qr.rs",
+    "crates/tezbar-core/src/instant/transform.rs",
+    "crates/tezbar-core/src/instant/transform_tests.rs",
+    "crates/tezbar-core/src/instant.rs",
+    "crates/tezbar-ui-model/src/launcher/controller.rs",
+    "crates/tezbar-ui-model/src/launcher/session.rs",
+    "crates/tezbar-ui-model/src/launcher/ts_cases.json",
+    "crates/tezbar-ui-model/src/launcher/ts_cases.rs",
+    "crates/tezbar-ui-model/src/launcher.rs",
+    "crates/tezbar-ui-model/src/notes.rs",
+    "crates/tezbar-ui-model/src/router.rs",
+    "crates/tezbar-ui-model/src/ui_state/tests.rs",
+    "crates/tezbar-ui-model/src/ui_state.rs",
+    "crates/tezbar-ui-model/src/utilities.rs",
+    "crates/tezbar-update/src/notes.rs"
+  ],
+  "owned_sha256": {
+    "crates/tezbar-core/src/instant/calculator.rs": "867ad5bcfc69b6c3b26b013c5ac6476c07bc0f419da719bf66beedc3972758fc",
+    "crates/tezbar-core/src/instant/color.rs": "bc9fe65256b82b2e9553465eb43da0c38ab76d0b453ff85d8749a8ad9df9924a",
+    "crates/tezbar-core/src/instant/currency.rs": "a8e5db51cfae8f20561f9efeb338f35b13b28adea0eed7017b13bd3d3f808ebe",
+    "crates/tezbar-core/src/instant/currency_synonyms.json": "f88d5a19c08da7b6d157701b036ae22e9d11fe70205d170413d9db63c6a129cc",
+    "crates/tezbar-core/src/instant/emoji.rs": "09b1ca7e977dfc57d33e542232f8a5b9897c126335eb5e854a9ae23f5dabee0b",
+    "crates/tezbar-core/src/instant/emoji_data.json": "e6ea7de54a1e7ed5f7d4346bbfa4708cb976fbe8b8633861e908f10dabf5f5db",
+    "crates/tezbar-core/src/instant/emoji_fixtures.json": "d19f449fa3ca633bc279e911105713f05432ef40b69df82664f5e6ea5d07af82",
+    "crates/tezbar-core/src/instant/fuse-license.txt": "cc807e3caa26cdee316bab2ff6fdb508a2f619b74959fe59e513ef6e61635ebe",
+    "crates/tezbar-core/src/instant/fuzzy.rs": "0cd31cdad3ae4084705e8342d6bf381d1a83eb87b37c62826c7608324b9df8d0",
+    "crates/tezbar-core/src/instant/qr.rs": "f0be74d43f0bfc25b02cdcfacce0b2654ff63c843fd2c5747982e1f7b3405809",
+    "crates/tezbar-core/src/instant/transform.rs": "ef4a2cf4c6e4b050dc0dd6912e414fed6979d469b437dbc1364228c9e2b760de",
+    "crates/tezbar-core/src/instant/transform_tests.rs": "f5194bdeec935b663e193986eacb1d55d7c34b220e20b12048f75f2980ead692",
+    "crates/tezbar-core/src/instant.rs": "293410928cd09fa8ea90cbc39d89301a310d7624618d4a5160af760e14ad6ccf",
+    "crates/tezbar-ui-model/src/launcher/controller.rs": "0aa0f5af51ccc6d1655f2f0a9b67ee8d4fc512312a4faa15d3cc9980cb89cca8",
+    "crates/tezbar-ui-model/src/launcher/session.rs": "039bf0736d023e0d24cade1f52667db62c4964cc126bc0cbfc0374d373f08f4e",
+    "crates/tezbar-ui-model/src/launcher/ts_cases.json": "2134c82699c63096279979d0b1378a0e99c6b3f4e795115f101602adf9fad495",
+    "crates/tezbar-ui-model/src/launcher/ts_cases.rs": "9cad5be00b7f4a4545f579f408e43579294bfec8a2b5b67b8eeb536a5789ea96",
+    "crates/tezbar-ui-model/src/launcher.rs": "e7597173f71fbf3be6929ce372b22310831fb11caeae0a79c2cef7941f308229",
+    "crates/tezbar-ui-model/src/notes.rs": "e7a1d8d18f7acc677b084548cba636aa7691562165e209bd0388173c3830a56b",
+    "crates/tezbar-ui-model/src/router.rs": "9c743feaeb0192cd36bc1efe3aa8c542331f4593af9bc12069d906d71c7c8c8a",
+    "crates/tezbar-ui-model/src/ui_state/tests.rs": "1c84669d943ba98a9155dc6dc24a6d8a883d09524b0a6129a3e37b23a95dd62e",
+    "crates/tezbar-ui-model/src/ui_state.rs": "d1bb6f3443e5b87e92b734fbc0bec1791cdfbb0dce3ee0ecabd45de761ab423e",
+    "crates/tezbar-ui-model/src/utilities.rs": "4384150734c233ea6266b6106488a8e816ad921df683507ac0b3c8758d2119d9",
+    "crates/tezbar-update/src/notes.rs": "0e7a31087d594a88215ae2c91cdd67e227c09470db70b133c1ef7c1731245dd4"
+  },
+  "browser_storage": {
+    "literal_keys": 14,
+    "ledger_rows": 15,
+    "non_browser_row": "P-15 window positions and layout profiles already native",
+    "not_imported": [
+      "tezbar:home-search-results:v2",
+      "tezbar:search-candidates:v2"
+    ]
+  },
+  "limits": [
+    "GPUI views, accessibility, native input and effect execution are subsequent integration work",
+    "M11 discovers real WebKit/WebView2 storage; no real profiles read here",
+    "Locale formatting uses injected AmountFormatter; timestamp Local label is deterministic UTC in core",
+    "Quicklinks remain legacy read/search/open-url through core; no CRUD exists or is added"
+  ],
+  "validation": [
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo +1.98.1 test --locked -p tezbar-ui-model --features launcher-models",
+      "log": "ui-handoff.log",
+      "passed": 138,
+      "ignored": 0
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo +1.98.1 test --locked -p tezbar-core --features native-ui-instant",
+      "log": "core-final-accepted.log",
+      "passed": 651,
+      "ignored": 8
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo +1.98.1 test --locked -p tezbar-core --features native-ui-instant instant::",
+      "log": "core-instant-final.log",
+      "passed": 87,
+      "ignored": 0,
+      "filtered": 572
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo +1.98.1 test --locked -p tezbar-update --no-default-features notes::",
+      "log": "update-notes-final.log",
+      "passed": 9,
+      "ignored": 0,
+      "filtered": 8
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo +1.85.0 check --locked -p tezbar-ui-model --features launcher-models",
+      "log": "msrv-handoff.log",
+      "result": "passed"
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo +1.85.0 check --locked -p tezbar-update --no-default-features",
+      "log": "msrv-notes-final.log",
+      "result": "passed"
+    }
+  ]
+}

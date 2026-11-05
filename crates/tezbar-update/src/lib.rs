@@ -99,3 +99,5 @@ pub fn published_release_status(
         Err(message) => AppUpdateStatus::Error { message },
     }
 }
+
+pub mod notes;

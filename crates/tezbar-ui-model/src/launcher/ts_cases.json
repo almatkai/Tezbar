@@ -1,0 +1,2234 @@
+[
+  {
+    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_case": "gives AI mode priority over slash-path completion after double Space",
+    "calls": [
+      {
+        "function": "commandBarInputMode",
+        "args": [
+          "/Desktop/code/aml  ",
+          false
+        ],
+        "expected": {
+          "parsedSearchQuery": {
+            "mode": "basic",
+            "query": "/Desktop/code/aml"
+          },
+          "isDeepSearchMode": false,
+          "isAiMode": true,
+          "aiTask": "",
+          "aiWorkingDirectory": "/Desktop/code/aml",
+          "slashQuery": "/Desktop/code/aml  ",
+          "isSlashInput": true,
+          "isApplicationInput": false,
+          "isCompletionInput": false
+        }
+      },
+      {
+        "function": "aiChatBootForInput",
+        "args": [
+          {
+            "parsedSearchQuery": {
+              "mode": "basic",
+              "query": "/Desktop/code/aml"
+            },
+            "isDeepSearchMode": false,
+            "isAiMode": true,
+            "aiTask": "",
+            "aiWorkingDirectory": "/Desktop/code/aml",
+            "slashQuery": "/Desktop/code/aml  ",
+            "isSlashInput": true,
+            "isApplicationInput": false,
+            "isCompletionInput": false
+          },
+          "/Users/dev/Desktop/code/aml"
+        ],
+        "expected": {
+          "kind": "newChat",
+          "workingDirectory": "/Users/dev/Desktop/code/aml"
+        }
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_case": "keeps AI mode active and searches chats after typing beyond the double-Space switch",
+    "calls": [
+      {
+        "function": "commandBarInputMode",
+        "args": [
+          "/Desktop/code/aml  explain this project",
+          false
+        ],
+        "expected": {
+          "parsedSearchQuery": {
+            "mode": "basic",
+            "query": "/Desktop/code/aml  explain this project"
+          },
+          "isDeepSearchMode": false,
+          "isAiMode": true,
+          "aiTask": "explain this project",
+          "aiWorkingDirectory": "/Desktop/code/aml",
+          "slashQuery": "/Desktop/code/aml  explain this project",
+          "isSlashInput": true,
+          "isApplicationInput": false,
+          "isCompletionInput": false
+        }
+      },
+      {
+        "function": "aiChatBootForInput",
+        "args": [
+          {
+            "parsedSearchQuery": {
+              "mode": "basic",
+              "query": "/Desktop/code/aml  explain this project"
+            },
+            "isDeepSearchMode": false,
+            "isAiMode": true,
+            "aiTask": "explain this project",
+            "aiWorkingDirectory": "/Desktop/code/aml",
+            "slashQuery": "/Desktop/code/aml  explain this project",
+            "isSlashInput": true,
+            "isApplicationInput": false,
+            "isCompletionInput": false
+          },
+          "/Users/dev/Desktop/code/aml"
+        ],
+        "expected": {
+          "kind": "submit",
+          "prompt": "explain this project",
+          "workingDirectory": "/Users/dev/Desktop/code/aml"
+        }
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_case": "preserves regular AI activation when two spaces are trailing",
+    "calls": [
+      {
+        "function": "commandBarInputMode",
+        "args": [
+          "search  ",
+          false
+        ],
+        "expected": {
+          "parsedSearchQuery": {
+            "mode": "basic",
+            "query": "search"
+          },
+          "isDeepSearchMode": false,
+          "isAiMode": true,
+          "aiTask": "search",
+          "slashQuery": "search  ",
+          "isSlashInput": false,
+          "isApplicationInput": false,
+          "isCompletionInput": false
+        }
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_case": "does not treat an ordinary internal double-space query as AI mode",
+    "calls": [
+      {
+        "function": "commandBarInputMode",
+        "args": [
+          "search  two words",
+          false
+        ],
+        "expected": {
+          "parsedSearchQuery": {
+            "mode": "basic",
+            "query": "search  two words"
+          },
+          "isDeepSearchMode": false,
+          "isAiMode": false,
+          "aiTask": "",
+          "slashQuery": "search  two words",
+          "isSlashInput": false,
+          "isApplicationInput": false,
+          "isCompletionInput": false
+        }
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_case": "preserves leading-Space AI prompts without treating them as directories",
+    "calls": [
+      {
+        "function": "commandBarInputMode",
+        "args": [
+          " explain this project",
+          false
+        ],
+        "expected": {
+          "parsedSearchQuery": {
+            "mode": "basic",
+            "query": "explain this project"
+          },
+          "isDeepSearchMode": false,
+          "isAiMode": true,
+          "aiTask": "explain this project",
+          "slashQuery": "explain this project",
+          "isSlashInput": false,
+          "isApplicationInput": false,
+          "isCompletionInput": false
+        }
+      },
+      {
+        "function": "aiChatBootForInput",
+        "args": [
+          {
+            "parsedSearchQuery": {
+              "mode": "basic",
+              "query": "explain this project"
+            },
+            "isDeepSearchMode": false,
+            "isAiMode": true,
+            "aiTask": "explain this project",
+            "slashQuery": "explain this project",
+            "isSlashInput": false,
+            "isApplicationInput": false,
+            "isCompletionInput": false
+          },
+          null
+        ],
+        "expected": {
+          "kind": "submit",
+          "prompt": "explain this project"
+        }
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_case": "returns null boot for empty AI mode prompt so newChat can be opened",
+    "calls": [
+      {
+        "function": "commandBarInputMode",
+        "args": [
+          " ",
+          false
+        ],
+        "expected": {
+          "parsedSearchQuery": {
+            "mode": "basic",
+            "query": ""
+          },
+          "isDeepSearchMode": false,
+          "isAiMode": true,
+          "aiTask": "",
+          "slashQuery": "",
+          "isSlashInput": false,
+          "isApplicationInput": false,
+          "isCompletionInput": false
+        }
+      },
+      {
+        "function": "aiChatBootForInput",
+        "args": [
+          {
+            "parsedSearchQuery": {
+              "mode": "basic",
+              "query": ""
+            },
+            "isDeepSearchMode": false,
+            "isAiMode": true,
+            "aiTask": "",
+            "slashQuery": "",
+            "isSlashInput": false,
+            "isApplicationInput": false,
+            "isCompletionInput": false
+          },
+          null
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherArgument.test.ts",
+    "ts_case": "retains numeric input filtering and range validation",
+    "calls": [
+      {
+        "function": "sanitizeLauncherArgument",
+        "args": [
+          "a30b00x99",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": "30009"
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "1",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": null
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "3000",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": null
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "65535",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": null
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": "Invalid value"
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "0",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": "Invalid value"
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "65536",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": "Invalid value"
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "3000;kill",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": "Invalid value"
+      },
+      {
+        "function": "validateLauncherArgument",
+        "args": [
+          "1.5",
+          {
+            "kind": "integer",
+            "min": 1,
+            "max": 65535,
+            "maxLength": 5,
+            "message": "Invalid value"
+          }
+        ],
+        "expected": "Invalid value"
+      },
+      {
+        "function": "sanitizeLauncherArgument",
+        "args": [
+          "雪 café"
+        ],
+        "expected": "雪 café"
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_case": "puts the matching app and extension surface above generic files",
+    "calls": [
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "library",
+              "title": "Open ~/Library",
+              "subtitle": "Reveal the hidden Library folder",
+              "category": "native-command",
+              "score": 9999,
+              "action": {
+                "type": "copy-text",
+                "text": "Open ~/Library"
+              }
+            },
+            {
+              "id": "file",
+              "title": "Gemini_Generated_Image.png",
+              "subtitle": "/Users/example/Downloads",
+              "category": "files",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Gemini_Generated_Image.png"
+              }
+            },
+            {
+              "id": "summarize",
+              "title": "Summarize",
+              "subtitle": "Google Gemini",
+              "category": "extensions",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Summarize"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Gemini 2",
+              "subtitle": "/Applications/Gemini 2.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Gemini 2"
+              }
+            }
+          ],
+          "gemini"
+        ],
+        "expected": [
+          {
+            "id": "app",
+            "title": "Gemini 2",
+            "subtitle": "/Applications/Gemini 2.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Gemini 2"
+            }
+          },
+          {
+            "id": "summarize",
+            "title": "Summarize",
+            "subtitle": "Google Gemini",
+            "category": "extensions",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Summarize"
+            }
+          },
+          {
+            "id": "file",
+            "title": "Gemini_Generated_Image.png",
+            "subtitle": "/Users/example/Downloads",
+            "category": "files",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Gemini_Generated_Image.png"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_case": "matches corrected layouts in the first frame without unrelated cached results",
+    "calls": [
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            },
+            {
+              "id": "chrome",
+              "title": "Chrome",
+              "subtitle": "/Applications/Chrome.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Chrome"
+              }
+            }
+          ],
+          "МЫ СЩВУ"
+        ],
+        "expected": [
+          {
+            "id": "app",
+            "title": "Visual Studio Code",
+            "subtitle": "/Applications/Visual Studio Code.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Visual Studio Code"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            },
+            {
+              "id": "chrome",
+              "title": "Chrome",
+              "subtitle": "/Applications/Chrome.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Chrome"
+              }
+            }
+          ],
+          "vs сщву"
+        ],
+        "expected": [
+          {
+            "id": "app",
+            "title": "Visual Studio Code",
+            "subtitle": "/Applications/Visual Studio Code.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Visual Studio Code"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            },
+            {
+              "id": "chrome",
+              "title": "Chrome",
+              "subtitle": "/Applications/Chrome.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Chrome"
+              }
+            }
+          ],
+          "мы code"
+        ],
+        "expected": [
+          {
+            "id": "app",
+            "title": "Visual Studio Code",
+            "subtitle": "/Applications/Visual Studio Code.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Visual Studio Code"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            },
+            {
+              "id": "chrome",
+              "title": "Chrome",
+              "subtitle": "/Applications/Chrome.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Chrome"
+              }
+            }
+          ],
+          "vs code"
+        ],
+        "expected": [
+          {
+            "id": "app",
+            "title": "Visual Studio Code",
+            "subtitle": "/Applications/Visual Studio Code.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Visual Studio Code"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            },
+            {
+              "id": "chrome",
+              "title": "Chrome",
+              "subtitle": "/Applications/Chrome.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Chrome"
+              }
+            }
+          ],
+          "вс код"
+        ],
+        "expected": [
+          {
+            "id": "app",
+            "title": "Visual Studio Code",
+            "subtitle": "/Applications/Visual Studio Code.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Visual Studio Code"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            },
+            {
+              "id": "chrome",
+              "title": "Chrome",
+              "subtitle": "/Applications/Chrome.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Chrome"
+              }
+            }
+          ],
+          "сркщьу"
+        ],
+        "expected": [
+          {
+            "id": "chrome",
+            "title": "Chrome",
+            "subtitle": "/Applications/Chrome.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Chrome"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            },
+            {
+              "id": "chrome",
+              "title": "Chrome",
+              "subtitle": "/Applications/Chrome.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Chrome"
+              }
+            }
+          ],
+          "хром"
+        ],
+        "expected": [
+          {
+            "id": "chrome",
+            "title": "Chrome",
+            "subtitle": "/Applications/Chrome.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Chrome"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_case": "preserves literal Russian matches and supports the reverse layout",
+    "calls": [
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "other",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "russian",
+              "title": "Привет",
+              "subtitle": "Заметка",
+              "category": "quick-notes",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Привет"
+              }
+            }
+          ],
+          "Привет"
+        ],
+        "expected": [
+          {
+            "id": "russian",
+            "title": "Привет",
+            "subtitle": "Заметка",
+            "category": "quick-notes",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Привет"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "other",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "russian",
+              "title": "Привет",
+              "subtitle": "Заметка",
+              "category": "quick-notes",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Привет"
+              }
+            }
+          ],
+          "ghbdtn"
+        ],
+        "expected": [
+          {
+            "id": "russian",
+            "title": "Привет",
+            "subtitle": "Заметка",
+            "category": "quick-notes",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Привет"
+            }
+          }
+        ]
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "other",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "russian",
+              "title": "Привет",
+              "subtitle": "Заметка",
+              "category": "quick-notes",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Привет"
+              }
+            }
+          ],
+          "Несуществующее"
+        ],
+        "expected": []
+      },
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "other",
+              "title": "Open Ports",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports"
+              }
+            },
+            {
+              "id": "russian",
+              "title": "Привет",
+              "subtitle": "Заметка",
+              "category": "quick-notes",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Привет"
+              }
+            }
+          ],
+          "***"
+        ],
+        "expected": []
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_case": "prefers a literal match over an equally relevant corrected match",
+    "calls": [
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "corrected",
+              "title": "Code",
+              "subtitle": "Application",
+              "category": "applications",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Code"
+              }
+            },
+            {
+              "id": "literal",
+              "title": "Сщву",
+              "subtitle": "Application",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Сщву"
+              }
+            }
+          ],
+          "сщву"
+        ],
+        "expected": [
+          {
+            "id": "literal",
+            "title": "Сщву",
+            "subtitle": "Application",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Сщву"
+            }
+          },
+          {
+            "id": "corrected",
+            "title": "Code",
+            "subtitle": "Application",
+            "category": "applications",
+            "score": 50000,
+            "action": {
+              "type": "copy-text",
+              "text": "Code"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_case": "does not carry an unrelated high-score result into a typed query",
+    "calls": [
+      {
+        "function": "optimisticSearchResults",
+        "args": [
+          [
+            {
+              "id": "ports",
+              "title": "Open Ports in Menu Bar",
+              "subtitle": "Port Manager",
+              "category": "extensions",
+              "score": 50000,
+              "action": {
+                "type": "copy-text",
+                "text": "Open Ports in Menu Bar"
+              }
+            },
+            {
+              "id": "app",
+              "title": "Gemini 2",
+              "subtitle": "/Applications/Gemini 2.app",
+              "category": "applications",
+              "score": 0,
+              "action": {
+                "type": "copy-text",
+                "text": "Gemini 2"
+              }
+            }
+          ],
+          "gemini"
+        ],
+        "expected": [
+          {
+            "id": "app",
+            "title": "Gemini 2",
+            "subtitle": "/Applications/Gemini 2.app",
+            "category": "applications",
+            "score": 0,
+            "action": {
+              "type": "copy-text",
+              "text": "Gemini 2"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "records a submitted launcher query without surrounding whitespace",
+    "calls": [
+      {
+        "function": "launcherQueryHistoryEntry",
+        "args": [
+          "clipboard history ",
+          false
+        ],
+        "expected": "clipboard history"
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "preserves AI mode when normalizing a recalled prompt",
+    "calls": [
+      {
+        "function": "launcherQueryHistoryEntry",
+        "args": [
+          "explain this  ",
+          false
+        ],
+        "expected": " explain this"
+      },
+      {
+        "function": "launcherQueryHistoryEntry",
+        "args": [
+          " explain this",
+          false
+        ],
+        "expected": " explain this"
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "leaves terminal commands to terminal history",
+    "calls": [
+      {
+        "function": "launcherQueryHistoryEntry",
+        "args": [
+          "git status",
+          true
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "keeps only the latest query",
+    "calls": [
+      {
+        "function": "addLauncherQueryHistoryEntry",
+        "args": [
+          "new query"
+        ],
+        "expected": [
+          "new query"
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "only recalls the last query after ArrowUp reaches the top search result",
+    "calls": [
+      {
+        "function": "shouldRecallLastLauncherQuery",
+        "args": [
+          {
+            "isDeepSearchMode": false,
+            "key": "ArrowUp",
+            "value": "",
+            "visibleResultCount": 10,
+            "selectedResultIndex": 8
+          }
+        ],
+        "expected": false
+      },
+      {
+        "function": "shouldRecallLastLauncherQuery",
+        "args": [
+          {
+            "isDeepSearchMode": false,
+            "key": "ArrowUp",
+            "value": "",
+            "visibleResultCount": 10,
+            "selectedResultIndex": 1
+          }
+        ],
+        "expected": false
+      },
+      {
+        "function": "shouldRecallLastLauncherQuery",
+        "args": [
+          {
+            "isDeepSearchMode": false,
+            "key": "ArrowUp",
+            "value": "",
+            "visibleResultCount": 10,
+            "selectedResultIndex": 0
+          }
+        ],
+        "expected": true
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "leaves ArrowDown for result navigation",
+    "calls": [
+      {
+        "function": "shouldRecallLastLauncherQuery",
+        "args": [
+          {
+            "isDeepSearchMode": false,
+            "key": "ArrowDown",
+            "selectedResultIndex": 0,
+            "value": "",
+            "visibleResultCount": 10
+          }
+        ],
+        "expected": false
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "never recalls a launcher query from Deep Search mode",
+    "calls": [
+      {
+        "function": "shouldRecallLastLauncherQuery",
+        "args": [
+          {
+            "isDeepSearchMode": true,
+            "key": "ArrowUp",
+            "selectedResultIndex": -1,
+            "value": "!passwords",
+            "visibleResultCount": 10
+          }
+        ],
+        "expected": false
+      }
+    ]
+  },
+  {
+    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_case": "safely parses persisted history",
+    "calls": [
+      {
+        "function": "parseLauncherQueryHistory",
+        "args": [
+          "[\"settings\", 42, \"\", \" clipboard\"]"
+        ],
+        "expected": [
+          "settings"
+        ]
+      },
+      {
+        "function": "parseLauncherQueryHistory",
+        "args": [
+          "not json"
+        ],
+        "expected": []
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "treats a leading bang as deep search and removes it from the indexed query",
+    "calls": [
+      {
+        "function": "parseSearchQuery",
+        "args": [
+          "! quarterly revenue "
+        ],
+        "expected": {
+          "mode": "deep",
+          "query": "quarterly revenue"
+        }
+      },
+      {
+        "function": "parseSearchQuery",
+        "args": [
+          " ! quarterly revenue "
+        ],
+        "expected": {
+          "mode": "basic",
+          "query": "! quarterly revenue"
+        }
+      },
+      {
+        "function": "parseSearchQuery",
+        "args": [
+          "quarterly revenue"
+        ],
+        "expected": {
+          "mode": "basic",
+          "query": "quarterly revenue"
+        }
+      },
+      {
+        "function": "deepSearchInput",
+        "args": [
+          " quarterly revenue "
+        ],
+        "expected": "!quarterly revenue"
+      },
+      {
+        "function": "deepSearchDraftInput",
+        "args": [
+          "quarterly revenue "
+        ],
+        "expected": "!quarterly revenue "
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "does not change the backend query for trailing whitespace",
+    "calls": [
+      {
+        "function": "searchRequestInput",
+        "args": [
+          "quarterly revenue"
+        ],
+        "expected": "quarterly revenue"
+      },
+      {
+        "function": "searchRequestInput",
+        "args": [
+          "quarterly revenue "
+        ],
+        "expected": "quarterly revenue"
+      },
+      {
+        "function": "searchRequestInput",
+        "args": [
+          "!quarterly revenue"
+        ],
+        "expected": "!quarterly revenue"
+      },
+      {
+        "function": "searchRequestInput",
+        "args": [
+          "!quarterly revenue   "
+        ],
+        "expected": "!quarterly revenue"
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "accepts a complete metadata match",
+    "calls": [
+      {
+        "function": "hasGoodMetadataMatch",
+        "args": [
+          "quarterly revenue",
+          [
+            {
+              "id": "file:report",
+              "title": "Q3 quarterly report.pdf",
+              "subtitle": "/Documents/revenue",
+              "category": "files",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Q3 quarterly report.pdf"
+              }
+            }
+          ]
+        ],
+        "expected": true
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "recommends deep search for weak partial matches and ignores synthetic rows",
+    "calls": [
+      {
+        "function": "hasGoodMetadataMatch",
+        "args": [
+          "quarterly revenue",
+          [
+            {
+              "id": "file:quarterly",
+              "title": "quarterly-notes.txt",
+              "subtitle": "/Documents",
+              "category": "files",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "quarterly-notes.txt"
+              }
+            },
+            {
+              "id": "note-add:quarterly revenue",
+              "title": "Add quick note: quarterly revenue",
+              "subtitle": "Quick notes",
+              "category": "files",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Add quick note: quarterly revenue"
+              }
+            },
+            {
+              "id": "deep-search:quarterly-revenue",
+              "title": "Deep Search “quarterly revenue”",
+              "subtitle": "Search inside indexed file contents",
+              "category": "knowledge",
+              "score": 10000,
+              "action": {
+                "type": "copy-text",
+                "text": "Deep Search “quarterly revenue”"
+              }
+            }
+          ]
+        ],
+        "expected": false
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "does not treat short path fragments as a match for a punctuated Unicode query",
+    "calls": [
+      {
+        "function": "hasGoodMetadataMatch",
+        "args": [
+          "¡Comienzo!",
+          [
+            {
+              "id": "file:person-promoter",
+              "title": "PersonPromoter",
+              "subtitle": "/Pictures/Photos Library.photoslibrary/private/com.apple.mediaanalysis/cache",
+              "category": "files",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "PersonPromoter"
+              }
+            },
+            {
+              "id": "snippet:commit",
+              "title": "Conventional commit message (full template)",
+              "subtitle": "Commit template",
+              "category": "snippets",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Conventional commit message (full template)"
+              }
+            },
+            {
+              "id": "quick-link:google",
+              "title": "Google Search",
+              "subtitle": "Quick link",
+              "category": "quick-links",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Google Search"
+              }
+            },
+            {
+              "id": "note-add:comienzo",
+              "title": "Add quick note: ¡Comienzo!",
+              "subtitle": "Quick notes",
+              "category": "quick-notes",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Add quick note: ¡Comienzo!"
+              }
+            }
+          ]
+        ],
+        "expected": false
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "still accepts a substantial reverse-prefix metadata match",
+    "calls": [
+      {
+        "function": "hasGoodMetadataMatch",
+        "args": [
+          "quarterly",
+          [
+            {
+              "id": "file:quarter",
+              "title": "Quarter report.pdf",
+              "subtitle": "/Documents",
+              "category": "files",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Quarter report.pdf"
+              }
+            }
+          ]
+        ],
+        "expected": true
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "builds an immediate recommendation above weak local candidates",
+    "calls": [
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "¡Comienzo!",
+          [
+            {
+              "id": "file:person-promoter",
+              "title": "PersonPromoter",
+              "subtitle": "/private/com.apple/cache",
+              "category": "files",
+              "score": 2489,
+              "action": {
+                "type": "copy-text",
+                "text": "PersonPromoter"
+              }
+            }
+          ]
+        ],
+        "expected": {
+          "id": "deep-search:%C2%A1comienzo!",
+          "title": "Deep Search “¡Comienzo!”",
+          "subtitle": "No strong metadata match · Search inside indexed file contents",
+          "category": "knowledge",
+          "score": 2490,
+          "action": {
+            "type": "invoke-command",
+            "commandId": "activate-deep-search",
+            "payload": {
+              "query": "¡Comienzo!"
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "keeps a matching app ahead of Deep Search for сркщьу",
+    "calls": [
+      {
+        "function": "hasGoodMetadataMatch",
+        "args": [
+          "сркщьу",
+          [
+            {
+              "id": "app:chrome",
+              "title": "Google Chrome",
+              "subtitle": "/Applications/Google Chrome.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Google Chrome"
+              }
+            }
+          ]
+        ],
+        "expected": true
+      },
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "сркщьу",
+          [
+            {
+              "id": "app:chrome",
+              "title": "Google Chrome",
+              "subtitle": "/Applications/Google Chrome.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Google Chrome"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "keeps a matching app ahead of Deep Search for СРКЩЬУ",
+    "calls": [
+      {
+        "function": "hasGoodMetadataMatch",
+        "args": [
+          "СРКЩЬУ",
+          [
+            {
+              "id": "app:chrome",
+              "title": "Google Chrome",
+              "subtitle": "/Applications/Google Chrome.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Google Chrome"
+              }
+            }
+          ]
+        ],
+        "expected": true
+      },
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "СРКЩЬУ",
+          [
+            {
+              "id": "app:chrome",
+              "title": "Google Chrome",
+              "subtitle": "/Applications/Google Chrome.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Google Chrome"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "keeps a matching app ahead of Deep Search for chrome",
+    "calls": [
+      {
+        "function": "hasGoodMetadataMatch",
+        "args": [
+          "chrome",
+          [
+            {
+              "id": "app:chrome",
+              "title": "Google Chrome",
+              "subtitle": "/Applications/Google Chrome.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Google Chrome"
+              }
+            }
+          ]
+        ],
+        "expected": true
+      },
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "chrome",
+          [
+            {
+              "id": "app:chrome",
+              "title": "Google Chrome",
+              "subtitle": "/Applications/Google Chrome.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Google Chrome"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "recognizes the real Visual Studio Code name for vs code",
+    "calls": [
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "vs code",
+          [
+            {
+              "id": "app:vscode",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "recognizes the real Visual Studio Code name for мы сщву",
+    "calls": [
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "мы сщву",
+          [
+            {
+              "id": "app:vscode",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "recognizes the real Visual Studio Code name for vs сщву",
+    "calls": [
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "vs сщву",
+          [
+            {
+              "id": "app:vscode",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "recognizes the real Visual Studio Code name for мы code",
+    "calls": [
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "мы code",
+          [
+            {
+              "id": "app:vscode",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "recognizes the real Visual Studio Code name for вс код",
+    "calls": [
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "вс код",
+          [
+            {
+              "id": "app:vscode",
+              "title": "Visual Studio Code",
+              "subtitle": "/Applications/Visual Studio Code.app",
+              "category": "applications",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Visual Studio Code"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchMode.test.ts",
+    "ts_case": "does not recommend Deep Search when local metadata is already close",
+    "calls": [
+      {
+        "function": "buildDeepSearchRecommendation",
+        "args": [
+          "quarterly revenue",
+          [
+            {
+              "id": "file:report",
+              "title": "Q3 quarterly report.pdf",
+              "subtitle": "/Documents/revenue",
+              "category": "files",
+              "score": 700,
+              "action": {
+                "type": "copy-text",
+                "text": "Q3 quarterly report.pdf"
+              }
+            }
+          ]
+        ],
+        "expected": null
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchQueryVariants.test.ts",
+    "ts_case": "corrects Russian keys to English without discarding the literal query",
+    "calls": [
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "  МЫ СЩВУ  "
+        ],
+        "expected": [
+          "мы сщву",
+          "vs code"
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "сркщьу"
+        ],
+        "expected": [
+          "сркщьу",
+          "chrome"
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "ЕУДУПКФЬ"
+        ],
+        "expected": [
+          "еудупкфь",
+          "telegram"
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchQueryVariants.test.ts",
+    "ts_case": "also corrects English keys to Russian",
+    "calls": [
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "ghbdtn"
+        ],
+        "expected": [
+          "ghbdtn",
+          "привет"
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "Gjиcr"
+        ],
+        "expected": [
+          "gjиcr",
+          "gjbcr",
+          "поиск"
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchQueryVariants.test.ts",
+    "ts_case": "retains already-correct words in mixed-layout input",
+    "calls": [
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "МЫ code"
+        ],
+        "expected": [
+          "мы code",
+          "vs code",
+          "мы сщву"
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "vs сщву"
+        ],
+        "expected": [
+          "vs сщву",
+          "vs code",
+          "мы сщву"
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchQueryVariants.test.ts",
+    "ts_case": "handles Russian letter keys on punctuation positions",
+    "calls": [
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "ёхъжэбю"
+        ],
+        "expected": [
+          "ёхъжэбю",
+          "`[];',."
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "`[];',.a"
+        ],
+        "expected": [
+          "`[];',.a",
+          "ёхъжэбюф"
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchQueryVariants.test.ts",
+    "ts_case": "does not expand empty, numeric, or punctuation-only queries",
+    "calls": [
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "  "
+        ],
+        "expected": []
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "123"
+        ],
+        "expected": [
+          "123"
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "! / *"
+        ],
+        "expected": [
+          "! / *"
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/searchQueryVariants.test.ts",
+    "ts_case": "keeps real Russian and English queries as the first choice",
+    "calls": [
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "Поиск документов"
+        ],
+        "expected": [
+          "поиск документов",
+          "gjbcr ljrevtynjd"
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "VS Code"
+        ],
+        "expected": [
+          "vs code",
+          "мы сщву"
+        ]
+      },
+      {
+        "function": "searchQueryVariants",
+        "args": [
+          "你好"
+        ],
+        "expected": [
+          "你好"
+        ]
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "recognizes Visual Studio Code by the alias vs code",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Visual Studio Code",
+          "vs code"
+        ],
+        "expected": 1
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "recognizes Visual Studio Code by the alias vscode",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Visual Studio Code",
+          "vscode"
+        ],
+        "expected": 1
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "recognizes Visual Studio Code by the alias вс код",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Visual Studio Code",
+          "вс код"
+        ],
+        "expected": 1
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "recognizes Google Chrome by the alias хром",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Google Chrome",
+          "хром"
+        ],
+        "expected": 1
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "recognizes Telegram by the alias телеграм",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Telegram",
+          "телеграм"
+        ],
+        "expected": 1
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "recognizes Discord by the alias дискорд",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Discord",
+          "дискорд"
+        ],
+        "expected": 1
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "recognizes Safari by the alias сафари",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Safari",
+          "сафари"
+        ],
+        "expected": 1
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "matches complete name tokens, including partial typing, without dropping terms",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Google Chrome",
+          "chrome"
+        ],
+        "expected": 1
+      },
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Visual Studio Code",
+          "VS   CO"
+        ],
+        "expected": 0.92
+      },
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Visual Studio Code",
+          "studio code"
+        ],
+        "expected": 0.9
+      },
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Google Chrome",
+          "no chrome"
+        ],
+        "expected": 0
+      },
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Visual Studio Code",
+          "vs unrelated"
+        ],
+        "expected": 0
+      },
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Google Chrome",
+          "***"
+        ],
+        "expected": 0
+      }
+    ]
+  },
+  {
+    "ts_file": "src/shared/applicationSearch.test.ts",
+    "ts_case": "does not inherit object keys or add aliases to unknown applications",
+    "calls": [
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Unrelated App",
+          "хром"
+        ],
+        "expected": 0
+      },
+      {
+        "function": "applicationNameMatchScore",
+        "args": [
+          "Привет",
+          "привет"
+        ],
+        "expected": 1
+      }
+    ]
+  }
+]
