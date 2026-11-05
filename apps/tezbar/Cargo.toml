@@ -16,11 +16,30 @@ runtime-shaders = ["gpui_platform/runtime_shaders"]
 
 [dependencies]
 tezbar-core = { path = "../../crates/tezbar-core" }
+tezbar-host = { path = "../../crates/tezbar-host" }
+tezbar-update = { path = "../../crates/tezbar-update" }
+tezbar-ui-model = { path = "../../crates/tezbar-ui-model" }
+tezbar-ui = { path = "../../crates/tezbar-ui" }
 anyhow = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+raw-window-handle = "0.6"
 gpui = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35", default-features = false, features = ["font-kit"] }
 gpui_tokio = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 proc-macro-crate = "=2.0.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSWindow", "NSRunningApplication", "NSScreen", "NSView", "NSPanel"] }
+objc2-foundation = "0.3.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
+
+[dev-dependencies]
+tempfile = "3.27"
