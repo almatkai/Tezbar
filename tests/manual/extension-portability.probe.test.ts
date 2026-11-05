@@ -40,7 +40,11 @@ vi.mock('@tezbar/desktop-runtime', () => ({
   nativeImage: { createFromPath: () => ({ isEmpty: () => true }) },
   shell: { openExternal: async () => {}, showItemInFolder() {} },
 }))
-vi.mock('../../src/main/llm/extensionAI', () => ({ askExtensionAI: async () => 'probe' }))
+vi.mock('../../src/main/extensionWorker/windowState', () => ({ setSuppressBlurHide: vi.fn() }))
+vi.mock('../../src/main/extensionWorker/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/main/extensionWorker/services')>()),
+  askExtensionAI: async () => 'probe',
+}))
 import { buildAllCommands } from '../../src/main/extension-builder'
 import {
   clearAllExtensionSessions,

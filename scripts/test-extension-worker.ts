@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { FrameReader } from '../src/main/extensionWorker/framing'
 
 // An actual compatibility-process smoke test. It uses a temporary extension
@@ -17,12 +18,32 @@ async function main(): Promise<void> {
       name: 'protocol-fixture',
       title: 'Protocol Fixture',
       platforms: ['macOS', 'Windows', 'Linux'],
-      commands: ['run', 'paste', 'image', 'html', 'failure', 'paste-action'].map((name) => ({
+      commands: ['run', 'paste', 'image', 'html', 'failure', 'paste-action', 'host-services'].map((name) => ({
         name,
         title: name,
         mode: name === 'paste-action' ? 'view' : 'no-view',
       })),
     })
+  )
+  // Exercise source compilation and the Bun SQLite shim, not only prebuilt JS.
+  const databasePath = join(root, 'fixture.db')
+  const database = new DatabaseSync(databasePath)
+  database.exec("CREATE TABLE items (value TEXT); INSERT INTO items VALUES ('Қазақша 🐎');")
+  database.close()
+  await mkdir(join(extension, 'src'))
+  await writeFile(
+    join(extension, 'src', 'host-services.ts'),
+    `import { Clipboard, getApplications, getSelectedText } from '@raycast/api';
+     import { executeSQL } from '@raycast/utils';
+     export default async function command(): Promise<void> {
+       const applications = await getApplications();
+       const selected = await getSelectedText();
+       const rows = await executeSQL(${JSON.stringify(databasePath)}, 'SELECT value FROM items');
+       let blocked = false;
+       try { await executeSQL(${JSON.stringify(databasePath)}, 'DELETE FROM items'); }
+       catch { blocked = true; }
+       await Clipboard.copy(JSON.stringify({ applications, selected, rows, blocked }));
+     }`
   )
   await writeFile(
     join(extension, '.sc-build', 'run.js'),
@@ -99,6 +120,8 @@ async function main(): Promise<void> {
     child.stdin.write(`${JSON.stringify(value)}\n`)
   }
   const requests: string[] = []
+  const applications = [{ name: 'Fixture', path: '/fixture/Host.app', bundleId: 'test.fixture' }]
+  const selected = 'Selected Қаза🐎\u2028日本語'
   let protocolFailure: Error | undefined
   const fail = (error: Error): void => {
     protocolFailure = error
@@ -122,7 +145,8 @@ async function main(): Promise<void> {
     if (frame.type === 'core-request') {
       requests.push(frame.channel)
       let result: unknown
-      if (frame.channel === 'core:apps:list') result = []
+      if (frame.channel === 'core:apps:list') result = applications
+      else if (frame.channel === 'core:platform:selected-text') result = selected
       else if (frame.channel === 'clipboard:read') result = clipboard
       else if (frame.channel === 'clipboard:write') {
         if (frame.payload[0] === 'reject this write') {
@@ -231,6 +255,23 @@ async function main(): Promise<void> {
       assert.equal(result.ok, true, result.message)
       assert.deepEqual(requests, expected)
     }
+    requests.length = 0
+    const compiled = await invoke('extension:run-command', {
+      extensionId: 'raycast.protocol-fixture',
+      commandName: 'host-services',
+    })
+    assert.equal(compiled.ok, true, compiled.message)
+    assert.deepEqual(JSON.parse(clipboard), {
+      applications,
+      selected,
+      rows: [{ value: 'Қазақша 🐎' }],
+      blocked: true,
+    })
+    assert.deepEqual(requests, [
+      'core:apps:list',
+      'core:platform:selected-text',
+      'clipboard:write',
+    ])
     const view = await invoke('extension:run-command', {
       extensionId: 'raycast.protocol-fixture',
       commandName: 'paste-action',
@@ -255,7 +296,7 @@ async function main(): Promise<void> {
     child.stdin.end()
     assert.equal(await deadline(exited), 0)
     console.log(
-      'Extension Worker: actual Bun process, ASCII/Unicode, clipboard/AI, image/HTML, paste, host errors, boundary rejection and EOF cleanup passed.'
+      'Extension Worker: actual Bun process, source compilation, readonly SQL, application/selection host services, ASCII/Unicode, clipboard/AI, image/HTML, paste, host errors, boundary rejection and EOF cleanup passed.'
     )
   } catch (error) {
     throw new Error(

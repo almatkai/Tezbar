@@ -31,13 +31,11 @@
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.147",
-    "@anthropic-ai/sdk": "^0.90.0",
     "ai": "7.0.143",
     "better-sqlite3": "^12.9.0",
     "esbuild": "^0.28.0",
     "fuse.js": "^7.3.0",
-    "sqlite-vec": "0.1.7-alpha.10",
-    "zod": "^4.6.7"
+    "sqlite-vec": "0.1.7-alpha.10"
   },
   "optionalDependencies": {
     "@esbuild/darwin-arm64": "0.28.0",
@@ -46,7 +44,6 @@
     "@esbuild/win32-x64": "0.28.0"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.90.0",
     "@raycast/api": "^1.104.13",
     "@shadcn/helpers": "0.3.0",
     "@tauri-apps/api": "^2.2.0",

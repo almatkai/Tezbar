@@ -6,7 +6,7 @@
  * reuses it; otherwise the renderer starts a fresh session.
  *
  * Sessions are owned by the main process (sqlite-backed in
- * `src/main/chat/sessionStore.ts`) and surfaced to the renderer via the
+ * `src-tauri/src/native_core/ai/chat.rs`) and surfaced to the renderer via the
  * `chat:*` IPC channels below.
  */
 

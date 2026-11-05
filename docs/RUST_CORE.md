@@ -103,8 +103,17 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib --locked \
 `build:backend` now builds only `dist-backend/extension-worker.js`, checks its
 dependency graph against accidental core imports, and stages the extension/native
 resources. It removes the old `main.js`, Knowledge worker and JS supervisor
-bundles. The old TypeScript core sources remain as migration reference and
-regression fixtures; they are neither app entrypoints nor packaged core services.
+bundles. The obsolete TypeScript core implementations and their implementation-only
+tests have been deleted. `src/main` now contains extension installation/build/runtime,
+the worker's host bridges, and development/test desktop and SQLite adapters.
+Shared renderer/worker contracts remain in `src/shared`; application snapshot types
+no longer pull in the removed search implementation. Extension modules import the
+worker bridges directly, without aliases to old core paths. The build still rejects
+core modules in the worker's transitive input graph.
+
+[TypeScript cleanup verification](TS_BACKEND_CLEANUP.md) records the deletion scope,
+retained JavaScript dependencies and isolated checks. Historical migration counts
+and reviews below describe their original revisions.
 
 The native lifecycle fixture starts the services with no JS bundle in its test
 profile, writes data, shuts down, reopens and verifies persistence. The actual

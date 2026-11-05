@@ -74,26 +74,9 @@ async function runBuild(): Promise<void> {
     outdir: outputDirectory,
     entryNames: '[name]',
     metafile: true,
-    plugins: [
-      {
-        name: 'native-core-boundary',
-        setup(builder) {
-          builder.onResolve(
-            { filter: /(?:llm\/extensionAI|search\/providers\/appsProvider|selected-text)$/ },
-            () => ({
-              path: join(root, 'src/main/extensionWorker/services.ts'),
-            })
-          )
-          builder.onResolve({ filter: /(?:^|\/)windowState$/ }, () => ({
-            path: join(root, 'src/main/extensionWorker/windowState.ts'),
-          }))
-        },
-      },
-    ],
     alias: {
       '@tezbar/desktop-runtime': join(root, 'src/main/extensionWorker/desktop.ts'),
       'better-sqlite3': join(root, 'src/main/better-sqlite3-shim.ts'),
-      'sqlite-vec': join(root, 'src/main/sqlite-vec-bundled.ts'),
     },
     external: ['esbuild', 'fsevents', 'bun:sqlite'],
     sourcemap: true,

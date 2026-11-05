@@ -6,7 +6,6 @@ import { executeExtensionSQL } from './extension-sql'
 import { copyClipboardContent, pasteClipboardContent } from './extensionWorker/clipboard'
 import { confirmExtensionAlert, type ExtensionAlertOptions } from './extension-confirm-alert'
 import { runPowerShellScript, type PowerShellScriptOptions } from './powershell-script'
-import { readSelectedText } from './selected-text'
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
@@ -23,13 +22,14 @@ import { deserialize, serialize } from 'node:v8'
 import { gunzipSync, gzip } from 'node:zlib'
 import vm from 'node:vm'
 import { configurePackagedEsbuildBinary } from './esbuild-runtime'
-import { askExtensionAI } from './llm/extensionAI'
 import {
+  askExtensionAI,
+  readSelectedText,
   listApplications,
   readAppBundleIdentifier,
   type InstalledApplication,
-} from './search/providers/appsProvider'
-import { setSuppressBlurHide } from './windowState'
+} from './extensionWorker/services'
+import { setSuppressBlurHide } from './extensionWorker/windowState'
 import type {
   ExtensionInvokeActionRequest,
   ExtensionInvokeActionResult,

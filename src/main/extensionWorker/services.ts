@@ -1,5 +1,5 @@
 import { request } from './host'
-import type { InstalledApplication } from '../search/providers/appsProvider'
+import type { InstalledApplication } from '../../shared/applicationSearch'
 
 export type { InstalledApplication }
 let applications: InstalledApplication[] = []

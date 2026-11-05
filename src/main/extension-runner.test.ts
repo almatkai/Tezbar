@@ -34,7 +34,9 @@ vi.mock('@tezbar/desktop-runtime', () => ({
   },
 }))
 
-vi.mock('./llm/extensionAI', () => ({
+vi.mock('./extensionWorker/windowState', () => ({ setSuppressBlurHide: vi.fn() }))
+vi.mock('./extensionWorker/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./extensionWorker/services')>()),
   askExtensionAI: async (prompt: string) => `AI:${prompt}`,
 }))
 

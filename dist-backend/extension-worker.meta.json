@@ -17,7 +17,7 @@
       "format": "esm"
     },
     "src/main/extensionWorker/services.ts": {
-      "bytes": 829,
+      "bytes": 827,
       "imports": [
         {
           "path": "src/main/extensionWorker/host.ts",
@@ -273,7 +273,7 @@
       "format": "esm"
     },
     "src/main/extension-registry.ts": {
-      "bytes": 65541,
+      "bytes": 65536,
       "imports": [
         {
           "path": "src/main/extensionWorker/desktop.ts",
@@ -338,7 +338,7 @@
         {
           "path": "src/main/extensionWorker/services.ts",
           "kind": "import-statement",
-          "original": "./search/providers/appsProvider"
+          "original": "./extensionWorker/services"
         },
         {
           "path": "src/main/extension-builder.ts",
@@ -369,7 +369,7 @@
       "format": "esm"
     },
     "src/main/extension-runner.ts": {
-      "bytes": 161086,
+      "bytes": 161033,
       "imports": [
         {
           "path": "src/main/extensionWorker/desktop.ts",
@@ -410,11 +410,6 @@
           "path": "src/main/powershell-script.ts",
           "kind": "import-statement",
           "original": "./powershell-script"
-        },
-        {
-          "path": "src/main/extensionWorker/services.ts",
-          "kind": "import-statement",
-          "original": "./selected-text"
         },
         {
           "path": "node:crypto",
@@ -479,17 +474,12 @@
         {
           "path": "src/main/extensionWorker/services.ts",
           "kind": "import-statement",
-          "original": "./llm/extensionAI"
-        },
-        {
-          "path": "src/main/extensionWorker/services.ts",
-          "kind": "import-statement",
-          "original": "./search/providers/appsProvider"
+          "original": "./extensionWorker/services"
         },
         {
           "path": "src/main/extensionWorker/windowState.ts",
           "kind": "import-statement",
-          "original": "./windowState"
+          "original": "./extensionWorker/windowState"
         },
         {
           "path": "src/main/extension-registry.ts",
@@ -510,7 +500,7 @@
       "format": "esm"
     },
     "src/main/extensions/raycastShim.ts": {
-      "bytes": 15067,
+      "bytes": 15028,
       "imports": [
         {
           "path": "src/main/extensionWorker/desktop.ts",
@@ -545,17 +535,12 @@
         {
           "path": "src/main/extensionWorker/services.ts",
           "kind": "import-statement",
-          "original": "../search/providers/appsProvider"
+          "original": "../extensionWorker/services"
         },
         {
           "path": "src/main/extension-confirm-alert.ts",
           "kind": "import-statement",
           "original": "../extension-confirm-alert"
-        },
-        {
-          "path": "src/main/extensionWorker/services.ts",
-          "kind": "import-statement",
-          "original": "../selected-text"
         },
         {
           "path": "src/main/powershell-script.ts",
@@ -673,7 +658,7 @@
       "imports": [],
       "exports": [],
       "inputs": {},
-      "bytes": 761676
+      "bytes": 761566
     },
     "dist-backend/extension-worker.js": {
       "imports": [
@@ -992,7 +977,7 @@
           "bytesInOutput": 143
         },
         "src/main/extensionWorker/windowState.ts": {
-          "bytesInOutput": 192
+          "bytesInOutput": 210
         },
         "src/main/extension-platform.ts": {
           "bytesInOutput": 1611
@@ -1013,13 +998,13 @@
           "bytesInOutput": 50335
         },
         "src/main/extension-runner.ts": {
-          "bytesInOutput": 136929
+          "bytesInOutput": 136887
         },
         "node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs": {
           "bytesInOutput": 57372
         },
         "src/main/extensions/raycastShim.ts": {
-          "bytesInOutput": 10929
+          "bytesInOutput": 10908
         },
         "src/main/extensions/service.ts": {
           "bytesInOutput": 22558
@@ -1031,7 +1016,7 @@
           "bytesInOutput": 906
         }
       },
-      "bytes": 428005
+      "bytes": 427960
     }
   }
 }

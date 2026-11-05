@@ -33,7 +33,7 @@ import type { ExtensionManifest } from '../shared/extensions';
 import { searchLovedExtensions } from '../shared/lovedExtensions';
 import type { ExtensionRegistryCommand, InstalledRegistryExtension } from '../shared/extensionRuntime';
 import { parseGitHubRepositoryUrl, type GitHubRepositoryReference } from '../shared/extensionRepository';
-import { readAppBundleIdentifier } from './search/providers/appsProvider';
+import { readAppBundleIdentifier } from './extensionWorker/services';
 
 export const extensionRegistryEvents = new EventEmitter();
 

@@ -34,7 +34,10 @@ vi.mock('node:child_process', async (original) => ({
       callback(null, { stdout: '/blocked-selected-file\n', stderr: '' })
   },
 }))
-vi.mock('./llm/extensionAI', () => ({ askExtensionAI: async () => 'fixture' }))
+vi.mock('./extensionWorker/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./extensionWorker/services')>()),
+  askExtensionAI: async () => 'fixture',
+}))
 import {
   clearAllExtensionSessions,
   invokeExtensionAction,

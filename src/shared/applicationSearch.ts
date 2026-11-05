@@ -1,3 +1,11 @@
+/** Application snapshot supplied by the native host to extension workers. */
+export type InstalledApplication = {
+  name: string
+  path: string
+  bundleId?: string
+  windowsAppId?: string
+}
+
 // Shared by indexed search, first-frame filtering, and the Deep Search fallback.
 // These are app names/aliases, not general-purpose translation of user queries.
 const APPLICATION_ALIASES: Readonly<Record<string, readonly string[]>> = {

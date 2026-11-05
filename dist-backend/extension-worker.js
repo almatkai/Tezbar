@@ -460,6 +460,7 @@ function setSuppressBlurHide(value) {
 }
 var init_windowState = __esm({
   "src/main/extensionWorker/windowState.ts"() {
+    "use strict";
     init_host();
   }
 });
@@ -8594,7 +8595,6 @@ var init_extension_runner = __esm({
     init_clipboard();
     init_extension_confirm_alert();
     init_powershell_script();
-    init_services();
     import_node_crypto2 = require("node:crypto");
     import_node_http = require("node:http");
     import_node_os2 = require("node:os");
@@ -8607,7 +8607,6 @@ var init_extension_runner = __esm({
     import_node_zlib = require("node:zlib");
     import_node_vm = __toESM(require("node:vm"));
     init_esbuild_runtime();
-    init_services();
     init_services();
     init_windowState();
     init_extension_registry();
@@ -10933,7 +10932,6 @@ var init_raycastShim = __esm({
     import_node_util3 = require("node:util");
     init_services();
     init_extension_confirm_alert();
-    init_services();
     init_powershell_script();
     init_extension_sql();
     init_clipboard();
