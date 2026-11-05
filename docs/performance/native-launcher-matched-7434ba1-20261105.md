@@ -4,7 +4,7 @@ Artifact source: **`7434ba1701d60395bbae510a50c80c4046ebb205`**, clean when A/B 
 Measurement harness: **`0c00d26ce3ffe6cb7348fad02b20d573f03c2c5c`**. Branch: `feat/native-launcher-prototype`.
 Last native Rust implementation: `8ef180046d751a21a7d7a481036d1300a5fcdaab`.
 
-**The original strict-idle gate FAILED. The separately authorized background-idle matrix completed 20/20 valid runs.** Every additional result explicitly records `protocol:background-idle`, `strict_cpu_gate_passed:false` and the reason for the protocol deviation. This is a completed prototype experiment with a qualified decision, not a completed frontend migration or a strict-idle pass. Parent review, recomputation and presentation remain pending.
+**The original strict-idle gate FAILED. The separately authorized background-idle matrix completed 20/20 valid runs.** Every additional result explicitly records `protocol:background-idle`, `strict_cpu_gate_passed:false` and the reason for the protocol deviation. This is a completed prototype experiment with a qualified decision, not a completed frontend migration or a strict-idle pass. Parent review and independent recomputation are complete; this report retains the production and platform limits below.
 
 ## Decision
 
@@ -386,3 +386,20 @@ For a headless run, use the archived `windows-measure-absolute-7434ba1.py C`, wh
 The standalone chart is [native-launcher-matched-7434ba1-20261105.html](../../prototypes/native-launcher/evidence/native-launcher-matched-7434ba1-20261105.html); HTML preview at width 728 passed with content height 1611 and no console messages. Parent presentation remains pending. [background-independent-validation-7434ba1.json](../../prototypes/native-launcher/evidence/background-independent-validation-7434ba1.json) retains derived per-run/per-role results and warmup-discarded latency rows; [run-details-index-7434ba1.json](../../prototypes/native-launcher/evidence/run-details-index-7434ba1.json) indexes safe fixture/resource manifests and VM logs. First-query warmup observations, startup process maps, all CPU stabilization/diagnostic series and failed attempts remain in raw evidence. No old smoke or empty-profile reference is used as A.
 
 The final documentation commit, clean-branch audit, selected-run hashes, artifact hashes and build/test-log hashes are recorded in [MEASURED_HANDOFF_7434ba1_20261105.json](../../prototypes/native-launcher/evidence/MEASURED_HANDOFF_7434ba1_20261105.json).
+
+## Parent acceptance
+
+The parent independently recalculated all 20 selected macOS runs directly from their
+raw per-process series, including footprint medians, identity-based CPU deltas,
+clock continuity, warmup/sampling coverage, root responsibility, category/resource
+parity and cleanup. All 36 local hashes in the measured handoff passed; copied-origin
+hashes, immutable review copies and the installed binary were also checked. Both
+Windows absolute series were recomputed from their raw 59-sample collectors, including
+PowerShell/conhost; the exported cleanup audit has no survivors or one-off task.
+Post-warmup latency grouping independently reproduced all four 162-observation cells.
+
+Evidence: [parent-final-validation.json](../../prototypes/native-launcher/evidence/parent-final-validation.json),
+[recomputation script](../../prototypes/native-launcher/evidence/parent-final-validation.py),
+and [compact Russian chart](../../prototypes/native-launcher/evidence/parent-native-launcher-summary.html).
+This accepts the qualified prototype experiment. It does not change the failed strict
+CPU gate, prove a renderer-only cause for retained memory, or approve production migration.

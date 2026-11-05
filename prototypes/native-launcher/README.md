@@ -45,14 +45,18 @@ Run from a second terminal, with that exact `prototype_root`:
 /opt/homebrew/bin/python3 prototypes/native-launcher/scripts/control.py "$prototype_root" quit
 ```
 
-To inspect the prebuilt final f387675 app without rebuilding, use its existing isolated
-profile (this is a review profile, not a fresh measurement fixture):
+To try the measured 7434ba1 prototype without rebuilding, create a new disposable
+profile and local-preview bundle from its preserved binary. This opens no control
+listener; quit with Cmd-Q. The installed app is unaffected.
 
 ```sh
-prototype_root="$(cat prototypes/native-launcher/evidence/mac-final-relaunch-root.txt)"
+prototype_binary="$PWD/prototypes/native-launcher/evidence/artifacts-7434ba1/mac/tezbar-launcher-prototype"
+prototype_source="$("$prototype_binary" --version | /opt/homebrew/bin/python3 -c 'import json,sys; print(json.load(sys.stdin)["source"])')"
+prototype_root="$(/opt/homebrew/bin/python3 prototypes/native-launcher/scripts/fixture.py --source "$prototype_source")"
+/opt/homebrew/bin/python3 prototypes/native-launcher/scripts/stage-resources.py "$prototype_root"
+prototypes/native-launcher/scripts/bundle-macos.sh --local-preview "$prototype_root" --binary "$prototype_binary"
 "$prototype_root/Tezbar Launcher Prototype.app/Contents/MacOS/tezbar-launcher-prototype" \
-  --show --theme dark --profile "$prototype_root" --resources "$prototype_root/resources" \
-  --control-token-file "$prototype_root/control-token"
+  --show --theme dark --profile "$prototype_root" --resources "$prototype_root/resources"
 ```
 
 `--theme light|dark|system` is a launch setting. `--headless` takes the same arguments
