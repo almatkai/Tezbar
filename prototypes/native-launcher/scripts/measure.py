@@ -152,7 +152,7 @@ def main():
                 assert after_clicks-before_clicks==1;result['activation_click_records']=after_clicks-before_clicks
             if a.condition=='visible':
                 d.command('show')
-                d.js("const e=document.querySelector('#command-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'doc');e.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);return true");ack=d.command('query',text='doc');settled(d,ack['expected_generation'])
+                ack=d.command('query',text='doc');settled(d,ack['expected_generation'])
             else:d.command('hide')
         elif a.mode=='A':
             if a.condition=='visible':
@@ -160,6 +160,7 @@ def main():
                 d.js("const e=document.querySelector('#command-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'doc');e.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);return true")
             else:d.command('show');d.command('hide')
             if a.condition=='retained':
+                d.command('show')
                 import importlib.util
                 spec=importlib.util.spec_from_file_location('native_responsiveness',REPO/'docs/performance/responsiveness-desktop.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
                 d.js(module.INSTALL);observations=[]
