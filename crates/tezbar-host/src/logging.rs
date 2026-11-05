@@ -2,12 +2,11 @@
 use std::{
     fs::{File, OpenOptions},
     io::Write,
-    path::{Path, PathBuf},
+    path::Path,
     sync::Mutex,
 };
 const LIMIT: u64 = 5_000_000;
 pub struct FileLog {
-    path: PathBuf,
     file: Mutex<File>,
 }
 impl FileLog {
@@ -23,7 +22,6 @@ impl FileLog {
             .open(&path)
             .map_err(|e| e.to_string())?;
         Ok(Self {
-            path,
             file: Mutex::new(file),
         })
     }
@@ -31,16 +29,9 @@ impl FileLog {
         let mut file = self.file.lock().map_err(|e| e.to_string())?;
         if file.metadata().map_err(|e| e.to_string())?.len() + line.len() as u64 > LIMIT {
             file.flush().map_err(|e| e.to_string())?;
-            let backup = self.path.with_extension("log.1");
-            if backup.exists() {
-                std::fs::remove_file(&backup).map_err(|e| e.to_string())?;
-            }
-            std::fs::rename(&self.path, &backup).map_err(|e| e.to_string())?;
-            *file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&self.path)
-                .map_err(|e| e.to_string())?;
+            // The locked legacy logger defaults to KeepOne: retain only the
+            // active 5 MB file, rather than introducing a second log history.
+            file.set_len(0).map_err(|e| e.to_string())?;
         }
         file.write_all(&line[..line.len().min(LIMIT as usize)])
             .map_err(|e| e.to_string())
@@ -71,12 +62,7 @@ mod tests {
         let l = FileLog::open(d.path(), "tezbar").unwrap();
         l.write(&vec![b'a'; LIMIT as usize]).unwrap();
         l.write(b"second").unwrap();
-        assert_eq!(
-            std::fs::metadata(d.path().join("tezbar.log.1"))
-                .unwrap()
-                .len(),
-            LIMIT
-        );
+        assert!(!d.path().join("tezbar.log.1").exists());
         assert_eq!(
             std::fs::read(d.path().join("tezbar.log")).unwrap(),
             b"second"

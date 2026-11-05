@@ -91,6 +91,9 @@ fn checks_again_once_the_interval_has_elapsed() {
 #[test]
 fn round_trips_the_timestamp() {
     assert_eq!(read_last(Some(&record(42.0))), Some(42.0));
+    for raw in ["0x2a", "0b101010", "0o52", " 42 "] {
+        assert_eq!(read_last(Some(raw)), Some(42.0));
+    }
 }
 // src/shared/updater.test.ts: returns null when unset or corrupt
 #[test]

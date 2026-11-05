@@ -11,8 +11,24 @@ pub fn read_last(raw: Option<&str>) -> Option<f64> {
     let s = raw.filter(|s| !s.is_empty())?.trim();
     let n = if s.is_empty() {
         0.0
-    } else if let Some(s) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        u64::from_str_radix(s, 16).ok()? as f64
+    } else if let Some((radix, digits)) = [
+        ("0x", 16),
+        ("0X", 16),
+        ("0b", 2),
+        ("0B", 2),
+        ("0o", 8),
+        ("0O", 8),
+    ]
+    .into_iter()
+    .find_map(|(prefix, radix)| s.strip_prefix(prefix).map(|digits| (radix, digits)))
+    {
+        if digits.is_empty() {
+            return None;
+        }
+        digits.chars().try_fold(0.0, |n, c| {
+            c.to_digit(radix)
+                .map(|digit| n * radix as f64 + digit as f64)
+        })?
     } else {
         s.parse().ok()?
     };
