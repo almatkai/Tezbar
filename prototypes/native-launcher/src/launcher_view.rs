@@ -153,9 +153,12 @@ impl LauncherView {
         if self.pump.is_some() {
             return;
         }
+        let Some(delay) = self.session.request_delay_ms(self.now()) else {
+            return;
+        };
         self.pump = Some(cx.spawn_in(w, async move |this, cx| {
             cx.background_executor()
-                .timer(Duration::from_millis(8))
+                .timer(Duration::from_millis(delay))
                 .await;
             let _ = this.update_in(cx, |this, w, cx| {
                 this.pump = None;

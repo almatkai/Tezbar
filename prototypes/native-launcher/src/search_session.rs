@@ -41,6 +41,12 @@ impl<R> SearchSession<R> {
         }
         self.enter = None;
     }
+    pub fn request_delay_ms(&self, now: u64) -> Option<u64> {
+        if self.flight.is_some() || self.pending.is_none() {
+            return None;
+        }
+        Some(self.deadline?.saturating_sub(now))
+    }
     pub fn take_request(&mut self, now: u64) -> Option<(u64, String)> {
         if self.flight.is_some() || now < self.deadline? {
             return None;
@@ -141,12 +147,15 @@ mod tests {
         let mut s = SearchSession::default();
         s.commit("a".into(), 0);
         s.commit("аб".into(), 7);
+        assert_eq!(s.request_delay_ms(7), Some(1));
         assert!(s.take_request(7).is_none());
         assert_eq!(s.take_request(8), Some((2, "аб".into())));
         s.commit("c".into(), 9);
         s.commit("d".into(), 10);
         assert!(s.take_request(90).is_none());
+        assert_eq!(s.request_delay_ms(90), None);
         assert!(!s.complete(2, vec!["old"], 90));
+        assert_eq!(s.request_delay_ms(90), Some(0));
         assert!(s.rows.is_empty());
         assert_eq!(s.take_request(90), Some((4, "d".into())));
         assert!(s.complete(4, vec!["current"], 91));
