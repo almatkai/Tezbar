@@ -19,6 +19,14 @@ caller were found by exact word search across `src/renderer` (excluding tests an
 
 ---
 
+## Implementation checkpoints
+
+M0–M1 implementation: `48fa44e`. See [verification](NATIVE_GPUI_VERIFICATION.md),
+[test retention](native-m01/test-retention.json), and [lock report](native-m01/lock-drift.json).
+Mac release and Windows debug compile gates passed. The core/Host extraction, legacy
+adapter and prototype compatibility are validated; native window/surface parity is
+still pending. Existing W/S/L/etc. rows remain `todo`: a Host seam is not a native UI.
+
 ## §W Windows, processes and OS integration
 
 | ID | Behaviour | Current owner | New module | Acceptance | Status |

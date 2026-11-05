@@ -33,4 +33,3 @@ pub fn locate_bun(app_local_data: &std::path::Path) -> Result<PathBuf, String> {
     }
     Err("Bun runtime is not installed on this system. Tezbar core features and Native V2 extensions run natively in Rust without Bun.".to_string())
 }
-
