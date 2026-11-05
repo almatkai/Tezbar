@@ -24,6 +24,34 @@ use std::sync::{
     Arc, Mutex,
 };
 
+/// Optional background startup is explicit so an isolated native preview can
+/// become searchable without scanning Knowledge, restoring extension processes
+/// or registering the production shortcut. Explicit service requests remain lazy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StartupOptions {
+    pub initialize_shortcuts: bool,
+    pub restore_background_extensions: bool,
+    pub background_knowledge: bool,
+}
+impl StartupOptions {
+    /// Combine with a Host whose desktop_services() is false. That also keeps
+    /// real clipboard observation, app discovery and filesystem watchers off.
+    pub const ISOLATED_PREVIEW: Self = Self {
+        initialize_shortcuts: false,
+        restore_background_extensions: false,
+        background_knowledge: false,
+    };
+}
+impl Default for StartupOptions {
+    fn default() -> Self {
+        Self {
+            initialize_shortcuts: true,
+            restore_background_extensions: true,
+            background_knowledge: true,
+        }
+    }
+}
+
 /// Application services live in Rust. Only explicit extension operations can
 /// reach the compatibility process; there is no general sidecar fallback.
 pub struct NativeCore {
@@ -73,21 +101,32 @@ impl NativeCore {
     }
 
     pub async fn start(&self) -> Result<(), String> {
+        self.start_with_options(StartupOptions::default()).await
+    }
+
+    pub async fn start_with_options(&self, options: StartupOptions) -> Result<(), String> {
         let _lifecycle = self.lifecycle.lock().await;
         if self.closing.load(Ordering::Acquire) {
             return Err("Native core has shut down".into());
         }
-        let shortcuts = self.platform.initialize_shortcuts();
+        let shortcuts = if options.initialize_shortcuts {
+            self.platform.initialize_shortcuts()
+        } else {
+            Ok(())
+        };
         let (launcher, ()) = tokio::join!(self.launcher.start(), self.ai.start());
-        self.extensions.start()?;
+        if options.restore_background_extensions {
+            self.extensions.start()?;
+        }
         // A legacy Knowledge database may need a large one-time FTS migration.
         // Resume it in the background without holding basic launcher IPC hostage.
         // Explicit Knowledge requests still await the service's serialized start.
         let mut pending = self.knowledge_start.lock().map_err(|e| e.to_string())?;
-        if pending
-            .as_ref()
-            .map(|task| task.is_finished())
-            .unwrap_or(true)
+        if options.background_knowledge
+            && pending
+                .as_ref()
+                .map(|task| task.is_finished())
+                .unwrap_or(true)
         {
             let knowledge = self.knowledge.clone();
             let ctx = self.ctx.clone();
