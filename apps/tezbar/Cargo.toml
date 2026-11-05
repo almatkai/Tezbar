@@ -22,6 +22,7 @@ tezbar-update = { path = "../../crates/tezbar-update" }
 tezbar-ui-model = { path = "../../crates/tezbar-ui-model", features = ["launcher-models", "agent-models"] }
 tezbar-ui = { path = "../../crates/tezbar-ui" }
 anyhow = "1"
+log = { version = "0.4", features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
