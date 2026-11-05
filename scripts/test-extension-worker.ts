@@ -18,10 +18,10 @@ async function main(): Promise<void> {
       name: 'protocol-fixture',
       title: 'Protocol Fixture',
       platforms: ['macOS', 'Windows', 'Linux'],
-      commands: ['run', 'paste', 'image', 'html', 'failure', 'paste-action', 'host-services'].map((name) => ({
+      commands: ['run', 'paste', 'image', 'html', 'failure', 'paste-action', 'host-services', 'effect-wave'].map((name) => ({
         name,
         title: name,
-        mode: name === 'paste-action' ? 'view' : 'no-view',
+        mode: ['paste-action', 'effect-wave'].includes(name) ? 'view' : 'no-view',
       })),
     })
   )
@@ -87,6 +87,16 @@ async function main(): Promise<void> {
       }));
   `
   )
+  await writeFile(join(extension, '.sc-build', 'effect-wave.js'), `
+    const React = require('react');
+    const { Detail, ActionPanel, Action, Clipboard, showHUD } = require('@raycast/api');
+    exports.default = () => React.createElement(Detail, { markdown: 'Effects', actions:
+      React.createElement(ActionPanel, null, React.createElement(Action, { title: 'Copy', onAction: async () => {
+        await Clipboard.copy('long copy:' + 'x'.repeat(10000));
+        await Clipboard.copy({ file: ${JSON.stringify(pngPath)} });
+        await showHUD('identical notice');
+      }})) });
+  `)
   const child = spawn(
     process.env.TEZBAR_TEST_BUN || 'bun',
     [resolve('dist-backend/extension-worker.js')],
@@ -286,6 +296,26 @@ async function main(): Promise<void> {
     assert.equal(action.ok, true, action.message)
     assert.deepEqual(requests, ['clipboard:write', 'core:platform:paste'])
     await invoke('extension:dispose-session', { sessionId: view.sessionId })
+    const wave = await invoke('extension:run-command', { extensionId: 'raycast.protocol-fixture', commandName: 'effect-wave' })
+    assert.equal(wave.mode, 'view')
+    assert.equal(wave.effectSequence, 0)
+    for (let i = 1; i <= 60; i++) {
+      requests.length = 0
+      const reply = await invoke('extension:invoke-action', { sessionId: wave.sessionId, actionId: wave.actions[0].id })
+      assert.equal(reply.effectSequence, i * 3)
+      assert.equal(reply.effects.length, Math.min(50, i * 3))
+      assert.equal(reply.effects.at(-1).message, 'identical notice')
+      assert.equal(clipboard.length, 10010) // Host receives complete text, record is truncated.
+      assert.deepEqual(requests, ['clipboard:write', 'core:platform:clipboard-write'])
+      requests.length = 0
+      for (let poll = 0; poll < 2; poll++) {
+        const refreshed = await invoke('extension:refresh-session', { sessionId: wave.sessionId })
+        assert.equal(refreshed.mode, 'unchanged')
+        assert.equal(refreshed.effects, undefined)
+      }
+      assert.deepEqual(requests, [])
+    }
+    await invoke('extension:dispose-session', { sessionId: wave.sessionId })
     const failure = await invoke('extension:run-command', {
       extensionId: 'raycast.protocol-fixture',
       commandName: 'failure',

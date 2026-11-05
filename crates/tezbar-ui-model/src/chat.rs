@@ -17,6 +17,7 @@ pub enum ApprovalMode {
 pub struct Selection {
     pub provider: Option<String>,
     pub model: Option<String>,
+    pub provider_title: Option<String>,
     pub cwd: Option<String>,
     pub profile: Option<String>,
     pub approval_mode: Option<ApprovalMode>,
@@ -70,6 +71,7 @@ pub enum TimelineItem {
     Text { start: usize, end: usize },
     Stage(u64),
 }
+/// Internal presentation type. Use from_core_wire/to_core_wire at the durable chat seam.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Turn {
@@ -77,9 +79,115 @@ pub struct Turn {
     pub role: Role,
     pub text: String,
     pub error: Option<String>,
+    #[serde(default)]
+    pub response_meta: Option<ResponseMeta>,
     pub references: Vec<Reference>,
     pub stages: Vec<Stage>,
     pub created_at: u64,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResponseMeta {
+    pub provider: String,
+    pub provider_title: String,
+    pub model: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "usage_count"
+    )]
+    pub token_count: Option<u64>,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TurnIdentity {
+    pub id: String,
+    pub role: Role,
+    pub has_error: bool,
+    pub has_images: bool,
+}
+impl From<&Turn> for TurnIdentity {
+    fn from(t: &Turn) -> Self {
+        Self {
+            id: t.id.clone(),
+            role: t.role.clone(),
+            has_error: t.error.is_some(),
+            has_images: t
+                .references
+                .iter()
+                .any(|r| matches!(r, Reference::Image { .. })),
+        }
+    }
+}
+impl Turn {
+    pub fn to_core_wire(&self) -> serde_json::Value {
+        use serde_json::json;
+        let attachments: Vec<_> = self.references.iter().filter_map(|r| match r {
+            Reference::Image { name, mime_type, width, height, .. } => Some(json!({"kind":"image","name":name,"mimeType":mime_type,"width":width,"height":height})),
+            _ => None,
+        }).collect();
+        let mut wire =
+            json!({"id":self.id,"role":self.role,"text":self.text,"createdAt":self.created_at});
+        if let Some(e) = &self.error {
+            wire["error"] = json!(e);
+        }
+        if let Some(meta) = &self.response_meta {
+            wire["responseMeta"] = json!(meta);
+        }
+        if !attachments.is_empty() {
+            wire["attachments"] = json!(attachments);
+        }
+        if !self.stages.is_empty() {
+            wire["stages"] = json!(self.stages);
+        }
+        wire
+    }
+    /// Core chat attachments are descriptors. Canonical image blobs and signed/tool history
+    /// remain in the runtime store, resolved by session/turn identity by the adapter.
+    pub fn from_core_wire(wire: serde_json::Value) -> Result<Self, serde_json::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Stored {
+            id: String,
+            role: Role,
+            text: String,
+            created_at: u64,
+            error: Option<String>,
+            response_meta: Option<ResponseMeta>,
+            #[serde(default)]
+            stages: Vec<Stage>,
+            #[serde(default)]
+            attachments: Vec<Image>,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Image {
+            name: String,
+            mime_type: String,
+            width: Option<u32>,
+            height: Option<u32>,
+        }
+        let t: Stored = serde_json::from_value(wire)?;
+        Ok(Self {
+            id: t.id,
+            role: t.role,
+            text: t.text,
+            created_at: t.created_at,
+            error: t.error,
+            response_meta: t.response_meta,
+            stages: t.stages,
+            references: t
+                .attachments
+                .into_iter()
+                .map(|i| Reference::Image {
+                    blob_id: String::new(),
+                    name: i.name,
+                    mime_type: i.mime_type,
+                    width: i.width,
+                    height: i.height,
+                })
+                .collect(),
+        })
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -203,6 +311,8 @@ pub struct RunRequest {
     pub assistant_turn_id: String,
     pub task: Arc<str>,
     pub prior_turn_ids: Vec<String>,
+    /// Only unsaved prior turns, shared with the bounded dirty queue; no stage/payload clone.
+    pub prior_turns: Vec<Arc<Turn>>,
     pub references: Vec<Reference>,
     pub selection: Selection,
     pub retry: bool,
@@ -255,7 +365,9 @@ pub enum Effect {
         decision: Decision,
     },
     SaveSelection(Selection),
-    FocusApproval,
+    FocusApproval {
+        session_id: String,
+    },
     ResolvePrompt {
         token: u64,
         id: String,
@@ -275,6 +387,7 @@ pub struct Conversation {
     pub id: String,
     pub title: String,
     pub turns: VecDeque<Arc<Turn>>,
+    pub context: VecDeque<TurnIdentity>,
     pub selection: Selection,
     pub phase: RunPhase,
     pub approval: Option<Approval>,
@@ -296,6 +409,7 @@ impl Conversation {
             id,
             title: "New chat".into(),
             turns: VecDeque::new(),
+            context: VecDeque::new(),
             selection: Selection::default(),
             phase: RunPhase::Settled,
             approval: None,
@@ -429,6 +543,9 @@ impl ChatController {
         self.load = None;
         self.prompt = None;
         self.visible = true;
+        for c in self.owners.values_mut() {
+            c.focus = ApprovalFocus::Composer;
+        }
         let mut effects = vec![];
         match boot {
             Boot::Panel => {
@@ -467,6 +584,17 @@ impl ChatController {
             } => {
                 self.fresh(session_id.clone(), cwd)?;
                 self.edit_draft(&session_id, prompt);
+            }
+        }
+        if let Some(id) = &self.active {
+            if self
+                .owners
+                .get(id)
+                .is_some_and(|c| c.approval.is_some() && c.deleted.is_none())
+            {
+                effects.push(Effect::FocusApproval {
+                    session_id: id.clone(),
+                });
             }
         }
         Ok(effects)
@@ -515,6 +643,13 @@ impl ChatController {
         if c.busy() || c.unsaved() || c.deleted.is_some() || c.draft_revision != draft_revision {
             return;
         }
+        c.context = turns
+            .iter()
+            .rev()
+            .take(self.max_turns)
+            .map(|t| TurnIdentity::from(t.as_ref()))
+            .collect();
+        c.context.make_contiguous().reverse();
         c.turns = turns
             .into_iter()
             .rev()
@@ -526,6 +661,9 @@ impl ChatController {
     }
     pub fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
+        for c in self.owners.values_mut() {
+            c.focus = ApprovalFocus::Composer;
+        }
         if !visible {
             self.capture = None;
             self.boot_generation += 1;
@@ -609,6 +747,7 @@ impl ChatController {
             role: Role::User,
             text: std::mem::take(&mut c.draft),
             error: None,
+            response_meta: None,
             references: std::mem::take(&mut c.attachments),
             stages: vec![],
             created_at: now,
@@ -655,6 +794,9 @@ impl ChatController {
             .iter()
             .position(|t| t.id == assistant_id && t.role == Role::Assistant && t.error.is_some())
             .ok_or("No failed response")?;
+        if c.context.back().is_none_or(|t| t.id != assistant_id) {
+            return Err("Only the latest failed response can be retried");
+        }
         let user = c
             .turns
             .iter()
@@ -709,10 +851,15 @@ impl ChatController {
                 return vec![];
             }
         };
-        let prior_turn_ids = c
-            .turns
+        let boundary = c
+            .context
             .iter()
-            .filter(|t| t.id != p.assistant_id && t.id != user.id)
+            .position(|t| t.id == user.id)
+            .unwrap_or(c.context.len());
+        let prior_turn_ids: Vec<String> = c
+            .context
+            .range(..boundary)
+            .filter(|t| t.id != p.assistant_id)
             .rev()
             .take(16)
             .map(|t| t.id.clone())
@@ -720,11 +867,16 @@ impl ChatController {
             .into_iter()
             .rev()
             .collect();
-        let history_has_images = c.turns.iter().any(|t| {
-            t.references
-                .iter()
-                .any(|r| matches!(r, Reference::Image { .. }))
-        });
+        let history_has_images = c
+            .context
+            .iter()
+            .filter(|t| prior_turn_ids.contains(&t.id))
+            .any(|t| t.has_images);
+        let prior_turns = prior_turn_ids
+            .iter()
+            .filter_map(|id| c.dirty.get(id).map(|(_, t)| t.clone()))
+            .collect();
+        remember(&mut c.context, &user, self.max_turns);
         if !c.turns.iter().any(|t| t.id == user.id) {
             c.turns.push_back(user.clone());
         }
@@ -736,6 +888,17 @@ impl ChatController {
             role: Role::Assistant,
             text: String::new(),
             error: None,
+            response_meta: Some(ResponseMeta {
+                provider: p.selection.provider.clone().unwrap_or_default(),
+                provider_title: p
+                    .selection
+                    .provider_title
+                    .clone()
+                    .or_else(|| p.selection.provider.clone())
+                    .unwrap_or_default(),
+                model: p.selection.model.clone().unwrap_or_default(),
+                token_count: None,
+            }),
             references: vec![],
             stages: vec![],
             created_at: now,
@@ -755,6 +918,7 @@ impl ChatController {
             assistant_turn_id: p.assistant_id,
             task: Arc::from(user.text.as_str()),
             prior_turn_ids,
+            prior_turns,
             references: user.references.clone(),
             selection: p.selection,
             retry: p.retry,
@@ -843,8 +1007,13 @@ impl ChatController {
             }
             Event::Approval { approval, .. } => {
                 c.approval = Some(approval);
-                c.focus = ApprovalFocus::AllowOnce;
-                return vec![Effect::FocusApproval];
+                c.focus = ApprovalFocus::Composer;
+                return if self.visible && self.active.as_deref() == Some(&id) && c.deleted.is_none()
+                {
+                    vec![Effect::FocusApproval { session_id: id }]
+                } else {
+                    vec![]
+                };
             }
             Event::ApprovalExpired { approval_id, .. } => {
                 if c.approval
@@ -900,6 +1069,7 @@ impl ChatController {
             }
         }
         let turn = Arc::new(a);
+        remember(&mut c.context, &turn, self.max_turns);
         if let Some(old) = c.turns.iter_mut().find(|t| t.id == turn.id) {
             *old = turn.clone();
         } else {
@@ -1001,13 +1171,13 @@ impl ChatController {
         });
         effects
     }
-    pub fn delete_result(&mut self, id: &str, token: u64, ok: bool) {
+    pub fn delete_result(&mut self, id: &str, token: u64, ok: bool) -> Vec<Effect> {
         if !self
             .owners
             .get(id)
             .is_some_and(|c| c.deleted == Some(token))
         {
-            return;
+            return vec![];
         }
         if ok {
             self.owners.remove(id);
@@ -1029,10 +1199,13 @@ impl ChatController {
                 c.phase = RunPhase::Settled;
             }
         }
+        self.retry_persistence(id)
     }
     pub fn focus(&mut self, id: &str, focus: ApprovalFocus) {
-        if let Some(c) = self.owners.get_mut(id) {
-            c.focus = focus;
+        if self.visible && self.active.as_deref() == Some(id) {
+            if let Some(c) = self.owners.get_mut(id) {
+                c.focus = focus;
+            }
         }
     }
     pub fn decide(&mut self, id: &str, decision: Decision) -> Option<Effect> {
@@ -1056,6 +1229,9 @@ impl ChatController {
         Some(effect)
     }
     pub fn enter(&mut self, id: &str) -> Option<Effect> {
+        if !self.visible || self.active.as_deref() != Some(id) {
+            return None;
+        }
         let focus = self.owners.get(id)?.focus;
         match focus {
             ApprovalFocus::AllowOnce => self.decide(id, Decision::Once),
@@ -1164,7 +1340,19 @@ pub fn format_error(raw: &str, provider: &str) -> String {
         .and_then(|i| serde_json::from_str::<serde_json::Value>(&trimmed[i..]).ok())
         .and_then(|v| v["error"]["message"].as_str().map(|s| s.trim().to_owned()));
     let message = detail.as_deref().unwrap_or(trimmed);
-    let re = |s: &str| regex::Regex::new(s).expect("static pattern");
+    static PATTERNS: std::sync::OnceLock<Vec<regex::Regex>> = std::sync::OnceLock::new();
+    let patterns = PATTERNS.get_or_init(|| [
+        "(?i)failed to write to backend runner|backend runner (?:is still recovering|stopped|restarting)",
+        r"(?i)supported API model names are (.+?), but you passed (.+?)(?:\.$|$)",
+        r#"(?i)Model\s+["']([^"']+)["']\s+not found"#,
+        r"(?i)\berror\s+(\d{3})\b",
+    ].into_iter().map(|p| regex::Regex::new(p).expect("static pattern")).collect());
+    let re = |s: &str| {
+        patterns
+            .iter()
+            .find(|p| p.as_str() == s)
+            .expect("known pattern")
+    };
     if re("(?i)failed to write to backend runner|backend runner (?:is still recovering|stopped|restarting)").is_match(message){return "The background service disconnected. Tezbar is reconnecting. Wait a moment, then try again. Your message has been kept.".into();}
     if let Some(c) = re(r"(?i)supported API model names are (.+?), but you passed (.+?)(?:\.$|$)")
         .captures(message)
@@ -1198,7 +1386,7 @@ fn trim_history(turns: &mut VecDeque<Arc<Turn>>, max_turns: usize, max_bytes: us
                     .sum::<usize>()
         })
         .sum();
-    while turns.len() > 1 && (turns.len() > max_turns || bytes > max_bytes) {
+    while turns.len() > 2 && (turns.len() > max_turns || bytes > max_bytes) {
         let t = turns.pop_front().unwrap();
         bytes = bytes.saturating_sub(
             t.text.len()
@@ -1251,6 +1439,7 @@ impl ChatController {
         if success {
             if let Some(c) = self.owners.get_mut(&session) {
                 c.turns.retain(|t| t.id != turn);
+                c.context.retain(|t| t.id != turn);
                 c.dirty.remove(&turn);
             }
         }
@@ -1302,5 +1491,80 @@ impl ChatController {
         self.owners.retain(|id, c| {
             Some(id.as_str()) == active || c.busy() || c.unsaved() || c.deleted.is_some()
         });
+    }
+}
+
+fn remember(context: &mut VecDeque<TurnIdentity>, turn: &Turn, max: usize) {
+    let identity = TurnIdentity::from(turn);
+    if let Some(old) = context.iter_mut().find(|t| t.id == turn.id) {
+        *old = identity;
+    } else {
+        context.push_back(identity);
+    }
+    while context.len() > max {
+        context.pop_front();
+    }
+}
+impl RunRequest {
+    pub fn core_prior_turns(&self) -> serde_json::Value {
+        serde_json::Value::Array(self.prior_turns.iter().map(|t| serde_json::json!({"id":t.id,"role":t.role,"text":t.text,"error":t.error,"hasImages":t.references.iter().any(|r| matches!(r, Reference::Image { .. }))})).collect())
+    }
+}
+impl ChatController {
+    /// Optional usage supplied by the run transport, never by the current picker selection.
+    pub fn token_count(&mut self, run: &str, count: u64) {
+        for c in self.owners.values_mut() {
+            if matches!(&c.phase, RunPhase::Running {run_id,..} if run_id == run) {
+                if let Some(meta) = c.assistant.as_mut().and_then(|t| t.response_meta.as_mut()) {
+                    meta.token_count = Some(count);
+                }
+            }
+        }
+    }
+}
+
+// Core normalizes usage through as_f64/round, so persisted JSON can contain 42.0.
+fn usage_count<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<u64>, D::Error> {
+    let value = Option::<f64>::deserialize(deserializer)?;
+    value
+        .map(|n| {
+            if n.is_finite() && n >= 0.0 && n < u64::MAX as f64 {
+                Ok(n.round() as u64)
+            } else {
+                Err(serde::de::Error::custom("Invalid token count"))
+            }
+        })
+        .transpose()
+}
+
+impl ChatController {
+    /// Preparation adapters resolve default provider/model/title from durable config
+    /// before Start. The resolved snapshot belongs to this preparation token, never
+    /// to a later picker edit. It also becomes the exact RunRequest selection.
+    pub fn prepared_with_selection(
+        &mut self,
+        id: &str,
+        token: u64,
+        canonical_user: Result<Arc<Turn>, String>,
+        resolved_selection: Selection,
+        now: u64,
+    ) -> Vec<Effect> {
+        if resolved_selection
+            .provider
+            .as_deref()
+            .is_none_or(str::is_empty)
+            || resolved_selection
+                .model
+                .as_deref()
+                .is_none_or(str::is_empty)
+        {
+            return self.prepared(id, token, Err("Unresolved run selection".into()), now);
+        }
+        if let Some(p) = self.owners.get_mut(id).and_then(|c| c.preparation.as_mut()) {
+            if p.token == token {
+                p.selection = resolved_selection;
+            }
+        }
+        self.prepared(id, token, canonical_user, now)
     }
 }

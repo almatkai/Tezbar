@@ -173,6 +173,9 @@ fn approval_resume_focus_enter_deny_and_mode_independence() {
     let mut c = controller();
     start(&mut c, "a", "r");
     approval(&mut c, Some(true));
+    assert_eq!(c.owners["a"].focus, ApprovalFocus::Composer);
+    assert!(c.enter("a").is_none());
+    c.focus("a", ApprovalFocus::AllowOnce);
     assert_eq!(c.owners["a"].focus, ApprovalFocus::AllowOnce);
     c.set_mode("a", ApprovalMode::Auto);
     assert!(c.owners["a"].approval.is_some());
@@ -724,4 +727,417 @@ fn one_hundred_settled_surface_cycles_release_background_owners() {
         c.trim_idle();
         assert!(c.owners.is_empty());
     }
+}
+
+#[test]
+fn large_stage_payload_retains_canonical_context_ids() {
+    let mut c = controller();
+    for i in 0..4 {
+        let run = format!("r{i}");
+        start(&mut c, "a", &run);
+        for index in 0..70 {
+            c.event(Event::Stage {
+                run_id: run.clone(),
+                stage: Stage {
+                    index,
+                    label: "tool".into(),
+                    status: StageStatus::Done,
+                    detail: None,
+                    output: Some("x".repeat(32768)),
+                    tool_name: Some("fixture".into()),
+                    duration_ms: None,
+                    output_truncated: false,
+                },
+            });
+        }
+        c.event(Event::Answer {
+            run_id: run.clone(),
+            text: "answer".into(),
+        });
+        let effects = c.event(Event::Done { run_id: run });
+        if let Effect::PersistTurn { token, .. } = effects[0] {
+            c.persisted("a", token, true);
+        }
+    }
+    assert_eq!(
+        c.conversation("a")
+            .unwrap()
+            .turns
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["u-r3", "s-r3"]
+    );
+    c.edit_draft("a", "follow up".into());
+    let Effect::AppendUser { token, turn, .. } = c
+        .send("a", "next".into(), "next-u".into(), "next-a".into(), 10)
+        .unwrap()
+    else {
+        panic!()
+    };
+    let effects = c.prepared("a", token, Ok(turn), 11);
+    let Effect::Start(request) = &effects[0] else {
+        panic!()
+    };
+    assert_eq!(
+        request.prior_turn_ids,
+        (0..4)
+            .flat_map(|i| [format!("u-r{i}"), format!("s-r{i}")])
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn failed_delete_returns_every_dirty_persistence_intent_and_fences_tokens() {
+    let mut c = controller();
+    start(&mut c, "a", "one");
+    c.event(Event::Error {
+        run_id: "one".into(),
+        message: "first".into(),
+    });
+    start(&mut c, "a", "two");
+    let effects = c.delete("a");
+    let token = effects
+        .iter()
+        .find_map(|e| {
+            if let Effect::DeleteConversation { token, .. } = e {
+                Some(*token)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    c.event(Event::Message {
+        run_id: "two".into(),
+        delta: "partial private text".into(),
+    });
+    assert!(c
+        .event(Event::Done {
+            run_id: "two".into()
+        })
+        .is_empty());
+    assert!(c.delete_result("a", token + 1, false).is_empty());
+    let effects = c.delete_result("a", token, false);
+    assert_eq!(effects.len(), 2);
+    let mut ids = vec![];
+    for e in effects {
+        let Effect::PersistTurn {
+            session_id,
+            token,
+            turn,
+        } = e
+        else {
+            panic!()
+        };
+        assert_eq!(session_id, "a");
+        ids.push(turn.id.clone());
+        if turn.id == "s-two" {
+            assert_eq!(turn.text, "partial private text");
+        }
+        c.persisted("a", token + 100, true);
+        assert!(c.conversation("a").unwrap().unsaved());
+        c.persisted("a", token, false);
+        c.persisted("a", token, true);
+    }
+    assert_eq!(ids, vec!["s-one", "s-two"]);
+    assert!(!c.conversation("a").unwrap().unsaved());
+    assert!(c.delete_result("a", token, false).is_empty());
+}
+
+#[test]
+fn response_meta_is_frozen_and_core_wire_roundtrips_optional_fields() {
+    let mut c = controller();
+    c.select(
+        "a",
+        Selection {
+            provider: Some("fixture".into()),
+            provider_title: Some("Fixture provider".into()),
+            model: Some("model-1".into()),
+            ..Selection::default()
+        },
+    );
+    start(&mut c, "a", "r");
+    c.select(
+        "a",
+        Selection {
+            provider: Some("other".into()),
+            model: Some("model-2".into()),
+            ..Selection::default()
+        },
+    );
+    c.token_count("wrong", 99);
+    c.token_count("r", 123);
+    let effects = c.event(Event::Answer {
+        run_id: "r".into(),
+        text: "answer".into(),
+    });
+    assert!(effects.is_empty());
+    let effects = c.event(Event::Done { run_id: "r".into() });
+    let Effect::PersistTurn { turn, .. } = &effects[0] else {
+        panic!()
+    };
+    let wire = turn.to_core_wire();
+    assert_eq!(
+        wire["responseMeta"],
+        serde_json::json!({"provider":"fixture","providerTitle":"Fixture provider","model":"model-1","tokenCount":123})
+    );
+    assert!(wire.get("references").is_none());
+    assert!(wire.get("stages").is_none());
+    let restored = Turn::from_core_wire(wire).unwrap();
+    assert_eq!(restored.response_meta, turn.response_meta);
+    let user = Turn::from_core_wire(serde_json::json!({"id":"image","role":"user","text":"look","createdAt":1,"attachments":[{"kind":"image","name":"shot","mimeType":"image/png","width":640}]})).unwrap();
+    assert!(matches!(
+        &user.references[0],
+        Reference::Image {
+            width: Some(640),
+            ..
+        }
+    ));
+    assert_eq!(
+        user.to_core_wire()["attachments"][0]["mimeType"],
+        "image/png"
+    );
+}
+
+#[test]
+fn reopened_large_history_keeps_last16_context_and_image_flags() {
+    let mut c = ChatController::default();
+    let effects = c
+        .boot(
+            Boot::Resume {
+                session_id: "a".into(),
+            },
+            None,
+        )
+        .unwrap();
+    let Effect::LoadConversation { token, .. } = effects[0] else {
+        panic!()
+    };
+    let mut turns = vec![];
+    for i in 0..300 {
+        let mut t = Turn::from_core_wire(serde_json::json!({"id":format!("t{i}"),"role":if i%2==0 {"user"} else {"assistant"},"text":"fixture","createdAt":i})).unwrap();
+        if i == 290 {
+            t.references.push(Reference::Image {
+                blob_id: "opaque".into(),
+                name: "image".into(),
+                mime_type: "image/png".into(),
+                width: None,
+                height: None,
+            });
+        }
+        if i == 299 {
+            t.stages = (0..70)
+                .map(|index| Stage {
+                    index,
+                    label: "tool".into(),
+                    status: StageStatus::Done,
+                    detail: None,
+                    output: Some("x".repeat(32768)),
+                    tool_name: None,
+                    duration_ms: None,
+                    output_truncated: false,
+                })
+                .collect();
+        }
+        turns.push(Arc::new(t));
+    }
+    c.history_result_conversation(token, turns, Selection::default());
+    assert_eq!(c.conversation("a").unwrap().context.len(), 256);
+    c.edit_draft("a", "follow up".into());
+    let Effect::AppendUser { token, turn, .. } = c
+        .send("a", "r".into(), "u".into(), "s".into(), 300)
+        .unwrap()
+    else {
+        panic!()
+    };
+    let effects = c.prepared("a", token, Ok(turn), 301);
+    let Effect::Start(r) = &effects[0] else {
+        panic!()
+    };
+    assert_eq!(
+        r.prior_turn_ids,
+        (284..300).map(|i| format!("t{i}")).collect::<Vec<_>>()
+    );
+    assert!(r.history_has_images);
+    assert!(r.prior_turns.is_empty());
+}
+
+#[test]
+fn unsaved_fallback_is_typed_and_older_retry_rejects_later_context() {
+    let mut c = controller();
+    start(&mut c, "a", "one");
+    c.event(Event::Error {
+        run_id: "one".into(),
+        message: "error".into(),
+    });
+    assert!(
+        c.conversation("a")
+            .unwrap()
+            .context
+            .iter()
+            .find(|t| t.id == "s-one")
+            .unwrap()
+            .has_error
+    );
+    c.edit_draft("a", "later".into());
+    let Effect::AppendUser { token, turn, .. } = c
+        .send("a", "two".into(), "u2".into(), "a2".into(), 2)
+        .unwrap()
+    else {
+        panic!()
+    };
+    let effects = c.prepared("a", token, Ok(turn), 3);
+    let Effect::Start(r) = &effects[0] else {
+        panic!()
+    };
+    assert_eq!(r.prior_turn_ids, vec!["u-one", "s-one"]);
+    assert_eq!(r.core_prior_turns()[0]["id"], "s-one");
+    assert_eq!(r.core_prior_turns()[0]["error"], "error");
+    assert!(r.core_prior_turns()[0].get("stages").is_none());
+    c.event(Event::Error {
+        run_id: "two".into(),
+        message: "later error".into(),
+    });
+    assert!(c.retry("a", "s-one", "retry".into()).is_err());
+    assert!(c.retry("a", "a2", "retry".into()).is_ok());
+}
+
+#[test]
+fn background_approval_never_focuses_and_resume_requires_real_ack() {
+    let mut c = controller();
+    start(&mut c, "a", "r");
+    c.boot(
+        Boot::NewChat {
+            session_id: "b".into(),
+            cwd: None,
+        },
+        None,
+    )
+    .unwrap();
+    let effects = c.event(Event::Approval {
+        run_id: "r".into(),
+        approval: Approval {
+            approval_id: "p".into(),
+            title: "Allow".into(),
+            command: "{}".into(),
+            can_remember: Some(true),
+            remember_kind: None,
+        },
+    });
+    assert!(effects.is_empty());
+    assert_eq!(c.owners["a"].focus, ApprovalFocus::Composer);
+    c.focus("a", ApprovalFocus::AllowOnce);
+    assert!(c.enter("a").is_none());
+    let effects = c
+        .boot(
+            Boot::Resume {
+                session_id: "a".into(),
+            },
+            None,
+        )
+        .unwrap();
+    assert!(matches!(&effects[0],Effect::FocusApproval {session_id} if session_id=="a"));
+    assert!(c.enter("a").is_none());
+    c.focus("a", ApprovalFocus::AllowOnce);
+    assert!(matches!(
+        c.enter("a"),
+        Some(Effect::Approve {
+            decision: Decision::Once,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn late_history_list_does_not_change_owner_or_followup_context() {
+    let mut c = ChatController::default();
+    let effects = c.boot(Boot::Panel, None).unwrap();
+    let Effect::LoadHistory { token: history } = effects[0] else {
+        panic!()
+    };
+    c.boot(
+        Boot::NewChat {
+            session_id: "a".into(),
+            cwd: None,
+        },
+        None,
+    )
+    .unwrap();
+    start(&mut c, "a", "r");
+    // Initial list request completes after composer submission, while the run owns A.
+    c.history_result(history, vec![]);
+    assert_eq!(c.active.as_deref(), Some("a"));
+    assert!(c.conversation("a").unwrap().busy());
+    assert_eq!(
+        c.conversation("a").unwrap().turns.front().unwrap().text,
+        "Canonical question"
+    );
+    c.event(Event::Answer {
+        run_id: "r".into(),
+        text: "Still here".into(),
+    });
+    c.event(Event::Done { run_id: "r".into() });
+    c.edit_draft("a", "Continue it".into());
+    let Effect::AppendUser { token, turn, .. } = c
+        .send("a", "next".into(), "u2".into(), "a2".into(), 3)
+        .unwrap()
+    else {
+        panic!()
+    };
+    let effects = c.prepared("a", token, Ok(turn), 4);
+    let Effect::Start(r) = &effects[0] else {
+        panic!()
+    };
+    assert_eq!(r.prior_turn_ids, vec!["u-r", "s-r"]);
+    assert_eq!(r.core_prior_turns()[0]["text"], "Still here");
+}
+
+#[test]
+fn core_normalized_floating_usage_is_accepted() {
+    let t=Turn::from_core_wire(serde_json::json!({"id":"a","role":"assistant","text":"answer","createdAt":1,"responseMeta":{"provider":"fixture","providerTitle":"Fixture","model":"model","tokenCount":42.0}})).unwrap();
+    assert_eq!(t.response_meta.unwrap().token_count, Some(42));
+}
+
+#[test]
+fn resolved_default_selection_belongs_to_preparation_not_later_picker() {
+    let mut c = controller();
+    c.edit_draft("a", "question".into());
+    let Effect::AppendUser { token, turn, .. } =
+        c.send("a", "r".into(), "u".into(), "s".into(), 1).unwrap()
+    else {
+        panic!()
+    };
+    c.select(
+        "a",
+        Selection {
+            provider: Some("later".into()),
+            model: Some("later-model".into()),
+            ..Selection::default()
+        },
+    );
+    let resolved = Selection {
+        provider: Some("resolved".into()),
+        provider_title: Some("Resolved title".into()),
+        model: Some("resolved-model".into()),
+        ..Selection::default()
+    };
+    let effects = c.prepared_with_selection("a", token, Ok(turn), resolved.clone(), 2);
+    let Effect::Start(r) = &effects[0] else {
+        panic!()
+    };
+    assert_eq!(r.selection, resolved);
+    let meta = c
+        .conversation("a")
+        .unwrap()
+        .response()
+        .unwrap()
+        .response_meta
+        .as_ref()
+        .unwrap();
+    assert_eq!(meta.provider, "resolved");
+    assert_eq!(meta.provider_title, "Resolved title");
+    assert_eq!(
+        c.conversation("a").unwrap().selection.provider.as_deref(),
+        Some("later")
+    );
 }

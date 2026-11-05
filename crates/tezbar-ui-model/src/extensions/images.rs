@@ -22,6 +22,7 @@ impl Variant {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Source {
     Builtin(String),
+    AppPath { extension_id: String, path: PathBuf },
     File(PathBuf),
     Remote(String),
     Data(String),
@@ -29,6 +30,12 @@ pub enum Source {
     Glyph(String),
 }
 pub enum Effect {
+    ResolveAppPath {
+        token: u64,
+        extension_id: String,
+        path: PathBuf,
+        max_width: u32,
+    },
     Fetch {
         token: u64,
         url: String,
@@ -64,6 +71,18 @@ pub fn resolve(
             return Err("Image exceeds limit");
         }
         return Ok(Source::Data(raw.into()));
+    }
+    // Host-independent Windows syntax check must precede URL parsing (C: is a URL scheme).
+    if windows_absolute(raw) {
+        if raw.split(['\\', '/']).any(|part| part == "..") {
+            return Err("Image path escapes extension");
+        }
+        let path = PathBuf::from(raw);
+        return if allowed_legacy.contains(&path) {
+            Ok(Source::File(path))
+        } else {
+            Err("Local image is outside extension")
+        };
     }
     if let Ok(u) = url::Url::parse(raw) {
         match u.scheme() {
@@ -113,6 +132,7 @@ struct Entry {
     handle: Option<String>,
     bytes: usize,
     touched: u64,
+    failed: bool,
 }
 #[derive(Default)]
 pub struct ImageCache {
@@ -130,35 +150,27 @@ impl ImageCache {
         self.next += 1;
         let lease = Lease(self.next);
         let key = (source.clone(), variant);
+        if self.leases.len() >= 1024 {
+            return Err("Too many image leases");
+        }
         if let Some(e) = self.entries.get_mut(&key) {
             e.users.insert(lease);
             e.touched = self.next;
+            let effect = if e.failed {
+                e.failed = false;
+                e.token = self.next;
+                request(&source, variant, self.next)
+            } else {
+                None
+            };
             self.leases.insert(lease, key);
-            return Ok((lease, None));
+            return Ok((lease, effect));
         }
         if self.entries.len() >= 128 {
             return Err("Image cache is full");
         }
         let token = self.next;
-        let effect = match source {
-            Source::Remote(url) => Some(Effect::Fetch {
-                token,
-                url,
-                max_bytes: 2 * 1024 * 1024,
-                max_width: variant.width(),
-            }),
-            Source::File(path) => Some(Effect::ReadFile {
-                token,
-                path,
-                max_bytes: 2 * 1024 * 1024,
-            }),
-            Source::Data(data) => Some(Effect::DecodeData {
-                token,
-                data,
-                max_bytes: 2 * 1024 * 1024,
-            }),
-            _ => None,
-        };
+        let effect = request(&source, variant, token);
         self.entries.insert(
             key.clone(),
             Entry {
@@ -167,6 +179,7 @@ impl ImageCache {
                 handle: None,
                 bytes: 0,
                 touched: self.next,
+                failed: false,
             },
         );
         self.leases.insert(lease, key);
@@ -186,11 +199,14 @@ impl ImageCache {
         let Some(key) = key else {
             return vec![Effect::Release(handle)];
         };
-        if bytes > 2 * 1024 * 1024 || self.bytes + bytes > 16 * 1024 * 1024 {
+        if bytes > 2 * 1024 * 1024
+            || self.bytes.saturating_sub(self.entries[&key].bytes) + bytes > 16 * 1024 * 1024
+        {
+            self.failed(token);
             return vec![Effect::Release(handle)];
         }
         let e = self.entries.get_mut(&key).unwrap();
-        if e.users.is_empty() {
+        if e.failed || e.users.is_empty() {
             self.entries.remove(&key);
             return vec![Effect::Release(handle)];
         }
@@ -202,6 +218,17 @@ impl ImageCache {
         e.bytes = bytes;
         self.bytes += bytes;
         effects
+    }
+    /// A fetch/decode/lookup error leaves a placeholder. Next acquire retries with a
+    /// fresh token; stale success/failure cannot mutate that retry.
+    pub fn failed(&mut self, token: u64) {
+        if let Some(e) = self
+            .entries
+            .values_mut()
+            .find(|e| e.token == token && e.handle.is_none())
+        {
+            e.failed = true;
+        }
     }
     pub fn release(&mut self, lease: Lease) -> Vec<Effect> {
         let Some(key) = self.leases.remove(&lease) else {
@@ -226,3 +253,78 @@ impl ImageCache {
 }
 #[cfg(test)]
 mod tests;
+
+fn windows_absolute(raw: &str) -> bool {
+    let b = raw.as_bytes();
+    (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/'))
+        || raw.starts_with("\\\\")
+        || raw.starts_with("//")
+}
+fn request(source: &Source, variant: Variant, token: u64) -> Option<Effect> {
+    Some(match source {
+        Source::Remote(url) => Effect::Fetch {
+            token,
+            url: url.clone(),
+            max_bytes: 2 * 1024 * 1024,
+            max_width: variant.width(),
+        },
+        Source::File(path) => Effect::ReadFile {
+            token,
+            path: path.clone(),
+            max_bytes: 2 * 1024 * 1024,
+        },
+        Source::Data(data) => Effect::DecodeData {
+            token,
+            data: data.clone(),
+            max_bytes: 2 * 1024 * 1024,
+        },
+        Source::AppPath { extension_id, path } => Effect::ResolveAppPath {
+            token,
+            extension_id: extension_id.clone(),
+            path: path.clone(),
+            max_width: variant.width(),
+        },
+        _ => return None,
+    })
+}
+/// A selected catalog icon owns one lease and its current catalog fallback. Changing
+/// selection clears the old lease synchronously, before an adapter dispatches effects.
+#[derive(Default)]
+pub struct CatalogIcon {
+    lease: Option<Lease>,
+    pub fallback: Option<Source>,
+}
+impl CatalogIcon {
+    pub fn select(
+        &mut self,
+        cache: &mut ImageCache,
+        extension_id: &str,
+        app_path: Option<PathBuf>,
+        fallback: Option<Source>,
+    ) -> Result<Vec<Effect>, &'static str> {
+        let mut effects = self.clear(cache);
+        self.fallback = fallback;
+        if let Some(path) = app_path {
+            let (lease, effect) = cache.acquire(
+                Source::AppPath {
+                    extension_id: extension_id.into(),
+                    path,
+                },
+                Variant::Icon,
+            )?;
+            self.lease = Some(lease);
+            effects.extend(effect);
+        }
+        Ok(effects)
+    }
+    pub fn handle<'a>(&self, cache: &'a ImageCache) -> Option<&'a str> {
+        cache.peek(self.lease?)
+    }
+    pub fn clear(&mut self, cache: &mut ImageCache) -> Vec<Effect> {
+        self.fallback = None;
+        self.lease
+            .take()
+            .map(|l| cache.release(l))
+            .unwrap_or_default()
+    }
+}

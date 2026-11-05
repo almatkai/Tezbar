@@ -31,6 +31,16 @@ several additional controller issues. That slice is not accepted; its
 repaired its own failed-provider-creation regression with failing-before tests;
 the integrated suite passes 308 cases while the remaining repairs are pending.
 
+The M3B repair wave now implements F1–F12 and the related create/update and regex
+fixes; see [repair evidence](native-m03/agent-settings-m03b-evidence.md). The parent
+verified all 28 delivered source/document hashes, all 354 mapping rows and 31
+unchanged original TS test-source hashes, the passing mapped filters, and both
+337-pass Rust 1.98.1/1.85 logs. Typecheck, 745 TS cases (7 existing skips), actual
+Bun simulated-host effects and core storage-wire probes passed. The worker's
+effectSequence field is additive and generated backend files were restored.
+Fresh Opus confirmation is still required; native focus, paint and decoding remain
+view acceptance work. The M4 owner has been notified that model compilation is ready.
+
 ## M0–M1 evidence
 
 Raw logs and archive: `/tmp/tezbar-native-m01-evidence/` on the build Mac.

@@ -263,8 +263,6 @@ pub enum Effect {
     Dispose(SessionKey),
     Leave,
     Open(String),
-    Clipboard(String),
-    ShowInFinder(String),
     Toast {
         title: String,
         message: String,
@@ -293,6 +291,7 @@ pub struct TreeReply {
     pub actions: Vec<Action>,
     pub refresh: PollPolicy,
     pub effects: Vec<WireEffect>,
+    pub effect_sequence: Option<u64>,
 }
 impl TreeReply {
     pub fn from_wire(value: Value) -> Result<Self, &'static str> {
@@ -323,6 +322,7 @@ impl TreeReply {
                 session_id: string("sessionId")?,
             },
             generation: value["generation"].as_str().map(str::to_owned),
+            effect_sequence: value["effectSequence"].as_u64(),
             root,
             actions,
             refresh,
@@ -374,15 +374,11 @@ pub struct RuntimeSession {
     page_pending: bool,
     effects: VecDeque<Effect>,
     pending_submit: Option<u64>,
+    records: WorkerRecords,
 }
 impl RuntimeSession {
     pub fn new(reply: TreeReply, now: u64) -> Result<Self, &'static str> {
         reply.root.validate()?;
-        let effects = reply
-            .effects
-            .into_iter()
-            .filter_map(WireEffect::into_effect)
-            .collect();
         let mut s = Self {
             key: reply.key,
             generation: reply.generation,
@@ -407,9 +403,11 @@ impl RuntimeSession {
             dirty: false,
             poll_at: None,
             page_pending: false,
-            effects,
+            effects: VecDeque::new(),
             pending_submit: None,
+            records: WorkerRecords::default(),
         };
+        s.records(reply.effects, reply.effect_sequence);
         s.rebuild();
         s.schedule(now);
         Ok(s)
@@ -559,13 +557,14 @@ impl RuntimeSession {
             }
             return Ok(None);
         }
+        self.notice = None;
+        self.notice_message = None;
         if let Some(r) = reply {
             if r.key != self.key || r.generation != self.generation {
                 return Err("Reply belongs to another session");
             }
             r.root.validate()?;
-            self.effects
-                .extend(r.effects.into_iter().filter_map(WireEffect::into_effect));
+            self.records(r.effects, r.effect_sequence);
             self.root = Arc::new(r.root);
             self.actions = r.actions;
             self.policy = r.refresh;
@@ -574,8 +573,6 @@ impl RuntimeSession {
         self.refreshing = false;
         self.refresh_sequence = None;
         self.page_pending = false;
-        self.notice = None;
-        self.notice_message = None;
         if self.dirty && self.visible {
             Ok(self.refresh())
         } else {
@@ -769,6 +766,7 @@ impl RuntimeSession {
         token: &RequestToken,
         message: String,
         effects: Vec<WireEffect>,
+        effect_sequence: Option<u64>,
         now: u64,
     ) {
         if self.pending_submit == Some(token.sequence)
@@ -783,23 +781,12 @@ impl RuntimeSession {
         self.refreshing = false;
         self.refresh_sequence = None;
         self.page_pending = false;
-        let mut notice = (!message.is_empty()).then_some(message);
-        for effect in effects {
-            if let WireEffect::Toast {
-                title: Some(title), ..
-            }
-            | WireEffect::Hud {
-                title: Some(title), ..
-            } = &effect
-            {
-                notice = Some(title.clone());
-            }
-            if let Some(effect) = effect.into_effect() {
-                self.effects.push_back(effect);
-            }
-        }
-        self.notice = notice.as_ref().map(|_| Notice::Success);
-        self.notice_message = notice;
+        let has_record_notice = effects
+            .iter()
+            .any(|e| matches!(e, WireEffect::Toast { .. } | WireEffect::Hud { .. }));
+        self.notice_message = (!has_record_notice && !message.is_empty()).then_some(message);
+        self.notice = self.notice_message.as_ref().map(|_| Notice::Success);
+        self.records(effects, effect_sequence);
         self.schedule(now);
     }
     pub fn action_filter(&self, query: &str) -> Vec<&Action> {
@@ -880,19 +867,60 @@ pub enum WireEffect {
         value: Option<String>,
     },
 }
-impl WireEffect {
-    fn into_effect(self) -> Option<Effect> {
-        Some(match self {
-            Self::Clipboard { value } => Effect::Clipboard(value),
-            Self::Open { value } => Effect::Open(value),
-            Self::ShowInFinder { value } => Effect::ShowInFinder(value),
-            Self::Toast { title, message, .. } => Effect::Toast {
-                title: title.unwrap_or_default(),
-                message: message.unwrap_or_default(),
-            },
-            Self::Hud { title, message } => Effect::Hud(message.or(title).unwrap_or_default()),
-            Self::AppleScript { .. } | Self::PowershellScript { .. } => return None,
-        })
+/// A bounded cursor per worker session/generation, also usable for initial no-view
+/// replies that have no RuntimeSession. Values never authorize desktop operations.
+#[derive(Default)]
+pub struct WorkerRecords {
+    sequence: u64,
+    legacy_records: Vec<u64>,
+}
+impl WorkerRecords {
+    /// Returns only the newest fresh toast/HUD notice. Legacy replies lack record
+    /// identities: repeated identical notices are conservatively suppressed.
+    pub fn notice(&mut self, effects: &[WireEffect], sequence: Option<u64>) -> Option<String> {
+        use std::hash::{Hash, Hasher};
+        let fingerprints: Vec<_> = effects
+            .iter()
+            .map(|e| {
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                serde_json::to_string(e).unwrap_or_default().hash(&mut h);
+                h.finish()
+            })
+            .collect();
+        let base = sequence.unwrap_or(0).saturating_sub(effects.len() as u64);
+        let mut notice = None;
+        for (index, effect) in effects.iter().enumerate() {
+            let fresh = match sequence {
+                Some(end) => end > self.sequence && base + index as u64 + 1 > self.sequence,
+                None => !self.legacy_records.contains(&fingerprints[index]),
+            };
+            if fresh {
+                match effect {
+                    WireEffect::Toast { title, message, .. }
+                    | WireEffect::Hud { title, message } => {
+                        notice = message
+                            .as_ref()
+                            .filter(|s| !s.is_empty())
+                            .or(title.as_ref())
+                            .cloned();
+                    }
+                    _ => {} // Copies, open/reveal and scripts already ran in worker.
+                }
+            }
+        }
+        if let Some(end) = sequence {
+            self.sequence = self.sequence.max(end);
+        }
+        self.legacy_records = fingerprints.into_iter().rev().take(50).collect();
+        notice
+    }
+}
+impl RuntimeSession {
+    fn records(&mut self, effects: Vec<WireEffect>, sequence: Option<u64>) {
+        if let Some(message) = self.records.notice(&effects, sequence) {
+            self.notice_message = Some(message);
+            self.notice = Some(Notice::Success);
+        }
     }
 }
 /// Adaptive grid colors use the same dark-first preference as the current renderer.

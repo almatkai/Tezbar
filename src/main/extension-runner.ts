@@ -141,6 +141,7 @@ type RuntimeSession = {
   actionHandlers: Map<string, RuntimeActionHandler>
   currentActions: ExtensionRuntimeAction[]
   feedback: RuntimeFeedback[]
+  effectSequence: number
   effects: ExtensionRuntimeEffect[]
   effectMode: 'system' | 'record'
   stack: unknown[]
@@ -1307,6 +1308,7 @@ function pushFeedback(session: RuntimeSession, feedback: RuntimeFeedback): void 
 }
 
 function pushEffect(session: RuntimeSession, effect: ExtensionRuntimeEffect): void {
+  session.effectSequence += 1
   session.effects.push(effect)
   if (session.effects.length > 50) {
     session.effects.splice(0, session.effects.length - 50)
@@ -3626,6 +3628,7 @@ function renderCurrentView(
     root,
     actions: [...session.currentActions],
     effects: [...session.effects],
+    effectSequence: session.effectSequence,
   }
 }
 
@@ -4403,6 +4406,7 @@ async function runCommandFromPackagePath(
     actionHandlers: new Map(),
     currentActions: [],
     feedback: [],
+    effectSequence: 0,
     effects: [],
     effectMode: options?.effectMode ?? 'system',
     stack: [],
@@ -4513,6 +4517,7 @@ async function runCommandFromPackagePath(
       mode: 'no-view',
       message,
       effects: [...session.effects],
+      effectSequence: session.effectSequence,
     }
   }
 
@@ -4635,6 +4640,7 @@ export async function invokeExtensionAction(
       mode: 'no-view',
       message: formatFeedback(session.feedback.at(-1)) || '',
       effects: [...session.effects],
+      effectSequence: session.effectSequence,
     }
   } catch (error) {
     return {

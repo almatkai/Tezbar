@@ -5,24 +5,21 @@ use std::collections::BTreeSet;
 pub fn infer_capabilities(id: &str) -> Vec<&'static str> {
     let id = id.to_lowercase();
     let mut caps = vec![];
-    for (pattern, cap) in [
-        (
+    static PATTERNS: std::sync::OnceLock<[regex::Regex; 3]> = std::sync::OnceLock::new();
+    let patterns = PATTERNS.get_or_init(|| {
+        [
             "vision|vl|llava|gpt-4o|gpt-[56]|gemini|claude|fable|opus|sonnet|haiku",
-            "vision",
-        ),
-        (
             r"reason|think|r1|o\d|gpt-[56]|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek",
-            "thinking",
-        ),
-    ] {
-        if regex::Regex::new(pattern).unwrap().is_match(&id) {
+            "embed|embedding|whisper|tts|audio|speech",
+        ]
+        .map(|p| regex::Regex::new(p).expect("static pattern"))
+    });
+    for (i, cap) in ["vision", "thinking"].into_iter().enumerate() {
+        if patterns[i].is_match(&id) {
             caps.push(cap);
         }
     }
-    if !regex::Regex::new("embed|embedding|whisper|tts|audio|speech")
-        .unwrap()
-        .is_match(&id)
-    {
+    if !patterns[2].is_match(&id) {
         caps.push("tools");
     }
     caps

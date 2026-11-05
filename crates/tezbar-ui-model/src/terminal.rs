@@ -24,7 +24,9 @@ pub enum KeepAliveFor {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Defaults {
+    #[serde(default = "default_save_for")]
     pub save_for: SaveFor,
+    #[serde(default = "default_keep_alive_for")]
     pub keep_alive_for: KeepAliveFor,
 }
 impl Default for Defaults {
@@ -48,12 +50,17 @@ impl Defaults {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub session_id: String,
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub cwd: String,
+    #[serde(default)]
     pub shell: String,
     pub initial_command: Option<String>,
     pub last_command: Option<String>,
+    #[serde(default = "default_save_for")]
     pub save_for: SaveFor,
+    #[serde(default = "default_keep_alive_for")]
     pub keep_alive_for: KeepAliveFor,
     #[serde(
         rename = "status",
@@ -422,5 +429,29 @@ mod wire_tests {
         assert_eq!(sessions.selected, None);
         sessions.down();
         assert_eq!(sessions.selected, Some(0));
+    }
+}
+
+fn default_save_for() -> SaveFor {
+    SaveFor::Week
+}
+fn default_keep_alive_for() -> KeepAliveFor {
+    KeepAliveFor::ThreeHours
+}
+
+#[cfg(test)]
+mod legacy_repair_tests {
+    use super::*;
+    #[test]
+    fn legacy_rows_default_optional_fields_without_losing_unknown_metadata() {
+        let rows:Vec<Session>=serde_json::from_value(serde_json::json!([{"sessionId":"old","name":"old","cwd":"/fixture","status":"exited","createdAt":7,"future":{"x":1}},{"sessionId":"minimal","status":"running"}])).unwrap();
+        assert_eq!(rows[0].save_for, SaveFor::Week);
+        assert_eq!(rows[0].keep_alive_for, KeepAliveFor::ThreeHours);
+        assert_eq!(rows[0].shell, "");
+        assert_eq!(rows[1].name, "");
+        assert_eq!(rows[1].cwd, "");
+        let wire = serde_json::to_value(&rows).unwrap();
+        assert_eq!(wire[0]["future"], serde_json::json!({"x":1}));
+        assert_eq!(wire[0]["createdAt"], 7);
     }
 }

@@ -264,10 +264,7 @@ impl KnowledgeSettings {
             self.next += 1;
             self.read = None;
             self.loading = false;
-            self.phase = Phase::Idle;
-            self.barrier = None;
-            self.lock_trigger = None;
-            self.local_error = None;
+            // Mutation/reconciliation ownership survives tab deactivation.
             vec![]
         }
     }
@@ -316,7 +313,7 @@ impl KnowledgeSettings {
             Err(e) => {
                 self.failed = true;
                 self.error = Some(e);
-                if self.barrier.is_some() {
+                if self.barrier.is_some() && !matches!(self.phase, Phase::Pending { .. }) {
                     self.phase = Phase::Unconfirmed;
                 }
             }
@@ -368,7 +365,7 @@ impl KnowledgeSettings {
         result: Result<Snapshot, String>,
         now: u64,
     ) -> Vec<Effect> {
-        if !self.active || !matches!(self.phase,Phase::Pending{token:t,..}if t==token) {
+        if !matches!(self.phase,Phase::Pending{token:t,..}if t==token) {
             return vec![];
         }
         let operation = match &self.phase {
@@ -413,7 +410,7 @@ impl KnowledgeSettings {
             self.failed = true;
             self.error =
                 Some("Loading Knowledge settings timed out. Try Refresh status or Retry.".into());
-            if self.barrier.is_some() {
+            if self.barrier.is_some() && !matches!(self.phase, Phase::Pending { .. }) {
                 self.phase = Phase::Unconfirmed;
             }
         }
@@ -544,6 +541,8 @@ impl KnowledgeSettings {
                         },
                         id.name()
                     )
+                } else if kind == "cancel" {
+                    format!("Cancel {} download", id.name())
                 } else {
                     format!("{label} {}", id.name())
                 };

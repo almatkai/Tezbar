@@ -1,37 +1,27 @@
-# M3B Opus findings and repair status
+# M3B Opus findings and repair ledger
 
-The controller foundation is **not accepted**. Original review, unchanged:
-[GPUI_M3B_OPUS_a52240a.md](../reviews/GPUI_M3B_OPUS_a52240a.md).
-The report covers controller correctness rather than GPUI view acceptance.
+**Implemented, awaiting independent fresh Opus review.** The original review is
+unchanged: [GPUI_M3B_OPUS_a52240a.md](../reviews/GPUI_M3B_OPUS_a52240a.md).
+This is controller repair evidence, not native UI or full migration acceptance.
 
-| ID | Finding | Current status |
+| ID | Repair | Controller/worker evidence |
 | --- | --- | --- |
-| F1 | Cumulative worker effect records would re-execute clipboard/open/reveal effects and repeat notices. | Repair required; no extension adapter may execute these records. |
-| F2 | Display trimming removes identities required for AI context and image history. | Repair required; canonical context identities must survive display-payload trimming. |
-| F3 | Parent removal fence silently drops fields after a failed provider creation; retries use key order rather than intent order. | Parent repaired with two failing-before regressions; fresh Opus confirmation pending. |
-| F4 | Response settling during failed deletion is not persisted afterwards. | Repair required. |
-| F5 | Assistant persistence cannot retain response provider/model/token metadata. | Repair required. |
-| F6 | Connection edits can replace secret references with display placeholders. | Repair required. |
-| F7 | Model discovery emits an outdated full model list. | Repair required. |
-| F8 | Approval focus is not scoped to a visible conversation owner. | Repair required. |
-| F9 | Retrying an older response can use later turns as prior context. | Repair required. |
-| F10 | Image failures cannot recover; app-path resolution and Windows paths are incomplete; mappings overclaim. | Repair and honest mappings required. |
-| F11 | Legacy terminal metadata fails strict deserialization. | Repair required. |
-| F12 | Knowledge Cancel label and tab-switch mutation ownership diverge. | Repair required. |
+| F1 high | Worker effects remain cumulative execution records, never executable host commands. Additive per-session effectSequence distinguishes new notices across the 50-record sliding window; legacy suppression is explicit. Standalone WorkerRecords also handles initial no-view replies. | `cumulative_records_never_execute_host_actions` failed before; `sliding_50_records_and_identical_new_notices_are_sequence_owned`, `no_view_and_legacy_records_never_replay_long_clipboard_file_open_or_scripts`; real Bun 60-action long-text/file fixture; simulated system clipboard/open/reveal worker test. |
+| F2 high | Separate bounded canonical turn identities/roles/error/image flags from byte-trimmed payloads. Chronological last16 context, newest pair and selected-context image history survive large outputs/reopen. Dirty fallback shares Arcs, no stage payload copy. | `large_stage_payload_retains_canonical_context_ids` failed before (only s-r3); `reopened_large_history_keeps_last16_context_and_image_flags`, `unsaved_fallback_is_typed_and_older_retry_rejects_later_context`. |
+| F3 medium | Retained parent's successful-removal-only field fences and revision-ordered retries. Explicit CreateProvider vs update-only Definition prevents stale definition recreation. | Parent red/green `/tmp/tezbar-native-m03-parent-f3-{before,after}.log`; retained `failed_creation_preserves_a_later_api_key_edit`, `failed_definition_retries_before_its_dependent_field_write`, removal/activation/recreation regressions; `stale_definition_update_cannot_recreate_but_explicit_create_can`. |
+| F4 medium | delete_result returns all deferred dirty PersistTurn effects after failed deletion, with per-turn tokens/errors retained. | `failed_delete_returns_every_dirty_persistence_intent_and_fences_tokens`; targeted actual core chat append/get probe verifies partial response durability and tombstone rejection. Source-map ownership:563 corrected. |
+| F5 medium | Freeze responseMeta provider/providerTitle/model at preparation; attach usage by live run identity. Explicit internal Turn ↔ durable core wire mapping handles attachments and optional stages. | `response_meta_is_frozen_and_core_wire_roundtrips_optional_fields`, `resolved_default_selection_belongs_to_preparation_not_later_picker`; actual core probe exposed floating 42.0 usage, repaired with `core_normalized_floating_usage_is_accepted`. |
+| F6 medium | Rehydrate placeholders only by unique stable row ID and unchanged field; retain omitted hidden credentials and untouched manifest data. Offer safe URL/command field editing for legacy rows. Reject ambiguous/tampered placeholders and view-supplied raw refs. | `edits_and_reorders_rehydrate_opaque_refs_by_stable_identity`, `ambiguous_or_tampered_secret_placeholders_are_rejected` cover env/header/provider refs, reorder, URL/command edits and untouched data. |
+| F7 medium | Discovery is an IDs/metadata merge intent evaluated on fresh durable config. Baseline IDs identify concurrent removals; peer additions/selections/metadata remain; shared normalization/capability inference and first-model selection run during merge. | `discovery_merges_fresh_models_peer_removals_metadata_and_selection`, existing provider isolation/discovery tests. |
+| F8 | Owner-scoped focus request only for active visible chat. Resume requests actual focus but leaves Composer state until acknowledgement. | `background_approval_never_focuses_and_resume_requires_real_ack`, strengthened `approval_resume_focus_enter_deny_and_mode_independence`. Native focus/Enter routing acceptance remains open. |
+| F9 | Only latest failed assistant response can retry, preserving old SDK truncation semantics. | `unsaved_fallback_is_typed_and_older_retry_rejects_later_context` rejects older retry after later response. |
+| F10 | Failed/oversize resources become placeholders and retry with fresh tokens. Bounded pending entries/leases; app-path resolution intents and selected-icon scope; drive/UNC authorization before URL parse. All ExtensionsView case mappings corrected. | Nine specific image ownership/recovery/portability tests replace the one-filter mapping; geometry/decode/paint rows remain explicitly partial. |
+| F11 | Legacy terminal shell/cwd/name defaults and week/3h policies; unknown metadata retained. | `legacy_rows_default_optional_fields_without_losing_unknown_metadata`. |
+| F12 | Exact Cancel accessible name; tab switches retain mutation/reconciliation owner and completion/errors. Read failure cannot replace pending cancellation owner. | `cancel_accessible_name_includes_download`, `mutation_ownership_survives_tab_switches_and_stale_results`, `failed_tab_read_cannot_replace_cancel_mutation_owner`; updated old late-mutation expectation. |
+| Low regex | Compile infer_capabilities / format_error patterns once with OnceLock. | Existing capability/error source cases remain passing on both Rust toolchains. |
+| Map honesty | Correct ownership:398 initial history-list completion after submission + follow-up context and :563 failed-delete persistence. Every image case has a corresponding controller filter; native assertions explicitly partial. | Source hashes and original tests unchanged; mapping audit and full passing suite in separate evidence. |
 
-The parent's F3 fix now distinguishes a known successful removal from simple
-absence after a failed creation. Later fields can save while the definition remains
-a recoverable failed intent. Retried intents run in original revision order.
-Tests reproduce both lost fields and a definition-dependent writer rejecting the
-wrong order before the fix. The earlier deleted-provider activation/recreation
-regressions remain passing.
-
-The full combined model suite passes **308/308** on Rust 1.98.1 after this repair.
-Logs: `/tmp/tezbar-native-m03-parent-f3-before.log` and
-`/tmp/tezbar-native-m03-parent-f3-after.log`. Rust 1.85, worker wire verification,
-all remaining findings and fresh Opus closure remain for the repair wave.
-
-The same Opus review accepted the parent M0–M2 repairs from source/tests/logs.
-Windows installer execution and the intentionally stricter F7 update-feed
-behavior remain explicit M11 rehearsal gates. No old review report was edited,
-and no native UI parity row is closed here.
+See [interfaces](agent-settings.md#repaired-interfaces-for-m7m10-adapters) and
+[evidence](agent-settings-m03b-evidence.md) for validation, hashes, limits and exact
+extra files. Parent owns primary parity ledger/common verification updates, final
+integration and fresh Opus review. Full migration remains active through M4–M11.

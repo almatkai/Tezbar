@@ -261,7 +261,7 @@ fn late_mutation_after_unmount_is_consumed() {
     ));
     k.activate(false, 1);
     k.mutation_result(t, Err("late".into()), 2);
-    assert!(k.local_error.is_none());
+    assert!(k.local_error.as_ref().unwrap().contains("late"));
 }
 #[test]
 fn legacy_verification_is_not_download_or_cancel() {
@@ -640,4 +640,60 @@ fn legacy_variant_argument_contract() {
             );
         }
     }
+}
+
+#[test]
+fn mutation_ownership_survives_tab_switches_and_stale_results() {
+    for hidden_completion in [false, true] {
+        let mut k = ready();
+        let token = mutation_token(&k.begin(Operation::AddMajor, "major".into(), 0));
+        k.activate(false, 1);
+        if hidden_completion {
+            k.mutation_result(token, Err("disk failure".into()), 2);
+        }
+        k.activate(true, 3);
+        if hidden_completion {
+            assert!(k.local_error.as_ref().unwrap().contains("disk failure"));
+        } else {
+            assert!(k.begin(Operation::AddMajor, "other".into(), 4).is_empty());
+            k.mutation_result(token + 100, Err("stale".into()), 5);
+            assert!(matches!(k.phase, Phase::Pending { .. }));
+            k.mutation_result(token, Err("disk failure".into()), 6);
+            assert!(k.local_error.as_ref().unwrap().contains("disk failure"));
+        }
+        assert_eq!(k.phase, Phase::Idle);
+    }
+}
+#[test]
+fn cancel_accessible_name_includes_download() {
+    let mut k = ready();
+    let mut s = snapshot();
+    s.semantic_search.model_state = FileState::Downloading;
+    k.snapshot = Some(s);
+    let cancel = k
+        .buttons(Variant::Standard)
+        .into_iter()
+        .find(|b| b.label == "Cancel")
+        .unwrap();
+    assert_eq!(cancel.accessible_name, "Cancel Standard (Q8_0) download");
+}
+
+#[test]
+fn failed_tab_read_cannot_replace_cancel_mutation_owner() {
+    let mut k = ready();
+    k.begin(
+        Operation::Switch(Some(Variant::Compact)),
+        "switch".into(),
+        0,
+    );
+    let cancel = mutation_token(&k.begin(Operation::Cancel(Variant::Compact), "cancel".into(), 1));
+    k.activate(false, 2);
+    let read = read_token(&k.activate(true, 3));
+    k.read_result(read, Err("read failed".into()), 4);
+    assert!(matches!(k.phase,Phase::Pending {token,..} if token==cancel));
+    assert!(k.begin(Operation::AddMajor, "major".into(), 5).is_empty());
+    let effects = k.mutation_result(cancel, Err("cancel failed".into()), 6);
+    assert!(k.local_error.as_ref().unwrap().contains("cancel failed"));
+    assert_eq!(k.phase, Phase::Reconciling);
+    assert!(!effects.is_empty());
 }

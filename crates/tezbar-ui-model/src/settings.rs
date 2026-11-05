@@ -55,9 +55,19 @@ pub enum Edit {
         provider: String,
         models: Vec<Value>,
     },
+    CreateProvider {
+        provider: String,
+        value: Value,
+    },
+    /// Updates only an existing durable definition. Creation is always explicit.
     Definition {
         provider: String,
         value: Value,
+    },
+    Discovered {
+        provider: String,
+        models: Vec<Value>,
+        baseline_ids: BTreeSet<String>,
     },
     Select {
         provider: String,
@@ -83,6 +93,8 @@ impl Edit {
             Self::Field { provider, .. }
             | Self::Models { provider, .. }
             | Self::Definition { provider, .. }
+            | Self::CreateProvider { provider, .. }
+            | Self::Discovered { provider, .. }
             | Self::Select { provider, .. }
             | Self::Activate { provider, .. }
             | Self::RemoveModels { provider, .. } => Some(provider),
@@ -95,10 +107,12 @@ impl Edit {
             Self::Field {
                 provider, field, ..
             } => Key::Field(provider.clone(), field.clone()),
-            Self::Models { provider, .. } | Self::RemoveModels { provider, .. } => {
-                Key::Models(provider.clone())
+            Self::Models { provider, .. }
+            | Self::RemoveModels { provider, .. }
+            | Self::Discovered { provider, .. } => Key::Models(provider.clone()),
+            Self::Definition { provider, .. } | Self::CreateProvider { provider, .. } => {
+                Key::Definition(provider.clone())
             }
-            Self::Definition { provider, .. } => Key::Definition(provider.clone()),
             Self::Select { provider, .. } => Key::Selection(provider.clone()),
             Self::Activate { .. } => Key::Active,
             Self::RemoveProvider(p) => Key::Remove(p.clone()),
@@ -274,7 +288,7 @@ impl WriteQueue {
             // A known removal must not be undone by stale tab fields. Absence
             // alone is not deletion: a failed Create can still have later edits
             // whose values must survive until its Definition is retried.
-            if !matches!(e, Edit::Definition { .. } | Edit::RemoveProvider(_))
+            if !matches!(e, Edit::CreateProvider { .. } | Edit::RemoveProvider(_))
                 && e.target_provider().is_some_and(|p| {
                     p.starts_with("custom:")
                         && self.removed.contains_key(p)
@@ -282,7 +296,7 @@ impl WriteQueue {
                             .as_array()
                             .is_some_and(|providers| providers.iter().any(|v| v["id"] == p))
                         && !intent.edits.iter().any(|candidate| {
-                            matches!(candidate, Edit::Definition { provider, .. } if provider == p)
+                            matches!(candidate, Edit::CreateProvider { provider, .. } if provider == p)
                                 && !self.stale_edit(candidate, intent.revision)
                         })
                 })
@@ -316,15 +330,65 @@ impl WriteQueue {
                     next["providerModels"][provider] = json!(models);
                     touched.insert("providerModels");
                 }
-                Edit::Definition { provider, value } => {
+                Edit::Discovered {
+                    provider,
+                    models: discovered,
+                    baseline_ids,
+                } => {
+                    let existing = next["providerModels"][provider]
+                        .as_array()
+                        .or_else(|| {
+                            provider_catalog()["DEFAULT_PROVIDER_MODELS"][provider].as_array()
+                        })
+                        .cloned()
+                        .unwrap_or_default();
+                    let mut merged = Vec::new();
+                    for model in discovered {
+                        let id = model["id"].as_str().unwrap_or("").trim();
+                        if id.is_empty() {
+                            continue;
+                        }
+                        let fresh = existing.iter().find(|m| m["id"] == id);
+                        if fresh.is_none() && baseline_ids.contains(id) {
+                            continue;
+                        }
+                        merged.push(fresh.cloned().unwrap_or_else(|| model.clone()));
+                    }
+                    merged.extend(existing);
+                    let models = providers::normalize_models(&merged);
+                    ensure_map(&mut next, "providerModels");
+                    next["providerModels"][provider] = json!(models);
+                    touched.insert("providerModels");
+                    let selected =
+                        next["providerSelectedModels"][provider]
+                            .as_str()
+                            .or_else(|| {
+                                if next["provider"] == *provider {
+                                    next["model"].as_str()
+                                } else {
+                                    None
+                                }
+                            });
+                    if selected.is_none_or(|s| s.is_empty())
+                        && !self.stale(&Key::Selection(provider.clone()), intent.revision)
+                    {
+                        if let Some(first) = models.first().and_then(|m| m["id"].as_str()) {
+                            set_selection(&mut next, provider, first, &mut touched);
+                            keys.push(Key::Selection(provider.clone()));
+                        }
+                    }
+                }
+                Edit::Definition { provider, value } | Edit::CreateProvider { provider, value } => {
                     let mut a = next["customProviders"]
                         .as_array()
                         .cloned()
                         .unwrap_or_default();
                     if let Some(v) = a.iter_mut().find(|v| v["id"] == *provider) {
                         *v = value.clone();
-                    } else {
+                    } else if matches!(e, Edit::CreateProvider { .. }) {
                         a.push(value.clone());
+                    } else {
+                        continue; // An update from a stale owner cannot recreate a removed definition.
                     }
                     next["customProviders"] = json!(a);
                     touched.insert("customProviders");
@@ -685,31 +749,20 @@ impl ProviderDraft {
         if token != self.generation || self.read_only {
             return None;
         }
-        let mut merged = Vec::new();
-        let mut seen = BTreeSet::new();
-        for id in ids {
-            if !seen.insert(id.clone()) {
-                continue;
-            }
-            merged.push(
-                self.models
-                    .iter()
-                    .find(|m| m["id"] == id)
-                    .cloned()
-                    .unwrap_or_else(|| json!({"id":id})),
-            );
+        self.discovered_models(token, ids.into_iter().map(|id| json!({"id":id})).collect())
+    }
+    pub fn discovered_models(&mut self, token: u64, models: Vec<Value>) -> Option<Edit> {
+        if token != self.generation || self.read_only {
+            return None;
         }
-        for m in &self.models {
-            if let Some(id) = m["id"].as_str() {
-                if seen.insert(id.into()) {
-                    merged.push(m.clone());
-                }
-            }
-        }
-        self.models = merged;
-        Some(Edit::Models {
+        Some(Edit::Discovered {
             provider: self.provider.clone(),
-            models: self.models.clone(),
+            models,
+            baseline_ids: self
+                .models
+                .iter()
+                .filter_map(|m| m["id"].as_str().map(str::to_owned))
+                .collect(),
         })
     }
     pub fn remove_models(&mut self, ids: BTreeSet<String>) -> Edit {

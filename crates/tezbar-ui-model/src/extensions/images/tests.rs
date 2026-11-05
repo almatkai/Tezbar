@@ -92,3 +92,200 @@ fn one_hundred_mount_hide_cycles_release_image_handles() {
         assert_eq!(c.retained_bytes(), 0);
     }
 }
+
+fn app_effect(effects: Vec<Effect>) -> u64 {
+    effects
+        .into_iter()
+        .find_map(|e| match e {
+            Effect::ResolveAppPath { token, .. } => Some(token),
+            _ => None,
+        })
+        .unwrap()
+}
+fn fallback() -> Option<Source> {
+    Some(Source::Remote("https://example.test/catalog".into()))
+}
+#[test]
+fn catalog_selection_clears_resolved_app_before_dispatch() {
+    let mut cache = ImageCache::default();
+    let mut slot = CatalogIcon::default();
+    let token = app_effect(
+        slot.select(
+            &mut cache,
+            "clean",
+            Some("/Applications/Clean.app".into()),
+            fallback(),
+        )
+        .unwrap(),
+    );
+    cache.ready(token, "clean icon".into(), 42);
+    assert_eq!(slot.handle(&cache), Some("clean icon"));
+    let effects = slot.select(&mut cache, "mole", None, fallback()).unwrap();
+    assert!(slot.handle(&cache).is_none());
+    assert!(matches!(slot.fallback, Some(Source::Remote(_))));
+    assert!(matches!(&effects[0],Effect::Release(h) if h=="clean icon"));
+}
+#[test]
+fn app_icon_scope_includes_extension_and_path() {
+    for (extension, path) in [
+        ("other", "/Applications/Clean.app"),
+        ("clean", "/Applications/Other.app"),
+        ("alias", "/Applications/Other.app"),
+    ] {
+        let mut cache = ImageCache::default();
+        let mut slot = CatalogIcon::default();
+        let old = app_effect(
+            slot.select(
+                &mut cache,
+                "clean",
+                Some("/Applications/Clean.app".into()),
+                fallback(),
+            )
+            .unwrap(),
+        );
+        cache.ready(old, "old".into(), 42);
+        let token = app_effect(
+            slot.select(&mut cache, extension, Some(path.into()), fallback())
+                .unwrap(),
+        );
+        assert!(slot.handle(&cache).is_none());
+        assert_ne!(token, old);
+        cache.ready(token, "current".into(), 42);
+        assert_eq!(slot.handle(&cache), Some("current"));
+    }
+}
+#[test]
+fn late_app_lookup_before_or_after_current_completion_cannot_replace_selection() {
+    for old_first in [true, false] {
+        let mut cache = ImageCache::default();
+        let mut slot = CatalogIcon::default();
+        let old = app_effect(
+            slot.select(&mut cache, "a", Some("/a.app".into()), fallback())
+                .unwrap(),
+        );
+        let new = app_effect(
+            slot.select(&mut cache, "b", Some("/b.app".into()), fallback())
+                .unwrap(),
+        );
+        if old_first {
+            assert_eq!(cache.ready(old, "old".into(), 42).len(), 1);
+            assert!(slot.handle(&cache).is_none());
+        }
+        cache.ready(new, "new".into(), 42);
+        if !old_first {
+            assert_eq!(cache.ready(old, "old".into(), 42).len(), 1);
+        }
+        assert_eq!(slot.handle(&cache), Some("new"));
+    }
+}
+#[test]
+fn failed_empty_unavailable_app_lookups_keep_current_catalog_fallback() {
+    for _outcome in ["empty", "rejected", "unavailable"] {
+        let mut cache = ImageCache::default();
+        let mut slot = CatalogIcon::default();
+        let token = app_effect(
+            slot.select(&mut cache, "a", Some("/a.app".into()), fallback())
+                .unwrap(),
+        );
+        cache.failed(token);
+        assert!(slot.handle(&cache).is_none());
+        assert!(matches!(slot.fallback, Some(Source::Remote(_))));
+        assert_eq!(cache.ready(token, "late failed".into(), 42).len(), 1);
+    }
+}
+#[test]
+fn app_lookup_after_unmount_is_released() {
+    let mut cache = ImageCache::default();
+    let mut slot = CatalogIcon::default();
+    let token = app_effect(
+        slot.select(&mut cache, "a", Some("/a.app".into()), fallback())
+            .unwrap(),
+    );
+    slot.clear(&mut cache);
+    assert_eq!(cache.ready(token, "unmounted".into(), 42).len(), 1);
+    assert!(slot.handle(&cache).is_none());
+    assert!(slot.fallback.is_none());
+}
+#[test]
+fn selected_remote_lease_never_exposes_previous_handle() {
+    let mut cache = ImageCache::default();
+    let (old, _) = cache.acquire(remote(), Variant::Icon).unwrap();
+    cache.ready(old.0, "old".into(), 42);
+    cache.release(old);
+    let (new, _) = cache
+        .acquire(
+            Source::Remote("https://example.test/new".into()),
+            Variant::Icon,
+        )
+        .unwrap();
+    assert!(cache.peek(new).is_none());
+    assert_eq!(cache.ready(old.0, "stale".into(), 42).len(), 1);
+    cache.ready(new.0, "new".into(), 42);
+    assert_eq!(cache.peek(new), Some("new"));
+    cache.release(new);
+    assert_eq!(cache.ready(new.0, "after unmount".into(), 42).len(), 1);
+}
+#[test]
+fn failed_or_oversize_image_has_placeholder_and_retries_with_new_token() {
+    for oversized in [false, true] {
+        let mut cache = ImageCache::default();
+        let (old, _) = cache.acquire(remote(), Variant::Icon).unwrap();
+        if oversized {
+            assert_eq!(
+                cache.ready(old.0, "huge".into(), 2 * 1024 * 1024 + 1).len(),
+                1
+            );
+        } else {
+            cache.failed(old.0);
+        }
+        assert!(cache.peek(old).is_none());
+        let (new, e) = cache.acquire(remote(), Variant::Icon).unwrap();
+        let Effect::Fetch { token, .. } = e.unwrap() else {
+            panic!()
+        };
+        assert_ne!(token, old.0);
+        cache.failed(old.0);
+        assert_eq!(cache.ready(old.0, "late".into(), 42).len(), 1);
+        cache.ready(token, "recovered".into(), 42);
+        assert_eq!(cache.peek(old), Some("recovered"));
+        assert_eq!(cache.peek(new), Some("recovered"));
+    }
+}
+#[test]
+fn windows_drive_and_unc_paths_require_authorization_before_url_parsing() {
+    let root = Path::new("/fixture/ext");
+    for raw in [
+        r"C:\Apps\Icon.png",
+        r"C:/Apps/Icon.png",
+        r"\\server\share\Icon.png",
+    ] {
+        assert!(resolve(raw, root, &BTreeSet::new()).is_err());
+        let allowed = [PathBuf::from(raw)].into();
+        assert!(matches!(resolve(raw, root, &allowed), Ok(Source::File(_))));
+    }
+    assert!(resolve(
+        r"C:\Apps\..\secret",
+        root,
+        &[PathBuf::from(r"C:\Apps\..\secret")].into()
+    )
+    .is_err());
+}
+
+#[test]
+fn missing_failed_catalog_icon_recovers_on_different_selection() {
+    let mut cache = ImageCache::default();
+    let mut slot = CatalogIcon::default();
+    slot.select(&mut cache, "missing", None, None).unwrap();
+    assert!(slot.handle(&cache).is_none());
+    assert!(slot.fallback.is_none());
+    let token = app_effect(
+        slot.select(&mut cache, "failed", Some("/a.app".into()), None)
+            .unwrap(),
+    );
+    cache.failed(token);
+    assert!(slot.handle(&cache).is_none());
+    assert!(slot.fallback.is_none());
+    slot.select(&mut cache, "remote", None, fallback()).unwrap();
+    assert!(matches!(slot.fallback, Some(Source::Remote(_))));
+    assert!(slot.handle(&cache).is_none());
+}

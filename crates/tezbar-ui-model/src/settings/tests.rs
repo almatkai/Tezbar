@@ -94,7 +94,7 @@ fn t_r3_repeated_retry_cannot_resurrect_deleted_provider() {
     q.enqueue(
         1,
         vec![
-            Edit::Definition {
+            Edit::CreateProvider {
                 provider: "custom:a".into(),
                 value: json!({"id":"custom:a"}),
             },
@@ -118,7 +118,7 @@ fn t_r3_explicit_recreation_has_new_revision() {
     q.enqueue(
         2,
         vec![
-            Edit::Definition {
+            Edit::CreateProvider {
                 provider: "custom:a".into(),
                 value: json!({"id":"custom:a","title":"Recreated"}),
             },
@@ -187,7 +187,7 @@ fn explicit_recreation_can_activate_provider_again() {
     q.enqueue(
         2,
         vec![
-            Edit::Definition {
+            Edit::CreateProvider {
                 provider: "custom:a".into(),
                 value: json!({"id":"custom:a","title":"Recreated"}),
             },
@@ -218,7 +218,7 @@ fn failed_creation_preserves_a_later_api_key_edit() {
     c["providerConfigs"] = json!({});
     q.enqueue(
         1,
-        vec![Edit::Definition {
+        vec![Edit::CreateProvider {
             provider: "custom:new".into(),
             value: json!({"id":"custom:new"}),
         }],
@@ -247,7 +247,7 @@ fn failed_definition_retries_before_its_dependent_field_write() {
     let mut c = json!({"customProviders":[]});
     q.enqueue(
         1,
-        vec![Edit::Definition {
+        vec![Edit::CreateProvider {
             provider: "custom:new".into(),
             value: json!({"id":"custom:new"}),
         }],
@@ -333,7 +333,7 @@ fn t_r6_all_writes_merge_only_owned_ids() {
     q.enqueue(
         1,
         vec![
-            Edit::Definition {
+            Edit::CreateProvider {
                 provider: "custom:new".into(),
                 value: json!({"id":"custom:new","title":"N"}),
             },
@@ -491,4 +491,94 @@ fn device_save_failure_and_cancellation_fence_polling() {
     d.cancel();
     d.polled(t, "success", String::new(), String::new(), 1001);
     assert_eq!(d.phase, DevicePhase::Cancelled);
+}
+
+#[test]
+fn stale_definition_update_cannot_recreate_but_explicit_create_can() {
+    let mut q = WriteQueue::default();
+    let mut c = config();
+    q.enqueue(1, vec![Edit::RemoveProvider("custom:a".into())]);
+    flush(&mut q, &mut c, true);
+    q.enqueue(
+        2,
+        vec![Edit::Definition {
+            provider: "custom:a".into(),
+            value: json!({"id":"custom:a","name":"stale"}),
+        }],
+    );
+    flush(&mut q, &mut c, true);
+    assert!(!c["customProviders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["id"] == "custom:a"));
+    q.enqueue(
+        2,
+        vec![Edit::CreateProvider {
+            provider: "custom:a".into(),
+            value: json!({"id":"custom:a","name":"new"}),
+        }],
+    );
+    flush(&mut q, &mut c, true);
+    assert!(c["customProviders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["id"] == "custom:a" && p["name"] == "new"));
+    // Also fence deletion by an external writer, not recorded in this queue.
+    c["customProviders"] = json!([]);
+    q.enqueue(
+        3,
+        vec![Edit::Definition {
+            provider: "custom:a".into(),
+            value: json!({"id":"custom:a"}),
+        }],
+    );
+    flush(&mut q, &mut c, true);
+    assert_eq!(c["customProviders"], json!([]));
+}
+
+#[test]
+fn discovery_merges_fresh_models_peer_removals_metadata_and_selection() {
+    let mut q = WriteQueue::default();
+    let mut c = config();
+    let mut d = ProviderDraft::default();
+    d.load("custom:a".into(), &c);
+    let edit = d
+        .discovered_models(
+            d.discovery_token(),
+            vec![
+                json!({"id":"A"}),
+                json!({"id":"B"}),
+                json!({"id":" gpt-6-sol ","maxTokens":4096}),
+                json!({"id":"gpt-6-sol"}),
+            ],
+        )
+        .unwrap();
+    c["providerModels"]["custom:a"] = json!([{"id":"A","maxTokens":9999,"protocol":"anthropic"},{"id":"peer","capabilities":["tools"]}]);
+    c["providerSelectedModels"]["custom:a"] = json!("peer");
+    q.discover(1, vec![edit]);
+    flush(&mut q, &mut c, true);
+    let a = c["providerModels"]["custom:a"].as_array().unwrap();
+    assert_eq!(
+        a.iter()
+            .map(|m| m["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["A", "gpt-6-sol", "peer"]
+    );
+    assert_eq!(a[0]["maxTokens"], 9999);
+    assert_eq!(a[0]["protocol"], "anthropic");
+    assert_eq!(a[1]["capabilities"], json!(["vision", "thinking", "tools"]));
+    assert_eq!(c["providerSelectedModels"]["custom:a"], "peer");
+    let mut c = json!({"provider":"ollama","providerModels":{"ollama":[]}});
+    d.load("ollama".into(), &c);
+    q.discover(
+        1,
+        vec![d
+            .discovered(d.discovery_token(), vec!["new".into()])
+            .unwrap()],
+    );
+    flush(&mut q, &mut c, true);
+    assert_eq!(c["providerSelectedModels"]["ollama"], "new");
+    assert_eq!(c["model"], "new");
 }

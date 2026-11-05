@@ -36,6 +36,7 @@ fn reply(root: Node) -> TreeReply {
         }],
         refresh: PollPolicy::EventDriven,
         effects: vec![],
+        effect_sequence: None,
     }
 }
 fn session() -> RuntimeSession {
@@ -241,7 +242,7 @@ fn adaptive_grid_colors_and_effects_are_emitted_once() {
         },
     ];
     let mut s = RuntimeSession::new(r, 0).unwrap();
-    assert_eq!(s.drain_effects().count(), 1);
+    assert_eq!(s.drain_effects().count(), 0);
     assert_eq!(s.drain_effects().count(), 0);
 }
 #[test]
@@ -270,7 +271,7 @@ fn submit_guard_releases_on_view_no_view_failure_and_ignores_replaced_session() 
     assert!(s.primary(false).is_err());
     s.ui_event(UiEvent::OpenActions).unwrap();
     assert!(s.action_panel);
-    s.no_view(&token, String::new(), vec![], 1);
+    s.no_view(&token, String::new(), vec![], None, 1);
     assert!(s.notice.is_none());
     let Some(Effect::Invoke { token, .. }) = s.primary(false).unwrap() else {
         panic!()
@@ -280,9 +281,104 @@ fn submit_guard_releases_on_view_no_view_failure_and_ignores_replaced_session() 
     let Some(Effect::Invoke { token, .. }) = s.primary(false).unwrap() else {
         panic!()
     };
-    s.no_view(&token, "Saved answer".into(), vec![], 3);
+    s.no_view(&token, "Saved answer".into(), vec![], None, 3);
     assert_eq!(s.notice_message.as_deref(), Some("Saved answer"));
     s.dispose();
-    s.no_view(&token, "stale".into(), vec![], 4);
+    s.no_view(&token, "stale".into(), vec![], None, 4);
     assert_ne!(s.notice_message.as_deref(), Some("stale"));
+}
+
+#[test]
+fn cumulative_records_never_execute_host_actions() {
+    let mut r = reply(root(&[]));
+    r.effects = vec![
+        WireEffect::Clipboard {
+            value: "truncated file copy".into(),
+        },
+        WireEffect::Open {
+            value: "https://example.test".into(),
+        },
+        WireEffect::ShowInFinder {
+            value: "/fixture/file".into(),
+        },
+    ];
+    let mut s = RuntimeSession::new(r, 0).unwrap();
+    assert_eq!(
+        s.drain_effects().count(),
+        0,
+        "worker records already executed"
+    );
+}
+
+#[test]
+fn sliding_50_records_and_identical_new_notices_are_sequence_owned() {
+    let mut s = session();
+    for total in 1..=120 {
+        let mut r = reply(root(&[]));
+        r.effect_sequence = Some(total);
+        r.effects = (0..total.min(50))
+            .map(|_| WireEffect::Hud {
+                title: None,
+                message: Some("identical notice".into()),
+            })
+            .collect();
+        let t = s.token();
+        s.refresh_finished(&t, Some(r), total).unwrap();
+        assert_eq!(s.notice_message.as_deref(), Some("identical notice"));
+        assert_eq!(s.records.sequence, total);
+        assert_eq!(s.drain_effects().count(), 0);
+        let mut repeated = reply(root(&[]));
+        repeated.effect_sequence = Some(total);
+        repeated.effects = (0..total.min(50))
+            .map(|_| WireEffect::Hud {
+                title: None,
+                message: Some("identical notice".into()),
+            })
+            .collect();
+        let t = s.token();
+        s.refresh_finished(&t, Some(repeated), total).unwrap();
+        assert!(s.notice_message.is_none(), "poll repeats no notices");
+    }
+}
+
+#[test]
+fn no_view_and_legacy_records_never_replay_long_clipboard_file_open_or_scripts() {
+    let records = || {
+        vec![
+            WireEffect::Clipboard {
+                value: "x".repeat(10_000),
+            },
+            WireEffect::Open {
+                value: "https://example.test".into(),
+            },
+            WireEffect::ShowInFinder {
+                value: "/fixture/image.png".into(),
+            },
+            WireEffect::AppleScript {
+                value: Some("never execute".into()),
+            },
+            WireEffect::PowershellScript {
+                value: Some("never execute".into()),
+            },
+            WireEffect::Hud {
+                title: None,
+                message: Some("copied".into()),
+            },
+        ]
+    };
+    let mut r = reply(root(&[]));
+    r.effects = records();
+    let mut s = RuntimeSession::new(r, 0).unwrap();
+    assert_eq!(s.notice_message.as_deref(), Some("copied"));
+    let t = s.token();
+    s.no_view(&t, String::new(), records(), None, 1);
+    assert!(s.notice_message.is_none());
+    assert_eq!(s.drain_effects().count(), 0);
+    let t = s.token();
+    s.no_view(&t, String::new(), records(), Some(7), 2);
+    assert_eq!(s.notice_message.as_deref(), Some("copied"));
+    let t = s.token();
+    s.no_view(&t, "copied".into(), records(), Some(7), 3);
+    assert!(s.notice_message.is_none());
+    assert_eq!(s.drain_effects().count(), 0);
 }

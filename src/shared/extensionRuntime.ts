@@ -87,6 +87,8 @@ export type ExtensionRunCommandResult =
       ok: true
       mode: 'no-view'
       message: string
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -102,6 +104,8 @@ export type ExtensionRunCommandResult =
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -120,6 +124,8 @@ export type ExtensionInvokeActionResult =
       ok: true
       mode: 'no-view'
       message: string
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -135,6 +141,8 @@ export type ExtensionInvokeActionResult =
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -171,6 +179,8 @@ export type ExtensionSearchTextChangedResult =
       ok: true
       mode: 'no-view'
       message: string
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -186,6 +196,8 @@ export type ExtensionSearchTextChangedResult =
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {

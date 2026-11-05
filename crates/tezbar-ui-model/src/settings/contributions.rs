@@ -270,7 +270,7 @@ impl Contributions {
             .find(|e| e["id"] == id)
             .cloned()
             .ok_or("Extension not found")?;
-        manifest[field] = value;
+        manifest[field] = rehydrate(&value, &manifest[field])?;
         Ok(self.request(
             format!("extension:{id}"),
             Action::Update,
@@ -424,5 +424,165 @@ mod revision_tests {
             Ok(json!({"globalInstructions":"first","extensions":[]})),
         );
         assert_eq!(c.instructions, "new draft");
+    }
+}
+
+/// Redacted snapshots may round-trip only with a unique stable id in arrays. Never
+/// accept a view-supplied opaque reference or guess which row held a placeholder.
+fn rehydrate(value: &Value, raw: &Value) -> Result<Value, &'static str> {
+    match value {
+        Value::Object(m) if m.contains_key("saved") => {
+            if raw.get("secret").is_some() && *value == redacted(raw) {
+                Ok(raw.clone())
+            } else {
+                Err("Saved secret placeholder changed or has no unique original")
+            }
+        }
+        Value::Object(m) => {
+            if m.contains_key("secret") {
+                return Err("Use the scoped secret editor");
+            }
+            let mut result = serde_json::Map::new();
+            for (key, v) in m {
+                result.insert(key.clone(), rehydrate(v, &raw[key])?);
+            }
+            // Fields hidden entirely by redaction remain opaque and untouched.
+            if let Some(old) = raw.as_object() {
+                for (k, v) in old {
+                    if matches!(
+                        k.as_str(),
+                        "apiKey" | "token" | "accessToken" | "refreshToken" | "password"
+                    ) {
+                        if m.contains_key(k) {
+                            return Err("Use the scoped secret editor");
+                        }
+                        result.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            Ok(Value::Object(result))
+        }
+        Value::Array(a) => {
+            let mut ids = BTreeSet::new();
+            a.iter()
+                .map(|v| {
+                    let old = if let Some(id) = v["id"].as_str() {
+                        if !ids.insert(id) {
+                            return Err("Ambiguous manifest row identity");
+                        }
+                        let matches: Vec<_> = raw
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter(|r| r["id"] == id)
+                            .collect();
+                        if matches.len() > 1 {
+                            return Err("Ambiguous manifest row identity");
+                        }
+                        matches.first().copied().unwrap_or(&Value::Null)
+                    } else {
+                        &Value::Null
+                    };
+                    rehydrate(v, old)
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::Array)
+        }
+        _ => Ok(value.clone()),
+    }
+}
+impl Contributions {
+    /// Safe field edit also supports legacy rows without stable ids. The raw row
+    /// is selected inside this controller; secrets and untouched fields are retained.
+    pub fn edit_row(
+        &mut self,
+        id: &str,
+        collection: &str,
+        index: usize,
+        field: &str,
+        value: Value,
+    ) -> Result<Effect, &'static str> {
+        let allowed = match collection {
+            "connections" => matches!(field, "url" | "command" | "args"),
+            "providers" => matches!(field, "name" | "baseURL" | "models"),
+            _ => false,
+        };
+        if !allowed {
+            return Err("Unsupported row field");
+        }
+        let mut manifest = self.raw["extensions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|e| e["id"] == id)
+            .cloned()
+            .ok_or("Extension not found")?;
+        let row = manifest[collection]
+            .as_array_mut()
+            .and_then(|a| a.get_mut(index))
+            .ok_or("Row not found")?;
+        row[field] = rehydrate(&value, &row[field])?;
+        Ok(self.request(
+            format!("extension:{id}"),
+            Action::Update,
+            vec![json!(id), manifest],
+        ))
+    }
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    fn fixture() -> Contributions {
+        let mut c = Contributions::default();
+        let e = c.load();
+        c.reply(e.token,Ok(json!({"extensions":[{"id":"fixture","connections":[{"id":"a","url":"old","env":{"KEY":{"secret":"ref-a","label":"Key"}},"headers":{"Authorization":{"secret":"ref-h"}}},{"id":"b","command":"old","env":{"KEY":{"secret":"ref-b"}}}],"providers":[{"id":"p","baseURL":"old","apiKey":{"secret":"ref-p"}}],"unknown":{"future":true}}]})));
+        c
+    }
+    #[test]
+    fn edits_and_reorders_rehydrate_opaque_refs_by_stable_identity() {
+        let mut c = fixture();
+        let mut rows = c.display["extensions"][0]["connections"]
+            .as_array()
+            .unwrap()
+            .clone();
+        rows.reverse();
+        rows[0]["command"] = json!("new-command");
+        rows[1]["url"] = json!("https://example.test");
+        let e = c.update("fixture", "connections", json!(rows)).unwrap();
+        assert_eq!(e.args[1]["connections"][0]["env"]["KEY"]["secret"], "ref-b");
+        assert_eq!(e.args[1]["connections"][1]["env"]["KEY"]["secret"], "ref-a");
+        assert_eq!(
+            e.args[1]["connections"][1]["headers"]["Authorization"]["secret"],
+            "ref-h"
+        );
+        assert_eq!(e.args[1]["providers"][0]["apiKey"]["secret"], "ref-p");
+        assert_eq!(e.args[1]["unknown"], json!({"future":true}));
+        let mut providers = c.display["extensions"][0]["providers"].clone();
+        providers[0]["baseURL"] = json!("new");
+        let e = c.update("fixture", "providers", providers).unwrap();
+        assert_eq!(e.args[1]["providers"][0]["apiKey"]["secret"], "ref-p");
+        let e = c
+            .edit_row("fixture", "connections", 0, "url", json!("new"))
+            .unwrap();
+        assert_eq!(e.args[1]["connections"][0]["env"]["KEY"]["secret"], "ref-a");
+        assert!(!c.display.to_string().contains("ref-"));
+    }
+    #[test]
+    fn ambiguous_or_tampered_secret_placeholders_are_rejected() {
+        let mut c = fixture();
+        let rows = c.display["extensions"][0]["connections"].clone();
+        let mut tampered = rows.clone();
+        tampered[0]["env"]["KEY"]["label"] = json!("tampered");
+        assert!(c.update("fixture", "connections", tampered).is_err());
+        let mut ambiguous = rows.clone();
+        ambiguous[1]["id"] = json!("a");
+        assert!(c.update("fixture", "connections", ambiguous).is_err());
+        let mut missing = rows.clone();
+        missing[0].as_object_mut().unwrap().remove("id");
+        assert!(c.update("fixture", "connections", missing).is_err());
+        assert!(c
+            .edit_row("fixture", "connections", 0, "env", json!({}))
+            .is_err());
     }
 }
