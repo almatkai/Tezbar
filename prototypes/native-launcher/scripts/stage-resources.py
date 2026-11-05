@@ -8,12 +8,14 @@ root=pathlib.Path(a.root).resolve();repo=pathlib.Path(__file__).resolve().parent
 assert pathlib.Path(tempfile.gettempdir()).resolve() in root.parents
 assert (root/'.tezbar-native-launcher-prototype').is_file()
 resources=root/'resources';assert not resources.exists()
-if a.from_resources: shutil.copytree(a.from_resources,resources)
+if a.from_resources:
+    assert (pathlib.Path(a.from_resources)/'.tezbar-prototype-source').read_text()==(root/'.tezbar-native-launcher-prototype').read_text(),'A resource source SHA differs from fixture'
+    shutil.copytree(a.from_resources,resources)
 else:
     resources.mkdir()
     for name,source in [('dist-backend',repo/'dist-backend'),('embedding-runtime',repo/'build/embedding-runtime/resources')]:shutil.copytree(source,resources/name)
     shutil.copy2(repo/'resources/trayIconTemplate@2x.png',resources/'trayIconTemplate@2x.png')
-(resources/'.tezbar-prototype-source').write_text((root/'.tezbar-native-launcher-prototype').read_text())
+if not a.from_resources:(resources/'.tezbar-prototype-source').write_text((root/'.tezbar-native-launcher-prototype').read_text())
 # No profile stores are traversed or hashed here.
 manifest={str(p.relative_to(resources)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(resources.rglob('*')) if p.is_file()}
 (root/'resource-manifest.json').write_text(json.dumps(dict(matched_A=bool(a.from_resources),files=manifest),indent=2))

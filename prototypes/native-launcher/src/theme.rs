@@ -38,7 +38,11 @@ pub fn tokens(w: &Window) -> Tokens {
     };
     if light {
         Tokens {
-            sheet: rgba(0xfafafbf5).into(),
+            sheet: if cfg!(windows) {
+                rgb(0xfafafb).into()
+            } else {
+                rgba(0xfafafbf5).into()
+            },
             rim: rgba(0x0f172a33).into(),
             hairline: rgba(0x0f172a1a).into(),
             pill: rgba(0x0f172a0d).into(),
@@ -52,7 +56,11 @@ pub fn tokens(w: &Window) -> Tokens {
         }
     } else {
         Tokens {
-            sheet: rgba(0x1c1d21f2).into(),
+            sheet: if cfg!(windows) {
+                rgb(0x1c1d21).into()
+            } else {
+                rgba(0x1c1d21f2).into()
+            },
             rim: rgba(0xffffff14).into(),
             hairline: rgba(0xffffff11).into(),
             pill: rgba(0xffffff0f).into(),

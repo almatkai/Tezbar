@@ -3,7 +3,7 @@
 recursive + responsibility-owned XPC). --smoke is functional evidence, not a verdict.
 Requires a fresh byte-for-byte fixture copy for EVERY invocation. Never hashes stores.
 """
-import argparse,hashlib,json,os,pathlib,secrets,sqlite3,statistics,subprocess,sys,time
+import argparse,hashlib,json,os,pathlib,secrets,sqlite3,statistics,subprocess,sys,time,threading,tempfile
 from control import Control
 REPO=pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(REPO/'docs/performance'))
@@ -20,6 +20,47 @@ def counts(root):
     # Counts only, never SELECT clipboard text or action_json.
     with sqlite3.connect(f'file:{root}/data/search/index.sqlite3?mode=ro',uri=True) as db:
         return dict(db.execute('SELECT category,count(*) FROM documents GROUP BY category'))
+class Baseline(Desktop):
+    def launch(self,binary):
+        # Existing desktop-bench validates raw OS-temp prefixes. Pass the OS's
+        # /var spelling to env, while retaining canonical process ownership paths.
+        alias=pathlib.Path(tempfile.gettempdir())/self.root.relative_to(pathlib.Path(tempfile.gettempdir()).resolve())
+        app=self.root/'Tezbar Performance.app'
+        assert app.is_dir(),'stage-a.py --local-preview first'
+        env={'TEZBAR_DATA_DIR':str(alias/'data'),'TEZBAR_CONFIG_DIR':str(alias/'config'),'TEZBAR_BENCH_HOME':str(alias/'home'),'TEZBAR_BENCH_SOCKET':str(alias/'control.sock')}
+        self.started=time.monotonic()
+        subprocess.run(['open','-n','-g','-o',str(self.root/'stdout.log'),'--stderr',str(self.root/'stderr.log'),str(app)]+sum((['--env',k+'='+v] for k,v in env.items()),[]),check=True)
+        expected=str(app/'Contents/MacOS/tezbar')
+        def find():
+            for line in subprocess.check_output(['ps','-axo','pid=,comm='],text=True).splitlines():
+                fields=line.strip().split(None,1)
+                if len(fields)==2 and fields[1]==expected:self.pid=int(fields[0]);return (self.root/'control.sock').exists()
+            return False
+        wait(find,60)
+        def ready():
+            try:return self.command('status')['phase']=='ready'
+            except RuntimeError as error:
+                if str(error)=='main window missing':return False
+                raise
+        self.wait(ready,60)
+        self.wait(lambda:self.command('status')['rendererLoaded'],60)
+        self.wait(lambda:self.js("return !!window.tezbar && !!document.querySelector('#command-input')"),60)
+        self.ready_ms=(time.monotonic()-self.started)*1000
+    def close(self):
+        if self.pid:
+            try:self.command('quit')
+            except (OSError,RuntimeError):pass
+            until=time.monotonic()+15
+            while time.monotonic()<until:
+                if not any(p['pid']==self.pid for p in processes(self.pid)):break
+                time.sleep(.1)
+            else:
+                expected=str(self.root/'Tezbar Performance.app/Contents/MacOS/tezbar')
+                actual=subprocess.run(['ps','-p',str(self.pid),'-o','comm='],capture_output=True,text=True).stdout.strip()
+                if actual!=expected:raise RuntimeError('baseline process identity changed')
+                import signal;os.kill(self.pid,signal.SIGTERM)
+                wait(lambda:not any(p['pid']==self.pid for p in processes(self.pid)),10)
+        scrub_fixture_clipboard(self.root)
 class Native:
     def __init__(self,root,binary,resources,headless=False,theme='system'):
         self.root=root;self.binary=binary;self.resources=resources;self.headless=headless;self.theme=theme;self.process=None;self.control=Control(root)
@@ -45,6 +86,20 @@ class Native:
 
 def settled(d,minimum=0):
     return wait(lambda:(s if s['generation']>=minimum and not s['pending'] and s['painted_generation']==s['generation'] else None) if (s:=d.command('status')) else None)
+def open_timings(d):
+    from window_visibility import main_on_screen
+    d.command('hide');wait(lambda:not main_on_screen(d.pid),5)
+    previous=d.command('status')['frames'];observed=[];stop=threading.Event()
+    def poll():
+        while not stop.is_set():
+            if main_on_screen(d.pid):observed.append(time.monotonic());return
+            stop.wait(.002)
+    thread=threading.Thread(target=poll);thread.start();started=time.monotonic()
+    try:
+        d.command('show');wait(lambda:d.command('status')['frames']>previous,5)
+        receipt=time.monotonic();thread.join(5)
+        return dict(open_control_receipt_ms=(receipt-started)*1000,open_os_poll_ms=(observed[0]-started)*1000 if observed else None,app_boundary='write show -> first post-show frame receipt (includes socket/poll overhead)',os_boundary='write show -> CoreGraphics on-screen 760x640 window observed; <=2ms requested polling')
+    finally:stop.set();thread.join()
 def latency(d,repetitions=10):
     queries=['d','doc','Calculator','document-001','Orchard project meeting','zz-no-match-65001'];out=[]
     for rep in range(repetitions):
@@ -63,14 +118,24 @@ def main():
     if sys.platform!='darwin':raise RuntimeError('macOS accounting harness only; use Windows collector for PrivateUsage')
     root=a.root.resolve();binary=a.binary.resolve();assert (root/'.tezbar-desktop-benchmark').is_file()
     if a.mode!='C':require_unlocked_display()
-    d=Desktop(root) if a.mode=='A' else Native(root,binary,a.resources.resolve(),a.mode=='C',a.theme)
+    d=Baseline(root) if a.mode=='A' else Native(root,binary,a.resources.resolve(),a.mode=='C',a.theme)
     raw=[];result=dict(mode=a.mode,condition=a.condition,smoke=a.smoke,source_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),resources_manifest=json.loads((root/'resource-manifest.json').read_text()) if (root/'resource-manifest.json').exists() else None,latency_boundary='synthetic committed input -> content render plus following frame callback; not photon time',runtime_shaders=True if a.mode=='B' else None)
     installed=pathlib.Path('/Applications/Tezbar.app/Contents/MacOS/tezbar');before=hashlib.sha256(installed.read_bytes()).hexdigest()
+    startup=[];stopping=threading.Event()
+    def startup_sampler():
+        while not stopping.is_set():
+            pid=getattr(d,'pid',None)
+            if pid:startup.append(dict(t=time.monotonic(),processes=processes(pid)))
+            stopping.wait(.25)
+    thread=threading.Thread(target=startup_sampler,daemon=True);thread.start()
     try:
         if a.mode=='A':d.launch(binary)
         else:d.launch()
+        stopping.set();thread.join();result['startup_samples']=startup
+        if a.mode=='A':d.wait(lambda:d.request('core:launcher:status')['status']=='ready',120)
         result.update(pid=d.pid,ready_ms=d.ready_ms,indexed_counts=counts(root))
         if a.mode=='B':
+            result['open_timings']=open_timings(d)
             d.command('show');ack=d.command('query',text='doc');s=settled(d,ack['expected_generation']);result['smoke_status']=s
             if a.condition=='retained' or a.smoke:result['latencies']=latency(d,1 if a.smoke else 10)
             # Exercise exactly one safe synthetic note write. No copy/open during smoke.
@@ -81,11 +146,27 @@ def main():
                 d.command('select',index=index);d.command('activation');wait(lambda:not d.command('status')['visible'])
                 with sqlite3.connect(root/'data/search/index.sqlite3') as db:after_clicks=db.execute('SELECT count(*) FROM click_events').fetchone()[0]
                 assert after_clicks-before_clicks==1;result['activation_click_records']=after_clicks-before_clicks
-            if a.condition=='visible':d.command('show');ack=d.command('query',text='doc');settled(d,ack['expected_generation'])
+            if a.condition=='visible':
+                d.command('show')
+                d.js("const e=document.querySelector('#command-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'doc');e.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);return true");ack=d.command('query',text='doc');settled(d,ack['expected_generation'])
             else:d.command('hide')
         elif a.mode=='A':
-            if a.condition=='visible':d.command('show')
+            if a.condition=='visible':
+                d.command('show')
+                d.js("const e=document.querySelector('#command-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'doc');e.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);return true")
             else:d.command('show');d.command('hide')
+            if a.condition=='retained':
+                import importlib.util
+                spec=importlib.util.spec_from_file_location('native_responsiveness',REPO/'docs/performance/responsiveness-desktop.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+                d.js(module.INSTALL);observations=[]
+                for rep in range(10):
+                    for query in ['d','doc','Calculator','document-001','Orchard project meeting','zz-no-match-65001']:
+                        for style in ['burst','characters']:
+                            d.js("window.__inputBench.input('','');await new Promise(r=>setTimeout(r,30));while(window.__inputBench.active)await new Promise(r=>setTimeout(r,1));return true")
+                            value=module.burst(d,[query] if style=='burst' else [query[:i] for i in range(1,len(query)+1)],70)
+                            # Do not retain action envelopes, titles or incidental user input.
+                            observations.append(dict(rep=rep,warmup=rep==0,style=style,**{k:value[k] for k in ['inputToTwoFramesMs','inputToCorrectDomObservedMs','ipcMs','obsoleteCompleted','trustedInputEvents']}))
+                result['latencies_tauri']=observations;d.command('hide')
             # Existing, preserved harness provides the app-internal Tauri latency
             # instrumentation. Run responsiveness-desktop.py separately for A;
             # this file does not mislabel core-only timing as matched UI latency.
@@ -111,7 +192,7 @@ def main():
             for name,command in [('footprint',['footprint','-p',str(proc['pid'])]),('vmmap',['vmmap','-summary',str(proc['pid'])])]:
                 (root/f'{name}-{proc["pid"]}.log').write_text(subprocess.run(command,capture_output=True,text=True).stdout)
     finally:
-        d.close();result['owned_survivors']=processes(d.pid) if getattr(d,'pid',None) else []
+        stopping.set();thread.join();d.close();result['owned_survivors']=processes(d.pid) if getattr(d,'pid',None) else []
         result['installed_app_unchanged']=hashlib.sha256(installed.read_bytes()).hexdigest()==before
         a.output.write_text(json.dumps(result,indent=2)+'\n')
     assert not result['owned_survivors'];assert result['installed_app_unchanged']

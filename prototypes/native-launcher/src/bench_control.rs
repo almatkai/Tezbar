@@ -64,7 +64,10 @@ impl Server {
                     server = next;
                 }
             });
-            Ok(Self { task, socket: None })
+            Ok(Self {
+                task,
+                socket: Some(root.join("control-pipe.txt")),
+            })
         }
     }
 }
