@@ -12,7 +12,7 @@ launcher-models = ["tezbar-core/native-ui-instant"]
 agent-models = []
 
 [dependencies]
-tezbar-update = { path = "../tezbar-update" }
+tezbar-update = { path = "../tezbar-update", default-features = false }
 
 tezbar-core = { path = "../tezbar-core" }
 serde = { version = "1", features = ["derive"] }

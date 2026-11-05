@@ -2,7 +2,15 @@
 //! The host supplies dispatch and pumps menu/hotkey events from its own event loop.
 use global_hotkey::{hotkey::HotKey, GlobalHotKeyManager};
 use std::str::FromStr;
-use std::{cell::RefCell, collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU8, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tezbar_core::host::*;
 pub fn parse_shortcut(raw: &str) -> Result<Shortcut, String> {
     let key = HotKey::from_str(raw).map_err(|e| e.to_string())?;
@@ -16,21 +24,69 @@ pub type MainThreadExecutor =
 #[derive(Clone)]
 pub struct NativeDesktop {
     execute: MainThreadExecutor,
+    main_thread: std::thread::ThreadId,
 }
 impl NativeDesktop {
+    /// Construct on the application's main thread, before handing clones to core.
     pub fn new(execute: MainThreadExecutor) -> Self {
-        Self { execute }
+        Self {
+            execute,
+            main_thread: std::thread::current().id(),
+        }
     }
     fn call<T: Send + 'static>(
         &self,
         op: impl FnOnce() -> Result<T, String> + Send + 'static,
     ) -> Result<T, String> {
+        self.call_with_timeout(op, Duration::from_secs(5))
+    }
+    fn call_with_timeout<T: Send + 'static>(
+        &self,
+        op: impl FnOnce() -> Result<T, String> + Send + 'static,
+        timeout: Duration,
+    ) -> Result<T, String> {
+        if std::thread::current().id() == self.main_thread {
+            return op();
+        }
+        const QUEUED: u8 = 0;
+        const RUNNING: u8 = 1;
+        const CANCELLED: u8 = 2;
+        let state = Arc::new(AtomicU8::new(QUEUED));
+        let queued_state = state.clone();
         let (tx, rx) = std::sync::mpsc::sync_channel(1);
-        (self.execute)(Box::new(move || {
+        let dispatched = (self.execute)(Box::new(move || {
+            if queued_state
+                .compare_exchange(QUEUED, RUNNING, Ordering::AcqRel, Ordering::Acquire)
+                .is_err()
+            {
+                return;
+            }
             let _ = tx.send(op());
-        }))?;
-        rx.recv_timeout(Duration::from_secs(5))
-            .map_err(|e| e.to_string())?
+        }));
+        if let Err(error) = dispatched {
+            if state
+                .compare_exchange(QUEUED, CANCELLED, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return Err(error);
+            }
+            // Dispatch may already have started the operation. Observe its real
+            // outcome instead of reporting a failure followed by a late effect.
+            return rx.recv().map_err(|e| e.to_string())?;
+        }
+        match rx.recv_timeout(timeout) {
+            Ok(result) => result,
+            Err(error) => {
+                if state
+                    .compare_exchange(QUEUED, CANCELLED, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    Err(error.to_string())
+                } else {
+                    rx.recv().map_err(|e| e.to_string())?
+                }
+            }
+        }
     }
     /// Called on the main thread by the owning run loop. Returns whether an item handled it.
     pub fn dispatch_menu_event(id: &str) -> bool {
@@ -174,8 +230,63 @@ mod tests {
     #[test]
     fn dispatcher_failures_return_without_creating_os_objects() {
         let d = NativeDesktop::new(Arc::new(|_| Err("fixture executor closed".into())));
-        let s = parse_shortcut("Alt+F19").unwrap();
-        assert_eq!(d.register(&s).unwrap_err(), "fixture executor closed");
-        assert_eq!(d.remove("fixture").unwrap_err(), "fixture executor closed");
+        std::thread::spawn(move || {
+            let s = parse_shortcut("Alt+F19").unwrap();
+            assert_eq!(d.register(&s).unwrap_err(), "fixture executor closed");
+            assert_eq!(d.remove("fixture").unwrap_err(), "fixture executor closed");
+        })
+        .join()
+        .unwrap();
+    }
+    #[test]
+    fn main_thread_calls_execute_inline_without_queueing() {
+        let d = NativeDesktop::new(Arc::new(|_| panic!("main-thread call must not queue")));
+        assert_eq!(d.call(|| Ok(42)).unwrap(), 42);
+    }
+    #[test]
+    fn timed_out_queued_operations_have_no_late_effects() {
+        let queued = Arc::new(std::sync::Mutex::new(None));
+        let sink = queued.clone();
+        let d = NativeDesktop::new(Arc::new(move |op| {
+            *sink.lock().unwrap() = Some(op);
+            Ok(())
+        }));
+        let effects = Arc::new(AtomicU8::new(0));
+        let counter = effects.clone();
+        let error = std::thread::spawn(move || {
+            d.call_with_timeout(
+                move || {
+                    counter.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                },
+                Duration::from_millis(10),
+            )
+        })
+        .join()
+        .unwrap();
+        assert!(error.is_err());
+        queued.lock().unwrap().take().unwrap()();
+        assert_eq!(effects.load(Ordering::Relaxed), 0);
+    }
+    #[test]
+    fn started_operation_returns_its_outcome_instead_of_a_false_timeout() {
+        let started = Arc::new(std::sync::Barrier::new(2));
+        let dispatch_started = started.clone();
+        let d = NativeDesktop::new(Arc::new(move |op| {
+            std::thread::spawn(op);
+            dispatch_started.wait();
+            Ok(())
+        }));
+        let caller = std::thread::spawn(move || {
+            d.call_with_timeout(
+                move || {
+                    started.wait();
+                    std::thread::sleep(Duration::from_millis(20));
+                    Ok(42)
+                },
+                Duration::from_millis(5),
+            )
+        });
+        assert_eq!(caller.join().unwrap().unwrap(), 42);
     }
 }

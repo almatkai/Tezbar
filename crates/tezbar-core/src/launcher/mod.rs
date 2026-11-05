@@ -6,7 +6,8 @@ mod providers;
 mod storage;
 mod stores;
 pub(crate) mod terminal;
-mod text;
+/// Shared query normalization and matching for core search and native UI models.
+pub mod text;
 use crate::common::{now_ms, CoreContext, CoreResult, HandlerResult};
 use serde_json::{json, Value};
 use std::{
@@ -66,7 +67,6 @@ pub const CHANNELS: &[&str] = &[
     "terminal:native-restore",
     "terminal:native-exit",
     "terminal:native-detach",
-    "core:terminal:detach",
     "terminal:exit",
     "core:terminal:exit",
     "core:apps:list",
@@ -407,7 +407,7 @@ impl LauncherCore {
             // Clipboard writes must not rebuild unrelated notes/snippets/links.
             return self.inner.clipboard.handle(c, a).await;
         }
-        if c.starts_with("terminal:") || c == "core:terminal:exit" || c == "core:terminal:detach" {
+        if c.starts_with("terminal:") || c == "core:terminal:exit" {
             return self.inner.terminal.handle(c, a).await;
         }
         match c {

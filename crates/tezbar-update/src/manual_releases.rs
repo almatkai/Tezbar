@@ -75,6 +75,7 @@ pub fn newest_installer(
         .max_by(|left, right| left.version.cmp(&right.version))
 }
 
+#[cfg(feature = "native")]
 pub async fn check(
     current: &Version,
     channel: ReleaseChannel,
@@ -118,6 +119,7 @@ pub async fn check(
 mod tests {
     use super::*;
 
+    #[cfg(feature = "native")]
     #[tokio::test]
     #[ignore = "Requires GitHub network access and a published Beta installer"]
     async fn live_beta_installer_discovery_from_stable_028() {

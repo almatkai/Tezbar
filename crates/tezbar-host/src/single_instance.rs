@@ -1,8 +1,15 @@
 //! Per-profile exclusive activation endpoint; owner-only local transport, no polling loop.
 use sha2::{Digest, Sha256};
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub struct Instance {
+    retiring: Arc<AtomicBool>,
     #[cfg(windows)]
     _mutex: MutexLease,
     task: tokio::task::JoinHandle<()>,
@@ -13,6 +20,7 @@ pub struct Instance {
 }
 impl Drop for Instance {
     fn drop(&mut self) {
+        self.begin_shutdown();
         self.task.abort();
         #[cfg(unix)]
         {
@@ -28,16 +36,27 @@ pub enum Claim {
     Activated,
 }
 // The ownership guard becomes visible before its activation endpoint is bound.
-// Retry only connection establishment; never replay an activation after sending it.
+// Retry binding/ownership and explicit retiring replies. An ambiguous activation
+// outcome is an error, never a reason to send the activation a second time.
 async fn connect_owner<S, F, Fut>(mut connect: F) -> std::io::Result<S>
 where
     F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = std::io::Result<S>>,
+    Fut: std::future::Future<Output = std::io::Result<Option<S>>>,
 {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    // Core shutdown has an eight-second bound; allow its owner to release the lease.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         match connect().await {
-            Ok(stream) => return Ok(stream),
+            Ok(Some(stream)) => return Ok(stream),
+            Ok(None) if std::time::Instant::now() < deadline => {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            Ok(None) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Instance is still shutting down",
+                ))
+            }
             Err(error)
                 if (matches!(
                     error.kind(),
@@ -55,15 +74,16 @@ where
 }
 async fn activate<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
     mut stream: S,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
         stream.write_all(b"activate\n").await?;
         let mut response = [0; 3];
         stream.read_exact(&mut response).await?;
-        if &response != b"ok\n" {
-            return Err(std::io::Error::other("Invalid activation reply"));
+        match &response {
+            b"ok\n" => Ok(true),
+            b"no\n" => Ok(false),
+            _ => Err(std::io::Error::other("Invalid activation reply")),
         }
-        Ok::<_, std::io::Error>(())
     })
     .await
     .map_err(|_| "Activation timed out".to_string())?
@@ -72,10 +92,15 @@ async fn activate<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
 async fn receive<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
     mut stream: S,
     callback: &Arc<dyn Fn() + Send + Sync>,
+    retiring: &AtomicBool,
 ) {
     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), async {
         let mut request = [0; 9];
         if stream.read_exact(&mut request).await.is_ok() && &request == b"activate\n" {
+            if retiring.load(Ordering::Acquire) {
+                let _ = stream.write_all(b"no\n").await;
+                return;
+            }
             callback();
             let _ = stream.write_all(b"ok\n").await;
         }
@@ -83,6 +108,10 @@ async fn receive<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin>(
     .await;
 }
 impl Instance {
+    /// Call before beginning bounded core shutdown, while retaining the lease.
+    pub fn begin_shutdown(&self) {
+        self.retiring.store(true, Ordering::Release);
+    }
     pub async fn claim(
         directory: &Path,
         identity: &str,
@@ -107,14 +136,22 @@ impl Instance {
                 .custom_flags(libc::O_NOFOLLOW)
                 .open(directory.join(format!(".instance-{key}.lock")))
                 .map_err(|e| e.to_string())?;
-            let socket = directory.join(format!(".instance-{}.sock", &key[..16]));
-            if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-                activate(
-                    connect_owner(|| tokio::net::UnixStream::connect(&socket))
-                        .await
-                        .map_err(|e| e.to_string())?,
-                )
-                .await?;
+            let socket = socket_directory()?.join(format!("{}.sock", &key[..32]));
+            let owns = connect_owner(|| async {
+                if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+                    return Ok(Some(true));
+                }
+                let error = std::io::Error::last_os_error();
+                if error.kind() != std::io::ErrorKind::WouldBlock {
+                    return Err(error);
+                }
+                let stream = tokio::net::UnixStream::connect(&socket).await?;
+                let accepted = activate(stream).await.map_err(std::io::Error::other)?;
+                Ok(accepted.then_some(false))
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+            if !owns {
                 return Ok(Claim::Activated);
             }
             if socket.exists() {
@@ -123,12 +160,19 @@ impl Instance {
             let listener = tokio::net::UnixListener::bind(&socket).map_err(|e| e.to_string())?;
             std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600))
                 .map_err(|e| e.to_string())?;
+            let retiring = Arc::new(AtomicBool::new(false));
+            let listener_retiring = retiring.clone();
             let task = tokio::spawn(async move {
                 while let Ok((stream, _)) = listener.accept().await {
-                    receive(stream, &callback).await;
+                    receive(stream, &callback, &listener_retiring).await;
                 }
             });
-            Ok(Claim::Owner(Self { task, lock, socket }))
+            Ok(Claim::Owner(Self {
+                task,
+                lock,
+                socket,
+                retiring,
+            }))
         }
         #[cfg(windows)]
         {
@@ -137,18 +181,26 @@ impl Instance {
                 r"\\.\pipe\tezbar-{}-{key}",
                 process_user_sid().map_err(|e| e.to_string())?
             );
-            let mutex = owner_mutex(&format!(
+            let mutex_name = format!(
                 "Local\\tezbar-{}-{key}",
                 process_user_sid().map_err(|e| e.to_string())?
-            ))
+            );
+            let mutex = connect_owner(|| async {
+                let mutex = owner_mutex(&mutex_name)?;
+                if mutex.owner {
+                    return Ok(Some(Some(mutex)));
+                }
+                // A contender must not keep the retiring owner's named object alive.
+                drop(mutex);
+                let stream = ClientOptions::new().open(&name)?;
+                let accepted = activate(stream).await.map_err(std::io::Error::other)?;
+                Ok(accepted.then_some(None))
+            })
+            .await
             .map_err(|e| e.to_string())?;
-            if !mutex.owner {
-                let stream = connect_owner(|| std::future::ready(ClientOptions::new().open(&name)))
-                    .await
-                    .map_err(|e| e.to_string())?;
-                activate(stream).await?;
+            let Some(mutex) = mutex else {
                 return Ok(Claim::Activated);
-            }
+            };
             // A dropped owner aborts its async accept task. Its final pipe handle
             // may close on the next executor turn, after the mutex is released.
             // Owning the new mutex means we must wait for that endpoint to drain,
@@ -163,6 +215,8 @@ impl Instance {
                     Err(_) => tokio::time::sleep(std::time::Duration::from_millis(5)).await,
                 }
             };
+            let retiring = Arc::new(AtomicBool::new(false));
+            let listener_retiring = retiring.clone();
             let task = tokio::spawn(async move {
                 let mut server = server;
                 loop {
@@ -173,16 +227,36 @@ impl Instance {
                         Ok(next) => next,
                         Err(_) => break,
                     };
-                    receive(server, &callback).await;
+                    receive(server, &callback, &listener_retiring).await;
                     server = next;
                 }
             });
             Ok(Claim::Owner(Self {
                 task,
                 _mutex: mutex,
+                retiring,
             }))
         }
     }
+}
+
+#[cfg(unix)]
+fn socket_directory() -> Result<std::path::PathBuf, String> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    // macOS canonical OS-temp profile paths can exceed sun_path before the
+    // socket filename is appended. Keep only the lock in that profile.
+    let uid = unsafe { libc::geteuid() };
+    let directory = std::path::PathBuf::from(format!("/tmp/tezbar-instance-{uid}"));
+    match std::fs::DirBuilder::new().mode(0o700).create(&directory) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    let metadata = std::fs::symlink_metadata(&directory).map_err(|e| e.to_string())?;
+    if !metadata.is_dir() || metadata.uid() != uid || metadata.mode() & 0o077 != 0 {
+        return Err("Instance socket directory must be private and owned by this user".into());
+    }
+    Ok(directory)
 }
 #[cfg(test)]
 mod tests {
@@ -195,7 +269,7 @@ mod tests {
             std::future::ready(match attempts {
                 1 => Err(std::io::ErrorKind::NotFound.into()),
                 2 => Err(std::io::ErrorKind::WouldBlock.into()),
-                _ => Ok(42),
+                _ => Ok(Some(42)),
             })
         })
         .await
@@ -238,6 +312,77 @@ mod tests {
                 .unwrap(),
             Claim::Owner(_)
         ));
+    }
+    #[tokio::test]
+    async fn retiring_owner_refuses_activation_and_contender_acquires_released_profile() {
+        let d = tempfile::tempdir().unwrap();
+        let callbacks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = callbacks.clone();
+        let callback: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            count.fetch_add(1, Ordering::Relaxed);
+        });
+        let Claim::Owner(owner) = Instance::claim(d.path(), "retire-fixture", callback.clone())
+            .await
+            .unwrap()
+        else {
+            panic!("owner missing");
+        };
+        owner.begin_shutdown();
+        let root = d.path().to_owned();
+        let contender =
+            tokio::spawn(async move { Instance::claim(&root, "retire-fixture", callback).await });
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+        assert!(!contender.is_finished());
+        drop(owner);
+        let claim = tokio::time::timeout(std::time::Duration::from_secs(2), contender)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(matches!(claim, Claim::Owner(_)));
+        assert_eq!(callbacks.load(Ordering::Relaxed), 0);
+    }
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn deep_preview_profile_uses_a_short_private_activation_socket() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let d = tempfile::tempdir().unwrap();
+        let deep = d
+            .path()
+            .join("preview-profile-with-a-deliberately-long-name")
+            .join("data")
+            .join("nested-profile");
+        std::fs::create_dir_all(&deep).unwrap();
+        let Claim::Owner(owner) = Instance::claim(&deep, "deep-fixture", Arc::new(|| {}))
+            .await
+            .unwrap()
+        else {
+            panic!("owner missing");
+        };
+        assert!(owner.socket.as_os_str().len() < 104);
+        assert!(!owner.socket.starts_with(&deep));
+        let parent = owner.socket.parent().unwrap();
+        let metadata = std::fs::symlink_metadata(parent).unwrap();
+        assert_eq!(metadata.uid(), unsafe { libc::geteuid() });
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o700);
+        assert!(matches!(
+            Instance::claim(&deep, "deep-fixture", Arc::new(|| {}))
+                .await
+                .unwrap(),
+            Claim::Activated
+        ));
+    }
+    #[tokio::test]
+    async fn ambiguous_activation_failure_is_not_replayed() {
+        let (mut server, client) = tokio::io::duplex(32);
+        let reader = tokio::spawn(async move {
+            let mut command = [0; 9];
+            server.read_exact(&mut command).await.unwrap();
+            assert_eq!(&command, b"activate\n");
+            // The owner may have acted but its acknowledgement was lost.
+        });
+        assert!(activate(client).await.is_err());
+        reader.await.unwrap();
     }
 }
 

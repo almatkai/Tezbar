@@ -188,7 +188,7 @@ impl TerminalCore {
             .map_err(|e| e.to_string())?
     }
     pub(crate) fn metadata(ctx: &CoreContext, c: &str, a: &[Value]) -> CoreResult {
-        let c = if c == "terminal:native-detach" || c == "core:terminal:detach" {
+        let c = if c == "terminal:native-detach" {
             "terminal:detach"
         } else {
             c

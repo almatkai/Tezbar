@@ -1,5 +1,12 @@
 # Native GPUI parity ledger
 
+M0–M2 review dispositions: see [repair record](native-m01/m2-review-repairs.md).
+Native update status handling deliberately surfaces feed failures more strictly
+(F7). Temporary Tauri extension-tray removal and interrupted Vault-auth blur
+suppression are preserved old defects; native acceptance must verify real tray
+removal and cancellation-safe blur restoration. No UI row becomes done from a
+portable-host unit test alone.
+
 Companion to [NATIVE_GPUI_APP_SPEC.md](NATIVE_GPUI_APP_SPEC.md). Source state: `5a5d9da`.
 Every row starts as `todo`. An implementer changes the status only together with evidence:
 a test name, a log path or a screenshot path. Final statuses are `native` (GPUI view and

@@ -349,15 +349,19 @@ impl Host {
         }
     }
     pub async fn cleanup(&self) {
-        let (blur, notifications) = {
+        let (blur, notifications, trays) = {
             let mut r = self.resources.lock().unwrap_or_else(|e| e.into_inner());
-            let result = (r.blur, r.notifications.drain().collect::<Vec<_>>());
-            for (_, scoped) in r.trays.drain() {
-                let _ = self.ctx.host.status_items().remove(&scoped);
-            }
+            let result = (
+                r.blur,
+                r.notifications.drain().collect::<Vec<_>>(),
+                r.trays.drain().map(|(_, scoped)| scoped).collect::<Vec<_>>(),
+            );
             r.leases.clear();
             result
         };
+        for scoped in trays {
+            let _ = self.ctx.host.status_items().remove(&scoped);
+        }
         if blur {
             let _ = self.blur(false).await;
         }

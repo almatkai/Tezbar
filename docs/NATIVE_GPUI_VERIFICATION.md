@@ -6,6 +6,12 @@ The full migration is **not complete**. M3–M11 and all native UI acceptance re
 outstanding. No default entrypoint, installed app, production profile, signing
 identity, updater feed, release guard or immutable performance report was changed.
 
+The first Opus review accepted the foundation conditionally, finding three concrete
+M2 repairs and three native-host integration requirements. The parent's
+[repair record](native-m01/m2-review-repairs.md) documents their implementation,
+focused Mac checks, feed-status disposition and remaining Windows/re-review gates.
+Earlier clean M2 artifact hashes below remain historical, not hashes of these repairs.
+
 ## M0–M1 evidence
 
 Raw logs and archive: `/tmp/tezbar-native-m01-evidence/` on the build Mac.

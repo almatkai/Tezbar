@@ -6020,6 +6020,7 @@ dependencies = [
  "tar",
  "tempfile",
  "tokio",
+ "url",
  "windows-sys 0.59.0",
 ]
 

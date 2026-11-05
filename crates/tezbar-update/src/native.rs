@@ -458,10 +458,7 @@ impl StagedMac {
         let requirement = pin["designatedRequirement"]
             .as_str()
             .ok_or("Pinned designated requirement missing")?;
-        for args in [
-            vec!["--verify", "--deep", "--strict"],
-            vec!["--verify", "--strict", "-R", requirement],
-        ] {
+        for args in mac_verification_arguments(requirement) {
             let out = std::process::Command::new("/usr/bin/codesign")
                 .args(args)
                 .arg(&self.bundle)
@@ -548,30 +545,94 @@ pub struct StagedWindows {
     pub installer: PathBuf,
 }
 impl StagedWindows {
+    /// Raw NSIS parameter fragments, joined once for ShellExecuteW. `/R` keeps
+    /// the passive install's relaunch contract from tauri-plugin-updater 2.10.1.
     pub fn arguments(current_args: &[String]) -> Vec<String> {
-        vec![
-            "/P".into(),
-            "/UPDATE".into(),
-            "/ARGS".into(),
-            current_args
-                .iter()
-                .map(|s| format!("\"{}\"", s.replace('"', "\\\"")))
-                .collect::<Vec<_>>()
-                .join(" "),
-        ]
+        ["/P", "/R", "/UPDATE", "/ARGS"]
+            .into_iter()
+            .map(String::from)
+            .chain(current_args.iter().map(|arg| escape_nsis_argument(arg)))
+            .collect()
     }
     #[cfg(windows)]
-    pub fn launch(self, current_args: &[String]) -> Result<std::process::Child, String> {
-        let child = std::process::Command::new(&self.installer)
-            .args(Self::arguments(current_args))
-            .spawn()
-            .map_err(|e| e.to_string())?;
+    pub fn launch(self, current_args: &[String]) -> Result<(), String> {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOW};
+        let parameters = Self::arguments(current_args).join(" ");
+        let file: Vec<u16> = self
+            .installer
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+        if file[..file.len() - 1].contains(&0) || parameters.contains('\0') {
+            return Err("Installer arguments contain a null character".into());
+        }
+        let parameters: Vec<u16> = parameters.encode_utf16().chain(Some(0)).collect();
+        let verb: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
+        // ShellExecute preserves the installer's elevation behavior and consumes
+        // the already-escaped NSIS command line without a second quoting pass.
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                verb.as_ptr(),
+                file.as_ptr(),
+                parameters.as_ptr(),
+                std::ptr::null(),
+                SW_SHOW,
+            )
+        } as isize;
+        if result <= 32 {
+            return Err(format!(
+                "Installer launch failed with ShellExecuteW code {result}"
+            ));
+        }
         self.directory.keep();
-        Ok(child)
+        Ok(())
     }
     pub fn staging_root(&self) -> &Path {
         self.directory.path()
     }
+}
+#[cfg(unix)]
+fn mac_verification_arguments(requirement: &str) -> [Vec<String>; 2] {
+    [
+        ["--verify", "--deep", "--strict"]
+            .map(String::from)
+            .to_vec(),
+        vec![
+            "--verify".into(),
+            "--strict".into(),
+            format!("-R={requirement}"),
+        ],
+    ]
+}
+
+/// Port of the locked updater's NSIS escaping. In addition to Windows quoting,
+/// slash-containing arguments must be quoted for NSIS GetOptions.
+fn escape_nsis_argument(argument: &str) -> String {
+    let quote = argument.is_empty() || argument.chars().any(|c| matches!(c, ' ' | '\t' | '/'));
+    let mut escaped = String::new();
+    if quote {
+        escaped.push('"');
+    }
+    let mut backslashes = 0;
+    for character in argument.chars() {
+        if character == '\\' {
+            backslashes += 1;
+        } else {
+            if character == '"' {
+                escaped.extend(std::iter::repeat('\\').take(backslashes + 1));
+            }
+            backslashes = 0;
+        }
+        escaped.push(character);
+    }
+    if quote {
+        escaped.extend(std::iter::repeat('\\').take(backslashes));
+        escaped.push('"');
+    }
+    escaped
 }
 #[cfg(unix)]
 fn verify_legacy(
@@ -757,8 +818,56 @@ mod tests {
         assert!(!missing.exists());
         let args =
             StagedWindows::arguments(&["--profile".into(), "C:\\fixture with spaces".into()]);
-        assert_eq!(&args[..3], ["/P", "/UPDATE", "/ARGS"]);
-        assert!(args[3].contains("fixture with spaces"));
+        assert_eq!(&args[..4], ["/P", "/R", "/UPDATE", "/ARGS"]);
+        assert_eq!(&args[4..], ["--profile", "\"C:\\fixture with spaces\""]);
+        assert_eq!(
+            StagedWindows::arguments(&[]).join(" "),
+            "/P /R /UPDATE /ARGS"
+        );
+    }
+
+    #[test]
+    fn nsis_relaunch_arguments_preserve_spaces_slashes_quotes_and_trailing_backslashes() {
+        let cases = [
+            ("something", "something"),
+            ("--flag", "--flag"),
+            ("some space", "\"some space\""),
+            ("--arg=\"wrapped\"", "--arg=\\\"wrapped\\\""),
+            ("--arg=\"wrapped space\"", "\"--arg=\\\"wrapped space\\\"\""),
+            ("/profile", "\"/profile\""),
+            ("C:\\dir with spaces\\", "\"C:\\dir with spaces\\\\\""),
+            ("C:\\dir\\", "C:\\dir\\"),
+            ("a\\\"b", "a\\\\\\\"b"),
+            ("", "\"\""),
+            ("қазақша 😀", "\"қазақша 😀\""),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(escape_nsis_argument(input), expected, "{input:?}");
+        }
+        let inputs: Vec<String> = cases.iter().map(|(input, _)| (*input).into()).collect();
+        let arguments = StagedWindows::arguments(&inputs);
+        assert_eq!(arguments.len(), inputs.len() + 4);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn inline_mac_requirement_is_enforced_by_codesign() {
+        for (requirement, succeeds) in [("anchor apple", true), ("identifier \"com.wrong\"", false)]
+        {
+            let args = mac_verification_arguments(requirement);
+            assert_eq!(args[1][2], format!("-R={requirement}"));
+            let output = std::process::Command::new("/usr/bin/codesign")
+                .args(&args[1])
+                .arg("/bin/ls")
+                .output()
+                .unwrap();
+            assert_eq!(
+                output.status.success(),
+                succeeds,
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
     }
 }
 #[cfg(test)]

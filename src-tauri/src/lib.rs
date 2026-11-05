@@ -1631,6 +1631,7 @@ fn update_raymes_shortcut(app: AppHandle, shortcut_str: String) -> Result<(), St
 
 #[tauri::command]
 async fn call_backend(
+    app: AppHandle,
     core: State<'_, Arc<native_core::NativeCore>>,
     channel: String,
     payload: serde_json::Value,
@@ -1638,12 +1639,14 @@ async fn call_backend(
     #[cfg(feature = "desktop-bench")]
     if channel == "__desktop_bench_reply" {
         desktop_bench::reply(
-            core.ctx.app.as_ref().unwrap(),
+            &app,
             payload[0].as_u64().unwrap(),
             payload[1].clone(),
         );
         return Ok(serde_json::Value::Null);
     }
+    #[cfg(not(feature = "desktop-bench"))]
+    let _ = app;
     let args = payload
         .as_array()
         .ok_or("IPC payload must be an argument array")?;

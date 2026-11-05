@@ -6,19 +6,24 @@ rust-version = "1.85"
 license = "Apache-2.0"
 publish = false
 
+[features]
+default = ["native"]
+native = ["dep:reqwest", "dep:tokio", "dep:tempfile", "dep:base64", "dep:minisign-verify", "dep:futures-util", "dep:flate2", "dep:tar", "dep:libc", "dep:windows-sys"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = "1"
-reqwest = { version = "0.13.4", default-features = false, features = ["json", "native-tls", "stream"] }
-tokio = { version = "1", features = ["full"] }
-tempfile = "3.27"
-base64 = "0.22"
-minisign-verify = "=0.2.5"
-futures-util = "0.3"
-flate2 = "1"
-tar = "0.4"
-libc = "0.2"
+url = "2"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "native-tls", "stream"], optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+tempfile = { version = "3.27", optional = true }
+base64 = { version = "0.22", optional = true }
+minisign-verify = { version = "=0.2.5", optional = true }
+futures-util = { version = "0.3", optional = true }
+flate2 = { version = "1", optional = true }
+tar = { version = "0.4", optional = true }
+libc = { version = "0.2", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Memory", "Win32_Security"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Memory", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"], optional = true }

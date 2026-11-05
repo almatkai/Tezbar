@@ -1,7 +1,7 @@
 //! Portable updater contracts and policy; no window runtime or installer side effects at startup.
 pub mod manual_releases;
 pub mod release_channels;
-#[cfg(unix)]
+#[cfg(all(unix, feature = "native"))]
 pub mod updater_temp;
 use serde::{Deserialize, Serialize};
 const GITHUB_REPO: &str = "almatkai/Tezbar";
@@ -41,7 +41,7 @@ pub enum AppUpdateStatus {
     },
 }
 
-pub fn validate_download_url(version: &semver::Version, url: &reqwest::Url) -> Result<(), String> {
+pub fn validate_download_url(version: &semver::Version, url: &url::Url) -> Result<(), String> {
     let prefix = format!("/{GITHUB_REPO}/releases/download/v{version}/");
     let filename = url.path().strip_prefix(&prefix).unwrap_or("");
     let product = "Tezbar";
@@ -64,6 +64,7 @@ pub fn validate_download_url(version: &semver::Version, url: &reqwest::Url) -> R
     Ok(())
 }
 
+#[cfg(feature = "native")]
 pub mod native;
 pub fn github_release_url(tag: &str, draft_fallback: &str) -> String {
     if tag.is_empty() {
