@@ -109,7 +109,7 @@ def open_timings(d):
         return dict(open_control_receipt_ms=(receipt-started)*1000,open_os_poll_ms=(observed[0]-started)*1000 if observed else None,app_boundary='write show -> first post-show frame receipt (includes socket/poll overhead)',os_boundary='write show -> CoreGraphics on-screen 760x640 window observed; <=2ms requested polling')
     finally:stop.set();thread.join()
 def latency(d,repetitions=10):
-    queries=['d','doc','Calculator','document-001','Orchard project meeting','zz-no-match-65001'];out=[]
+    queries=['do','doc','Calculator','document-001','Orchard project meeting','zz-no-match-65001'];out=[]
     for rep in range(repetitions):
         for query in queries:
             for style in ['burst','characters']:
@@ -175,7 +175,7 @@ def main():
                 spec=importlib.util.spec_from_file_location('native_responsiveness',REPO/'docs/performance/responsiveness-desktop.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
                 d.js(module.INSTALL);observations=[]
                 for rep in range(10):
-                    for query in ['d','doc','Calculator','document-001','Orchard project meeting','zz-no-match-65001']:
+                    for query in ['do','doc','Calculator','document-001','Orchard project meeting','zz-no-match-65001']:
                         for style in ['burst','characters']:
                             d.js("window.__inputBench.input('','');await new Promise(r=>setTimeout(r,30));while(window.__inputBench.active)await new Promise(r=>setTimeout(r,1));return true")
                             value=module.burst(d,[query] if style=='burst' else [query[:i] for i in range(1,len(query)+1)],70)
@@ -185,6 +185,10 @@ def main():
             # Existing, preserved harness provides the app-internal Tauri latency
             # instrumentation. Run responsiveness-desktop.py separately for A;
             # this file does not mislabel core-only timing as matched UI latency.
+        if a.mode!='C':
+            from window_visibility import main_on_screen
+            wait(lambda:bool(main_on_screen(d.pid))==(a.condition=='visible'),5)
+        result['latency_query_note']='Fresh-native-reply timing starts at two characters: A deliberately filters one-character input locally. One-character results/IPC timings are not compared.'
         started=time.monotonic();warmup=2 if a.smoke else 120
         def sample(phase):
             if a.mode!='C':

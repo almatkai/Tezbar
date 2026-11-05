@@ -282,3 +282,10 @@ binds source, binary SHA-256, resource hashes and compiler commit; stale receipt
 resource changes and compilers other than Rust 1.98.1 are refused. B embeds its
 compiler commit and exposes it with --version. Results separate binary source from
 harness source. The full runner also requires equal indexed category counts.
+
+The parent functional validation also found two harness assumptions: the current
+WebView deliberately makes no native search request for one-character input, and
+hide acknowledgement precedes WindowServer visibility. Fresh-reply comparisons use
+the same six queries starting at two characters in both apps (one-character native
+result timing is omitted explicitly). Both variants now reach the requested OS
+visibility state before warmup sampling. Failed smoke outputs remain preserved.
