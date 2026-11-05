@@ -129,6 +129,88 @@ fn t_r3_explicit_recreation_has_new_revision() {
     assert_eq!(c["providerConfigs"]["custom:a"]["apiKey"], "new");
 }
 #[test]
+fn retired_activation_cannot_target_deleted_provider_on_retry() {
+    for active in ["custom:a", "custom:b"] {
+        let mut q = WriteQueue::default();
+        let mut c = config();
+        c["provider"] = json!(active);
+        c["taskProviderOverrides"]["chat"] = json!(active);
+        q.enqueue(
+            1,
+            vec![Edit::Activate {
+                provider: "custom:a".into(),
+                model: "A".into(),
+            }],
+        );
+        flush(&mut q, &mut c, false);
+        q.retire(1);
+        q.enqueue(2, vec![Edit::RemoveProvider("custom:a".into())]);
+        flush(&mut q, &mut c, true);
+        q.retry(true);
+        while !q.pending.is_empty() {
+            flush(&mut q, &mut c, true);
+        }
+        let expected = if active == "custom:a" {
+            "ollama"
+        } else {
+            active
+        };
+        assert_eq!(c["provider"], expected);
+        assert_eq!(c["taskProviderOverrides"]["chat"], expected);
+        assert_eq!(q.failure_count(), 0);
+    }
+}
+#[test]
+fn stale_owner_cannot_activate_deleted_provider() {
+    let mut q = WriteQueue::default();
+    let mut c = config();
+    q.register(1);
+    q.enqueue(2, vec![Edit::RemoveProvider("custom:a".into())]);
+    flush(&mut q, &mut c, true);
+    q.enqueue(
+        1,
+        vec![Edit::Activate {
+            provider: "custom:a".into(),
+            model: "A".into(),
+        }],
+    );
+    flush(&mut q, &mut c, true);
+    assert_eq!(c["provider"], "ollama");
+    assert_eq!(c["taskProviderOverrides"]["chat"], "ollama");
+}
+#[test]
+fn explicit_recreation_can_activate_provider_again() {
+    let mut q = WriteQueue::default();
+    let mut c = config();
+    q.enqueue(1, vec![Edit::RemoveProvider("custom:a".into())]);
+    flush(&mut q, &mut c, true);
+    q.enqueue(
+        2,
+        vec![
+            Edit::Definition {
+                provider: "custom:a".into(),
+                value: json!({"id":"custom:a","title":"Recreated"}),
+            },
+            Edit::Activate {
+                provider: "custom:a".into(),
+                model: "New".into(),
+            },
+        ],
+    );
+    flush(&mut q, &mut c, true);
+    assert_eq!(c["provider"], "custom:a");
+    assert_eq!(c["model"], "New");
+    assert_eq!(
+        c["customProviders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| p["id"] == "custom:a")
+            .count(),
+        1
+    );
+}
+#[test]
 fn t_r4_retries_are_deduplicated_and_keep_newer_failed_removal() {
     let mut q = WriteQueue::default();
     let mut c = config();

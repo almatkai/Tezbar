@@ -12,6 +12,12 @@ M2 repairs and three native-host integration requirements. The parent's
 focused Mac checks, feed-status disposition and remaining Windows/re-review gates.
 Earlier clean M2 artifact hashes below remain historical, not hashes of these repairs.
 
+M3's agent/settings/Knowledge/extension/terminal/Vault controller lane is saved at
+`8d3d3f0`. Its [parent check](native-m03/parent-agent-model-check.md) records independent
+hash/mapping checks, a reproduced provider-removal defect, its repair and the 193-pass
+controller reruns on Rust 1.98.1/1.85. This is model progress; GPUI adapter/view parity
+and fresh Opus acceptance remain pending.
+
 ## M0–M1 evidence
 
 Raw logs and archive: `/tmp/tezbar-native-m01-evidence/` on the build Mac.

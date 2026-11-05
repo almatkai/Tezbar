@@ -78,6 +78,18 @@ pub enum Edit {
     },
 }
 impl Edit {
+    fn target_provider(&self) -> Option<&str> {
+        match self {
+            Self::Field { provider, .. }
+            | Self::Models { provider, .. }
+            | Self::Definition { provider, .. }
+            | Self::Select { provider, .. }
+            | Self::Activate { provider, .. }
+            | Self::RemoveModels { provider, .. } => Some(provider),
+            Self::RemoveProvider(provider) => Some(provider),
+            Self::Global { .. } => None,
+        }
+    }
     fn key(&self) -> Key {
         match self {
             Self::Field {
@@ -208,6 +220,12 @@ impl WriteQueue {
                 .provider()
                 .is_some_and(|p| self.removed.get(p).copied().unwrap_or(0) > revision)
     }
+    fn stale_edit(&self, edit: &Edit, revision: Revision) -> bool {
+        self.stale(&edit.key(), revision)
+            || edit
+                .target_provider()
+                .is_some_and(|p| self.removed.get(p).copied().unwrap_or(0) > revision)
+    }
     pub fn read_result(&mut self, token: u64, current: Result<Value, ()>) -> Option<Effect> {
         if !self
             .flight
@@ -250,7 +268,24 @@ impl WriteQueue {
             );
         for e in edits {
             let key = e.key();
-            if self.stale(&key, intent.revision) {
+            if self.stale_edit(e, intent.revision) {
+                continue;
+            }
+            // A live tab can be older than a successful provider removal. Only
+            // an explicit new Definition may recreate that id, never activation
+            // or stale form/model fields from that tab.
+            if !matches!(e, Edit::Definition { .. } | Edit::RemoveProvider(_))
+                && e.target_provider().is_some_and(|p| {
+                    p.starts_with("custom:")
+                        && !current["customProviders"]
+                            .as_array()
+                            .is_some_and(|providers| providers.iter().any(|v| v["id"] == p))
+                        && !intent.edits.iter().any(|candidate| {
+                            matches!(candidate, Edit::Definition { provider, .. } if provider == p)
+                                && !self.stale_edit(candidate, intent.revision)
+                        })
+                })
+            {
                 continue;
             }
             let provider = key.provider();
@@ -431,8 +466,12 @@ impl WriteQueue {
             let removed = &self.removed;
             self.failures.retain(|k, i| {
                 saved.get(k).copied().unwrap_or(0) < i.revision
-                    && !k
-                        .provider()
+                    && !i
+                        .edits
+                        .iter()
+                        .rev()
+                        .find(|e| e.key() == *k)
+                        .and_then(Edit::target_provider)
                         .is_some_and(|p| removed.get(p).copied().unwrap_or(0) >= i.revision)
             });
             if self.failures.is_empty() {
@@ -445,7 +484,7 @@ impl WriteQueue {
         } else if !f.intent.optional {
             for e in &f.intent.edits {
                 let k = e.key();
-                if self.stale(&k, f.intent.revision) {
+                if self.stale_edit(e, f.intent.revision) {
                     continue;
                 }
                 if self
