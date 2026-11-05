@@ -102,7 +102,13 @@ impl LauncherView {
             let _ = this.update_in(cx, |this, w, cx| match result {
                 Ok(()) => {
                     this.ready = true;
-                    this.commit(this.input.read(cx).content.to_string(), w, cx)
+                    // The field may contain IME preedit. Search only the last
+                    // committed generation, preserving a pending Enter ticket.
+                    if this.session.generation == 0 {
+                        this.commit(String::new(), w, cx);
+                    } else {
+                        this.schedule(w, cx);
+                    }
                 }
                 Err(error) => {
                     this.error = Some(format!("Search couldn't start: {error}"));
