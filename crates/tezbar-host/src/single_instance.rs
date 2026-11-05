@@ -123,14 +123,18 @@ impl Instance {
                 activate(stream).await?;
                 return Ok(Claim::Activated);
             }
-            let server = match owner_pipe(&name, true) {
-                Ok(server) => server,
-                Err(error) => {
-                    let stream = ClientOptions::new()
-                        .open(&name)
-                        .map_err(|_| error.to_string())?;
-                    activate(stream).await?;
-                    return Ok(Claim::Activated);
+            // A dropped owner aborts its async accept task. Its final pipe handle
+            // may close on the next executor turn, after the mutex is released.
+            // Owning the new mutex means we must wait for that endpoint to drain,
+            // never activate an endpoint belonging to the retired owner.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            let server = loop {
+                match owner_pipe(&name, true) {
+                    Ok(server) => break server,
+                    Err(error) if std::time::Instant::now() >= deadline => {
+                        return Err(error.to_string())
+                    }
+                    Err(_) => tokio::time::sleep(std::time::Duration::from_millis(5)).await,
                 }
             };
             let task = tokio::spawn(async move {
