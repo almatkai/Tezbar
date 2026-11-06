@@ -1,0 +1,1328 @@
+{
+  "parent_head_requested": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+  "current_parent_head": "35dca9bad4c44198dbc1c1e2e7b687ab0b6a9b2f",
+  "native_test_count": 28,
+  "native_fixture_tests": {
+    "clipboard_native_selection_secret_boundary_and_one_restore": "apps/tezbar/src/surfaces/utilities/tests.rs:123",
+    "snippet_create_actual_id_cancel_and_delete_confirmation": "apps/tezbar/src/surfaces/utilities/tests.rs:175",
+    "notes_real_rich_ime_format_save_failure_retry_and_identity": "apps/tezbar/src/surfaces/utilities/tests.rs:224",
+    "monitor_hidden_stops_polling_and_stale_reply_cannot_change_view": "apps/tezbar/src/surfaces/utilities/tests.rs:338",
+    "emoji_native_grid_persists_recent_and_emits_single_ordered_hide_paste": "apps/tezbar/src/surfaces/utilities/tests.rs:367",
+    "cancelled_release_and_vault_auth_cannot_cross_navigation": "apps/tezbar/src/surfaces/utilities/tests.rs:395",
+    "canonical_wire_shapes_and_redacted_diagnostics": "apps/tezbar/src/surfaces/utilities/tests.rs:416",
+    "native_note_list_continuation_and_bounded_model_undo_roundtrip": "apps/tezbar/src/surfaces/utilities/tests.rs:449",
+    "indexing_filter_paging_fences_and_native_open_wire": "apps/tezbar/src/surfaces/utilities/tests.rs:520",
+    "native_delete_confirmation_cannot_transfer_to_new_selection": "apps/tezbar/src/surfaces/utilities/tests.rs:575",
+    "permissions_native_action_lock_refresh_and_accessible_status": "apps/tezbar/src/surfaces/utilities/tests.rs:618",
+    "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire": "apps/tezbar/src/surfaces/utilities/tests.rs:674",
+    "background_actions_are_typed_and_hidden_owner_does_not_poll": "apps/tezbar/src/surfaces/utilities/tests.rs:729",
+    "clipboard_native_lazy_image_decodes_wire_object_and_releases_on_hide": "apps/tezbar/src/surfaces/utilities/tests.rs:751",
+    "native_paste_is_plain_safe_and_note_owned": "apps/tezbar/src/surfaces/utilities/tests.rs:810",
+    "vault_icon_picker_source_registry_filter_keyboard_default_and_escape": "apps/tezbar/src/surfaces/utilities/tests.rs:851",
+    "native_rich_backspace_delete_join_preserves_run_styles_and_undo_html": "apps/tezbar/src/surfaces/utilities/tests.rs:915",
+    "native_rich_range_replace_and_empty_list_enter_keep_canonical_html": "apps/tezbar/src/surfaces/utilities/tests.rs:997",
+    "explicit_drain_retries_failed_note_once_and_reports_new_failure": "apps/tezbar/src/surfaces/utilities/tests.rs:1073",
+    "native_collapsed_bold_types_formatted_run_and_undo_restores_caret": "apps/tezbar/src/surfaces/utilities/tests.rs:1137",
+    "structural_helper_preserves_nested_list_neighbors_and_inline_styles": "apps/tezbar/src/surfaces/utilities/tests.rs:1180",
+    "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped": "apps/tezbar/src/surfaces/utilities/tests.rs:1201",
+    "release_exact_version_native_enter_full_markdown_error_and_retry": "apps/tezbar/src/surfaces/utilities/tests.rs:1260",
+    "retired_note_native_ime_handler_cannot_commit_into_new_note": "apps/tezbar/src/surfaces/utilities/tests.rs:1297",
+    "delayed_note_create_and_save_update_store_owner_without_stealing_selection": "apps/tezbar/src/surfaces/utilities/tests.rs:1376",
+    "delayed_restore_cannot_hide_or_navigate_new_surface": "apps/tezbar/src/surfaces/utilities/tests.rs:1453",
+    "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire": "apps/tezbar/src/surfaces/utilities/tests.rs:1481",
+    "background_host_update_ready_is_actionable_and_idle_has_no_badge": "apps/tezbar/src/surfaces/utilities/tests.rs:1539"
+  },
+  "rows": [
+    {
+      "ledger_rows": [
+        "U-01",
+        "U-02",
+        "U-06"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/ClipboardView.tsx",
+          "sha256": "ca0fed88492af1dd171a687b94de449f95d5201f43739f46b74c62b05d82654b"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "clipboard_native_selection_secret_boundary_and_one_restore",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:123"
+        },
+        {
+          "name": "native_delete_confirmation_cannot_transfer_to_new_selection",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:575"
+        },
+        {
+          "name": "clipboard_native_lazy_image_decodes_wire_object_and_releases_on_hide",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:751"
+        },
+        {
+          "name": "delayed_restore_cannot_hide_or_navigate_new_surface",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1453"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "U-03",
+        "U-14"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/ClipboardView.tsx",
+          "sha256": "ca0fed88492af1dd171a687b94de449f95d5201f43739f46b74c62b05d82654b"
+        },
+        {
+          "path": "src/renderer/vaultDetect.test.ts",
+          "sha256": "4b6266042da8791a2ad2dddd1bd9b0c419a50761dcfb5fdf5b603d520d737bad"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:674"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "U-04",
+        "U-05"
+      ],
+      "sources": [
+        {
+          "path": "src/shared/textTransform.test.ts",
+          "sha256": "47ce60a7b24ee52761ff7e886873e73d5e5f717ff53ae6956e2d1c42ef05305b"
+        },
+        {
+          "path": "src/shared/textTransformers.test.ts",
+          "sha256": "85da95d1049a92903a3cacfce1f9ca4bdec4b241c730ab98b14f003ebe6ac467"
+        },
+        {
+          "path": "src/renderer/qrImage.test.ts",
+          "sha256": "42bc47de32e5afb66beeee2d7513cd2769c47e0cb76b99f406a681ffe1a653f5"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1201"
+        },
+        {
+          "name": "clipboard_native_selection_secret_boundary_and_one_restore",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:123"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "U-07",
+        "U-08",
+        "U-21"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/SnippetsView.tsx",
+          "sha256": "3e737e42c66b0c67736e476eb3028a94331159ad11cd9f27d7ed386ea2d33b5b"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "snippet_create_actual_id_cancel_and_delete_confirmation",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:175"
+        },
+        {
+          "name": "canonical_wire_shapes_and_redacted_diagnostics",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:416"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "U-09",
+        "U-10",
+        "U-11",
+        "U-20"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/NotesView.tsx",
+          "sha256": "0811aac2058fc43ab87dd68f3b56cbdee955455e224383df69bbd015bd585409"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "notes_real_rich_ime_format_save_failure_retry_and_identity",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:224"
+        },
+        {
+          "name": "native_note_list_continuation_and_bounded_model_undo_roundtrip",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:449"
+        },
+        {
+          "name": "native_rich_backspace_delete_join_preserves_run_styles_and_undo_html",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:915"
+        },
+        {
+          "name": "native_rich_range_replace_and_empty_list_enter_keep_canonical_html",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:997"
+        },
+        {
+          "name": "native_collapsed_bold_types_formatted_run_and_undo_restores_caret",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1137"
+        },
+        {
+          "name": "native_paste_is_plain_safe_and_note_owned",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:810"
+        },
+        {
+          "name": "retired_note_native_ime_handler_cannot_commit_into_new_note",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1297"
+        },
+        {
+          "name": "delayed_note_create_and_save_update_store_owner_without_stealing_selection",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1376"
+        },
+        {
+          "name": "explicit_drain_retries_failed_note_once_and_reports_new_failure",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1073"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "U-12",
+        "U-13"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/VaultView.tsx",
+          "sha256": "4790a0ac8d321418dc699a777266c68fd71258326eb596273c89bfbc027a8861"
+        },
+        {
+          "path": "src/renderer/vaultCopy.test.ts",
+          "sha256": "467e926f844b28af3eabafcf468f616c8f1fc68f05d4c0424f7e32d03577d523"
+        },
+        {
+          "path": "src/renderer/VaultIconPicker.test.ts",
+          "sha256": "101877c2afcffbe3f411d86cf2b36a02aa836794503d4aad2560986fcfc51154"
+        },
+        {
+          "path": "src/renderer/vaultIcons.test.ts",
+          "sha256": "d038b45b1295b617988855490781254ba04439b3d5d76128b025771093e98b86"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1481"
+        },
+        {
+          "name": "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:851"
+        },
+        {
+          "name": "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:674"
+        },
+        {
+          "name": "cancelled_release_and_vault_auth_cannot_cross_navigation",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:395"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "U-15"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/EmojiPickerView.tsx",
+          "sha256": "45254d0d01d386e60756afac976b44750f85c8b29166faabf5a5dafb109721b4"
+        },
+        {
+          "path": "src/renderer/emoji/emojiData.ts",
+          "sha256": "560b8d0fcb3feb75c309e2ae49ece6779372e40a8321ac7ac99dd43a10912df8"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "emoji_native_grid_persists_recent_and_emits_single_ordered_hide_paste",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:367"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "Y-01"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/SystemMonitorView.tsx",
+          "sha256": "3eb90264f9f36a6af1b1286a85a64142d50cc48e12f9ad322fd27f913ec8fd5b"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "monitor_hidden_stops_polling_and_stale_reply_cannot_change_view",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:338"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "N-01",
+        "N-02",
+        "N-03"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/IndexingView.tsx",
+          "sha256": "4d161b9d8b5c07f92376f73f6c447edb3140894ae9648f4dc47d4c0052da52d7"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "indexing_filter_paging_fences_and_native_open_wire",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:520"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "Y-02"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/PermissionsView.tsx",
+          "sha256": "1a08ff8e4c1020a71fb1ad8f0294ad0e4ebcbbeba8e86c44dc6dc36160d9f119"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "permissions_native_action_lock_refresh_and_accessible_status",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:618"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "Y-03"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/releaseNotes.test.ts",
+          "sha256": "d134d6b1bcbaea5991af84b25be95043931f86f8263ffbc78a765b0df62df436"
+        },
+        {
+          "path": "src/renderer/ReleaseNotesView.tsx",
+          "sha256": "25687367fe8595f47caeae2f1ed5ba25930f22fc3890706fdad2e337f1782afc"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "release_exact_version_native_enter_full_markdown_error_and_retry",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1260"
+        },
+        {
+          "name": "cancelled_release_and_vault_auth_cannot_cross_navigation",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:395"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    },
+    {
+      "ledger_rows": [
+        "U-31",
+        "Y-10"
+      ],
+      "sources": [
+        {
+          "path": "src/renderer/BackgroundTaskStatus.tsx",
+          "sha256": "028b4b91d5d3cd8fa1781117acce7bb6e160fcde93f92865e31e330974c948b7"
+        }
+      ],
+      "production_view_tests": [
+        {
+          "name": "background_actions_are_typed_and_hidden_owner_does_not_poll",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:729"
+        },
+        {
+          "name": "background_host_update_ready_is_actionable_and_idle_has_no_badge",
+          "location": "apps/tezbar/src/surfaces/utilities/tests.rs:1539"
+        }
+      ],
+      "status": "native-fixture evidence; parent integration/physical acceptance separate",
+      "limits": "Synthetic host only. Does not certify full row solely from a helper/controller assertion."
+    }
+  ],
+  "original_ts_cases": [
+    {
+      "source": "src/renderer/VaultIconPicker.test.ts",
+      "line": 66,
+      "case": "opens with the kind default selected and focuses the filter",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/VaultIconPicker.test.ts",
+      "line": 74,
+      "case": "navigates the grid with arrows, selects with Enter, and returns focus",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/VaultIconPicker.test.ts",
+      "line": 97,
+      "case": "filters by labels and keywords, and handles an empty grid",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/VaultIconPicker.test.ts",
+      "line": 114,
+      "case": "consumes Escape before the editor and App, then restores focus to the chip",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/VaultIconPicker.test.ts",
+      "line": 133,
+      "case": "clears a custom selection with Use default and closes on an outside click",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/qrImage.test.ts",
+      "line": 5,
+      "case": "rasterizes the generated SVG into a PNG-backed canvas image",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 18,
+      "case": "shows the notes bundled with the installed app without a network request",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 31,
+      "case": "does not substitute remote release descriptions when the installed notes are missing",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 41,
+      "case": "fetches the exact tag and preserves Markdown without truncation",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 55,
+      "case": "rejects notes for a different version",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 68,
+      "case": "handles missing releases without pretending there are notes",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 87,
+      "case": "skips a fresh install and records its version",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 95,
+      "case": "shows an upgraded version until the user dismisses it",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 103,
+      "case": "shows notes to existing users upgrading from before version tracking",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 118,
+      "case": "puts unread app notes first, ahead of the updater command",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 125,
+      "case": "keeps the home list unchanged after notes have been read",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 130,
+      "case": "lets users find the notes again by searching",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 136,
+      "case": "does not interfere with file, deep, or unrelated searches",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/releaseNotes.test.ts",
+      "line": 143,
+      "case": "does not duplicate an existing release-notes command",
+      "view_workflow_family": [
+        "release_exact_version_native_enter_full_markdown_error_and_retry",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/vaultCopy.test.ts",
+      "line": 17,
+      "case": "copies straight away while the vault is open",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/vaultCopy.test.ts",
+      "line": 26,
+      "case": "asks for Touch ID first when locked",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/vaultCopy.test.ts",
+      "line": 35,
+      "case": "copies nothing when the prompt is cancelled",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/vaultCopy.test.ts",
+      "line": 41,
+      "case": "reports errors as a message",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/vaultDetect.test.ts",
+      "line": 22,
+      "case": "recognises private keys anywhere in a multi-line paste",
+      "view_workflow_family": [
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/renderer/vaultDetect.test.ts",
+      "line": 28,
+      "case": "names servers after user@host from an ssh command or a bare address",
+      "view_workflow_family": [
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/renderer/vaultDetect.test.ts",
+      "line": 40,
+      "case": "treats text with spaces as a note named by its first line",
+      "view_workflow_family": [
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/renderer/vaultDetect.test.ts",
+      "line": 46,
+      "case": "falls back to a password and suggests nothing for an empty paste",
+      "view_workflow_family": [
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/renderer/vaultIcons.test.ts",
+      "line": 8,
+      "case": "keeps persisted ids unique and within the Rust validation format",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/vaultIcons.test.ts",
+      "line": 14,
+      "case": "has a registered default for every VaultKind",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/renderer/vaultIcons.test.ts",
+      "line": 23,
+      "case": "renders a custom icon and falls back to the kind for an unknown id",
+      "view_workflow_family": [
+        "vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire",
+        "vault_icon_picker_source_registry_filter_keyboard_default_and_escape",
+        "vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire",
+        "cancelled_release_and_vault_auth_cannot_cross_navigation"
+      ],
+      "scope": "native view workflow family; exact sub-assertions not all certified"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 6,
+      "case": "formats JSON",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 12,
+      "case": "encodes then decodes base64",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 21,
+      "case": "url-encodes and decodes",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 31,
+      "case": "counts words/chars/lines",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 40,
+      "case": "flips case",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 46,
+      "case": "hashes with sha256",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 52,
+      "case": "generates QR data URL",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransform.test.ts",
+      "line": 58,
+      "case": "generates QR for whitespace-only input (renderer handles trimming)",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 22,
+      "case": "formats valid JSON with 2-space indent by default",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 27,
+      "case": "minifies valid JSON",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 32,
+      "case": "round-trips format → minify",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 41,
+      "case": "reports invalid JSON with the parse error",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 47,
+      "case": "rejects empty input without calling JSON.parse",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 54,
+      "case": "encodes ASCII",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 58,
+      "case": "encodes UTF-8 (emoji, CJK) without data loss",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 66,
+      "case": "decodes standard base64",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 70,
+      "case": "accepts URL-safe base64 and missing padding",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 81,
+      "case": "rejects malformed base64",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 88,
+      "case": "encodes reserved characters",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 95,
+      "case": "encodes unicode",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 102,
+      "case": "round-trips",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 111,
+      "case": "decodes plus-as-space for form-encoded strings",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 115,
+      "case": "rejects malformed percent-encoding",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 123,
+      "case": "computes md5",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 131,
+      "case": "computes sha256 via WebCrypto",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 139,
+      "case": "computes sha512 via WebCrypto",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 148,
+      "case": "computes md5 through the uniform async hash API",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 153,
+      "case": "handles unicode input",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 161,
+      "case": "rejects empty input",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 168,
+      "case": "counts words, characters, sentences, paragraphs, lines",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 176,
+      "case": "handles contractions as a single word",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 180,
+      "case": "counts unicode words",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 184,
+      "case": "counts characters as code points (not UTF-16 units)",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 189,
+      "case": "formats the report",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 198,
+      "case": "rejects empty input",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 204,
+      "case": "splits on spaces",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 208,
+      "case": "splits camelCase and PascalCase",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 213,
+      "case": "splits snake_case and kebab-case",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 218,
+      "case": "handles acronym word boundaries",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 222,
+      "case": "converts to camelCase",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 230,
+      "case": "converts to snake_case",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 234,
+      "case": "converts to kebab-case",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 238,
+      "case": "converts to CONSTANT_CASE",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 245,
+      "case": "converts to Title Case",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 249,
+      "case": "converts to lower and UPPER",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 254,
+      "case": "round-trips camel ↔ snake",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 265,
+      "case": "rejects empty input",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 271,
+      "case": "parses a unix-ms timestamp",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 282,
+      "case": "auto-detects unix seconds",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 288,
+      "case": "rejects non-numeric input",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 293,
+      "case": "rejects empty input",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 299,
+      "case": "returns a base64 SVG data URL",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 312,
+      "case": "is deterministic — same input, same data URL",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 318,
+      "case": "produces different output for different inputs",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 325,
+      "case": "rejects empty input",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 329,
+      "case": "encodes longer payloads (v2+ path)",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 334,
+      "case": "rejects payloads too large for version 10",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 486,
+      "case": "round-trips short inputs",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 494,
+      "case": "round-trips longer inputs (forces multi-block RS, alignment patterns)",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    },
+    {
+      "source": "src/shared/textTransformers.test.ts",
+      "line": 505,
+      "case": "round-trips unicode payloads",
+      "view_workflow_family": [
+        "qr_preview_copy_and_export_are_worker_owned_and_selection_scoped",
+        "clipboard_native_selection_secret_boundary_and_one_restore"
+      ],
+      "scope": "partial native interaction + existing M3 algorithm cases"
+    }
+  ],
+  "inherited_model_map": "docs/native-m03/launcher-utilities-test-map.json",
+  "inherited_model_map_sha256": "6621c7f23c4928c95fcbdedc19cc81287e76132c9770c670a57288358a62dcd2",
+  "manual_acceptance": [
+    "macOS/Windows screenshots light/dark/zoom",
+    "VoiceOver/Narrator real focus and announcements",
+    "OS IME candidate anchoring/commit",
+    "native clipboard/reveal/save dialogs/Keychain/DPAPI",
+    "full application memory/performance",
+    "fresh visual/architecture review"
+  ],
+  "not_claimed": [
+    "M7-M11 migration",
+    "production profile/credentials/clipboard tests",
+    "model-only tests as complete native rows",
+    "every original transform algorithm as a distinct native chip fixture"
+  ],
+  "gpui_fixture_count": 26,
+  "ordinary_wire_or_structural_count": 2,
+  "parent_composition_tests": {
+    "path": "apps/tezbar/src/surfaces/command_bar/utilities_integration_tests.rs",
+    "sha256": "e484f935e4e562527508cac9221329b2627c1e50316a25b6dff94be7ec08ba85",
+    "count": 4,
+    "log": "/tmp/tezbar-native-m06-evidence/native-final.log"
+  }
+}

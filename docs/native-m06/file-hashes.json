@@ -1,0 +1,26 @@
+{
+  "algorithm": "SHA-256",
+  "files": {
+    "apps/tezbar/src/surfaces/utilities/background_tasks.rs": "4a0cacdc447836ad3ee6ecbf82fd0888178494cfd72eb8dc0ee08afe51963171",
+    "apps/tezbar/src/surfaces/utilities/clipboard.rs": "50bb016c2df6c7b92733f22261fc69bfe8e9c32864c39337fb2e9653b66e0167",
+    "apps/tezbar/src/surfaces/utilities/emoji.rs": "cdbd905dfd1d5c39a956d1fa192a0d7e4f189e2e5a73ae6be462df56aa5b27ca",
+    "apps/tezbar/src/surfaces/utilities/indexing.rs": "bde63076eaef9448b1b7474e087179ed5a6912cb4d9935b35a8c5dc2943265e8",
+    "apps/tezbar/src/surfaces/utilities/mod.rs": "e98c916a46a0a9d13692dc1f3eae252f19fb837c77b722589d985dcd048cb35b",
+    "apps/tezbar/src/surfaces/utilities/notes.rs": "ec945f0ee0726e5cdf0a306ab5ebbf59d143600bb20ca5a565958af70e5848ab",
+    "apps/tezbar/src/surfaces/utilities/permissions.rs": "32499aa51b27d5bb08bc8409ffd34f6b245dbb2804219fb821adfe2ce5523aca",
+    "apps/tezbar/src/surfaces/utilities/release_notes.rs": "6c53e6b56301835ce4c6512e919846b9672ee7551646feeefa3ba3bce9a2d452",
+    "apps/tezbar/src/surfaces/utilities/request.rs": "27cf5f2d76848a4adc9716cc219af5fba0698c1e45546d162e15a61064379273",
+    "apps/tezbar/src/surfaces/utilities/snippets.rs": "70699304ebcd56b07bc92cca426cc1db6387918baa2b873b308af8e2139cdd37",
+    "apps/tezbar/src/surfaces/utilities/system_monitor.rs": "dba646b2954aa6b1540643b476fa743ee3b8e2106d9d34c5d3f1fd39d75e0858",
+    "apps/tezbar/src/surfaces/utilities/tests.rs": "ebc03f8b10874d4e2091c3ab0f02a1b4e814b0501649ce443cce042540090bce",
+    "apps/tezbar/src/surfaces/utilities/vault.rs": "2f59ac53e28f1c182f5667976f5ac73b8dbdb8dea9c9ab2cd76e52ade131342a",
+    "apps/tezbar/src/surfaces/utilities/vault_icons.json": "7992fe8bc5019fd1c9e734838f8d18a10dbd2964aefcbc7676697953a773efbb",
+    "apps/tezbar/src/surfaces/utilities/view.rs": "b6fd57aa9068b55123d11e4c466191ab56623c9a128f5a46131a387d4b3b9dd2",
+    "crates/tezbar-ui/src/rich_text.rs": "cebdfb08bfd209c1bf3e39ff18912c9fbafe644ef71d69f0995975c3e5db0fd4",
+    "crates/tezbar-ui/src/text_input.rs": "eb7087062383d02778ed43872dc2767d40f5b3c6e2858137c399acd101efafc3",
+    "docs/native-m06/integration.md": "fbf9766fce4d04d3e844e06cf77f9757fc8e6f7d83e8527431e33509bddf5555",
+    "docs/native-m06/parent-contracts.md": "acfdc4a8955163a552031273eabd897e363fbcb345d84d4eaef397442789e622",
+    "docs/native-m06/source-case-map.json": "459a861623fc7bca3a9681ed90a62ecb0247e69d5a5d37f79cd24d0a6764b878",
+    "docs/native-m06/verification.md": "3b881111efa2bd0a0d89b5811488bb37a4ffb7fe5e088bee44897b607f38b59d"
+  }
+}

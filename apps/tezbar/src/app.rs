@@ -342,13 +342,13 @@ impl Owner {
                 .update(cx, |owner, cx| {
                     owner
                         .launcher
-                        .update(cx, |view, _, _| view.state_write_error())
+                        .update(cx, |view, _, _| view.durable_write_error())
                 })
                 .map_err(|e| e.to_string())
                 .and_then(|v| v.map_err(|e| e.to_string()))
                 .and_then(|error| error.map_or(Ok(()), Err));
             let prepared = gpui_tokio::Tokio::spawn(cx, async move {
-                launcher_error.map_err(|e| format!("Launcher state: {e}"))?;
+                launcher_error?;
                 if let Some(settings_drain) = settings_drain {
                     settings_drain
                         .map_err(|e| format!("Settings window: {e}"))?
@@ -814,6 +814,8 @@ impl Owner {
                     .update(cx, |view, _, cx| view.receive_navigation(intent, cx));
                 if settings {
                     self.settings(cx);
+                } else {
+                    self.show(cx);
                 }
             }
             Event::Reveal(path) => {

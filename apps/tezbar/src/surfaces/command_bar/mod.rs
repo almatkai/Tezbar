@@ -1,7 +1,7 @@
 //! Native command bar. All I/O starts in event/effect methods; Render only constructs elements.
 mod arguments;
 mod interactions;
-mod locale;
+pub(crate) mod locale;
 mod model_picker;
 pub mod navigation;
 mod presentation;
@@ -9,6 +9,9 @@ mod presentation;
 mod review_tests;
 #[cfg(test)]
 mod tests;
+mod utilities_integration;
+#[cfg(test)]
+mod utilities_integration_tests;
 mod view;
 use crate::{
     core_client::{CoreClient, Request, RequestAdapter},
@@ -126,6 +129,12 @@ pub struct Launcher {
     pointer: Option<Point<Pixels>>,
     suppress_pin_click: bool,
     navigation: Option<Navigation>,
+    utilities: Option<Entity<super::utilities::Utilities>>,
+    utility_transport: Option<Arc<dyn super::utilities::UtilityTransport>>,
+    utility_subscription: Option<Subscription>,
+    utility_save_directory: PathBuf,
+    utility_save_error: Option<String>,
+    utility_drain_serial: u64,
     nonce: u64,
     deep_navigation: bool,
     terminal_prompt: String,
@@ -169,7 +178,12 @@ pub struct Launcher {
 impl Launcher {
     pub fn new(core: CoreClient, relay: Relay, w: &mut Window, cx: &mut Context<Self>) -> Self {
         let path = core.0.ctx.paths.config_dir.join("ui-state-v1.json");
-        Self::with_adapter(Arc::new(core), relay, Some(path), w, cx)
+        let directory = core.0.ctx.paths.home_dir.clone();
+        let core = Arc::new(core);
+        let mut launcher = Self::with_adapter(core.clone(), relay, Some(path), w, cx);
+        launcher.utility_transport = Some(core);
+        launcher.utility_save_directory = directory;
+        launcher
     }
     pub fn with_adapter(
         adapter: Arc<dyn RequestAdapter>,
@@ -373,6 +387,12 @@ impl Launcher {
             pointer: None,
             suppress_pin_click: false,
             navigation: None,
+            utilities: None,
+            utility_transport: None,
+            utility_subscription: None,
+            utility_save_directory: std::env::temp_dir(),
+            utility_save_error: None,
+            utility_drain_serial: 0,
             nonce: 0,
             deep_navigation: false,
             terminal_prompt: String::new(),
@@ -517,6 +537,7 @@ impl Launcher {
         cx.notify();
     }
     pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        self.hide_utilities(w, cx);
         self.visible = false;
         self.dispatch(Input::Hide, cx);
         self.model.session.reset_transport();
@@ -1346,6 +1367,7 @@ impl Launcher {
         cx.notify();
     }
     pub fn receive_navigation(&mut self, intent: Navigation, cx: &mut Context<Self>) {
+        self.route_utility_navigation(intent.clone(), cx);
         if intent.surface == Surface::Command {
             let entity = cx.entity();
             let window = self.window;
@@ -1470,6 +1492,7 @@ impl Launcher {
         // Retry the current durable state on every quit. An earlier failed write must neither
         // permanently block quit nor be cleared by an unrelated successful model/config read.
         self.persist(cx);
+        self.drain_utilities(cx);
         std::mem::take(&mut self.writes)
     }
     fn core_event(&mut self, event: &CoreEvent, cx: &mut Context<Self>) {

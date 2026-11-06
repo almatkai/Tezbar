@@ -39,6 +39,7 @@ impl ShutdownOwner {
 pub type SearchRow = tezbar_ui_model::launcher::Row;
 #[derive(Clone, Debug)]
 pub enum Request {
+    Utility(crate::surfaces::utilities::UtilityRequest),
     Search(String),
     Execute {
         action: Value,
@@ -93,6 +94,7 @@ impl Request {
     pub fn wire(self) -> (&'static str, Vec<Value>) {
         let context = |action, query, rank, id: Option<String>| json!({"action":action,"context":{"query":query,"rank":rank,"resultId":id}});
         match self {
+            Self::Utility(request) => request.wire(),
             Self::Search(q) => ("search:all", vec![json!(q)]),
             Self::Execute {
                 action,
@@ -164,6 +166,22 @@ impl RequestAdapter for CoreClient {
     }
 }
 impl CoreClient {
+    /// Read-only HTTP stays cancellable, while sharing the app's request admission bound.
+    /// Unlike effectful core work, dropping this future must not detach a network task.
+    pub(crate) async fn release_notes(
+        &self,
+        url: String,
+        accept: &'static str,
+    ) -> Result<String, String> {
+        #[cfg(feature = "bench-control")]
+        let admissions = self.4.clone();
+        #[cfg(not(feature = "bench-control"))]
+        let admissions = self.3.clone();
+        let _permit = admissions
+            .try_acquire_owned()
+            .map_err(|_| "Native operations are still finishing; try again".to_owned())?;
+        tezbar_update::notes::http::fetch(&url, accept).await
+    }
     pub fn new(core: Arc<tezbar_core::NativeCore>) -> Self {
         Self(
             core,

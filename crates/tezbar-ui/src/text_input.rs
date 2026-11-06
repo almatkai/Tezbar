@@ -84,7 +84,39 @@ pub enum ClipboardEffect {
     Write(String),
 }
 impl gpui::EventEmitter<ClipboardEffect> for TextInput {}
+/// Optional document-owned editing. Absent by default; password fields never expose spans.
+#[derive(Clone, Debug)]
+pub struct StyledRange {
+    pub range: Range<usize>,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+}
+#[derive(Clone, Debug)]
+pub enum ExternalEdit {
+    Replace {
+        before: String,
+        after: String,
+        before_selection: ByteSelection,
+        after_selection: ByteSelection,
+    },
+    Undo {
+        redo: bool,
+    },
+    Newline,
+}
+impl gpui::EventEmitter<ExternalEdit> for TextInput {}
+#[derive(Clone, Debug, PartialEq)]
+pub struct ByteSelection {
+    pub range: Range<usize>,
+    pub reversed: bool,
+}
 pub struct TextInput {
+    external_edits: bool,
+    external_action_selection: Option<ByteSelection>,
+    styled_ranges: Vec<StyledRange>,
+    before_composition_styles: Option<Vec<StyledRange>>,
+    before_composition_selection: Option<ByteSelection>,
     pub options: FieldOptions,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
@@ -108,6 +140,11 @@ impl TextInput {
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self {
             options: FieldOptions::default(),
+            external_edits: false,
+            external_action_selection: None,
+            styled_ranges: Vec::new(),
+            before_composition_styles: None,
+            before_composition_selection: None,
             undo: Vec::new(),
             redo: Vec::new(),
             focus_handle: cx.focus_handle(),
@@ -124,12 +161,107 @@ impl TextInput {
             scroll_x: px(0.),
         }
     }
+    fn rebase_styles(&mut self, range: &Range<usize>, inserted: usize) {
+        let shift = |offset: usize| range.start + inserted + offset.saturating_sub(range.end);
+        for span in &mut self.styled_ranges {
+            if span.range.end <= range.start {
+                continue;
+            }
+            if span.range.start >= range.end {
+                span.range = shift(span.range.start)..shift(span.range.end);
+            } else {
+                span.range.start = span.range.start.min(range.start);
+                span.range.end = if span.range.end > range.end {
+                    shift(span.range.end)
+                } else {
+                    range.start + inserted
+                };
+            }
+        }
+        self.styled_ranges.retain(|s| s.range.start < s.range.end);
+    }
+    pub fn delegate_edits(&mut self, enabled: bool) {
+        self.external_edits = enabled;
+    }
+    pub fn selection_bytes(&self) -> ByteSelection {
+        ByteSelection {
+            range: self.selected_range.clone(),
+            reversed: self.selection_reversed,
+        }
+    }
+    pub fn replace_silently(
+        &mut self,
+        text: &str,
+        selection: ByteSelection,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let boundary = |at: usize| {
+            let mut at = at.min(text.len());
+            while !text.is_char_boundary(at) {
+                at -= 1;
+            }
+            at
+        };
+        let start = boundary(selection.range.start);
+        let end = boundary(selection.range.end).max(start);
+        self.content = text.to_string().into();
+        self.selected_range = start..end;
+        self.selection_reversed = selection.reversed;
+        self.marked_range = None;
+        self.before_composition = None;
+        self.before_composition_selection = None;
+        self.before_composition_styles = None;
+        self.lines.clear();
+        self.last_layout = None;
+        self.styled_ranges.clear();
+        self.undo.clear();
+        self.redo.clear();
+        window.notify_text_input_changed(&self.focus_handle);
+        window.notify_text_selection_changed(&self.focus_handle);
+        cx.notify();
+    }
+    pub fn set_styled_ranges(&mut self, ranges: Vec<StyledRange>, cx: &mut Context<Self>) {
+        self.styled_ranges = if self.options.password {
+            vec![]
+        } else {
+            ranges
+                .into_iter()
+                .filter_map(|mut s| {
+                    s.range.start = s.range.start.min(self.content.len());
+                    s.range.end = s.range.end.min(self.content.len());
+                    while !self.content.is_char_boundary(s.range.start) {
+                        s.range.start -= 1;
+                    }
+                    while !self.content.is_char_boundary(s.range.end) {
+                        s.range.end -= 1;
+                    }
+                    (s.range.start < s.range.end).then_some(s)
+                })
+                .take(65536)
+                .collect()
+        };
+        self.styled_ranges.sort_by_key(|s| s.range.start);
+        let mut end = 0;
+        self.styled_ranges.retain_mut(|s| {
+            s.range.start = s.range.start.max(end);
+            if s.range.start >= s.range.end {
+                return false;
+            }
+            end = s.range.end;
+            true
+        });
+        self.lines.clear();
+        cx.notify();
+    }
     pub fn clear_silently(&mut self, window: &Window, cx: &mut Context<Self>) {
         self.content = "".into();
         self.selected_range = 0..0;
         self.selection_reversed = false;
         self.marked_range = None;
         self.before_composition = None;
+        self.before_composition_selection = None;
+        self.before_composition_styles = None;
         self.lines.clear();
         self.last_layout = None;
         self.last_bounds = None;
@@ -144,6 +276,9 @@ impl TextInput {
     }
     pub fn cancel_composition(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(before) = self.before_composition.take() {
+            if let Some(styles) = self.before_composition_styles.take() {
+                self.styled_ranges = styles;
+            }
             self.content = before;
             self.selected_range = self.content.len()..self.content.len();
         }
@@ -188,8 +323,12 @@ impl TextInput {
         self.select_to(self.line_boundary(true), w, cx)
     }
     fn delete_word(&mut self, _: &DeleteWord, w: &mut Window, cx: &mut Context<Self>) {
+        let before_selection = self.selection_bytes();
         if self.selected_range.is_empty() {
             self.select_to(self.word_boundary(false), w, cx);
+        }
+        if self.external_edits {
+            self.external_action_selection = Some(before_selection);
         }
         self.replace_text_in_range(None, "", w, cx)
     }
@@ -268,8 +407,12 @@ impl TextInput {
         self.select_to(self.content.len(), w, cx);
     }
     fn delete_line_start(&mut self, _: &DeleteLineStart, w: &mut Window, cx: &mut Context<Self>) {
+        let before_selection = self.selection_bytes();
         if self.selected_range.is_empty() {
             self.select_to(self.line_boundary(false), w, cx);
+        }
+        if self.external_edits {
+            self.external_action_selection = Some(before_selection);
         }
         self.replace_text_in_range(None, "", w, cx);
     }
@@ -279,13 +422,18 @@ impl TextInput {
         w: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let before_selection = self.selection_bytes();
         if self.selected_range.is_empty() {
             self.select_to(self.word_boundary(true), w, cx);
+        }
+        if self.external_edits {
+            self.external_action_selection = Some(before_selection);
         }
         self.replace_text_in_range(None, "", w, cx);
     }
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
+        let before_selection = self.selection_bytes();
         if self.selected_range.is_empty() {
             let prev = self.previous_boundary(self.cursor_offset());
             if self.cursor_offset() == prev {
@@ -294,10 +442,14 @@ impl TextInput {
             }
             self.select_to(prev, window, cx)
         }
+        if self.external_edits {
+            self.external_action_selection = Some(before_selection);
+        }
         self.replace_text_in_range(None, "", window, cx)
     }
 
     fn delete(&mut self, _: &Delete, window: &mut Window, cx: &mut Context<Self>) {
+        let before_selection = self.selection_bytes();
         if self.selected_range.is_empty() {
             let next = self.next_boundary(self.cursor_offset());
             if self.cursor_offset() == next {
@@ -305,6 +457,9 @@ impl TextInput {
                 return;
             }
             self.select_to(next, window, cx)
+        }
+        if self.external_edits {
+            self.external_action_selection = Some(before_selection);
         }
         self.replace_text_in_range(None, "", window, cx)
     }
@@ -398,6 +553,9 @@ impl TextInput {
         }
     }
     fn checkpoint(&mut self) {
+        if self.external_edits {
+            return;
+        }
         let snapshot = self.snapshot();
         self.undo.push(snapshot);
         self.redo.clear();
@@ -414,6 +572,7 @@ impl TextInput {
         self.selection_reversed = s.reversed;
         self.marked_range = None;
         self.before_composition = None;
+        self.before_composition_selection = None;
         w.notify_text_input_changed(&self.focus_handle);
         cx.emit(Committed(self.content.to_string()));
         cx.notify();
@@ -423,12 +582,24 @@ impl TextInput {
             self.cancel_composition(w, cx);
             return;
         }
+        if self.external_edits {
+            cx.emit(ExternalEdit::Undo { redo: false });
+            return;
+        }
         if let Some(s) = self.undo.pop() {
             self.redo.push(self.snapshot());
             self.restore(s, w, cx);
         }
     }
     fn redo(&mut self, _: &Redo, w: &mut Window, cx: &mut Context<Self>) {
+        if self.marked_range.is_some() {
+            self.cancel_composition(w, cx);
+            return;
+        }
+        if self.external_edits {
+            cx.emit(ExternalEdit::Undo { redo: true });
+            return;
+        }
         if let Some(s) = self.redo.pop() {
             self.undo.push(self.snapshot());
             self.restore(s, w, cx);
@@ -437,6 +608,10 @@ impl TextInput {
     fn newline(&mut self, _: &Newline, w: &mut Window, cx: &mut Context<Self>) {
         if self.marked_range.is_some() {
             cx.propagate();
+            return;
+        }
+        if self.options.multiline && self.external_edits {
+            cx.emit(ExternalEdit::Newline);
             return;
         }
         if self.options.multiline {
@@ -667,8 +842,25 @@ impl EntityInputHandler for TextInput {
 
     fn unmark_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.marked_range = None;
-        self.before_composition = None;
-        cx.emit(Committed(self.content.to_string()));
+        let before_selection = self
+            .external_action_selection
+            .take()
+            .or_else(|| self.before_composition_selection.take())
+            .unwrap_or_else(|| self.selection_bytes());
+        let before = self.before_composition.take();
+        self.before_composition_styles = None;
+        if self.external_edits {
+            if let Some(before) = before {
+                cx.emit(ExternalEdit::Replace {
+                    before: before.to_string(),
+                    after: self.content.to_string(),
+                    before_selection,
+                    after_selection: self.selection_bytes(),
+                });
+            }
+        } else {
+            cx.emit(Committed(self.content.to_string()));
+        }
         window.notify_text_input_changed(&self.focus_handle);
         cx.notify();
     }
@@ -692,9 +884,19 @@ impl EntityInputHandler for TextInput {
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
 
+        let before_selection = self
+            .external_action_selection
+            .take()
+            .or_else(|| self.before_composition_selection.take())
+            .unwrap_or_else(|| self.selection_bytes());
+        let before = self
+            .before_composition
+            .clone()
+            .unwrap_or_else(|| self.content.clone());
         if self.before_composition.is_none() {
             self.checkpoint();
         }
+        self.rebase_styles(&range, new_text.len());
         self.content =
             (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..])
                 .into();
@@ -703,7 +905,18 @@ impl EntityInputHandler for TextInput {
         self.lines.clear();
         self.marked_range.take();
         self.before_composition = None;
-        cx.emit(Committed(self.content.to_string()));
+        self.before_composition_selection = None;
+        self.before_composition_styles = None;
+        if self.external_edits {
+            cx.emit(ExternalEdit::Replace {
+                before: before.to_string(),
+                after: self.content.to_string(),
+                before_selection,
+                after_selection: self.selection_bytes(),
+            });
+        } else {
+            cx.emit(Committed(self.content.to_string()));
+        }
         window.notify_text_input_changed(&self.focus_handle);
         cx.notify();
     }
@@ -719,6 +932,8 @@ impl EntityInputHandler for TextInput {
         if self.before_composition.is_none() {
             self.checkpoint();
             self.before_composition = Some(self.content.clone());
+            self.before_composition_styles = Some(self.styled_ranges.clone());
+            self.before_composition_selection = Some(self.selection_bytes());
         }
         let range = range_utf16
             .as_ref()
@@ -726,6 +941,7 @@ impl EntityInputHandler for TextInput {
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
 
+        self.rebase_styles(&range, new_text.len());
         self.content =
             (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..])
                 .into();
@@ -883,34 +1099,73 @@ impl Element for TextElement {
                 strikethrough: None,
             };
             let mut runs = vec![];
-            if let Some(marked) = input
-                .marked_range
-                .as_ref()
-                .filter(|_| !input.options.password)
-            {
-                let start = marked.start.saturating_sub(at).min(source.len());
-                let end = marked.end.saturating_sub(at).min(source.len());
-                for (len, underline) in [
-                    (start, None),
-                    (
-                        end - start,
-                        Some(UnderlineStyle {
+            let mut boundaries = vec![0, source.len()];
+            if !input.options.password {
+                let first = input.styled_ranges.partition_point(|s| s.range.end <= at);
+                for span in input.styled_ranges[first..]
+                    .iter()
+                    .take_while(|s| s.range.start < at + source.len())
+                {
+                    for edge in [span.range.start, span.range.end] {
+                        if edge > at && edge < at + source.len() {
+                            boundaries.push(edge - at);
+                        }
+                    }
+                }
+                if let Some(mark) = &input.marked_range {
+                    boundaries.push(mark.start.saturating_sub(at).min(source.len()));
+                    boundaries.push(mark.end.saturating_sub(at).min(source.len()));
+                }
+            }
+            boundaries.sort_unstable();
+            boundaries.dedup();
+            for pair in boundaries.windows(2) {
+                if pair[0] == pair[1] {
+                    continue;
+                }
+                let mut run = base.clone();
+                run.len = if input.options.password {
+                    display.len()
+                } else {
+                    pair[1] - pair[0]
+                };
+                if !input.options.password {
+                    let offset = at + pair[0];
+                    let index = input
+                        .styled_ranges
+                        .partition_point(|s| s.range.end <= offset);
+                    if let Some(span) = input.styled_ranges.get(index) {
+                        if span.range.contains(&offset) {
+                            if span.bold {
+                                run.font.weight = gpui::FontWeight::BOLD;
+                            }
+                            if span.italic {
+                                run.font.style = gpui::FontStyle::Italic;
+                            }
+                            if span.underline {
+                                run.underline = Some(UnderlineStyle {
+                                    color: Some(color),
+                                    thickness: px(1.),
+                                    wavy: false,
+                                });
+                            }
+                        }
+                    }
+                    if input
+                        .marked_range
+                        .as_ref()
+                        .is_some_and(|r| r.contains(&offset))
+                    {
+                        run.underline = Some(UnderlineStyle {
                             color: Some(color),
                             thickness: px(1.),
                             wavy: false,
-                        }),
-                    ),
-                    (source.len() - end, None),
-                ] {
-                    if len > 0 {
-                        runs.push(TextRun {
-                            len,
-                            underline,
-                            ..base.clone()
                         });
                     }
                 }
-            } else {
+                runs.push(run);
+            }
+            if runs.is_empty() {
                 runs.push(base);
             }
             let line = w.text_system().shape_line(
@@ -1610,5 +1865,198 @@ mod repair_tests {
             cx.simulate_keystrokes("home ctrl-delete");
             cx.update(|_, cx| assert_eq!(field.read(cx).content.as_ref(), "one е́\n 👨‍👩‍👧 end"));
         }
+    }
+}
+
+#[cfg(test)]
+mod rich_hook_tests {
+    use super::*;
+    use ::core::prelude::v1::test;
+    #[gpui::test]
+    fn delegated_composition_is_one_commit_and_silent_refresh_has_direction(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (input, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
+        let edits = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = edits.clone();
+        let plain = std::sync::Arc::new(std::sync::Mutex::new(0));
+        let p = plain.clone();
+        cx.update(|_, cx| {
+            cx.subscribe(&input, move |_, e: &ExternalEdit, _| {
+                sink.lock().unwrap().push(e.clone())
+            })
+            .detach();
+            cx.subscribe(&input, move |_, _: &Committed, _| *p.lock().unwrap() += 1)
+                .detach();
+        });
+        cx.update(|w, cx| {
+            input.update(cx, |i, cx| {
+                i.configure(FieldOptions {
+                    multiline: true,
+                    ..Default::default()
+                });
+                i.delegate_edits(true);
+                i.replace_silently(
+                    "a😀b",
+                    ByteSelection {
+                        range: 1..5,
+                        reversed: true,
+                    },
+                    w,
+                    cx,
+                );
+                assert_eq!(
+                    i.selection_bytes(),
+                    ByteSelection {
+                        range: 1..5,
+                        reversed: true
+                    }
+                );
+                i.replace_and_mark_text_in_range(None, "に", None, w, cx);
+                i.replace_and_mark_text_in_range(None, "日本", None, w, cx);
+                assert!(edits.lock().unwrap().is_empty());
+                i.unmark_text(w, cx);
+            })
+        });
+        let e = edits.lock().unwrap();
+        assert_eq!(e.len(), 1);
+        assert!(
+            matches!(&e[0],ExternalEdit::Replace{before,after,..} if before=="a😀b" && after=="a日本b")
+        );
+        assert_eq!(*plain.lock().unwrap(), 0);
+    }
+    #[gpui::test]
+    fn delegated_undo_redo_newline_preserve_document_ownership_and_ime(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (input, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
+        let edits = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = edits.clone();
+        cx.update(|_, cx| {
+            cx.subscribe(&input, move |_, e: &ExternalEdit, _| {
+                sink.lock().unwrap().push(e.clone())
+            })
+            .detach()
+        });
+        cx.update(|w, cx| {
+            input.update(cx, |i, cx| {
+                i.configure(FieldOptions {
+                    multiline: true,
+                    ..Default::default()
+                });
+                i.delegate_edits(true);
+                i.replace_silently(
+                    "list",
+                    ByteSelection {
+                        range: 4..4,
+                        reversed: false,
+                    },
+                    w,
+                    cx,
+                );
+                i.newline(&Newline, w, cx);
+                i.undo(&Undo, w, cx);
+                i.redo(&Redo, w, cx);
+                assert_eq!(i.content.as_ref(), "list");
+                i.replace_and_mark_text_in_range(None, "に", None, w, cx);
+                i.newline(&Newline, w, cx);
+                i.undo(&Undo, w, cx);
+                assert_eq!(i.content.as_ref(), "list");
+            })
+        });
+        let e = edits.lock().unwrap();
+        assert_eq!(e.len(), 3);
+        assert!(matches!(e[0], ExternalEdit::Newline));
+        assert!(matches!(e[1], ExternalEdit::Undo { redo: false }));
+        assert!(matches!(e[2], ExternalEdit::Undo { redo: true }));
+    }
+    #[gpui::test]
+    fn styles_clamp_utf8_and_password_ignores_them_plain_stays_internal(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (input, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
+        cx.update(|w, cx| {
+            input.update(cx, |i, cx| {
+                i.set_text("қ😀", w, cx);
+                i.set_styled_ranges(
+                    vec![StyledRange {
+                        range: 1..999,
+                        bold: true,
+                        italic: true,
+                        underline: true,
+                    }],
+                    cx,
+                );
+                assert_eq!(i.styled_ranges[0].range, 0..6);
+                i.undo(&Undo, w, cx);
+                assert!(i.content.is_empty());
+                i.configure(FieldOptions {
+                    password: true,
+                    ..Default::default()
+                });
+                i.set_text("synthetic-private", w, cx);
+                i.set_styled_ranges(
+                    vec![StyledRange {
+                        range: 0..999,
+                        bold: true,
+                        italic: false,
+                        underline: false,
+                    }],
+                    cx,
+                );
+                assert!(i.styled_ranges.is_empty());
+            })
+        });
+    }
+}
+#[cfg(test)]
+mod rich_marked_style_tests {
+    use super::*;
+    use ::core::prelude::v1::test;
+    #[gpui::test]
+    fn styled_multibyte_marked_replacements_keep_boundary_safe_ranges_and_cancel(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (input, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
+        cx.update(|w, cx| {
+            input.update(cx, |i, cx| {
+                i.configure(FieldOptions {
+                    multiline: true,
+                    ..Default::default()
+                });
+                i.delegate_edits(true);
+                i.replace_silently(
+                    "one 世界",
+                    ByteSelection {
+                        range: 0..0,
+                        reversed: false,
+                    },
+                    w,
+                    cx,
+                );
+                i.set_styled_ranges(
+                    vec![StyledRange {
+                        range: 4..10,
+                        bold: true,
+                        italic: false,
+                        underline: true,
+                    }],
+                    cx,
+                );
+                i.replace_and_mark_text_in_range(None, "に", None, w, cx);
+                for span in &i.styled_ranges {
+                    assert!(i.content.is_char_boundary(span.range.start));
+                    assert!(i.content.is_char_boundary(span.range.end));
+                }
+                i.replace_and_mark_text_in_range(None, "日本語", None, w, cx);
+                for span in &i.styled_ranges {
+                    assert!(i.content.is_char_boundary(span.range.start));
+                    assert!(i.content.is_char_boundary(span.range.end));
+                }
+                i.cancel_composition(w, cx);
+                assert_eq!(i.content.as_ref(), "one 世界");
+                assert_eq!(i.styled_ranges[0].range, 4..10);
+            })
+        });
     }
 }

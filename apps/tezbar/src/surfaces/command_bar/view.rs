@@ -153,6 +153,7 @@ impl Launcher {
         }
     }
     pub(super) fn return_home(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        self.hide_utilities(w, cx);
         self.prefix = None;
         self.model_menu = false;
         self.terminal_settings = false;
@@ -907,6 +908,18 @@ impl Render for Launcher {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         w.set_rem_size(px(16. * self.zoom));
         let t = tokens::tokens(w);
+        let utility = self
+            .utilities
+            .as_ref()
+            .filter(|view| {
+                let view = view.read(cx);
+                self.navigation
+                    .as_ref()
+                    .is_some_and(|navigation| navigation.surface == view.surface)
+                    && view.visible
+            })
+            .cloned();
+        let utility_active = utility.is_some();
         let mode = launcher::input_mode(&self.model.input, self.model.terminal_mode).mode;
         let grid = mode == Mode::Applications;
         let list = if grid {
@@ -976,7 +989,9 @@ impl Render for Launcher {
             .size_full()
             .into_any_element()
         };
-        let content = if let Some(n) = &self.navigation {
+        let content = if let Some(utility) = utility {
+            div().flex_1().min_h_0().child(utility).into_any_element()
+        } else if let Some(n) = &self.navigation {
             div()
                 .flex_1()
                 .p(px(16.))
@@ -1383,7 +1398,7 @@ impl Render for Launcher {
                     }
                 }),
             )
-            .child(
+            .when(!utility_active, |d| d.child(
                 controls::header(t)
                     .child(div().id("drag-handle").w(px(8.)).h_full().on_mouse_down(
                         MouseButton::Left,
@@ -1438,8 +1453,8 @@ impl Render for Launcher {
                                 .child(self.terminal_prompt.clone()),
                         )
                     }),
-            )
-            .when(self.history, |d| {
+            ))
+            .when(self.history && !utility_active, |d| {
                 d.child(
                     div()
                         .id("query-history")
@@ -1466,7 +1481,7 @@ impl Render for Launcher {
                         )),
                 )
             })
-            .when(self.message_kind.is_some(), |d| {
+            .when(self.message_kind.is_some() && !utility_active, |d| {
                 d.child(
                     div()
                         .px(px(12.))
@@ -1559,7 +1574,7 @@ impl Render for Launcher {
                         })),
                 )
             })
-            .child(
+            .when(!utility_active, |d| d.child(
                 controls::footer(t)
                     .child(
                         div()
@@ -1594,7 +1609,7 @@ impl Render for Launcher {
                     .child(controls::keycap("⌘K", t))
                     .child("Pin")
                     .child(controls::keycap("⌘P", t)),
-            )
+            ))
             .child(tracker)
             .children(resize::handles(cx, |view, edge, w, _| {
                 view.resize = resize::Gesture::begin(edge, w)
