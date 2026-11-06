@@ -1628,3 +1628,345 @@ async fn review_executor_failure_keeps_inflight_edit_retryable() {
     assert_eq!(f.config.lock().unwrap()["memoryMaxItems"], 81);
     assert_eq!(store.failures(), 0);
 }
+
+// Regressions reproduced by the independent 409dbf3 closure review.
+struct ShortcutConflict(Arc<Fixture>);
+impl SettingsTransport for ShortcutConflict {
+    fn durable_config(&self) -> SettingsFuture {
+        self.0.durable_config()
+    }
+    fn send(&self, request: SettingsRequest) -> SettingsFuture {
+        if let SettingsRequest::Save(patch) = &request {
+            if patch.get("raymesHotkey").is_some() {
+                self.0
+                    .calls
+                    .lock()
+                    .unwrap()
+                    .push(("opus-hotkey-save", vec![]));
+                return Box::pin(async {
+                    Ok(json!({"ok":false,"accelerator":"Control+K","error":"in use"}))
+                });
+            }
+        }
+        self.0.send(request)
+    }
+}
+#[gpui::test]
+fn review_closure_settings_rejection_during_inflight_save_is_reported_and_does_not_cancel_next_action(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(Arc::new(ShortcutConflict(f.clone())));
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    // Hold the first llm-config-set (an ordinary toggle save).
+    let (release, gate) = tokio::sync::oneshot::channel();
+    *f.held.lock().unwrap() = Some(gate);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(Action::Toggle("memoryEnabled", false), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.saving));
+    // While that save is in flight the user records a shortcut the OS rejects
+    // (this is exactly what the hotkey key handler does: self.queue(..)).
+    view.update(cx, |v, cx| {
+        v.queue(
+            vec![Edit::Global {
+                field: "raymesHotkey".into(),
+                value: json!("Control+K"),
+            }],
+            cx,
+        )
+    });
+    settle(&rt, cx);
+    let _ = release.send(());
+    settle(&rt, cx);
+    let after_save_error = view.read_with(cx, |v, _| v.error.clone());
+    let after_save_message = view.read_with(cx, |v, _| v.message.clone());
+    let hotkey_saves = f
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "opus-hotkey-save")
+        .count();
+    // Next, unrelated follow-up: Copilot sign-in (no new edit is enqueued by SignIn).
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let config = v.config.clone();
+            v.provider.load("copilot".into(), &config);
+            v.action(Action::SignIn, w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let starts = f
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "github-device-start")
+        .count();
+    let signin_error = view.read_with(cx, |v, _| v.error.clone());
+    eprintln!(
+        "OPUS2 rejection-in-flight: hotkey_saves={hotkey_saves} after_save error={after_save_error:?} message={after_save_message:?} | signin starts={starts} signin_error={signin_error:?} failures={}",
+        store.failures()
+    );
+    assert_eq!(
+        starts, 1,
+        "stale shortcut rejection cancelled an unrelated Sign-in"
+    );
+    assert!(
+        after_save_error.is_some(),
+        "the rejected shortcut was reported as Saved"
+    );
+}
+#[gpui::test]
+fn review_closure_validation_error_is_not_a_retryable_durable_save(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    view.update(cx, |v, cx| {
+        if let Some(field) = v.fields.get_mut("memoryMaxItems") {
+            field.dirty = true;
+            field.value = "abc".into();
+        }
+        v.field_changed("memoryMaxItems", cx);
+    });
+    settle(&rt, cx);
+    let local = view.read_with(cx, |v, _| v.error.clone());
+    let durable = view.read_with(cx, |v, _| v.durable_error().map(str::to_owned));
+    let retry_visible = cx.debug_bounds("settings-Retry saved changes").is_some();
+    cx.update(|w, cx| view.update(cx, |v, cx| v.action(Action::Retry, w, cx)));
+    settle(&rt, cx);
+    let after_retry = view.read_with(cx, |v, _| v.error.clone());
+    let after_retry_durable = view.read_with(cx, |v, _| v.durable_error().map(str::to_owned));
+    eprintln!(
+        "OPUS2 validation: local={local:?} durable={durable:?} retry_button={retry_visible} | after Retry local={after_retry:?} durable={after_retry_durable:?}"
+    );
+    assert!(
+        !retry_visible,
+        "a local validation error offers 'Retry saved changes' (D-4)"
+    );
+    assert_eq!(
+        after_retry, local,
+        "Retry replaced the field-specific validation message with the generic save error"
+    );
+}
+#[gpui::test]
+fn review_closure_confirmation_sheet_occludes_footer_controls(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let closes = std::rc::Rc::new(std::cell::Cell::new(0));
+    let count = closes.clone();
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        let v = SettingsContent::new(store.clone(), &UiState::default(), w, cx);
+        let sub = cx.subscribe(&cx.entity(), move |_, _, e: &SettingsEffect, _| {
+            if matches!(e, SettingsEffect::Close) {
+                count.set(count.get() + 1)
+            }
+        });
+        std::mem::forget(sub);
+        v
+    });
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.confirm(Action::Uninstall("fixture".into()), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let dialog = cx.debug_bounds("settings-confirmation");
+    let close = cx.debug_bounds("settings-Close");
+    if let Some(close) = close {
+        cx.simulate_click(close.center(), Modifiers::default());
+        settle(&rt, cx);
+    }
+    let still_open = view.read_with(cx, |v, _| v.confirmation.is_some());
+    eprintln!(
+        "OPUS2 modal: dialog={dialog:?} footer_close={close:?} close_events={} confirmation_still_open={still_open}",
+        closes.get()
+    );
+    assert_eq!(
+        closes.get(),
+        0,
+        "footer Close is clickable through the open confirmation sheet"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn review_closure_alias_racing_pump_exit_is_durable_for_both_owners() {
+    tokio::time::timeout(Duration::from_secs(40), async {
+        for i in 0..50_000u32 {
+            let f = fixture();
+            let store = SettingsStore::new(f.clone());
+            let peer = store.owner();
+            let alias = store.owner();
+            store.enqueue(
+                peer,
+                vec![Edit::Global {
+                    field: "memoryMaxItems".into(),
+                    value: json!(i),
+                }],
+            );
+            let peer_store = store.clone();
+            let mut peer_wait = tokio::spawn(async move { peer_store.drain_owner(peer).await });
+            let alias_store = store.clone();
+            let mut alias_wait = tokio::spawn(async move {
+                for _ in 0..i % 13 {
+                    tokio::task::yield_now().await;
+                }
+                alias_store.alias(alias, "fixture".into(), format!("v{i}"));
+                alias_store.drain_owner(alias).await
+            });
+            let result = tokio::time::timeout(Duration::from_secs(1), async {
+                (&mut peer_wait).await.unwrap().unwrap();
+                (&mut alias_wait).await.unwrap().unwrap();
+                store.drain().await.unwrap();
+            })
+            .await;
+            peer_wait.abort();
+            alias_wait.abort();
+            assert!(result.is_ok(), "owner stranded at iteration {i}");
+            assert_eq!(
+                f.config.lock().unwrap()["commandAliases"]["fixture"],
+                json!(format!("v{i}"))
+            );
+            assert!(!store.pending());
+        }
+    })
+    .await
+    .expect("bounded alias race regression exceeded 40 seconds");
+}
+pub(crate) fn presentation_zoom(view: &SettingsContent) -> f64 {
+    view.layout.as_ref().unwrap().1.zoom
+}
+#[test]
+fn review_closure_field_labels_preserve_familiar_acronyms() {
+    for (source, label) in [
+        ("baseURL", "Base URL"),
+        ("url", "URL"),
+        ("apiKey", "API Key"),
+        ("clientId", "Client ID"),
+    ] {
+        assert_eq!(view::display_name(source), label);
+    }
+}
+
+#[gpui::test]
+fn review_closure_rejected_shortcut_does_not_discard_an_already_queued_signin(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(Arc::new(ShortcutConflict(f.clone())));
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    // Hold the first llm-config-set (an ordinary toggle save).
+    let (release, gate) = tokio::sync::oneshot::channel();
+    *f.held.lock().unwrap() = Some(gate);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(Action::Toggle("memoryEnabled", false), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.saving));
+    // While that save is in flight the user records a shortcut the OS rejects
+    // (this is exactly what the hotkey key handler does: self.queue(..)).
+    view.update(cx, |v, cx| {
+        v.queue(
+            vec![Edit::Global {
+                field: "raymesHotkey".into(),
+                value: json!("Control+K"),
+            }],
+            cx,
+        )
+    });
+    settle(&rt, cx);
+    // Queue the follow-up before the in-flight save finishes.
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let config = v.config.clone();
+            v.provider.load("copilot".into(), &config);
+            v.action(Action::SignIn, w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let _ = release.send(());
+    settle(&rt, cx);
+    let after_save_error = view.read_with(cx, |v, _| v.error.clone());
+    let after_save_message = view.read_with(cx, |v, _| v.message.clone());
+    let hotkey_saves = f
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "opus-hotkey-save")
+        .count();
+    let starts = f
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "github-device-start")
+        .count();
+    let signin_error = view.read_with(cx, |v, _| v.error.clone());
+    eprintln!(
+        "OPUS2 rejection-in-flight: hotkey_saves={hotkey_saves} after_save error={after_save_error:?} message={after_save_message:?} | signin starts={starts} signin_error={signin_error:?} failures={}",
+        store.failures()
+    );
+    assert_eq!(
+        starts, 1,
+        "stale shortcut rejection cancelled an unrelated Sign-in"
+    );
+    assert!(
+        after_save_error.is_some(),
+        "the rejected shortcut was reported as Saved"
+    );
+}
+
+#[tokio::test]
+async fn review_closure_dropped_barrier_releases_its_shortcut_rejection_claim() {
+    let f = fixture();
+    let store = SettingsStore::new(Arc::new(ShortcutConflict(f)));
+    let owner = store.owner();
+    store.enqueue(
+        owner,
+        vec![Edit::Global {
+            field: "raymesHotkey".into(),
+            value: json!("Control+K"),
+        }],
+    );
+    let abandoned = store.drain_owner(owner);
+    store.drain().await.unwrap();
+    store.enqueue(
+        owner,
+        vec![Edit::Global {
+            field: "memoryMaxItems".into(),
+            value: json!(81),
+        }],
+    );
+    let next = store.drain_owner(owner);
+    drop(abandoned);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(1), next)
+            .await
+            .unwrap(),
+        Err(store::REJECTED_CHANGE.into())
+    );
+    store.drain_owner(owner).await.unwrap();
+    assert!(!store.owner_pending(owner));
+}

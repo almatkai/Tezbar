@@ -452,3 +452,67 @@ fn actual_launcher_input_actions_focus_and_ime_do_not_fall_through_search(cx: &m
     );
     assert_eq!(f.count("agent:run"), 1);
 }
+
+// M7 regressions use the actual Owner and Settings window, with the same isolated transport.
+#[gpui::test]
+fn review_m7_queued_zoom_is_applied_before_settings_refresh(cx: &mut TestAppContext) {
+    let (rt, root, backend, launcher, cx) = mount(cx);
+    let owner = owner(cx, &rt, &root, &backend);
+    owner.update(cx, |o, cx| o.settings_intent(None, cx));
+    settle(&rt, cx);
+    let content = owner.read_with(cx, |o, cx| {
+        o.settings
+            .unwrap()
+            .read(cx)
+            .unwrap()
+            .content
+            .clone()
+            .unwrap()
+    });
+    launcher.update(cx, |v, _| v.zoom = 1.05);
+    owner.update(cx, |o, cx| {
+        let ticket = o.m7.barrier.begin("layout");
+        o.m7.queued_layout = Some((
+            content.entity_id(),
+            crate::surfaces::settings::SettingsEffect::LauncherLayout {
+                width: None,
+                height: None,
+                zoom: Some(1.10),
+                reset: false,
+            },
+            ticket,
+        ));
+        o.m7.layout_pending = false;
+        o.m7_continue_layout(cx);
+    });
+    // TestPlatform refuses physical native placement after updating the zoom. This checks
+    // real composition ordering and the third-click input, not OS geometry or durable layout.
+    let zoom = content.read_with(cx, |v, _| {
+        crate::surfaces::settings::tests::presentation_zoom(v)
+    });
+    assert!((zoom - 1.10).abs() < 0.0001);
+    assert!((zoom + 0.05 - 1.15).abs() < 0.0001);
+    assert!(owner.read_with(cx, |o, _| o.m7.queued_layout.is_none()));
+    rt.block_on(backend.core.0.shutdown());
+}
+#[gpui::test]
+fn review_m7_failed_core_start_delivers_pending_settings_once(cx: &mut TestAppContext) {
+    let (rt, root, backend, _launcher, cx) = mount(cx);
+    let owner = owner(cx, &rt, &root, &backend);
+    owner.update(cx, |o, cx| {
+        o.m7.boot = m7::Boot::Waiting;
+        o.m7.decided = false;
+        o.settings_intent(None, cx);
+        assert!(o.m7.pending_settings.is_some());
+        assert!(o.settings.is_none());
+        o.m7.fail_open();
+        o.m7_present_ready(cx);
+        assert!(o.m7.pending_settings.is_none());
+        assert!(o.settings.is_some());
+    });
+    settle(&rt, cx);
+    let settings = owner.read_with(cx, |o, _| o.settings.unwrap());
+    owner.update(cx, |o, cx| o.m7_ready(cx));
+    assert_eq!(owner.read_with(cx, |o, _| o.settings.unwrap()), settings);
+    rt.block_on(backend.core.0.shutdown());
+}

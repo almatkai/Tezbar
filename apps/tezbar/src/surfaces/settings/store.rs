@@ -6,6 +6,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tezbar_ui_model::settings::{CLOSE_ERROR, Edit, Effect, OwnerId, WriteQueue};
+pub(super) const REJECTED_CHANGE: &str =
+    "Shortcut unavailable. Your previous shortcut is unchanged.";
 #[derive(Default)]
 struct State {
     queue: WriteQueue,
@@ -18,7 +20,8 @@ struct State {
     next_operation: u64,
     operations: VecDeque<(u64, SettingsRequest)>,
     results: BTreeMap<u64, Result<Value, String>>,
-    rejected: BTreeMap<OwnerId, u64>,
+    rejected: BTreeMap<OwnerId, BTreeSet<u64>>,
+    waiters: BTreeMap<(OwnerId, u64), usize>,
     running: bool,
     pump_generation: u64,
     active: BTreeMap<u64, tokio::task::JoinHandle<()>>,
@@ -175,15 +178,31 @@ impl SettingsStore {
     }
     pub fn pending(&self) -> bool {
         let s = self.state.lock().unwrap();
-        s.revision != s.settled || !s.operations.is_empty()
+        s.revision != s.settled || s.aliases_pending || !s.operations.is_empty()
     }
     pub fn owner_pending(&self, owner: OwnerId) -> bool {
         let state = self.state.lock().unwrap();
         state.queue.owner_pending(owner)
             || (state.aliases_pending && state.aliases.values().any(|(o, _)| *o == owner))
+            || state
+                .rejected
+                .get(&owner)
+                .is_some_and(|revisions| !revisions.is_empty())
     }
     pub fn canonical(&self) -> Option<Value> {
         self.state.lock().unwrap().canonical.clone()
+    }
+    pub fn validation_error(&self, owner: OwnerId) -> Option<&'static str> {
+        self.state
+            .lock()
+            .unwrap()
+            .validation
+            .iter()
+            .find_map(|((id, _), error)| (*id == owner).then_some(*error))
+    }
+    pub fn durable_failures(&self) -> usize {
+        let s = self.state.lock().unwrap();
+        s.queue.failure_count() + usize::from(s.alias_read_failed) + usize::from(s.executor_failed)
     }
     pub fn failures(&self) -> usize {
         {
@@ -197,10 +216,19 @@ impl SettingsStore {
     pub fn drain_owner(&self, owner: OwnerId) -> tezbar_core::host::HostFuture<()> {
         let this = self.clone();
         let (target, owner_target) = {
-            let state = self.state.lock().unwrap();
-            (state.config_revision, state.queue.owner_revision(owner))
+            let mut state = this.state.lock().unwrap();
+            let target = state.config_revision;
+            let owner_target = state.queue.owner_revision(owner);
+            *state.waiters.entry((owner, owner_target)).or_default() += 1;
+            (target, owner_target)
+        };
+        let waiter = OwnerWaiter {
+            store: this.clone(),
+            owner,
+            target: owner_target,
         };
         Box::pin(async move {
+            let _waiter = waiter;
             this.start_worker().await;
             loop {
                 let wait = this.completion.notified();
@@ -212,14 +240,40 @@ impl SettingsStore {
                         return Err(CLOSE_ERROR.into());
                     }
                     if state.config_settled >= target {
-                        if state.rejected.get(&owner) == Some(&owner_target) {
-                            state.rejected.remove(&owner);
-                            return Err(
-                                "Shortcut unavailable. Your previous shortcut is unchanged.".into(),
-                            );
+                        // An earlier captured barrier owns its rejection even if a newer
+                        // waiter runs first. Dropping a waiter releases that claim.
+                        let claimed = state
+                            .rejected
+                            .get(&owner)
+                            .into_iter()
+                            .flatten()
+                            .copied()
+                            .filter(|revision| {
+                                *revision <= owner_target
+                                    && !state.waiters.keys().any(|(id, target)| {
+                                        *id == owner
+                                            && *target >= *revision
+                                            && *target < owner_target
+                                    })
+                            })
+                            .collect::<Vec<_>>();
+                        let rejected = !claimed.is_empty();
+                        if let Some(revisions) = state.rejected.get_mut(&owner) {
+                            for revision in claimed {
+                                revisions.remove(&revision);
+                            }
+                        }
+                        if rejected {
+                            return Err(REJECTED_CHANGE.into());
+                        }
+                        if let Some(error) = state
+                            .validation
+                            .iter()
+                            .find_map(|((id, _), error)| (*id == owner).then_some(*error))
+                        {
+                            return Err(error.into());
                         }
                         return if state.queue.owner_failure_count(owner) > 0
-                            || state.validation.keys().any(|(id, _)| *id == owner)
                             || (state.alias_read_failed
                                 && state.aliases.values().any(|(id, _)| *id == owner))
                         {
@@ -229,6 +283,7 @@ impl SettingsStore {
                         };
                     }
                 }
+                this.start_worker().await;
                 wait.await;
             }
         })
@@ -267,7 +322,7 @@ impl SettingsStore {
                     if state.executor_failed {
                         return Err(CLOSE_ERROR.into());
                     }
-                    if !state.running && state.revision == state.settled {
+                    if !state.running && state.revision == state.settled && !state.aliases_pending {
                         drop(state);
                         return if this.failures() == 0 {
                             Ok(())
@@ -442,7 +497,7 @@ impl SettingsStore {
                 let mut s = self.state.lock().unwrap();
                 // The queue was examined under the same synchronous owner lock; a new intent
                 // increments revision and is drained on the next waiter even after this return.
-                if s.revision != revision {
+                if s.revision != revision || s.aliases_pending {
                     continue;
                 }
                 s.settled = revision;
@@ -474,7 +529,7 @@ impl SettingsStore {
                     let mut state = self.state.lock().unwrap();
                     if matches!(&result, Ok(v) if v["ok"] == false) {
                         if let Some((owner, revision)) = state.queue.reject(token) {
-                            state.rejected.insert(owner, revision);
+                            state.rejected.entry(owner).or_default().insert(revision);
                         }
                     } else {
                         state.queue.finish(token, ok);
@@ -518,4 +573,25 @@ impl Drop for PumpLease {
 }
 pub fn success(r: &Result<Value, String>) -> bool {
     matches!(r,Ok(v) if v["ok"] != false)
+}
+
+// Registered at capture, not first poll, so simultaneous owner barriers keep intent order.
+struct OwnerWaiter {
+    store: SettingsStore,
+    owner: OwnerId,
+    target: u64,
+}
+impl Drop for OwnerWaiter {
+    fn drop(&mut self) {
+        let mut state = self.store.state.lock().unwrap();
+        let key = (self.owner, self.target);
+        if let Some(count) = state.waiters.get_mut(&key) {
+            *count -= 1;
+            if *count == 0 {
+                state.waiters.remove(&key);
+            }
+        }
+        drop(state);
+        self.store.completion.notify_waiters();
+    }
 }

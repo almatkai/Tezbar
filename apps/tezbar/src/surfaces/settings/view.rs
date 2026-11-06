@@ -1572,6 +1572,45 @@ impl Render for SettingsContent {
                             .child(body),
                     ),
             );
+        if let Some(error) = self.durable_error() {
+            root = root.child(
+                div()
+                    .id("settings-save-error")
+                    .role(Role::Alert)
+                    .text_color(t.danger)
+                    .px(px(16.))
+                    .child(error.to_owned())
+                    .child(self.b("Retry saved changes", Action::Retry, t, cx)),
+            );
+        }
+        if let Some(error) = self
+            .error
+            .as_ref()
+            .filter(|e| e.as_str() != settings::CLOSE_ERROR)
+            .map(String::as_str)
+            .or(self.store.validation_error(self.owner))
+        {
+            root = root.child(
+                div()
+                    .id("settings-action-error")
+                    .role(Role::Alert)
+                    .text_color(t.danger)
+                    .px(px(16.))
+                    .child(error.to_owned()),
+            );
+        }
+        root = if self.embedded {
+            root.child(controls::footer(t).child(self.message.clone().unwrap_or_default()))
+        } else {
+            root.child(
+                controls::footer(t)
+                    .child(self.message.clone().unwrap_or_default())
+                    .child(self.b("Save", Action::Save, t, cx))
+                    .child(controls::keycap("Enter", t))
+                    .child(self.b("Close", Action::Close, t, cx))
+                    .child(controls::keycap("Esc", t)),
+            )
+        };
         if let Some(action) = self.confirmation.as_ref() {
             let (title, description, accept) = self.confirmation_copy(action);
             let weak = cx.entity().downgrade();
@@ -1619,45 +1658,7 @@ impl Render for SettingsContent {
                     ),
             );
         }
-        if let Some(error) = self.durable_error() {
-            root = root.child(
-                div()
-                    .id("settings-save-error")
-                    .role(Role::Alert)
-                    .text_color(t.danger)
-                    .px(px(16.))
-                    .child(error.to_owned())
-                    .child(self.b("Retry saved changes", Action::Retry, t, cx)),
-            );
-        }
-        if let Some(error) = self
-            .error
-            .as_ref()
-            .filter(|e| e.as_str() != settings::CLOSE_ERROR)
-        {
-            root = root.child(
-                div()
-                    .id("settings-action-error")
-                    .role(Role::Alert)
-                    .text_color(t.danger)
-                    .px(px(16.))
-                    .child(error.clone()),
-            );
-        }
-        if self.embedded {
-            return root
-                .child(controls::footer(t).child(self.message.clone().unwrap_or_default()))
-                .into_any_element();
-        }
-        root.child(
-            controls::footer(t)
-                .child(self.message.clone().unwrap_or_default())
-                .child(self.b("Save", Action::Save, t, cx))
-                .child(controls::keycap("Enter", t))
-                .child(self.b("Close", Action::Close, t, cx))
-                .child(controls::keycap("Esc", t)),
-        )
-        .into_any_element()
+        root.into_any_element()
     }
 }
 impl SettingsContent {
@@ -1835,22 +1836,45 @@ pub(super) fn safe_display(v: &Value) -> String {
     out.join("\n")
 }
 
-fn display_name(value: &str) -> String {
-    let mut result = String::new();
-    for (i, c) in value.chars().enumerate() {
+pub(super) fn display_name(value: &str) -> String {
+    let chars = value.chars().collect::<Vec<_>>();
+    let mut words = String::new();
+    for (i, c) in chars.iter().copied().enumerate() {
         if matches!(c, '_' | '-') {
-            result.push(' ');
-        } else if i == 0 {
-            result.extend(c.to_uppercase());
-        } else {
-            if c.is_uppercase() && !result.ends_with(' ') {
-                result.push(' ');
-            }
-            result.push(c);
+            words.push(' ');
+            continue;
         }
+        if i > 0
+            && c.is_uppercase()
+            && (chars[i - 1].is_lowercase()
+                || (chars[i - 1].is_uppercase()
+                    && chars.get(i + 1).is_some_and(|c| c.is_lowercase())))
+        {
+            words.push(' ');
+        }
+        words.push(c);
     }
-    result
+    words
+        .split_whitespace()
+        .map(|word| match word.to_ascii_lowercase().as_str() {
+            "url" => "URL".into(),
+            "id" => "ID".into(),
+            "api" => "API".into(),
+            "mcp" => "MCP".into(),
+            "json" => "JSON".into(),
+            "ui" => "UI".into(),
+            _ => {
+                let mut chars = word.chars();
+                chars
+                    .next()
+                    .map(|c| c.to_uppercase().collect::<String>() + chars.as_str())
+                    .unwrap_or_default()
+            }
+        })
+        .collect::<Vec<String>>()
+        .join(" ")
 }
+
 pub(super) fn download_progress(done: u64, total: Option<u64>) -> String {
     let done = tezbar_ui_model::utilities::monitor::decimal_bytes(done as f64);
     match total {

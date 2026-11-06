@@ -122,12 +122,18 @@ impl Owner {
             self.m7.pending_project_review = None;
         }
     }
+    pub(super) fn m7_present_ready(&mut self, cx: &mut Context<Self>) {
+        if let Some(intent) = self.m7.pending_settings.take() {
+            self.show_on_ready = false;
+            self.settings_intent(intent, cx);
+        } else if std::mem::take(&mut self.show_on_ready) {
+            self.show(cx);
+        }
+    }
     pub(super) fn m7_ready(&mut self, cx: &mut Context<Self>) {
         if self.m7.decided {
             self.m7_load_channel(cx);
-            if std::mem::take(&mut self.show_on_ready) {
-                self.show(cx)
-            }
+            self.m7_present_ready(cx);
             return;
         }
         if self.m7.boot == Boot::Reading {
@@ -519,6 +525,12 @@ impl Owner {
         };
         self.m7_layout_ticket(id, effect, ticket, cx);
     }
+    pub(super) fn m7_continue_layout(&mut self, cx: &mut Context<Self>) {
+        if let Some((id, effect, ticket)) = self.m7.queued_layout.take() {
+            self.m7_layout_ticket(id, effect, ticket, cx);
+        }
+        self.m7_refresh_content(cx);
+    }
     fn m7_layout_ticket(
         &mut self,
         id: EntityId,
@@ -622,10 +634,7 @@ impl Owner {
                     owner.m7.failed_layout = None;
                 }
                 owner.m7_finish_effect(id, "layout", ticket, result, cx);
-                owner.m7_refresh_content(cx);
-                if let Some((id, effect, ticket)) = owner.m7.queued_layout.take() {
-                    owner.m7_layout_ticket(id, effect, ticket, cx);
-                }
+                owner.m7_continue_layout(cx);
             });
         }));
     }

@@ -103,9 +103,7 @@ impl Owner {
                     owner.m7_ready(cx)
                 } else {
                     owner.m7.fail_open();
-                    if std::mem::take(&mut owner.show_on_ready) {
-                        owner.show(cx)
-                    }
+                    owner.m7_present_ready(cx);
                 }
                 let _ = owner.launcher.update(cx, |view, _, cx| {
                     view.core_ready(cx);

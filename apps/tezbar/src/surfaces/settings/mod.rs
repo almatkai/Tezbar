@@ -791,8 +791,7 @@ impl SettingsContent {
         }
         self.saving = true;
         self.message = Some("Saving…".into());
-        let store = self.store.clone();
-        let drain = store.drain_owner(self.owner);
+        let drain = self.store.drain_owner(self.owner);
         let window = self.window;
         self.next_job += 1;
         let id = self.next_job;
@@ -804,31 +803,48 @@ impl SettingsContent {
                 let _ = this.update(cx, |this, cx| {
                     this.jobs.remove(&id);
                     this.saving = false;
-                    match result {
-                        Ok(()) => {
+                    let rejected = result
+                        .as_ref()
+                        .err()
+                        .is_some_and(|e| e == store::REJECTED_CHANGE);
+                    let pending = this.store.owner_pending(this.owner);
+                    match &result {
+                        Ok(()) if !pending => {
                             this.error = None;
                             this.message = Some("Saved".into());
-                            if let Some(config) = this.store.canonical() {
-                                this.hydrate(config, w, cx)
-                            }
-                            if !this.store.owner_pending(this.owner) {
-                                let actions = std::mem::take(&mut this.after_save);
-                                for a in actions {
-                                    this.action(a, w, cx);
-                                }
-                            }
                         }
+                        Ok(()) => {}
                         Err(error) => {
-                            this.after_save.clear();
-                            this.error = Some(error);
                             this.message = None;
-                            this.device.saved(this.device_token(), false, None);
+                            if this.store.validation_error(this.owner).is_none()
+                                || this.error.is_none()
+                            {
+                                this.error = Some(error.clone());
+                            }
+                            if !rejected {
+                                this.after_save.clear();
+                                this.device.saved(this.device_token(), false, None);
+                            }
                         }
                     }
-                    if this.store.owner_pending(this.owner) {
-                        this.flush(None, cx)
+                    if result.is_ok() || rejected {
+                        if let Some(config) = this.store.canonical() {
+                            this.hydrate(config, w, cx);
+                        }
+                        if !pending {
+                            let actions = std::mem::take(&mut this.after_save);
+                            for action in actions {
+                                this.action(action, w, cx);
+                            }
+                            if rejected {
+                                this.error = Some(store::REJECTED_CHANGE.into());
+                            }
+                        }
                     }
-                    cx.notify()
+                    if pending {
+                        this.flush(None, cx);
+                    }
+                    cx.notify();
                 });
             });
         });
@@ -1225,6 +1241,7 @@ impl SettingsContent {
                                 key,
                                 Some("Correct the invalid numeric field before closing."),
                             );
+                            cx.notify();
                             return;
                         }
                     }
@@ -1248,6 +1265,7 @@ impl SettingsContent {
                     )
                 {
                     self.error = Some("Cancel sign-in before changing the Copilot token.".into());
+                    cx.notify();
                     return;
                 }
                 if name == "protocol"
@@ -1263,6 +1281,7 @@ impl SettingsContent {
                         key,
                         Some("Correct the provider protocol before closing."),
                     );
+                    cx.notify();
                     return;
                 }
                 let v = if is_json {
@@ -1275,6 +1294,7 @@ impl SettingsContent {
                                 key,
                                 Some("Correct invalid JSON before closing."),
                             );
+                            cx.notify();
                             return;
                         }
                     }
@@ -1502,14 +1522,19 @@ impl SettingsContent {
         w.focus(&self.confirm_focus[1], cx);
     }
     fn durable_error(&self) -> Option<&str> {
-        if self.store.failures() > 0 {
+        if self.store.durable_failures() > 0 {
             Some(settings::CLOSE_ERROR)
         } else {
             self.parent_error.as_deref()
         }
     }
     pub fn action(&mut self, a: Action, w: &mut Window, cx: &mut Context<Self>) {
-        self.error = None;
+        if self.confirmation.is_some() && !matches!(&a, Action::Confirm(_)) {
+            return;
+        }
+        if self.store.validation_error(self.owner).is_none() {
+            self.error = None;
+        }
         match a {
             Action::Permission(id) => self.flush(Some(Action::RequestPermission(id)), cx),
             Action::RequestPermission(id) => {
@@ -1534,6 +1559,13 @@ impl SettingsContent {
             Action::Tab(t) => self.select_tab(t, w, cx),
             Action::Refresh => self.refresh(cx),
             Action::Retry => {
+                if self.store.validation_error(self.owner).is_some()
+                    && self.store.durable_failures() == 0
+                    && self.parent_error.is_none()
+                {
+                    cx.notify();
+                    return;
+                }
                 cx.emit(SettingsEffect::RetryPersistence);
                 self.store.retry();
                 self.flush(Some(Action::Refresh), cx)
