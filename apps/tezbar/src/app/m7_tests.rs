@@ -146,3 +146,61 @@ async fn close_barrier_keeps_latest_failure_and_waits_for_all_parent_writes() {
     barrier.finish("ui-state", retry, true);
     barrier.drain().await.unwrap();
 }
+
+#[gpui::test]
+fn review_layout_changes_coalesce_without_leaving_active_barrier_tickets(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let entity = cx.new(|_| ());
+    let id = entity.entity_id();
+    let mut state = m7::State::new(SettingsStore::new(backend()));
+    let effect = |width, zoom, reset| SettingsEffect::LauncherLayout {
+        width,
+        height: None,
+        zoom,
+        reset,
+    };
+    let (_, first) = state
+        .schedule_layout(id, effect(None, Some(1.05), false))
+        .unwrap();
+    state.layout_pending = true;
+    assert!(
+        state
+            .schedule_layout(id, effect(Some(800.), None, false))
+            .is_none()
+    );
+    assert!(
+        state
+            .schedule_layout(id, effect(None, Some(1.15), false))
+            .is_none()
+    );
+    let (_, next, last) = state.queued_layout.take().unwrap();
+    assert!(
+        matches!(next, SettingsEffect::LauncherLayout { width: Some(800.), zoom: Some(z), .. } if z == 1.15)
+    );
+    state.barrier.finish("layout", first, false);
+    assert!(
+        rt.block_on(async {
+            tokio::time::timeout(Duration::from_millis(1), state.barrier.drain()).await
+        })
+        .is_err()
+    );
+    state.barrier.finish("layout", last, true);
+    rt.block_on(state.barrier.drain()).unwrap();
+    let merged = m7::merge_layout(effect(None, None, true), effect(None, Some(1.2), false));
+    assert!(matches!(
+        merged,
+        SettingsEffect::LauncherLayout {
+            reset: false,
+            width: Some(_),
+            zoom: Some(1.2),
+            ..
+        }
+    ));
+}
+#[test]
+fn review_failed_start_gate_stays_decided_when_the_core_recovers() {
+    let mut state = m7::State::new(SettingsStore::new(backend()));
+    state.fail_open();
+    assert!(state.decided);
+    assert!(matches!(state.boot, m7::Boot::Ready));
+}

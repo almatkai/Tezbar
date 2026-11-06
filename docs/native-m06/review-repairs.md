@@ -19,7 +19,7 @@ need the complete native regressions, final freeze and fresh independent review.
 | F-9 | Native note rows now render cached title, summary and locale date. Portable date validation avoids invalid timestamps reaching the platform formatter. Native title/summary/date assertions pass. |
 | F-10 | Assigned to the active M7 composition: pass tab/intent directly to Settings, preserve the originating launcher destination, and test Indexing → Knowledge Settings → return. |
 | S-1 | Vault/snippet field subscriptions now use their disposable field collection. Twelve repeated native form mount/cancel cycles preserve the permanent subscription count and release field subscriptions. |
-| S-2 | Pending final evidence refresh. Original c2a36b5 manifests/logs are historical; no claim that those hashes describe this repair WIP. |
+| S-2 | Closed: the original source-case map and parent-composition document explicitly label their hashes, fixture counts and logs as historical handoff evidence. Original values remain intact. Fresh M7 review independently accepted every M6 functional repair at 290e414; see `../native-m07/reviews/OPUS_290e414.md`. |
 | Other design/standards notes | Standard base64 replaces the hand-coded codec; invalid/oversized previews show an error, duplicated admission checks removed, Vault kinds use product labels, pins trail row text, Clear uses specific destructive copy. The existing broad utility action rows remain a documented visual-quality limitation for the independent review; no screenshot/physical acceptance is claimed. |
 
 Current parent logs: `/tmp/tezbar-m6-parent-editor-ui-2.log` (**50 UI passed**) and
@@ -30,3 +30,6 @@ were removed or ignored. M7–M11 and the full migration remain active.
 
 
 Latest parent targeted integrated logs: `/tmp/tezbar-m6-parent-native-probes-4.log` (**15 passed**), `/tmp/tezbar-m6-parent-task-footer-2.log` (**2 passed**) and `/tmp/tezbar-m6-m8-parent-shared-ui-1.log` (**51 passed**). Earlier failed fixture/debug-selector/compile attempts remain preserved. These targets are not a full frozen application acceptance; M7 now owns final shared-source native/bench/check/build validation before the next immutable review. Core and shared Markdown M8 seams are checkpointed separately in `ba3a227`.
+
+
+The 290e414 Opus review accepted F-1–F-10 and S-1 at their real callers, with five additional passing editor edge probes. Its pristine reruns were 187 native and 51 shared UI tests. Those figures describe that review pin, not later M7 repairs. Current parent utility-composition source SHA-256: `f616ecaddf2f91bdd80c8de8a4bf3cc59246ad63a91768af9a1689f1a80e88ca` (five fixtures).

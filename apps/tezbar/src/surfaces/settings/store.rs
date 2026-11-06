@@ -18,7 +18,9 @@ struct State {
     next_operation: u64,
     operations: VecDeque<(u64, SettingsRequest)>,
     results: BTreeMap<u64, Result<Value, String>>,
-    failed: BTreeMap<u64, SettingsRequest>,
+    rejected: BTreeMap<OwnerId, u64>,
+    running: bool,
+    pump_generation: u64,
     active: BTreeMap<u64, tokio::task::JoinHandle<()>>,
     in_transit: BTreeSet<u64>,
     last_copy: u64,
@@ -32,7 +34,6 @@ struct State {
 #[derive(Clone)]
 pub struct SettingsStore {
     state: Arc<Mutex<State>>,
-    worker: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<Result<(), String>>>>>,
     transport: Arc<dyn SettingsTransport>,
     completion: Arc<tokio::sync::Notify>,
     config_lane: Arc<tokio::sync::Mutex<()>>,
@@ -42,7 +43,6 @@ impl SettingsStore {
     pub fn new(transport: Arc<dyn SettingsTransport>) -> Self {
         Self {
             state: Arc::default(),
-            worker: Arc::default(),
             transport,
             completion: Arc::default(),
             config_lane: Arc::default(),
@@ -60,7 +60,9 @@ impl SettingsStore {
         id
     }
     pub fn retire(&self, owner: OwnerId) {
-        self.state.lock().unwrap().queue.retire(owner);
+        let mut state = self.state.lock().unwrap();
+        state.queue.retire(owner);
+        state.rejected.remove(&owner);
     }
     pub fn enqueue(&self, owner: OwnerId, edits: Vec<Edit>) -> u64 {
         {
@@ -105,14 +107,13 @@ impl SettingsStore {
         if s.alias_read_failed {
             s.aliases_pending = true;
         }
-        let failed = std::mem::take(&mut s.failed);
-        s.operations.extend(failed);
+        s.executor_failed = false;
         self.completion.notify_waiters();
         self.completion.notify_one();
     }
     pub fn admit(&self, request: SettingsRequest) -> Result<u64, String> {
         let mut s = self.state.lock().unwrap();
-        if s.operations.len() + s.failed.len() + s.active.len() + s.in_transit.len()
+        if s.operations.len() + s.active.len() + s.in_transit.len()
             >= if request.interrupt() { 16 } else { 15 }
         {
             return Err("Settings actions are still finishing. Retry.".into());
@@ -122,8 +123,6 @@ impl SettingsStore {
         let id = s.next_operation;
         if let Some(scope) = request.mutation_scope() {
             s.latest_mutations.insert(scope.clone(), id);
-            s.failed
-                .retain(|_, old| old.mutation_scope().as_ref() != Some(&scope));
         }
         if matches!(request, SettingsRequest::PracticeCopy(_)) {
             s.last_copy = id;
@@ -178,6 +177,11 @@ impl SettingsStore {
         let s = self.state.lock().unwrap();
         s.revision != s.settled || !s.operations.is_empty()
     }
+    pub fn owner_pending(&self, owner: OwnerId) -> bool {
+        let state = self.state.lock().unwrap();
+        state.queue.owner_pending(owner)
+            || (state.aliases_pending && state.aliases.values().any(|(o, _)| *o == owner))
+    }
     pub fn canonical(&self) -> Option<Value> {
         self.state.lock().unwrap().canonical.clone()
     }
@@ -185,7 +189,6 @@ impl SettingsStore {
         {
             let s = self.state.lock().unwrap();
             s.queue.failure_count()
-                + s.failed.len()
                 + s.validation.len()
                 + usize::from(s.alias_read_failed)
                 + usize::from(s.executor_failed)
@@ -193,21 +196,32 @@ impl SettingsStore {
     }
     pub fn drain_owner(&self, owner: OwnerId) -> tezbar_core::host::HostFuture<()> {
         let this = self.clone();
+        let (target, owner_target) = {
+            let state = self.state.lock().unwrap();
+            (state.config_revision, state.queue.owner_revision(owner))
+        };
         Box::pin(async move {
-            let target = this.state.lock().unwrap().config_revision;
             this.start_worker().await;
             loop {
                 let wait = this.completion.notified();
                 tokio::pin!(wait);
                 wait.as_mut().enable();
                 {
-                    let state = this.state.lock().unwrap();
+                    let mut state = this.state.lock().unwrap();
                     if state.executor_failed {
                         return Err(CLOSE_ERROR.into());
                     }
                     if state.config_settled >= target {
+                        if state.rejected.get(&owner) == Some(&owner_target) {
+                            state.rejected.remove(&owner);
+                            return Err(
+                                "Shortcut unavailable. Your previous shortcut is unchanged.".into(),
+                            );
+                        }
                         return if state.queue.owner_failure_count(owner) > 0
                             || state.validation.keys().any(|(id, _)| *id == owner)
+                            || (state.alias_read_failed
+                                && state.aliases.values().any(|(id, _)| *id == owner))
                         {
                             Err(CLOSE_ERROR.into())
                         } else {
@@ -220,38 +234,50 @@ impl SettingsStore {
         })
     }
     async fn start_worker(&self) {
-        if let Ok(mut worker) = self.worker.try_lock() {
-            if worker.as_ref().is_none_or(|t| t.is_finished()) {
-                if let Some(done) = worker.take() {
-                    if done.await.is_err() {
-                        self.state.lock().unwrap().executor_failed = true;
-                    }
-                }
-                let pump = self.clone();
-                *worker = Some(tokio::spawn(async move { pump.pump().await }));
+        let generation = {
+            let mut state = self.state.lock().unwrap();
+            if state.running || state.executor_failed {
+                return;
             }
-        }
+            state.running = true;
+            state.pump_generation += 1;
+            state.pump_generation
+        };
+        let pump = self.clone();
+        // The task owns its lifetime independently of a GPUI waiter. Liveness changes
+        // use the same lock as the exit decision, never JoinHandle::is_finished().
+        let lease = PumpLease {
+            store: pump.clone(),
+            generation,
+        };
+        tokio::spawn(async move {
+            let _lease = lease;
+            let _ = pump.pump().await;
+        });
     }
     pub fn drain(&self) -> tezbar_core::host::HostFuture<()> {
         let this = self.clone();
         Box::pin(async move {
-            // A cancelled GPUI waiter cannot strand the model between Read and Save.
-            let mut worker = this.worker.lock().await;
             loop {
-                if worker.is_none() {
-                    let pump = this.clone();
-                    *worker = Some(tokio::spawn(async move { pump.pump().await }));
+                let wait = this.completion.notified();
+                tokio::pin!(wait);
+                wait.as_mut().enable();
+                {
+                    let state = this.state.lock().unwrap();
+                    if state.executor_failed {
+                        return Err(CLOSE_ERROR.into());
+                    }
+                    if !state.running && state.revision == state.settled {
+                        drop(state);
+                        return if this.failures() == 0 {
+                            Ok(())
+                        } else {
+                            Err(CLOSE_ERROR.into())
+                        };
+                    }
                 }
-                let joined = worker.as_mut().unwrap().await;
-                if joined.is_err() {
-                    this.state.lock().unwrap().executor_failed = true;
-                }
-                let result = joined.map_err(|_| CLOSE_ERROR.to_string()).and_then(|v| v);
-                worker.take();
-                if this.pending() {
-                    continue;
-                }
-                return result;
+                this.start_worker().await;
+                wait.await;
             }
         })
     }
@@ -280,9 +306,6 @@ impl SettingsStore {
             .is_some_and(|scope| s.latest_mutations.get(&scope) != Some(&id))
         {
             result = Ok(Value::Null);
-        }
-        if request.recoverable_write() && !success(&result) {
-            s.failed.insert(id, request);
         }
         if s.results.len() >= 64 {
             if let Some(key) = s.results.keys().next().copied() {
@@ -423,6 +446,9 @@ impl SettingsStore {
                     continue;
                 }
                 s.settled = revision;
+                s.running = false;
+                drop(s);
+                self.completion.notify_waiters();
                 break;
             };
             let _config_guard = self.config_lane.lock().await;
@@ -433,7 +459,8 @@ impl SettingsStore {
             };
             if let Some(Effect::Save { token, patch }) = save {
                 let saved_aliases = patch.get("commandAliases").cloned();
-                let ok = success(&self.transport.send(SettingsRequest::Save(patch)).await);
+                let result = self.transport.send(SettingsRequest::Save(patch)).await;
+                let ok = success(&result);
                 if ok {
                     if let Some(aliases) = saved_aliases {
                         self.state
@@ -443,7 +470,16 @@ impl SettingsStore {
                             .retain(|id, (_, value)| aliases[id] != *value);
                     }
                 }
-                self.state.lock().unwrap().queue.finish(token, ok);
+                {
+                    let mut state = self.state.lock().unwrap();
+                    if matches!(&result, Ok(v) if v["ok"] == false) {
+                        if let Some((owner, revision)) = state.queue.reject(token) {
+                            state.rejected.insert(owner, revision);
+                        }
+                    } else {
+                        state.queue.finish(token, ok);
+                    }
+                }
                 if ok {
                     self.state.lock().unwrap().canonical = None;
                     if let Ok(v) = self.transport.durable_config().await {
@@ -457,6 +493,27 @@ impl SettingsStore {
         } else {
             Ok(())
         }
+    }
+}
+struct PumpLease {
+    store: SettingsStore,
+    generation: u64,
+}
+impl Drop for PumpLease {
+    fn drop(&mut self) {
+        let mut state = self.store.state.lock().unwrap();
+        if state.running && state.pump_generation == self.generation {
+            if let Some((token, _)) = state.queue.phase() {
+                state.queue.finish(token, false);
+            }
+            if !state.aliases.is_empty() {
+                state.alias_read_failed = true;
+            }
+            state.running = false;
+            state.executor_failed = true;
+        }
+        drop(state);
+        self.store.completion.notify_waiters();
     }
 }
 pub fn success(r: &Result<Value, String>) -> bool {

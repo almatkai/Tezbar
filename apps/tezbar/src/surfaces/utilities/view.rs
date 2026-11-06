@@ -15,7 +15,11 @@ impl Utilities {
                 .gap(px(8.))
                 .child(div().flex_1().truncate().child(label.to_owned()))
                 .when(pinned, |d| {
-                    d.child(div().id(SharedString::from(format!("pinned-{id}"))).aria_label("Pinned").text_color(t.text3).child("⌖"))
+                    d.child(
+                        div()
+                            .id(SharedString::from(format!("pinned-{id}")))
+                            .child(controls::pin(t)),
+                    )
                 })
                 .into_any_element();
         }

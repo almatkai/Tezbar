@@ -410,16 +410,7 @@ impl SettingsContent {
         self.activated = true;
         self.prepare_fields(w, cx);
         self.refresh(cx);
-        self.timer = Some(cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(250))
-                    .await;
-                if this.update(cx, |this, cx| this.tick(cx)).is_err() {
-                    break;
-                }
-            }
-        }));
+        self.refresh_timer(cx);
     }
     pub fn navigate(&mut self, intent: &Navigation, w: &mut Window, cx: &mut Context<Self>) {
         if self.last_navigation == Some(intent.nonce) {
@@ -479,6 +470,7 @@ impl SettingsContent {
         }
         let effects = self.knowledge.visible(visible, self.now());
         self.knowledge_effects(effects, cx);
+        self.refresh_timer(cx);
     }
     pub fn set_ui_state(&mut self, state: &UiState, cx: &mut Context<Self>) {
         self.state = state.clone();
@@ -591,6 +583,45 @@ impl SettingsContent {
                 _ => {}
             }
         }
+    }
+    fn needs_timer(&self) -> bool {
+        self.activated
+            && self.visible
+            && (self.tab == Tab::Knowledge
+                || matches!(
+                    self.device.phase,
+                    DevicePhase::Waiting { .. } | DevicePhase::Polling
+                )
+                || (self.tab == Tab::Ai && self.account_status == "pending"))
+    }
+    fn refresh_timer(&mut self, cx: &mut Context<Self>) {
+        if !self.needs_timer() {
+            self.timer = None;
+            return;
+        }
+        if self.timer.is_some() {
+            return;
+        }
+        self.timer = Some(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
+                if !this
+                    .update(cx, |this, cx| {
+                        if !this.needs_timer() {
+                            this.timer = None;
+                            return false;
+                        }
+                        this.tick(cx);
+                        true
+                    })
+                    .unwrap_or(false)
+                {
+                    break;
+                }
+            }
+        }));
     }
     fn tick(&mut self, cx: &mut Context<Self>) {
         let e = self.knowledge.tick(self.now());
@@ -739,6 +770,7 @@ impl SettingsContent {
                     if scope.is_none_or(|scope| this.latest_reads.get(scope) == Some(&id)) {
                         this.complete(completion, result, w, cx);
                     }
+                    this.refresh_timer(cx);
                     cx.notify()
                 });
             });
@@ -760,11 +792,12 @@ impl SettingsContent {
         self.saving = true;
         self.message = Some("Saving…".into());
         let store = self.store.clone();
+        let drain = store.drain_owner(self.owner);
         let window = self.window;
         self.next_job += 1;
         let id = self.next_job;
         let task = cx.spawn(async move |this, cx| {
-            let result = gpui_tokio::Tokio::spawn(cx, store.drain())
+            let result = gpui_tokio::Tokio::spawn(cx, drain)
                 .await
                 .unwrap_or_else(|_| Err(settings::CLOSE_ERROR.into()));
             let _ = cx.update_window(window, |_, w, cx| {
@@ -778,21 +811,21 @@ impl SettingsContent {
                             if let Some(config) = this.store.canonical() {
                                 this.hydrate(config, w, cx)
                             }
-                            if !this.store.pending() {
+                            if !this.store.owner_pending(this.owner) {
                                 let actions = std::mem::take(&mut this.after_save);
                                 for a in actions {
                                     this.action(a, w, cx);
                                 }
                             }
                         }
-                        Err(_) => {
+                        Err(error) => {
                             this.after_save.clear();
-                            this.error = Some(settings::CLOSE_ERROR.into());
+                            this.error = Some(error);
                             this.message = None;
                             this.device.saved(this.device_token(), false, None);
                         }
                     }
-                    if this.store.pending() {
+                    if this.store.owner_pending(this.owner) {
                         this.flush(None, cx)
                     }
                     cx.notify()
@@ -1071,9 +1104,18 @@ impl SettingsContent {
                         );
                     }
                     Completion::DryRun => self.dry_run = v.as_bool().unwrap_or(false),
-                    Completion::Installed => self.installed = v,
-                    Completion::Schema => self.schema = v,
-                    Completion::ExtensionSettings => self.extension_settings = v,
+                    Completion::Installed => {
+                        self.installed = v;
+                        self.prepare_extension_fields(w, cx);
+                    }
+                    Completion::Schema => {
+                        self.schema = v;
+                        self.prepare_extension_fields(w, cx);
+                    }
+                    Completion::ExtensionSettings => {
+                        self.extension_settings = v;
+                        self.prepare_extension_fields(w, cx);
+                    }
                     Completion::Statuses => self.provider_statuses = v,
                     Completion::Pi => self.pi = v,
                     Completion::Simple => {
@@ -1365,7 +1407,7 @@ impl SettingsContent {
             ("apiKey", "API key", true, false),
             ("baseURL", "Base URL", false, false),
             ("protocol", "Protocol", false, false),
-            ("headers", "Headers", true, true),
+            ("headers", "Headers JSON", true, false),
             (
                 "githubOAuthClientId",
                 "GitHub OAuth client ID",
@@ -1459,6 +1501,13 @@ impl SettingsContent {
         self.confirmation = Some(action);
         w.focus(&self.confirm_focus[1], cx);
     }
+    fn durable_error(&self) -> Option<&str> {
+        if self.store.failures() > 0 {
+            Some(settings::CLOSE_ERROR)
+        } else {
+            self.parent_error.as_deref()
+        }
+    }
     pub fn action(&mut self, a: Action, w: &mut Window, cx: &mut Context<Self>) {
         self.error = None;
         match a {
@@ -1537,12 +1586,18 @@ impl SettingsContent {
                 zoom: None,
                 reset: true,
             }),
-            Action::Zoom(v) => cx.emit(SettingsEffect::LauncherLayout {
-                width: None,
-                height: None,
-                zoom: Some(v.clamp(0.75, 2.)),
-                reset: false,
-            }),
+            Action::Zoom(v) => {
+                let zoom = v.clamp(0.75, 2.);
+                if let Some((_, profile)) = self.layout.as_mut() {
+                    profile.zoom = zoom;
+                }
+                cx.emit(SettingsEffect::LauncherLayout {
+                    width: None,
+                    height: None,
+                    zoom: Some(zoom),
+                    reset: false,
+                });
+            }
             Action::RecordHotkey => {
                 self.hotkey_recording = true;
                 w.focus(&self.focus, cx)
@@ -1896,7 +1951,54 @@ impl SettingsContent {
             }
             Action::Close => cx.emit(SettingsEffect::Close),
         }
+        self.refresh_timer(cx);
         cx.notify();
+    }
+    fn prepare_extension_fields(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        let rows = view::merge_installed(&self.schema, &self.installed);
+        let mut keep = std::collections::BTreeSet::new();
+        for row in rows.as_array().into_iter().flatten() {
+            let id = text(&row["extName"]);
+            for command in row["commands"].as_array().into_iter().flatten() {
+                let id = format!("extcmd:{id}:{}", text(&command["name"]));
+                for (kind, label, source) in [
+                    ("alias", "Alias", "commandAliases"),
+                    ("hotkey", "Shortcut", "commandHotkeys"),
+                ] {
+                    let key = format!("command.{kind}.{id}");
+                    keep.insert(key.clone());
+                    let value = text(&self.extension_settings[source][&id]);
+                    self.field(&key, label, FieldKind::Local, &value, false, false, w, cx);
+                }
+            }
+        }
+        // Dropping a removed field also drops its input subscription.
+        self.fields
+            .retain(|key, _| !key.starts_with("command.") || keep.contains(key));
+    }
+    fn confirmation_copy(&self, action: &Action) -> (String, String, String) {
+        let (title, description, accept) = match action {
+            Action::Quit => ("Quit Tezbar?".into(), "Background tasks and terminals will stop.".into(), "Quit Tezbar"),
+            Action::DeleteProvider(id) => {
+                let name = self.config["customProviders"].as_array().into_iter().flatten()
+                    .find(|p| p["id"].as_str() == Some(id)).and_then(|p| p["name"].as_str()).unwrap_or("this provider");
+                (format!("Remove {name}?"), "Its saved configuration will be removed. Existing conversations stay in history.".into(), "Remove provider")
+            }
+            Action::Uninstall(id) => {
+                let rows = view::merge_installed(&self.schema, &self.installed);
+                let name = rows.as_array().into_iter().flatten().find(|p| p["extName"].as_str() == Some(id))
+                    .and_then(|p| p["title"].as_str()).unwrap_or("this extension");
+                (format!("Uninstall {name}?"), "Its commands will no longer be available.".into(), "Uninstall extension")
+            }
+            Action::Contribution(ContributionIntent::ResetSecrets) => ("Reset saved connection secrets?".into(), "Saved tokens, passwords and provider credentials from AI extensions will be removed. Enter them again to reconnect.".into(), "Reset connection secrets"),
+            Action::Contribution(ContributionIntent::Remove(id)) => {
+                let name = self.contributions.display["extensions"].as_array().into_iter().flatten()
+                    .find(|e| e["id"].as_str() == Some(id)).and_then(|e| e["name"].as_str()).unwrap_or("this AI extension");
+                (format!("Remove {name}?"), "Its connections will stop and its saved secrets will be removed.".into(), "Remove AI extension")
+            }
+            _ => ("Discard these changes?".into(), "This action cannot be undone.".into(), "Discard changes"),
+        };
+        (title, description, accept.into())
     }
     fn prepare_preferences(
         &mut self,

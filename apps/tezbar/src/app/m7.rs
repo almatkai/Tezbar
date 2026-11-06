@@ -27,11 +27,35 @@ pub(super) struct State {
     pub channel: String,
     pub channel_loaded: bool,
     pub layout_pending: bool,
+    pub queued_layout: Option<(EntityId, SettingsEffect, u64)>,
     pub channel_lock: Arc<tokio::sync::Mutex<()>>,
     pub failed_layout: Option<SettingsEffect>,
     pub failed_channel: Option<String>,
 }
 impl State {
+    pub(super) fn schedule_layout(
+        &mut self,
+        id: EntityId,
+        effect: SettingsEffect,
+    ) -> Option<(SettingsEffect, u64)> {
+        let ticket = self.barrier.begin("layout");
+        let effect = if let Some((_, old, old_ticket)) = self.queued_layout.take() {
+            self.barrier.finish("layout", old_ticket, true);
+            merge_layout(old, effect)
+        } else {
+            effect
+        };
+        self.failed_layout = Some(effect.clone());
+        if self.layout_pending {
+            self.queued_layout = Some((id, effect, ticket));
+            return None;
+        }
+        Some((effect, ticket))
+    }
+    pub fn fail_open(&mut self) {
+        self.boot = Boot::Ready;
+        self.decided = true;
+    }
     pub fn new(store: SettingsStore) -> Self {
         Self {
             store,
@@ -47,6 +71,7 @@ impl State {
             channel: String::new(),
             channel_loaded: false,
             layout_pending: false,
+            queued_layout: None,
             channel_lock: Arc::default(),
             failed_layout: None,
             failed_channel: None,
@@ -99,6 +124,7 @@ impl Owner {
     }
     pub(super) fn m7_ready(&mut self, cx: &mut Context<Self>) {
         if self.m7.decided {
+            self.m7_load_channel(cx);
             if std::mem::take(&mut self.show_on_ready) {
                 self.show(cx)
             }
@@ -488,18 +514,18 @@ impl Owner {
         }));
     }
     fn m7_layout(&mut self, id: EntityId, effect: SettingsEffect, cx: &mut Context<Self>) {
-        let ticket = self.m7.barrier.begin("layout");
-        self.m7.failed_layout = Some(effect.clone());
-        if self.m7.layout_pending {
-            self.m7_finish_effect(
-                id,
-                "layout",
-                ticket,
-                Err("Layout save is still finishing".into()),
-                cx,
-            );
+        let Some((effect, ticket)) = self.m7.schedule_layout(id, effect) else {
             return;
-        }
+        };
+        self.m7_layout_ticket(id, effect, ticket, cx);
+    }
+    fn m7_layout_ticket(
+        &mut self,
+        id: EntityId,
+        effect: SettingsEffect,
+        ticket: u64,
+        cx: &mut Context<Self>,
+    ) {
         let SettingsEffect::LauncherLayout {
             width,
             height,
@@ -597,7 +623,40 @@ impl Owner {
                 }
                 owner.m7_finish_effect(id, "layout", ticket, result, cx);
                 owner.m7_refresh_content(cx);
+                if let Some((id, effect, ticket)) = owner.m7.queued_layout.take() {
+                    owner.m7_layout_ticket(id, effect, ticket, cx);
+                }
             });
         }));
+    }
+}
+pub(super) fn merge_layout(previous: SettingsEffect, next: SettingsEffect) -> SettingsEffect {
+    match (previous, next) {
+        (
+            SettingsEffect::LauncherLayout {
+                width: a,
+                height: b,
+                zoom: c,
+                reset: old_reset,
+            },
+            SettingsEffect::LauncherLayout {
+                width,
+                height,
+                zoom,
+                reset,
+            },
+        ) if !reset => SettingsEffect::LauncherLayout {
+            width: width
+                .or(a)
+                .or_else(|| old_reset.then_some(Profile::default().width)),
+            height: height
+                .or(b)
+                .or_else(|| old_reset.then_some(Profile::default().height)),
+            zoom: zoom
+                .or(c)
+                .or_else(|| old_reset.then_some(Profile::default().zoom)),
+            reset: false,
+        },
+        (_, next) => next,
     }
 }

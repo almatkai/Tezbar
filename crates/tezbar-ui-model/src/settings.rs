@@ -161,10 +161,12 @@ pub struct WriteQueue {
     revision: Revision,
     next: u64,
     owners: BTreeMap<OwnerId, bool>,
+    latest: BTreeMap<OwnerId, Revision>,
     pending: VecDeque<Intent>,
     flight: Option<Flight>,
     failures: BTreeMap<Key, Intent>,
     saved: BTreeMap<Key, Revision>,
+    rejected: BTreeMap<Key, Revision>,
     removed: BTreeMap<String, Revision>,
     close: Option<(u64, u64, bool)>,
     pub message: Option<&'static str>,
@@ -208,6 +210,7 @@ impl WriteQueue {
         self.revision += 1;
         self.next += 1;
         self.owners.entry(owner).or_insert(false);
+        self.latest.insert(owner, self.revision);
         self.pending.push_back(Intent {
             id: self.next,
             owner,
@@ -238,6 +241,7 @@ impl WriteQueue {
     }
     fn stale(&self, key: &Key, revision: Revision) -> bool {
         self.saved.get(key).copied().unwrap_or(0) > revision
+            || self.rejected.get(key).copied().unwrap_or(0) > revision
             || key
                 .provider()
                 .is_some_and(|p| self.removed.get(p).copied().unwrap_or(0) > revision)
@@ -547,7 +551,40 @@ impl WriteQueue {
         }
         (Value::Object(patch), keys)
     }
-    /// `ok:false` and transport failures both call this with false. Error payloads are not retained.
+    /// A definitive validation rejection settles this intent without claiming it was saved.
+    /// Older retries for the same keys must not resurrect the rejected choice.
+    pub fn reject(&mut self, token: u64) -> Option<(OwnerId, Revision)> {
+        if !self
+            .flight
+            .as_ref()
+            .is_some_and(|f| f.token == token && f.phase == Phase::Saving)
+        {
+            return None;
+        }
+        let f = self.flight.take()?;
+        for key in f.intent.edits.iter().map(Edit::key) {
+            self.rejected
+                .entry(key.clone())
+                .and_modify(|r| *r = (*r).max(f.intent.revision))
+                .or_insert(f.intent.revision);
+            if self
+                .failures
+                .get(&key)
+                .is_some_and(|i| i.revision <= f.intent.revision)
+            {
+                self.failures.remove(&key);
+            }
+        }
+        if self.failures.is_empty() {
+            self.message = None;
+        }
+        self.collect_owners();
+        Some((f.intent.owner, f.intent.revision))
+    }
+    pub fn owner_revision(&self, owner: OwnerId) -> Revision {
+        self.latest.get(&owner).copied().unwrap_or(0)
+    }
+    /// Transport failures remain retryable. Definitive validation failures use `reject`.
     pub fn finish(&mut self, token: u64, success: bool) -> Option<Effect> {
         if !self.flight.as_ref().is_some_and(|f| f.token == token) {
             return None;
@@ -624,6 +661,13 @@ impl WriteQueue {
             .collect::<BTreeSet<_>>()
             .len()
     }
+    pub fn owner_pending(&self, owner: OwnerId) -> bool {
+        self.pending.iter().any(|i| i.owner == owner)
+            || self
+                .flight
+                .as_ref()
+                .is_some_and(|f| f.intent.owner == owner)
+    }
     pub fn owner_failure_count(&self, owner: OwnerId) -> usize {
         self.failures
             .values()
@@ -642,6 +686,7 @@ impl WriteQueue {
             .collect();
         self.owners
             .retain(|id, retired| !*retired || busy.contains(id));
+        self.latest.retain(|id, _| self.owners.contains_key(id));
     }
     pub fn request_close(&mut self, request: u64, now: u64, acknowledge: bool) -> Option<Effect> {
         self.close = Some((request, now, acknowledge));
@@ -955,3 +1000,40 @@ impl DeviceSignIn {
 }
 pub mod contributions;
 pub mod providers;
+
+#[cfg(test)]
+mod rejection_regressions {
+    use super::*;
+    #[test]
+    fn rejected_choice_does_not_stamp_saved_state_or_replay_an_older_failure() {
+        let mut q = WriteQueue::default();
+        q.register(1);
+        let edit = |v: &str| Edit::Global {
+            field: "raymesHotkey".into(),
+            value: json!(v),
+        };
+        let prepare = |q: &mut WriteQueue, value: &str| {
+            q.enqueue(1, vec![edit(value)]);
+            let Some(Effect::Read { token }) = q.next_effect() else {
+                panic!("missing read")
+            };
+            assert!(matches!(
+                q.read_result(token, Ok(json!({"raymesHotkey":"Alt+Space"}))),
+                Some(Effect::Save { .. })
+            ));
+            token
+        };
+        let token = prepare(&mut q, "Control+X");
+        q.finish(token, false);
+        assert_eq!(q.failure_count(), 1);
+        let token = prepare(&mut q, "Control+K");
+        assert_eq!(q.reject(token), Some((1, 2)));
+        assert_eq!(q.failure_count(), 0);
+        assert!(!q.saved.contains_key(&Key::Global("raymesHotkey".into())));
+        q.retry(false);
+        assert!(q.next_effect().is_none());
+        let token = prepare(&mut q, "Control+L");
+        q.finish(token, true);
+        assert_eq!(q.saved[&Key::Global("raymesHotkey".into())], 3);
+    }
+}

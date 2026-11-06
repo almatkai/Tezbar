@@ -1,5 +1,7 @@
 # Parent M6 composition and verification
 
+Historical original M6 handoff. Its counts and hashes below describe the original lane and parent gates, before the c2a36b5 review repairs. They are retained as evidence and do not describe the current source. See `review-repairs.md` for current review dispositions.
+
 The native Launcher lazily creates one retained `Utilities` owner using its existing
 `CoreClient`. It supplies the current updater status, native locale formatter,
 release-note identity, core event subscription, and existing `UiState`. Native

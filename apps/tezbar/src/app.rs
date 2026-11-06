@@ -101,7 +101,7 @@ impl Owner {
                 {
                     owner.m7_ready(cx)
                 } else {
-                    owner.m7.boot = m7::Boot::Ready;
+                    owner.m7.fail_open();
                     if std::mem::take(&mut owner.show_on_ready) {
                         owner.show(cx)
                     }

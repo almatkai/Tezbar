@@ -1323,6 +1323,8 @@
     "path": "apps/tezbar/src/surfaces/command_bar/utilities_integration_tests.rs",
     "sha256": "e484f935e4e562527508cac9221329b2627c1e50316a25b6dff94be7ec08ba85",
     "count": 4,
-    "log": "/tmp/tezbar-native-m06-evidence/native-final.log"
-  }
+    "log": "/tmp/tezbar-native-m06-evidence/native-final.log",
+    "status": "historical-original-handoff"
+  },
+  "evidence_scope": "Historical M6 implementation handoff, before parent review repairs. Original hashes and counts below are preserved; current repair composition is recorded in review-repairs.md."
 }

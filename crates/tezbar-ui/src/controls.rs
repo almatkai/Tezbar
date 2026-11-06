@@ -352,3 +352,9 @@ mod tests {
         });
     }
 }
+
+/// The product pin marker from ClipboardView, shared by native rows.
+pub fn pin(t: Tokens) -> impl IntoElement {
+    div().id("pin-marker").role(Role::Image).aria_label("Pinned")
+        .child(gpui::svg().data(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="white" d="M5 .5 6 3l2.6.4-1.9 1.8.5 2.6L5 6.6 2.8 7.8l.5-2.6L1.4 3.4 4 3 5 .5Z"/></svg>"#.as_slice()).size(px(10. * t.zoom)).text_color(t.text3))
+}

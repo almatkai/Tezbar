@@ -60,6 +60,7 @@ pub struct Onboarding {
     load: Option<Task<()>>,
     shortcut_save: Option<Task<()>>,
     pub finishing: bool,
+    completed: bool,
 }
 impl Onboarding {
     pub fn new(
@@ -129,6 +130,7 @@ impl Onboarding {
             load: None,
             shortcut_save: None,
             finishing: false,
+            completed: false,
         }
     }
     pub fn activate(&mut self, _w: &mut Window, cx: &mut Context<Self>) {
@@ -183,7 +185,7 @@ impl Onboarding {
         cx.notify();
     }
     pub fn finish(&mut self, cx: &mut Context<Self>) {
-        if self.finishing {
+        if self.finishing || self.completed {
             return;
         }
         self.finishing = true;
@@ -196,11 +198,13 @@ impl Onboarding {
             }],
         );
         let store = self.store.clone();
+        let drain = store.drain_owner(self.owner);
         self.finish = Some(cx.spawn(async move |this, cx| {
-            let r = gpui_tokio::Tokio::spawn(cx, store.drain()).await;
+            let r = gpui_tokio::Tokio::spawn(cx, drain).await;
             let _ = this.update(cx, |v, cx| {
                 v.finishing = false;
                 if matches!(r, Ok(Ok(()))) {
+                    v.completed = true;
                     cx.emit(OnboardingEffect::Finished)
                 } else {
                     v.error = Some("Could not finish saving. Retry to complete onboarding.".into())
@@ -468,8 +472,9 @@ impl Onboarding {
                     }],
                 );
                 let store = self.store.clone();
+                let drain = store.drain_owner(self.owner);
                 self.shortcut_save = Some(cx.spawn(async move |this, cx| {
-                    let r = gpui_tokio::Tokio::spawn(cx, store.drain()).await;
+                    let r = gpui_tokio::Tokio::spawn(cx, drain).await;
                     let _ = this.update(cx, |v, cx| {
                         if matches!(r, Ok(Ok(()))) {
                             v.hotkey = hotkey;
@@ -828,5 +833,131 @@ mod tests {
             assert_eq!(v.done.len(), 3);
             assert!(!v.steps.contains(&Step::Permissions));
         });
+    }
+}
+
+#[cfg(test)]
+mod review_regressions {
+    // Independent-review rejection regression.
+    use super::*;
+    use crate::surfaces::settings::{
+        SettingsFuture, SettingsTransport,
+        tests::{Fixture, runtime, settle},
+    };
+    use ::core::prelude::v1::test;
+    use std::sync::{Arc, Mutex};
+    /// The real core returns {"ok":false} when the shortcut is registered by another app.
+    struct Conflict(Arc<Fixture>);
+    impl SettingsTransport for Conflict {
+        fn durable_config(&self) -> SettingsFuture {
+            self.0.durable_config()
+        }
+        fn send(&self, request: SettingsRequest) -> SettingsFuture {
+            if let SettingsRequest::Save(patch) = &request {
+                if patch.get("raymesHotkey").is_some() {
+                    return Box::pin(async {
+                        Ok(json!({"ok":false,"accelerator":"Control+K","error":"in use"}))
+                    });
+                }
+            }
+            self.0.send(request)
+        }
+    }
+    #[gpui::test]
+    fn review_conflicting_shortcut_does_not_block_finish_or_skip(cx: &mut TestAppContext) {
+        let rt = runtime(cx);
+        let fixture = Arc::new(Fixture {
+            config: Mutex::new(json!({"raymesHotkey":"Alt+Space"})),
+            ..Default::default()
+        });
+        let store = SettingsStore::new(Arc::new(Conflict(fixture.clone())));
+        let finished = std::rc::Rc::new(std::cell::Cell::new(0));
+        let count = finished.clone();
+        let (view, cx) = cx.add_window_view(|w, cx| {
+            let mut v = Onboarding::new(store.clone(), &UiState::default(), false, w, cx);
+            let sub = cx.subscribe(&cx.entity(), move |_, _, e: &OnboardingEffect, _| {
+                if matches!(e, OnboardingEffect::Finished) {
+                    count.set(count.get() + 1)
+                }
+            });
+            v._subscriptions.push(sub);
+            v
+        });
+        cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+        settle(&rt, cx);
+        cx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.recording = true;
+                v.key(
+                    &KeyDownEvent {
+                        keystroke: Keystroke::parse("ctrl-k").unwrap(),
+                        is_held: false,
+                        prefer_character_input: false,
+                    },
+                    w,
+                    cx,
+                )
+            })
+        });
+        settle(&rt, cx);
+        let shortcut_error = view.read_with(cx, |v, _| v.error.clone());
+        let kept = view.read_with(cx, |v, _| v.hotkey.clone());
+        // The user accepts the "previous shortcut is unchanged" outcome and skips the tour.
+        view.update(cx, |v, cx| {
+            v.error = None;
+            v.finish(cx)
+        });
+        settle(&rt, cx);
+        let skip_error = view.read_with(cx, |v, _| v.error.clone());
+        view.update(cx, |v, cx| v.retry_finish(cx));
+        settle(&rt, cx);
+        let retry_error = view.read_with(cx, |v, _| v.error.clone());
+        let barrier =
+            rt.block_on(store.drain_with(crate::surfaces::settings::EffectBarrier::default()));
+        eprintln!(
+            "OPUS shortcut_error={shortcut_error:?} kept={kept:?} skip_error={skip_error:?} retry_error={retry_error:?} finished={} hasCompleted={} close/quit barrier={barrier:?}",
+            finished.get(),
+            fixture.config.lock().unwrap()["hasCompletedOnboarding"]
+        );
+        assert_eq!(kept, "Alt+Space");
+        assert_eq!(
+            finished.get(),
+            1,
+            "a rejected shortcut (old binding kept) prevents Skip/Finish forever"
+        );
+    }
+    #[tokio::test]
+    async fn review_rejection_belongs_to_its_revision_not_a_later_finish() {
+        let fixture = Arc::new(Fixture {
+            config: Mutex::new(json!({"raymesHotkey":"Alt+Space"})),
+            ..Default::default()
+        });
+        let store = SettingsStore::new(Arc::new(Conflict(fixture.clone())));
+        let owner = store.owner();
+        store.enqueue(
+            owner,
+            vec![Edit::Global {
+                field: "raymesHotkey".into(),
+                value: json!("Control+K"),
+            }],
+        );
+        let shortcut = store.drain_owner(owner);
+        store.enqueue(
+            owner,
+            vec![Edit::Global {
+                field: "hasCompletedOnboarding".into(),
+                value: json!(true),
+            }],
+        );
+        let finish = store.drain_owner(owner);
+        let (shortcut, finish) = tokio::join!(shortcut, finish);
+        assert!(shortcut.is_err());
+        finish.unwrap();
+        store.drain().await.unwrap();
+        assert_eq!(fixture.config.lock().unwrap()["raymesHotkey"], "Alt+Space");
+        assert_eq!(
+            fixture.config.lock().unwrap()["hasCompletedOnboarding"],
+            true
+        );
     }
 }

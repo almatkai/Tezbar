@@ -1065,7 +1065,20 @@ async fn failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_a
         .admit(SettingsRequest::ClipboardSet(json!({"watchEnabled":false})))
         .unwrap();
     assert!(store.operation_result(id).await.is_err());
-    assert!(store.drain().await.is_err());
+    // Operational failures are reported to this ticket, not retained as an
+    // undismissable Settings-close failure (Opus N-2).
+    store.drain().await.unwrap();
+    store.retry();
+    store.drain().await.unwrap();
+    assert_eq!(
+        f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(c, _)| *c == "storage:clipboard-config:set")
+            .count(),
+        1
+    );
     *f.fail_channel.lock().unwrap() = None;
     let id = store
         .admit(SettingsRequest::ClipboardSet(json!({"watchEnabled":true})))
@@ -1119,4 +1132,499 @@ async fn close_drain_rechecks_config_edits_admitted_during_parent_persistence() 
     task.await.unwrap().unwrap();
     assert_eq!(f.config.lock().unwrap()["memoryMaxItems"], 23);
     assert!(!store.pending());
+}
+
+// Regression cases reproduced by the independent 290e414 review.
+#[gpui::test]
+fn review_failed_operational_delete_is_retryable_but_never_dischargeable(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    // A real core delete that keeps failing (file in use / permission denied).
+    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    let store = SettingsStore::new(f.clone());
+    let barrier = EffectBarrier::default();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(
+                Action::Voice(VoiceAction::Delete("fixture-model".into())),
+                w,
+                cx,
+            )
+        })
+    });
+    settle(&rt, cx);
+    let first = rt.block_on(store.drain_with(barrier.clone()));
+    for _ in 0..3 {
+        cx.update(|w, cx| view.update(cx, |v, cx| v.action(Action::Retry, w, cx)));
+        settle(&rt, cx);
+    }
+    let after_retries = rt.block_on(store.drain_with(barrier.clone()));
+    let deletes = f
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "voice:model:delete")
+        .count();
+    eprintln!(
+        "OPUS close barrier: first={first:?} after 3 retries={after_retries:?} deletes={deletes} failures={}",
+        store.failures()
+    );
+    assert_eq!(
+        deletes, 1,
+        "Retry saved changes must not repeat an operational deletion"
+    );
+    assert!(first.is_ok());
+    assert!(
+        after_retries.is_ok(),
+        "a failed operational mutation keeps the all-owner close/quit barrier failing forever"
+    );
+}
+#[gpui::test]
+fn review_unrelated_failed_operation_blocks_copilot_signin(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(
+                Action::Voice(VoiceAction::Delete("fixture-model".into())),
+                w,
+                cx,
+            )
+        })
+    });
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let config = v.config.clone();
+            v.provider.load("copilot".into(), &config);
+            v.action(Action::SignIn, w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let starts = f
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "github-device-start")
+        .count();
+    eprintln!(
+        "OPUS sign-in starts={starts} error={:?} message={:?}",
+        view.read_with(cx, |v, _| v.error.clone()),
+        view.read_with(cx, |v, _| v.message.clone())
+    );
+    assert_eq!(
+        starts, 1,
+        "an unrelated failed Voice delete blocked Copilot sign-in"
+    );
+}
+#[gpui::test]
+fn review_successful_toggle_reports_failure_after_unrelated_operation_failed(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let f = fixture();
+    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(
+                Action::Voice(VoiceAction::Delete("fixture-model".into())),
+                w,
+                cx,
+            )
+        })
+    });
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.error = None;
+            v.action(Action::Toggle("memoryEnabled", false), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let saved = f.config.lock().unwrap()["memoryEnabled"].clone();
+    let error = view.read_with(cx, |v, _| v.error.clone());
+    eprintln!("OPUS toggle saved={saved} error={error:?}");
+    assert_eq!(saved, false);
+    assert!(
+        error.is_none(),
+        "durable toggle saved, yet the view reports {error:?}"
+    );
+}
+#[test]
+fn review_plain_f_key_is_not_a_global_shortcut() {
+    let k = gpui::Keystroke::parse("f").unwrap();
+    let got = view::accelerator(&k);
+    eprintln!("OPUS accelerator(f)={got:?}");
+    assert_eq!(got, None, "TS accepts modifier-less F1..F24 only");
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn review_owner_drain_cannot_strand_behind_an_exiting_pump() {
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let owner = store.owner();
+    let mut stranded = 0;
+    for i in 0..20_000u32 {
+        store.enqueue(
+            owner,
+            vec![Edit::Global {
+                field: "memoryMaxItems".into(),
+                value: json!(i),
+            }],
+        );
+        if tokio::time::timeout(Duration::from_millis(500), store.drain_owner(owner))
+            .await
+            .is_err()
+        {
+            stranded += 1;
+            // Recover the probe so later iterations still run.
+            let _ = store.drain().await;
+        }
+    }
+    eprintln!("OPUS stranded drain_owner waits: {stranded}/20000");
+    assert_eq!(stranded, 0);
+}
+#[gpui::test]
+fn review_repeated_failed_operations_exhaust_admission(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    for _ in 0..15 {
+        cx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.action(
+                    Action::Voice(VoiceAction::Delete("fixture-model".into())),
+                    w,
+                    cx,
+                )
+            })
+        });
+        settle(&rt, cx);
+    }
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(
+                Action::Voice(VoiceAction::Select("other-model".into())),
+                w,
+                cx,
+            )
+        })
+    });
+    settle(&rt, cx);
+    let selects = f
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "voice:model:set-selected")
+        .count();
+    eprintln!(
+        "OPUS after 15 failed deletes: select calls={selects} error={:?} failures={}",
+        view.read_with(cx, |v, _| v.error.clone()),
+        store.failures()
+    );
+    assert_eq!(
+        selects, 1,
+        "retained failed operations consume the 15-slot admission bound"
+    );
+}
+#[gpui::test]
+fn review_tab_switch_hides_unresolved_durable_failure(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    f.fail.store(true, Ordering::SeqCst);
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(Action::Toggle("memoryEnabled", false), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let before = view.read_with(cx, |v, _| v.error.clone());
+    cx.update(|w, cx| view.update(cx, |v, cx| v.action(Action::Tab(Tab::Voice), w, cx)));
+    settle(&rt, cx);
+    let after = view.read_with(cx, |v, _| v.durable_error().map(str::to_owned));
+    eprintln!(
+        "OPUS durable failure before tab={before:?} after tab={after:?} store failures={}",
+        store.failures()
+    );
+    assert!(
+        after.is_some(),
+        "the unresolved durable write failure disappears on any action"
+    );
+}
+
+#[gpui::test]
+fn review_peer_durable_failure_does_not_cancel_own_save_or_signin(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let peer = store.owner();
+    f.fail.store(true, Ordering::SeqCst);
+    store.enqueue(
+        peer,
+        vec![Edit::Global {
+            field: "memoryMaxItems".into(),
+            value: json!(77),
+        }],
+    );
+    assert!(rt.block_on(store.drain()).is_err());
+    f.fail.store(false, Ordering::SeqCst);
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(Action::Toggle("memoryEnabled", false), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    assert_eq!(f.config.lock().unwrap()["memoryEnabled"], false);
+    assert!(view.read_with(cx, |v, _| v.error.is_none()));
+    assert_eq!(store.failures(), 1);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let config = v.config.clone();
+            v.provider.load("copilot".into(), &config);
+            v.action(Action::SignIn, w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert_eq!(
+        f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(c, _)| *c == "github-device-start")
+            .count(),
+        1
+    );
+    assert!(
+        rt.block_on(store.drain()).is_err(),
+        "the peer write is still unsaved"
+    );
+    store.retry();
+    rt.block_on(store.drain()).unwrap();
+}
+#[gpui::test]
+fn review_followup_does_not_wait_for_unrelated_download(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let (release, gate) = tokio::sync::oneshot::channel();
+    *f.held.lock().unwrap() = Some(gate);
+    *f.hold_channel.lock().unwrap() = Some("knowledge:root:add");
+    let ticket = store
+        .admit(SettingsRequest::Knowledge(knowledge::Operation::AddRoot(
+            "/fixture".into(),
+        )))
+        .unwrap();
+    let operation = rt.spawn({
+        let store = store.clone();
+        async move { store.operation_result(ticket).await }
+    });
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let config = v.config.clone();
+            v.provider.load("copilot".into(), &config);
+            v.action(Action::SignIn, w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert!(!operation.is_finished());
+    assert_eq!(
+        f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(c, _)| *c == "github-device-start")
+            .count(),
+        1
+    );
+    release.send(()).unwrap();
+    rt.block_on(operation).unwrap().unwrap();
+    rt.block_on(store.drain()).unwrap();
+}
+#[gpui::test]
+fn review_hidden_settings_and_idle_ai_release_the_tick_task(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let store = SettingsStore::new(fixture());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate_tab(Tab::Knowledge, w, cx)));
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.timer.is_some()));
+    view.update(cx, |v, cx| v.set_visible(false, cx));
+    assert!(view.read_with(cx, |v, _| v.timer.is_none()));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate_tab(Tab::Ai, w, cx)));
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.timer.is_none()));
+}
+#[gpui::test]
+fn review_choices_reflect_hydrated_values_and_readable_details(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f);
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate_tab(Tab::Knowledge, w, cx);
+            v.update_channel = "beta".into();
+            v.state.theme = Theme::Dark;
+        })
+    });
+    settle(&rt, cx);
+    view.read_with(cx, |v, _| {
+        assert!(v.choice_selected(&Action::Theme(Theme::Dark)));
+        assert!(!v.choice_selected(&Action::Theme(Theme::White)));
+        assert!(v.choice_selected(&Action::UpdateChannel("beta".into())));
+        assert!(
+            v.choice_selected(&Action::Knowledge(knowledge::Operation::Depth(
+                "smart".into()
+            )))
+        );
+        assert!(
+            v.choice_selected(&Action::Knowledge(knowledge::Operation::Speed(
+                "medium".into()
+            )))
+        );
+        assert!(
+            !v.choice_selected(&Action::Knowledge(knowledge::Operation::Depth(
+                "deep".into()
+            )))
+        );
+    });
+    let details = view::safe_display(
+        &json!({"cwd":"/project", "env":{"NODE_OPTIONS":"--loader ./custom.js"}}),
+    );
+    assert!(details.contains("/project") && details.contains("--loader ./custom.js"));
+    assert!(
+        details.contains("Env · NODE_OPTIONS"),
+        "execution-affecting variable names must be exact"
+    );
+    assert!(!details.contains('{'));
+    assert_eq!(
+        view::download_progress(1_000_000, None),
+        "1.0 MB downloaded"
+    );
+}
+#[test]
+fn review_function_key_range_requires_exact_f1_through_f24() {
+    for key in ["f", "f0", "f25", "f01", "foo"] {
+        assert_eq!(
+            view::accelerator(&gpui::Keystroke::parse(key).unwrap()),
+            None,
+            "{key}"
+        );
+    }
+    for key in ["f1", "f12", "f24", "ctrl-f"] {
+        assert!(
+            view::accelerator(&gpui::Keystroke::parse(key).unwrap()).is_some(),
+            "{key}"
+        );
+    }
+}
+
+#[gpui::test]
+fn review_scale_stepper_uses_each_click_before_parent_save_returns(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let store = SettingsStore::new(fixture());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(w, cx);
+            v.set_layout(
+                "Fixture display".into(),
+                tezbar_host::layout::Profile::default(),
+                w,
+                cx,
+            );
+        })
+    });
+    settle(&rt, cx);
+    let first = cx.debug_bounds("settings-Increase scale").unwrap().center();
+    cx.simulate_click(first, Modifiers::default());
+    settle(&rt, cx);
+    let second = cx.debug_bounds("settings-Increase scale").unwrap().center();
+    cx.simulate_click(second, Modifiers::default());
+    settle(&rt, cx);
+    assert!((view.read_with(cx, |v, _| v.layout.as_ref().unwrap().1.zoom) - 1.1).abs() < 0.001);
+}
+
+#[tokio::test]
+async fn review_executor_failure_keeps_inflight_edit_retryable() {
+    struct PanicOnce {
+        fixture: Arc<Fixture>,
+        panic: AtomicBool,
+    }
+    impl SettingsTransport for PanicOnce {
+        fn durable_config(&self) -> SettingsFuture {
+            if self.panic.swap(false, Ordering::SeqCst) {
+                Box::pin(async { panic!("Synthetic executor interruption") })
+            } else {
+                self.fixture.durable_config()
+            }
+        }
+        fn send(&self, request: SettingsRequest) -> SettingsFuture {
+            self.fixture.send(request)
+        }
+    }
+    let f = fixture();
+    let store = SettingsStore::new(Arc::new(PanicOnce {
+        fixture: f.clone(),
+        panic: AtomicBool::new(true),
+    }));
+    let owner = store.owner();
+    store.enqueue(
+        owner,
+        vec![Edit::Global {
+            field: "memoryMaxItems".into(),
+            value: json!(81),
+        }],
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), store.drain())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    store.retry();
+    tokio::time::timeout(Duration::from_secs(1), store.drain())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(f.config.lock().unwrap()["memoryMaxItems"], 81);
+    assert_eq!(store.failures(), 0);
 }

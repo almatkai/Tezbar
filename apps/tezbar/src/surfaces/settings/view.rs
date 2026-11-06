@@ -27,12 +27,109 @@ impl SettingsContent {
     }
     fn b(&self, label: &str, action: Action, t: Tokens, cx: &mut Context<Self>) -> Stateful<Div> {
         self.button(
-            format!("settings-{label}"),
+            match &action {
+                Action::Knowledge(
+                    knowledge::Operation::RemoveRoot(id)
+                    | knowledge::Operation::RootEnabled { id, .. },
+                ) => format!("settings-{id}-{label}"),
+                Action::Knowledge(knowledge::Operation::RootDepth { id, depth }) => {
+                    format!("settings-{id}-depth-{depth}")
+                }
+                Action::CommandAlias(id)
+                | Action::CommandHotkey(id)
+                | Action::CommandEnabled(id, _)
+                | Action::Uninstall(id)
+                | Action::Preferences(id, _) => format!("settings-{id}-{label}"),
+                Action::Contribution(intent) => {
+                    use ContributionIntent::*;
+                    let scope = match intent {
+                        Select(id)
+                        | Test(id)
+                        | Enable(id, _)
+                        | Remove(id)
+                        | Review(id)
+                        | Accept(id)
+                        | SaveCollection(id, _)
+                        | ReloadSecretFields(id)
+                        | SaveSecret(id, _, _) => id.clone(),
+                        SaveRow(id, collection, index, field) => {
+                            format!("{id}-{collection}-{index}-{field}")
+                        }
+                        SaveSavedSecret(id, index) => format!("{id}-secret-{index}"),
+                        SetTool(id, tool, _, connection) => format!("{id}-{connection:?}-{tool}"),
+                        Operation(id, action, args) => format!(
+                            "{id}-{:?}-{}",
+                            std::mem::discriminant(action),
+                            args.iter()
+                                .find_map(|v| v.get("connectionId").and_then(Value::as_str))
+                                .or_else(|| {
+                                    if matches!(
+                                        action,
+                                        ContributionAction::OAuthStart
+                                            | ContributionAction::OAuthStatus
+                                            | ContributionAction::OAuthCancel
+                                            | ContributionAction::ClearAllowance
+                                    ) {
+                                        args.get(1).and_then(Value::as_str)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or("")
+                        ),
+                        _ => String::new(),
+                    };
+                    format!("settings-{scope}-{label}")
+                }
+                _ => format!("settings-{label}"),
+            },
             label.to_string(),
             action,
             t,
             cx,
         )
+    }
+    pub(super) fn choice_selected(&self, action: &Action) -> bool {
+        match action {
+            Action::Theme(theme) => self.state.theme == *theme,
+            Action::UpdateChannel(channel) => self.update_channel == *channel,
+            Action::Knowledge(knowledge::Operation::Depth(depth)) => self
+                .knowledge
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| s.settings.depth == *depth),
+            Action::Knowledge(knowledge::Operation::Speed(speed)) => self
+                .knowledge
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| s.settings.indexing_speed == *speed),
+            Action::Knowledge(knowledge::Operation::RootDepth { id, depth }) => {
+                self.knowledge.snapshot.as_ref().is_some_and(|s| {
+                    s.roots.iter().any(|r| {
+                        r["id"].as_str() == Some(id)
+                            && r["depth"].as_str().unwrap_or("inherit") == depth
+                    })
+                })
+            }
+            _ => false,
+        }
+    }
+    fn choice(
+        &self,
+        label: &str,
+        action: Action,
+        t: Tokens,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let selected = self.choice_selected(&action);
+        self.b(label, action, t, cx)
+            .role(Role::RadioButton)
+            .aria_toggled(if selected {
+                Toggled::True
+            } else {
+                Toggled::False
+            })
+            .when(selected, |button| button.bg(t.pill_strong))
     }
     fn field_view(&self, id: &str) -> AnyElement {
         self.fields
@@ -118,15 +215,24 @@ impl SettingsContent {
             .child(self.labeled("layout.width", "Width"))
             .child(self.labeled("layout.height", "Height"))
             .child(self.b("Apply size", Action::Layout, t, cx));
-        let mut zoom = div().flex().flex_wrap().gap(px(5.));
-        for percent in (75..=200).step_by(5) {
-            zoom = zoom.child(self.b(
-                &format!("{percent}%"),
-                Action::Zoom(percent as f64 / 100.),
+        let current_zoom = self.layout.as_ref().map(|(_, p)| p.zoom).unwrap_or(1.0);
+        let zoom = div()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .child(self.b(
+                "Decrease scale",
+                Action::Zoom((current_zoom - 0.05).max(0.75)),
                 t,
                 cx,
             ))
-        }
+            .child(format!("{:.0}%", current_zoom * 100.))
+            .child(self.b(
+                "Increase scale",
+                Action::Zoom((current_zoom + 0.05).min(2.0)),
+                t,
+                cx,
+            ));
         appearance = appearance.child(zoom).child(self.b(
             "Reset size & scale for this display",
             Action::ResetLayout,
@@ -214,7 +320,7 @@ impl SettingsContent {
             ("White", Theme::White),
             ("Dark", Theme::Dark),
         ] {
-            themes = themes.child(self.b(label, Action::Theme(theme), t, cx));
+            themes = themes.child(self.choice(label, Action::Theme(theme), t, cx));
         }
         d = d.child(themes);
         d = d.child(
@@ -274,7 +380,12 @@ impl SettingsContent {
             ))
             .child(self.b("Release notes", Action::ReleaseNotes, t, cx));
         for channel in ["stable", "beta", "alpha"] {
-            updates = updates.child(self.b(channel, Action::UpdateChannel(channel.into()), t, cx));
+            updates = updates.child(self.choice(
+                &display_name(channel),
+                Action::UpdateChannel(channel.into()),
+                t,
+                cx,
+            ));
         }
         d.child(updates)
     }
@@ -528,7 +639,7 @@ impl SettingsContent {
                         text(&m["language"]),
                         text(&m["tier"]),
                         text(&m["sizeLabel"]),
-                        text(&m["status"])
+                        display_name(m["status"].as_str().unwrap_or("Not installed"))
                     ),
                     t,
                 )
@@ -614,10 +725,9 @@ impl SettingsContent {
                         .child("Could not download this model. Retry the download."),
                 );
             }
-            d = d.child(row.child(div().text_color(t.text2).child(format!(
-                "{} / {} bytes",
-                text(&m["downloadedBytes"]),
-                text(&m["totalBytes"])
+            d = d.child(row.child(div().text_color(t.text2).child(download_progress(
+                m["downloadedBytes"].as_u64().unwrap_or(0),
+                m["totalBytes"].as_u64(),
             ))));
         }
         d.child(
@@ -642,16 +752,16 @@ impl SettingsContent {
             ));
         if let Some(s) = &self.knowledge.snapshot {
             for depth in ["off", "basic", "smart", "deep"] {
-                d = d.child(self.b(
-                    depth,
+                d = d.child(self.choice(
+                    &display_name(depth),
                     Action::Knowledge(knowledge::Operation::Depth(depth.into())),
                     t,
                     cx,
                 ));
             }
             for speed in ["slow", "medium", "fast"] {
-                d = d.child(self.b(
-                    speed,
+                d = d.child(self.choice(
+                    &display_name(speed),
                     Action::Knowledge(knowledge::Operation::Speed(speed.into())),
                     t,
                     cx,
@@ -662,11 +772,15 @@ impl SettingsContent {
                 let mut row = self
                     .row(
                         root["path"].as_str().unwrap_or("Folder"),
-                        root["status"].as_str().unwrap_or(""),
+                        &display_name(root["status"].as_str().unwrap_or("")),
                         t,
                     )
                     .child(self.b(
-                        &format!("Toggle folder {id}"),
+                        if root["enabled"] == true {
+                            "Disable folder"
+                        } else {
+                            "Enable folder"
+                        },
                         Action::Knowledge(knowledge::Operation::RootEnabled {
                             id: id.clone(),
                             enabled: root["enabled"] != true,
@@ -675,14 +789,14 @@ impl SettingsContent {
                         cx,
                     ))
                     .child(self.b(
-                        &format!("Remove folder {id}"),
+                        "Remove folder",
                         Action::Knowledge(knowledge::Operation::RemoveRoot(id.clone())),
                         t,
                         cx,
                     ));
                 for depth in ["inherit", "off", "basic", "smart", "deep"] {
-                    row = row.child(self.b(
-                        &format!("{id}: {depth}"),
+                    row = row.child(self.choice(
+                        &display_name(depth),
                         Action::Knowledge(knowledge::Operation::RootDepth {
                             id: id.clone(),
                             depth: depth.into(),
@@ -895,7 +1009,7 @@ impl SettingsContent {
             .child(self.b("Clear legacy Chromium cache", Action::LegacyCleanup, t, cx));
         d
     }
-    fn extensions(&mut self, t: Tokens, w: &mut Window, cx: &mut Context<Self>) -> Div {
+    fn extensions(&mut self, t: Tokens, _w: &mut Window, cx: &mut Context<Self>) -> Div {
         let mut d = self.row("Installed extensions", "", t).child(self.b(
             "Browse Store",
             Action::BrowseStore,
@@ -961,51 +1075,59 @@ impl SettingsContent {
             let mut row = self
                 .row(name, "", t)
                 .child(self.b(
-                    &format!("Preferences for {id}"),
+                    &format!("Preferences for {name}"),
                     Action::Preferences(extension_id.clone(), None),
                     t,
                     cx,
                 ))
                 .child(self.b(
-                    &format!("Uninstall {id}"),
+                    &format!("Uninstall {name}"),
                     Action::Uninstall(id.clone()),
                     t,
                     cx,
                 ));
             for c in e["commands"].as_array().into_iter().flatten() {
                 let command = format!("extcmd:{id}:{}", text(&c["name"]));
-                for (kind, label, source) in [
+                for (kind, label, _source) in [
                     ("alias", "Alias", "commandAliases"),
                     ("hotkey", "Hotkey", "commandHotkeys"),
                 ] {
                     let key = format!("command.{kind}.{command}");
-                    self.field(
-                        &key,
-                        label,
-                        FieldKind::Local,
-                        &text(&self.extension_settings[source][&command]),
-                        false,
-                        false,
-                        w,
-                        cx,
-                    );
                     row = row.child(self.labeled(&key, label));
                 }
                 row = row
                     .child(self.b(
-                        &format!("Save alias {command}"),
+                        &format!(
+                                "Save alias for {}",
+                                c["title"]
+                                    .as_str()
+                                    .or(c["name"].as_str())
+                                    .unwrap_or("command")
+                            ),
                         Action::CommandAlias(command.clone()),
                         t,
                         cx,
                     ))
                     .child(self.b(
-                        &format!("Save hotkey {command}"),
+                        &format!(
+                                "Save shortcut for {}",
+                                c["title"]
+                                    .as_str()
+                                    .or(c["name"].as_str())
+                                    .unwrap_or("command")
+                            ),
                         Action::CommandHotkey(command.clone()),
                         t,
                         cx,
                     ))
                     .child(self.b(
-                        &format!("Toggle {command}"),
+                        &format!(
+                                "Toggle {}",
+                                c["title"]
+                                    .as_str()
+                                    .or(c["name"].as_str())
+                                    .unwrap_or("command")
+                            ),
                         Action::CommandEnabled(
                             command.clone(),
                             self.extension_settings["disabledCommands"][&command] == true,
@@ -1116,6 +1238,7 @@ impl SettingsContent {
         }
         for e in state["extensions"].as_array().into_iter().flatten() {
             let id = text(&e["id"]);
+            let name = e["name"].as_str().unwrap_or("AI extension");
             let mut row = self
                 .row(
                     e["name"].as_str().unwrap_or(&id),
@@ -1127,20 +1250,20 @@ impl SettingsContent {
                     t,
                 )
                 .child(self.b(
-                    &format!("Details {id}"),
+                    &format!("Details for {name}"),
                     Action::Contribution(I::Select(id.clone())),
                     t,
                     cx,
                 ))
                 .child(self.b(
-                    &format!("Test {id}"),
+                    &format!("Test {name}"),
                     Action::Contribution(I::Test(id.clone())),
                     t,
                     cx,
                 ))
                 .child(self.b(
                     &format!(
-                        "{} {id}",
+                        "{} {name}",
                         if e["enabled"] == true {
                             "Disable"
                         } else {
@@ -1152,19 +1275,19 @@ impl SettingsContent {
                     cx,
                 ))
                 .child(self.b(
-                    &format!("Review changes {id}"),
+                    &format!("Review changes for {name}"),
                     Action::Contribution(I::Review(id.clone())),
                     t,
                     cx,
                 ))
                 .child(self.b(
-                    &format!("Keep disabled {id}"),
+                    &format!("Keep {name} disabled"),
                     Action::Contribution(I::Enable(id.clone(), false)),
                     t,
                     cx,
                 ))
                 .child(self.b(
-                    &format!("Remove extension {id}"),
+                    &format!("Remove {name}"),
                     Action::Contribution(I::Remove(id.clone())),
                     t,
                     cx,
@@ -1178,11 +1301,15 @@ impl SettingsContent {
                     .enumerate()
                 {
                     let cid = text(&c["id"]);
+                    let connection_label = c["name"]
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| format!("Connection {}", index + 1));
                     for field in ["command", "args", "url"] {
                         row = row
                             .child(self.labeled(&format!("connection.{id}.{index}.{field}"), field))
                             .child(self.b(
-                                &format!("Save {id} {index} {field}"),
+                                &format!("Save {} for {}", display_name(field), connection_label),
                                 Action::Contribution(I::SaveRow(
                                     id.clone(),
                                     "connections".into(),
@@ -1216,7 +1343,7 @@ impl SettingsContent {
                         ),
                     ] {
                         row = row.child(self.b(
-                            &format!("{label} {id} {cid}"),
+                            &format!("{label} · {connection_label}"),
                             Action::Contribution(I::Operation(id.clone(), action, args)),
                             t,
                             cx,
@@ -1229,7 +1356,14 @@ impl SettingsContent {
                         let name = text(&tool["name"]);
                         row = row
                             .child(self.b(
-                                &format!("Toggle tool {id} {cid} {name}"),
+                                &format!(
+                                    "{} {name}",
+                                    if c["disabledTools"][&name] == true {
+                                        "Enable"
+                                    } else {
+                                        "Disable"
+                                    }
+                                ),
                                 Action::Contribution(I::SetTool(
                                     id.clone(),
                                     name.clone(),
@@ -1240,7 +1374,7 @@ impl SettingsContent {
                                 cx,
                             ))
                             .child(self.b(
-                                &format!("Clear allowance {id} {cid} {name}"),
+                                &format!("Ask again before {name}"),
                                 Action::Contribution(I::Operation(
                                     id.clone(),
                                     ContributionAction::ClearAllowance,
@@ -1253,7 +1387,7 @@ impl SettingsContent {
                     for resource in c["catalog"]["resources"].as_array().into_iter().flatten() {
                         let uri = text(&resource["uri"]);
                         row = row.child(self.b(
-                            &format!("Read resource {id} {uri}"),
+                            &format!("Read {}", resource["name"].as_str().unwrap_or(&uri)),
                             Action::Contribution(I::Operation(
                                 id.clone(),
                                 ContributionAction::ReadResource,
@@ -1266,7 +1400,7 @@ impl SettingsContent {
                     for prompt in c["catalog"]["prompts"].as_array().into_iter().flatten() {
                         let name = text(&prompt["name"]);
                         row = row.child(self.b(
-                            &format!("Resolve prompt {id} {name}"),
+                            &format!("Preview {name}"),
                             Action::Contribution(I::Operation(
                                 id.clone(),
                                 ContributionAction::PromptResolve,
@@ -1288,7 +1422,7 @@ impl SettingsContent {
                                 &format!("{} · {}", descriptor.label, descriptor.scope),
                             ))
                             .child(self.b(
-                                &format!("Save credential {id} {index}"),
+                                &format!("Save {}", descriptor.label),
                                 Action::Contribution(I::SaveSavedSecret(id.clone(), index)),
                                 t,
                                 cx,
@@ -1296,7 +1430,7 @@ impl SettingsContent {
                     }
                 }
                 row = row.child(self.b(
-                    &format!("Reload credential fields {id}"),
+                    &format!("Refresh credentials for {name}"),
                     Action::Contribution(I::ReloadSecretFields(id.clone())),
                     t,
                     cx,
@@ -1305,7 +1439,7 @@ impl SettingsContent {
                     row = row
                         .child(self.labeled(&format!("manifest.{id}.{collection}"), collection))
                         .child(self.b(
-                            &format!("Save {collection} {id}"),
+                            &format!("Save {} for {name}", display_name(collection)),
                             Action::Contribution(I::SaveCollection(id.clone(), collection.into())),
                             t,
                             cx,
@@ -1317,7 +1451,7 @@ impl SettingsContent {
                         "Type the extension name to allow all tools",
                     ))
                     .child(self.b(
-                        &format!("Logs {id}"),
+                        &format!("Show logs for {name}"),
                         Action::Contribution(I::Operation(
                             id.clone(),
                             ContributionAction::Logs,
@@ -1430,35 +1564,84 @@ impl Render for SettingsContent {
                     .flex_1()
                     .overflow_y_scroll()
                     .px(px(24.))
-                    .child(body),
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(if self.tab == Tab::Ai { 850. } else { 610. }))
+                            .mx_auto()
+                            .child(body),
+                    ),
             );
-        if self.confirmation.is_some() {
+        if let Some(action) = self.confirmation.as_ref() {
+            let (title, description, accept) = self.confirmation_copy(action);
+            let weak = cx.entity().downgrade();
             root = root.child(
                 div()
-                    .id(("semantic", line!() as usize))
-                    .role(Role::AlertDialog)
-                    .aria_label("Confirm action")
-                    .p(px(16.))
-                    .child("Confirm this action?")
+                    .absolute()
+                    .inset_0()
+                    .occlude()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(t.settings_panel)
                     .child(
-                        self.b("Confirm", Action::Confirm(true), t, cx)
-                            .track_focus(&self.confirm_focus[0]),
-                    )
-                    .child(
-                        self.b("Cancel", Action::Confirm(false), t, cx)
-                            .track_focus(&self.confirm_focus[1]),
+                        div()
+                            .id("settings-confirmation")
+                            .role(Role::AlertDialog)
+                            .aria_label(title.clone())
+                            .w_full()
+                            .max_w(px(440.))
+                            .p(px(20.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(12.))
+                            .child(div().text_color(t.text1).child(title))
+                            .child(div().text_color(t.text2).child(description))
+                            .child(
+                                controls::action_button(
+                                    "confirm-settings-action",
+                                    accept,
+                                    ButtonTone::Danger,
+                                    false,
+                                    t,
+                                    move |w, cx| {
+                                        let _ = weak.update(cx, |v, cx| {
+                                            v.action(Action::Confirm(true), w, cx)
+                                        });
+                                    },
+                                )
+                                .track_focus(&self.confirm_focus[0]),
+                            )
+                            .child(
+                                self.b("Cancel", Action::Confirm(false), t, cx)
+                                    .track_focus(&self.confirm_focus[1]),
+                            ),
                     ),
             );
         }
-        if let Some(error) = self.error.as_ref().or(self.parent_error.as_ref()) {
+        if let Some(error) = self.durable_error() {
             root = root.child(
                 div()
-                    .id(("semantic", line!() as usize))
+                    .id("settings-save-error")
                     .role(Role::Alert)
                     .text_color(t.danger)
                     .px(px(16.))
-                    .child(error.clone())
+                    .child(error.to_owned())
                     .child(self.b("Retry saved changes", Action::Retry, t, cx)),
+            );
+        }
+        if let Some(error) = self
+            .error
+            .as_ref()
+            .filter(|e| e.as_str() != settings::CLOSE_ERROR)
+        {
+            root = root.child(
+                div()
+                    .id("settings-action-error")
+                    .role(Role::Alert)
+                    .text_color(t.danger)
+                    .px(px(16.))
+                    .child(error.clone()),
             );
         }
         if self.embedded {
@@ -1570,7 +1753,12 @@ pub(crate) fn accelerator(k: &Keystroke) -> Option<String> {
     if k.modifiers.shift {
         parts.push("Shift".into())
     }
-    if parts.is_empty() && !k.key.starts_with('f') {
+    let function_key = k
+        .key
+        .strip_prefix('f')
+        .and_then(|n| n.parse::<u8>().ok())
+        .is_some_and(|n| (1..=24).contains(&n) && k.key == format!("f{n}"));
+    if parts.is_empty() && !function_key {
         return None;
     }
     if matches!(k.key.as_str(), "shift" | "control" | "alt" | "cmd") {
@@ -1610,7 +1798,68 @@ fn format_device(s: &DevicePhase) -> String {
     }
 }
 pub(super) fn safe_display(v: &Value) -> String {
-    serde_json::to_string_pretty(v).unwrap_or_default()
+    fn lines(v: &Value, path: &str, literal_keys: bool, out: &mut Vec<String>) {
+        match v {
+            Value::Object(map) => {
+                for (key, value) in map {
+                    // Environment names are case-sensitive executable inputs. Keep their
+                    // spelling, and HTTP header names, exactly as the review manifest provides.
+                    let label = if literal_keys {
+                        key.to_owned()
+                    } else {
+                        display_name(key)
+                    };
+                    let path = if path.is_empty() {
+                        label
+                    } else {
+                        format!("{path} · {label}")
+                    };
+                    lines(value, &path, matches!(key.as_str(), "env" | "headers"), out);
+                }
+            }
+            Value::Array(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    lines(item, &format!("{path} {}", i + 1), literal_keys, out);
+                }
+            }
+            Value::Null => out.push(format!("{path}: Not set")),
+            Value::String(value) => out.push(format!("{path}: {value}")),
+            Value::Bool(value) => {
+                out.push(format!("{path}: {}", if *value { "Yes" } else { "No" }))
+            }
+            Value::Number(value) => out.push(format!("{path}: {value}")),
+        }
+    }
+    let mut out = Vec::new();
+    lines(v, "", false, &mut out);
+    out.join("\n")
+}
+
+fn display_name(value: &str) -> String {
+    let mut result = String::new();
+    for (i, c) in value.chars().enumerate() {
+        if matches!(c, '_' | '-') {
+            result.push(' ');
+        } else if i == 0 {
+            result.extend(c.to_uppercase());
+        } else {
+            if c.is_uppercase() && !result.ends_with(' ') {
+                result.push(' ');
+            }
+            result.push(c);
+        }
+    }
+    result
+}
+pub(super) fn download_progress(done: u64, total: Option<u64>) -> String {
+    let done = tezbar_ui_model::utilities::monitor::decimal_bytes(done as f64);
+    match total {
+        Some(total) if total > 0 => format!(
+            "{done} of {}",
+            tezbar_ui_model::utilities::monitor::decimal_bytes(total as f64)
+        ),
+        _ => format!("{done} downloaded"),
+    }
 }
 
 fn normalize_extension_id(id: &str) -> String {
@@ -1620,7 +1869,7 @@ fn normalize_extension_id(id: &str) -> String {
         .unwrap_or(id.trim().trim_start_matches('@'))
         .replace(['\\', '/'], "-")
 }
-fn merge_installed(schema: &Value, installed: &Value) -> Value {
+pub(super) fn merge_installed(schema: &Value, installed: &Value) -> Value {
     let mut rows = BTreeMap::new();
     for row in schema.as_array().into_iter().flatten() {
         rows.insert(
