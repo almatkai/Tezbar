@@ -54,9 +54,12 @@ pub fn tokens(w: &Window) -> Tokens {
             WindowAppearance::Light | WindowAppearance::VibrantLight
         ),
     };
+    palette(light, f32::from(w.rem_size()) / 16.)
+}
+fn palette(light: bool, zoom: f32) -> Tokens {
     if light {
         Tokens {
-            zoom: f32::from(w.rem_size()) / 16.,
+            zoom,
             light: true,
             settings_panel: rgb(0xffffff).into(),
             settings_accent_strong: rgb(0x3e35a5).into(),
@@ -69,10 +72,12 @@ pub fn tokens(w: &Window) -> Tokens {
             selected: rgba(0x0f172a0f).into(),
             accent: rgb(0x4f52d9).into(),
             accent_strong: rgb(0x5b5ef0).into(),
-            accent_hover: rgb(0x6a6df4).into(),
+            // White button text must retain AA contrast in its hover state.
+            accent_hover: rgb(0x6063e6).into(),
             link: rgb(0x4c44c1).into(),
-            success: rgb(0x059669).into(),
-            warning: rgb(0xd97706).into(),
+            // The legacy light status colours failed AA as normal-size text on the sheet.
+            success: rgb(0x047857).into(),
+            warning: rgb(0xb45309).into(),
             shell: rgb(0xf1f4f9).into(),
             sheet: if cfg!(windows) {
                 rgb(0xfafafb).into()
@@ -92,7 +97,7 @@ pub fn tokens(w: &Window) -> Tokens {
         }
     } else {
         Tokens {
-            zoom: f32::from(w.rem_size()) / 16.,
+            zoom,
             light: false,
             settings_panel: rgb(0x12141a).into(),
             settings_accent_strong: rgb(0xa8aaff).into(),
@@ -105,7 +110,7 @@ pub fn tokens(w: &Window) -> Tokens {
             selected: rgba(0xffffff12).into(),
             accent: rgb(0x4f52d9).into(),
             accent_strong: rgb(0x5b5ef0).into(),
-            accent_hover: rgb(0x6a6df4).into(),
+            accent_hover: rgb(0x6063e6).into(),
             link: rgb(0x8b8df7).into(),
             success: rgb(0x34d399).into(),
             warning: rgb(0xfbbf24).into(),
@@ -122,7 +127,7 @@ pub fn tokens(w: &Window) -> Tokens {
             bar: rgba(0x00000029).into(),
             text1: rgb(0xf5f6fa).into(),
             text2: rgb(0xbcbec8).into(),
-            text3: rgb(0x868a96).into(),
+            text3: rgb(0x979ba7).into(),
             text4: rgb(0x5e6270).into(),
             danger: rgb(0xf87171).into(),
         }
@@ -201,13 +206,13 @@ fn choose_font(cx: &gpui::App, mono: bool) -> gpui::SharedString {
 #[cfg(test)]
 mod repair_tests {
     use super::*;
-    fn contrast(foreground: u32, background: u32) -> f64 {
-        let luminance = |color: u32| {
-            [16, 8, 0]
+    fn contrast(foreground: Hsla, background: gpui::Rgba) -> f64 {
+        let luminance = |color: gpui::Rgba| {
+            [color.r, color.g, color.b]
                 .into_iter()
                 .zip([0.2126, 0.7152, 0.0722])
-                .map(|(shift, weight)| {
-                    let value = ((color >> shift) & 255) as f64 / 255.;
+                .map(|(value, weight)| {
+                    let value = value as f64;
                     weight
                         * if value <= 0.04045 {
                             value / 12.92
@@ -217,24 +222,80 @@ mod repair_tests {
                 })
                 .sum::<f64>()
         };
-        let a = luminance(foreground);
+        let a = luminance(background.blend(foreground.into()));
         let b = luminance(background);
         (a.max(b) + 0.05) / (a.min(b) + 0.05)
     }
     #[test]
     fn tokens_contrast_test() {
-        // Main readable text, secondary text, Settings link and primary button in both themes.
-        for (text, sheet) in [
-            (0x1b2539, 0xfafafb),
-            (0x3e4c65, 0xfafafb),
-            (0x4c44c1, 0xffffff),
-            (0xf5f6fa, 0x1c1d21),
-            (0xbcbec8, 0x1c1d21),
-            (0x8b8df7, 0x12141a),
-            (0xffffff, 0x5b5ef0),
-        ] {
-            assert!(contrast(text, sheet) >= 4.5, "{text:x} on {sheet:x}");
+        let mut failures = Vec::new();
+        for light in [false, true] {
+            // Test the same palette consumed by tokens(window), including translucent fills.
+            let t = palette(light, 1.);
+            let sheet = gpui::Rgba::from(t.shell).blend(t.sheet.into());
+            let mut check = |text, fill, name| {
+                let ratio = contrast(text, fill);
+                if ratio < 4.5 {
+                    failures.push(format!("light={light} {name}: {ratio:.3}"));
+                }
+            };
+            for (name, fill) in [
+                ("sheet", t.sheet),
+                ("footer", t.bar_float),
+                ("panel", t.panel),
+                ("field", t.field),
+                ("popover", t.popover),
+                ("solid popover", t.popover_solid),
+                ("selected", t.selected),
+                ("hover", t.hover),
+                ("pill", t.pill_strong),
+            ] {
+                let fill = sheet.blend(fill.into());
+                for (text_name, text) in
+                    [("text1", t.text1), ("text2", t.text2), ("text3", t.text3)]
+                {
+                    check(text, fill, format!("{text_name} on {name}"));
+                }
+            }
+            for (name, text) in [
+                ("danger", t.danger),
+                ("success", t.success),
+                ("warning", t.warning),
+                ("link", t.link),
+            ] {
+                check(text, sheet, format!("{name} on sheet"));
+                check(
+                    text,
+                    t.settings_panel.into(),
+                    format!("{name} on Settings panel"),
+                );
+            }
+            for (name, text) in [
+                ("text1", t.text1),
+                ("text2", t.text2),
+                ("text3", t.text3),
+                ("strong link", t.settings_accent_strong),
+            ] {
+                check(
+                    text,
+                    t.settings_panel.into(),
+                    format!("{name} on Settings panel"),
+                );
+            }
+            for (name, fill) in [
+                ("accent", t.accent),
+                ("primary button", t.accent_strong),
+                ("button hover", t.accent_hover),
+            ] {
+                check(
+                    rgb(0xffffff).into(),
+                    sheet.blend(fill.into()),
+                    format!("white on {name}"),
+                );
+            }
+            // text4 is reserved for placeholder/disabled text, the sole spec exemption.
         }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
     #[gpui::test]
     fn launcher_bar_and_float_are_distinct_and_os_motion_is_consumed(
@@ -254,6 +315,11 @@ mod repair_tests {
         cx.update(|w, cx| {
             let t = tokens(w);
             assert_ne!(t.bar, t.bar_float);
+            let mut footer = crate::controls::footer(t);
+            assert_eq!(
+                gpui::Styled::style(&mut footer).background,
+                Some(gpui::Fill::from(t.bar_float))
+            );
             assert_ne!(t.panel, t.settings_panel);
             cx.set_reduce_motion(true);
             assert!(Metrics::for_window(w, cx).surface_duration().is_zero());

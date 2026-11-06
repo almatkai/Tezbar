@@ -485,7 +485,12 @@ impl MarkdownView {
                 .iter()
                 .position(|b| matches!(&b.kind,Kind::Footnote(id) if id == label))
             {
-                self.scroll.scroll_to_item(index);
+                if let Some(row) = block_groups(&self.document.blocks)
+                    .iter()
+                    .position(|group| group.contains(&index))
+                {
+                    self.scroll.scroll_to_item(row);
+                }
                 cx.notify();
             }
         } else {
@@ -547,6 +552,23 @@ impl MarkdownView {
         }));
     }
 }
+// Root scroll rows and accessibility containers share this grouping. A list owns all
+// consecutive items; internal links must scroll to that grouped row, not a block index.
+fn block_groups(blocks: &[Block]) -> Vec<Range<usize>> {
+    let mut groups = Vec::new();
+    let mut index = 0;
+    while index < blocks.len() {
+        let start = index;
+        index += 1;
+        if matches!(blocks[start].kind, Kind::List) {
+            while index < blocks.len() && matches!(blocks[index].kind, Kind::List) {
+                index += 1;
+            }
+        }
+        groups.push(start..index);
+    }
+    groups
+}
 impl Render for MarkdownView {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::tokens::tokens(w);
@@ -559,198 +581,219 @@ impl Render for MarkdownView {
             self.highlight_task = None;
             self.document.highlighted.clear();
         }
-        for (index, block) in self.document.blocks.iter().enumerate() {
-            let text = block.text();
-            let block_len = text.len();
-            if matches!(block.kind, Kind::Details) {
-                let summary = text.lines().next().unwrap_or("Details").to_owned();
-                let expanded = self.expanded.contains(&index);
-                children.push(
-                    div()
-                        .id(index)
-                        .child(
-                            crate::controls::button(
-                                ("summary", index),
-                                summary,
-                                crate::controls::ButtonTone::Quiet,
-                                false,
-                                t,
-                            )
-                            .aria_expanded(expanded)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    if !this.expanded.remove(&index) {
-                                        this.expanded.insert(index);
-                                    }
-                                    cx.notify();
-                                },
-                            )),
-                        )
-                        .when(expanded, |d| {
-                            d.child(text.lines().skip(1).collect::<Vec<_>>().join("\n"))
-                        }),
-                );
-                base += block_len + 1;
-                continue;
-            }
-            let role = match block.kind {
-                Kind::Heading(_) => Role::Heading,
-                Kind::Code(_) => Role::Code,
-                Kind::Table => Role::Table,
-                Kind::List => Role::ListItem,
-                _ => Role::Paragraph,
-            };
-            let mut row = div()
-                .id(index)
-                .flex()
-                .flex_col()
-                .gap(px(4. * t.zoom))
-                .py(px(4. * t.zoom))
-                .text_size(px(t.zoom
-                    * match block.kind {
-                        Kind::Heading(1) => 22.,
-                        Kind::Heading(2) => 18.,
-                        Kind::Heading(_) => 15.,
-                        _ => 13.,
-                    }));
-            if matches!(block.kind, Kind::List) {
-                row = row.role(Role::List);
-            }
-            if let Some(checked) = block.checked {
-                row = row.child(crate::controls::checkbox(
-                    ("task", index),
-                    text.clone(),
-                    checked,
-                    t,
-                ));
-            }
-            if let Kind::Code(ref language) = block.kind {
-                let code = text.clone();
-                row = row
-                    .font_family(crate::tokens::font_family(cx, true))
-                    .bg(t.field)
-                    .p(px(8. * t.zoom))
-                    .child(
+        for group in block_groups(&self.document.blocks) {
+            let list = matches!(self.document.blocks[group.start].kind, Kind::List);
+            let mut rows = vec![];
+            for index in group.clone() {
+                let block = &self.document.blocks[index];
+                let text = block.text();
+                let block_len = text.len();
+                if matches!(block.kind, Kind::Details) {
+                    let summary = text.lines().next().unwrap_or("Details").to_owned();
+                    let expanded = self.expanded.contains(&index);
+                    rows.push(
                         div()
-                            .flex()
-                            .gap(px(8. * t.zoom))
-                            .child(div().text_color(t.text3).child(language.clone()))
+                            .id(index)
                             .child(
                                 crate::controls::button(
-                                    ("copy-code", index),
-                                    "Copy",
+                                    ("summary", index),
+                                    summary,
                                     crate::controls::ButtonTone::Quiet,
                                     false,
                                     t,
                                 )
+                                .aria_expanded(expanded)
                                 .on_click(cx.listener(
-                                    move |_, _, _, cx| cx.emit(DocumentEffect::Copy(code.clone())),
+                                    move |this, _, _, cx| {
+                                        if !this.expanded.remove(&index) {
+                                            this.expanded.insert(index);
+                                        }
+                                        cx.notify();
+                                    },
                                 )),
-                            ),
+                            )
+                            .when(expanded, |d| {
+                                d.child(text.lines().skip(1).collect::<Vec<_>>().join("\n"))
+                            }),
                     );
-            }
-            let selected = self
-                .selection
-                .as_ref()
-                .map(|r| {
-                    r.start.saturating_sub(base).min(block_len)
-                        ..r.end.saturating_sub(base).min(block_len)
-                })
-                .filter(|r| !r.is_empty());
-            let syntax = self
-                .document
-                .highlighted
-                .iter()
-                .find(|(i, _)| *i == index)
-                .map(|(_, s)| s.as_slice())
-                .unwrap_or(&[]);
-            let highlights = highlights(block, selected.clone(), syntax, t);
-            let styled = StyledText::new(text.clone()).with_highlights(highlights);
-            let layout = styled.layout().clone();
-            let down = layout.clone();
-            let drag = layout.clone();
-            let click = layout.clone();
-            let mut at = 0;
-            let links = block
-                .spans
-                .iter()
-                .filter_map(|span| {
-                    let range = at..at + span.text.len();
-                    at = range.end;
-                    span.link
-                        .clone()
-                        .map(|link| (range, span.text.clone(), link))
-                })
-                .collect::<Vec<_>>();
-            let click_links = links.clone();
-            let body = div()
-                .cursor(CursorStyle::IBeam)
-                .child(styled)
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |this, e: &MouseDownEvent, w, cx| {
-                        let index = down.index_for_position(e.position).unwrap_or_else(|i| i);
-                        let anchor = base + index;
-                        this.anchor = Some(anchor);
-                        this.selection = Some(anchor..anchor);
-                        if let Some(focus) = &this.focus {
-                            w.focus(focus, cx);
-                        }
-                        cx.notify();
-                    }),
-                )
-                .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
-                    if let Some(anchor) = this.anchor {
-                        let index =
-                            base + drag.index_for_position(e.position).unwrap_or_else(|i| i);
-                        this.selection = Some(anchor.min(index)..anchor.max(index));
-                        cx.notify();
-                    }
-                }))
-                .on_mouse_up(
-                    MouseButton::Left,
-                    cx.listener(move |this, e: &MouseUpEvent, _, cx| {
-                        this.anchor = None;
-                        if this.selection.as_ref().is_none_or(|r| r.is_empty()) {
-                            let index = click.index_for_position(e.position).unwrap_or_else(|i| i);
-                            if let Some((_, _, url)) = click_links
-                                .iter()
-                                .find(|(range, _, _)| range.contains(&index))
-                            {
-                                this.open_link(url.clone(), cx);
-                            }
-                        }
-                    }),
-                );
-            row = row.child(RichBlock {
-                inner: body.into_any_element(),
-                layout,
-                text,
-                role,
-                level: match block.kind {
-                    Kind::Heading(level) => Some(level as usize),
-                    _ => None,
-                },
-                links,
-                selection: selected,
-                owner: cx.entity(),
-                code_index: matches!(block.kind, Kind::Code(_)).then_some(index),
-                light,
-            });
-            for (i, (url, alt)) in block.images.iter().enumerate() {
-                if self.requested_images.len() < 128 && self.requested_images.insert(url.clone()) {
-                    cx.emit(DocumentEffect::Image(url.clone()));
+                    base += block_len + 1;
+                    continue;
                 }
-                row = row.child(
-                    div()
-                        .id(("image", i))
-                        .role(Role::Image)
-                        .aria_label(alt.clone())
-                        .child(alt.clone()),
-                );
+                let role = match block.kind {
+                    Kind::Heading(_) => Role::Heading,
+                    Kind::Code(_) => Role::Code,
+                    Kind::Table => Role::Table,
+                    _ => Role::Paragraph,
+                };
+                let mut row = div()
+                    .id(index)
+                    .flex()
+                    .flex_col()
+                    .gap(px(4. * t.zoom))
+                    .py(px(4. * t.zoom))
+                    .text_size(px(t.zoom
+                        * match block.kind {
+                            Kind::Heading(1) => 22.,
+                            Kind::Heading(2) => 18.,
+                            Kind::Heading(_) => 15.,
+                            _ => 13.,
+                        }));
+                if matches!(block.kind, Kind::List) {
+                    row = row.role(Role::ListItem);
+                }
+                if let Some(checked) = block.checked {
+                    row = row.child(crate::controls::checkbox(
+                        ("task", index),
+                        text.clone(),
+                        checked,
+                        t,
+                    ));
+                }
+                if let Kind::Code(ref language) = block.kind {
+                    let code = text.clone();
+                    row = row
+                        .font_family(crate::tokens::font_family(cx, true))
+                        .bg(t.field)
+                        .p(px(8. * t.zoom))
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(8. * t.zoom))
+                                .child(div().text_color(t.text3).child(language.clone()))
+                                .child(
+                                    crate::controls::button(
+                                        ("copy-code", index),
+                                        "Copy",
+                                        crate::controls::ButtonTone::Quiet,
+                                        false,
+                                        t,
+                                    )
+                                    .on_click(cx.listener(
+                                        move |_, _, _, cx| {
+                                            cx.emit(DocumentEffect::Copy(code.clone()))
+                                        },
+                                    )),
+                                ),
+                        );
+                }
+                let selected = self
+                    .selection
+                    .as_ref()
+                    .map(|r| {
+                        r.start.saturating_sub(base).min(block_len)
+                            ..r.end.saturating_sub(base).min(block_len)
+                    })
+                    .filter(|r| !r.is_empty());
+                let syntax = self
+                    .document
+                    .highlighted
+                    .iter()
+                    .find(|(i, _)| *i == index)
+                    .map(|(_, s)| s.as_slice())
+                    .unwrap_or(&[]);
+                let highlights = highlights(block, selected.clone(), syntax, t);
+                let styled = StyledText::new(text.clone()).with_highlights(highlights);
+                let layout = styled.layout().clone();
+                let down = layout.clone();
+                let drag = layout.clone();
+                let click = layout.clone();
+                let mut at = 0;
+                let links = block
+                    .spans
+                    .iter()
+                    .filter_map(|span| {
+                        let range = at..at + span.text.len();
+                        at = range.end;
+                        span.link
+                            .clone()
+                            .map(|link| (range, span.text.clone(), link))
+                    })
+                    .collect::<Vec<_>>();
+                let click_links = links.clone();
+                let body = div()
+                    .cursor(CursorStyle::IBeam)
+                    .child(styled)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, e: &MouseDownEvent, w, cx| {
+                            let index = down.index_for_position(e.position).unwrap_or_else(|i| i);
+                            let anchor = base + index;
+                            this.anchor = Some(anchor);
+                            this.selection = Some(anchor..anchor);
+                            if let Some(focus) = &this.focus {
+                                w.focus(focus, cx);
+                            }
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
+                        if let Some(anchor) = this.anchor {
+                            let index =
+                                base + drag.index_for_position(e.position).unwrap_or_else(|i| i);
+                            this.selection = Some(anchor.min(index)..anchor.max(index));
+                            cx.notify();
+                        }
+                    }))
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(move |this, e: &MouseUpEvent, _, cx| {
+                            this.anchor = None;
+                            if this.selection.as_ref().is_none_or(|r| r.is_empty()) {
+                                let index =
+                                    click.index_for_position(e.position).unwrap_or_else(|i| i);
+                                if let Some((_, _, url)) = click_links
+                                    .iter()
+                                    .find(|(range, _, _)| range.contains(&index))
+                                {
+                                    this.open_link(url.clone(), cx);
+                                }
+                            }
+                        }),
+                    );
+                row = row.child(RichBlock {
+                    inner: body.into_any_element(),
+                    layout,
+                    text,
+                    role,
+                    level: match block.kind {
+                        Kind::Heading(level) => Some(level as usize),
+                        _ => None,
+                    },
+                    links,
+                    selection: selected,
+                    owner: cx.entity(),
+                    code_index: matches!(block.kind, Kind::Code(_)).then_some(index),
+                    light,
+                });
+                for (i, (url, alt)) in block.images.iter().enumerate() {
+                    if self.requested_images.len() < 128
+                        && self.requested_images.insert(url.clone())
+                    {
+                        cx.emit(DocumentEffect::Image(url.clone()));
+                    }
+                    row = row.child(
+                        div()
+                            .id(("image", i))
+                            .role(Role::Image)
+                            .aria_label(alt.clone())
+                            .child(alt.clone()),
+                    );
+                }
+                rows.push(row);
+                base += block_len + 1;
             }
-            children.push(row);
-            base += block_len + 1;
+            if list {
+                children.push(
+                    div()
+                        .id(("list", group.start))
+                        .role(Role::List)
+                        .flex()
+                        .flex_col()
+                        .children(rows),
+                );
+            } else {
+                children.extend(rows);
+            }
         }
         div()
             .id("document")
@@ -1179,6 +1222,27 @@ mod tests {
 #[cfg(test)]
 mod repair_tests {
     use super::*;
+    #[::core::prelude::v1::test]
+    fn consecutive_list_items_share_a_container_and_footnote_scroll_row() {
+        let blocks = parse("- first\n- second\n- third\n\nParagraph[^one]\n\n[^one]: Note");
+        let groups = block_groups(&blocks);
+        assert_eq!(groups[0], 0..3);
+        assert!(
+            blocks[..3]
+                .iter()
+                .all(|block| matches!(block.kind, Kind::List))
+        );
+        let footnote = blocks
+            .iter()
+            .position(|block| matches!(block.kind, Kind::Footnote(_)))
+            .unwrap();
+        let row = groups
+            .iter()
+            .position(|group| group.contains(&footnote))
+            .unwrap();
+        assert_eq!(row, footnote - 2);
+        assert!(groups.iter().skip(1).all(|group| group.len() == 1));
+    }
     #[::core::prelude::v1::test]
     fn settled_stream_matches_full_parse_for_global_markdown_constructs() {
         for source in [

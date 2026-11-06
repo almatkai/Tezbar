@@ -129,6 +129,14 @@ impl Owner {
         if self.lifecycle.show().is_none() {
             return;
         }
+        if was_visible {
+            let _ = self.launcher.update(cx, |_, w, cx| {
+                let _ = native::visible(w, true);
+                cx.activate(true);
+                w.activate_window();
+            });
+            return;
+        }
         let config = self.config.clone();
         let positions = &self.positions.positions;
         let layouts = &self.layouts;
@@ -312,7 +320,7 @@ impl Owner {
             .map(|window| window.update(cx, |view, _, _| view.drain_writes()));
         let launcher_writes = self
             .launcher
-            .update(cx, |view, _, _| view.drain_state())
+            .update(cx, |view, _, cx| view.drain_state(cx))
             .unwrap_or_default();
         let drain = self.writer.drain();
         self.end_snap(cx);
@@ -566,13 +574,16 @@ impl Owner {
             return;
         };
         if let Some(panel) = self.panel {
-            let _ = panel.update(cx, |view, w, cx| {
-                view.sessions = rows;
+            let updated = panel.update(cx, |view, w, cx| {
+                view.sessions = rows.clone();
                 let _ = native::place(w, bounds);
                 let _ = native::visible(w, true);
                 cx.notify();
             });
-            return;
+            if updated.is_ok() {
+                return;
+            }
+            self.panel = None;
         }
         let relay = self.relay.clone();
         self.panel = cx
@@ -587,6 +598,11 @@ impl Owner {
                 },
                 move |w, cx| {
                     let _ = native::no_shadow(w);
+                    let close = relay.clone();
+                    w.on_window_should_close(cx, move |_, _| {
+                        let _ = close.send(Event::PanelHide);
+                        false
+                    });
                     if let Ok(parent) = parent {
                         let _ = native::attach(w, parent);
                     }

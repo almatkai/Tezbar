@@ -5,6 +5,8 @@ pub mod navigation;
 mod presentation;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod review_tests;
 mod view;
 use crate::{
     core_client::{CoreClient, Request, RequestAdapter},
@@ -93,7 +95,7 @@ pub struct Launcher {
     state_path: Option<PathBuf>,
     state_writer: Arc<tokio::sync::Mutex<()>>,
     persist_revision: Arc<std::sync::atomic::AtomicU64>,
-    write_error: Arc<std::sync::Mutex<Option<String>>>,
+    state_save_error: Option<String>,
     prefix: Option<char>,
     argument_revision: u64,
     argument_rows: Vec<Row>,
@@ -286,7 +288,7 @@ impl Launcher {
             state_path,
             state_writer: Arc::default(),
             persist_revision: Arc::default(),
-            write_error: Arc::default(),
+            state_save_error: None,
             prefix: None,
             argument_revision: 0,
             argument_rows: vec![],
@@ -778,7 +780,7 @@ impl Launcher {
                     .load(std::sync::atomic::Ordering::SeqCst)
                     == serial
                 {
-                    *this.write_error.lock().unwrap() = result.as_ref().err().cloned();
+                    this.state_save_error = result.as_ref().err().cloned();
                     if let Err(e) = result {
                         this.error = Some(format!("Could not save launcher state: {e}"));
                         cx.notify();
@@ -1250,9 +1252,12 @@ impl Launcher {
         }
     }
     pub fn state_write_error(&self) -> Option<String> {
-        self.write_error.lock().unwrap().clone()
+        self.state_save_error.clone()
     }
-    pub fn drain_state(&mut self) -> Vec<Task<()>> {
+    pub fn drain_state(&mut self, cx: &mut Context<Self>) -> Vec<Task<()>> {
+        // Retry the current durable state on every quit. An earlier failed write must neither
+        // permanently block quit nor be cleared by an unrelated successful model/config read.
+        self.persist(cx);
         std::mem::take(&mut self.writes)
     }
     fn core_event(&mut self, event: &CoreEvent, cx: &mut Context<Self>) {

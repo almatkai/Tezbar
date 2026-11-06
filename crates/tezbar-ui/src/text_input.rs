@@ -804,11 +804,7 @@ impl EntityInputHandler for TextInput {
 struct TextElement {
     input: Entity<TextInput>,
     text: String,
-    selection: Range<usize>,
-    reversed: bool,
-    password: bool,
     multiline: bool,
-    name: SharedString,
 }
 struct PrepaintState {
     lines: Vec<(usize, ShapedLine, Bounds<Pixels>)>,
@@ -828,57 +824,6 @@ impl Element for TextElement {
     }
     fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
         None
-    }
-    fn a11y_role(&self) -> Option<gpui::Role> {
-        Some(if self.password {
-            gpui::Role::PasswordInput
-        } else if self.multiline {
-            gpui::Role::MultilineTextInput
-        } else {
-            gpui::Role::TextInput
-        })
-    }
-    fn write_a11y_info(&self, node: &mut accesskit::Node) {
-        node.set_label(self.name.to_string());
-        node.set_value(if self.password {
-            "•".repeat(self.text.graphemes(true).count())
-        } else {
-            self.text.clone()
-        });
-    }
-    fn a11y_synthetic_children(
-        &mut self,
-        _: &mut Self::PrepaintState,
-        b: &mut gpui::A11ySubtreeBuilder,
-    ) {
-        // Passwords disclose neither clear text nor text length/selection to accessibility.
-        if self.password {
-            return;
-        }
-        let mut run = accesskit::Node::new(gpui::Role::TextRun);
-        run.set_value(self.text.clone());
-        run.set_character_lengths(
-            self.text
-                .graphemes(true)
-                .map(|c| c.len().min(255) as u8)
-                .collect::<Vec<_>>(),
-        );
-        let id = b.synthetic_node_id(0u8);
-        b.push_child(id, run);
-        let pos = |at: usize| accesskit::TextPosition {
-            node: id,
-            character_index: self.text[..at].graphemes(true).count(),
-        };
-        let (anchor, focus) = if self.reversed {
-            (self.selection.end, self.selection.start)
-        } else {
-            (self.selection.start, self.selection.end)
-        };
-        b.parent_node()
-            .set_text_selection(accesskit::TextSelection {
-                anchor: pos(anchor),
-                focus: pos(focus),
-            });
     }
     fn request_layout(
         &mut self,
@@ -1089,6 +1034,10 @@ impl Render for TextInput {
         let t = crate::tokens::tokens(window);
         let field = cx.entity();
         let selection_field = field.clone();
+        let text = self.content.clone();
+        let selection = self.selected_range.clone();
+        let reversed = self.selection_reversed;
+        let password = self.options.password;
 
         div()
             .id("field")
@@ -1106,6 +1055,36 @@ impl Render for TextInput {
             })
             .aria_label(self.options.name.clone())
             .aria_placeholder(self.placeholder.clone())
+            .a11y_synthetic_children(move |b| {
+                // The focused editable wrapper owns both its value and its caret/selection.
+                // A password exposes only its masked value, with no clear-text text run.
+                if password {
+                    return;
+                }
+                let mut run = accesskit::Node::new(gpui::Role::TextRun);
+                run.set_value(text.to_string());
+                run.set_character_lengths(
+                    text.graphemes(true)
+                        .map(|c| c.len().min(255) as u8)
+                        .collect::<Vec<_>>(),
+                );
+                let id = b.synthetic_node_id(0u8);
+                b.push_child(id, run);
+                let pos = |at: usize| accesskit::TextPosition {
+                    node: id,
+                    character_index: text[..at].graphemes(true).count(),
+                };
+                let (anchor, focus) = if reversed {
+                    (selection.end, selection.start)
+                } else {
+                    (selection.start, selection.end)
+                };
+                b.parent_node()
+                    .set_text_selection(accesskit::TextSelection {
+                        anchor: pos(anchor),
+                        focus: pos(focus),
+                    });
+            })
             .on_a11y_action(gpui::AccessibleAction::Focus, move |_, w, cx| {
                 let focus = field.read(cx).focus_handle.clone();
                 w.focus(&focus, cx);
@@ -1194,11 +1173,7 @@ impl Render for TextInput {
             .child(div().min_h(px(22. * t.zoom)).w_full().child(TextElement {
                 input: cx.entity(),
                 text: self.content.to_string(),
-                selection: self.selected_range.clone(),
-                reversed: self.selection_reversed,
-                password: self.options.password,
                 multiline: self.options.multiline,
-                name: self.options.name.clone(),
             }))
     }
 }
@@ -1424,25 +1399,56 @@ mod tests {
         });
     }
     #[gpui::test]
+    fn focused_field_is_the_only_editable_accessibility_node(cx: &mut gpui::TestAppContext) {
+        let (field, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
+        cx.update(|w, cx| {
+            field.update(cx, |f, cx| {
+                f.set_text("日本😀", w, cx);
+                f.focus_handle.focus(w, cx);
+                f.selected_range = 3..f.content.len();
+                for multiline in [false, true] {
+                    f.options.multiline = multiline;
+                    let element = f.render(w, cx).into_element();
+                    let role = if multiline {
+                        gpui::Role::MultilineTextInput
+                    } else {
+                        gpui::Role::TextInput
+                    };
+                    assert_eq!(element.a11y_role(), Some(role));
+                    let mut node = accesskit::Node::new(role);
+                    element.write_a11y_info(&mut node);
+                    assert_eq!(node.value(), Some("日本😀"));
+                    let text = TextElement {
+                        input: field.clone(),
+                        text: f.content.to_string(),
+                        multiline,
+                    };
+                    assert_eq!(text.a11y_role(), None);
+                }
+            });
+        });
+        cx.run_until_parked();
+    }
+    #[gpui::test]
     fn password_render_and_accessibility_never_expose_secret(cx: &mut gpui::TestAppContext) {
         let (field, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
         cx.update(|w, cx| {
             field.update(cx, |f, cx| {
                 f.options.password = true;
                 f.set_text("secret😀", w, cx);
-                let element = TextElement {
-                    input: field.clone(),
-                    text: f.content.to_string(),
-                    selection: f.selected_range.clone(),
-                    reversed: false,
-                    password: true,
-                    multiline: false,
-                    name: "Password".into(),
-                };
-                let mut node = accesskit::Node::new(gpui::Role::PasswordInput);
+                f.options.name = "Password".into();
+                let element = f.render(w, cx).into_element();
+                assert_eq!(element.a11y_role(), Some(gpui::Role::PasswordInput));
+                let mut node = accesskit::Node::new(element.a11y_role().unwrap());
                 element.write_a11y_info(&mut node);
                 assert_eq!(node.value(), Some("•••••••"));
                 assert_eq!(node.label(), Some("Password"));
+                let painted_text = TextElement {
+                    input: field.clone(),
+                    text: f.content.to_string(),
+                    multiline: false,
+                };
+                assert_eq!(painted_text.a11y_role(), None);
             })
         });
         cx.run_until_parked();

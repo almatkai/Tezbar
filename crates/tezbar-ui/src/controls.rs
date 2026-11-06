@@ -156,7 +156,7 @@ pub fn footer(t: Tokens) -> Div {
         .h(px(tokens::FOOTER * t.zoom))
         .flex_shrink_0()
         .px(px(12. * t.zoom))
-        .bg(t.bar)
+        .bg(t.bar_float)
         .text_size(px(10.5 * t.zoom))
         .text_color(t.text3)
 }

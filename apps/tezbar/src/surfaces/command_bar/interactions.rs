@@ -143,7 +143,6 @@ impl Launcher {
             .unwrap_or_else(|e| Err(e.to_string()));
             let _ = this.update(cx, |this, cx| {
                 this.model_saving = false;
-                *this.write_error.lock().unwrap() = result.as_ref().err().cloned();
                 match result {
                     Ok(config) => this.model_config = config,
                     Err(e) => this.error = Some(e),
