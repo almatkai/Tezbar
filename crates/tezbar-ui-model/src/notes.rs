@@ -506,6 +506,24 @@ struct Draft {
     undo: Vec<Patch>,
     redo: Vec<Patch>,
 }
+/// Ephemeral native editor offsets in its visual UTF-8 projection. The model keeps
+/// them opaque; the input adapter validates them against the restored projection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EditorSelection {
+    pub start: usize,
+    pub end: usize,
+    pub reversed: bool,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct UndoResult {
+    pub changed: bool,
+    pub selection: Option<EditorSelection>,
+}
+#[derive(Clone, Copy, Debug)]
+struct SelectionChange {
+    before: EditorSelection,
+    after: EditorSelection,
+}
 #[derive(Debug, Default)]
 pub struct Notes {
     pub rows: Vec<Note>,
@@ -629,17 +647,50 @@ impl Notes {
         now: u64,
         change: impl FnOnce(&mut Document) -> Result<(), String>,
     ) -> Result<(), String> {
+        self.edit_transaction(now, None, |document| change(document).map(|()| None))
+    }
+    /// Content and selection metadata enter the same bounded undo transaction.
+    pub fn edit_with_selection(
+        &mut self,
+        now: u64,
+        before: EditorSelection,
+        change: impl FnOnce(&mut Document) -> Result<EditorSelection, String>,
+    ) -> Result<(), String> {
+        if before.start > before.end {
+            return Err("Invalid editor selection".into());
+        }
+        self.edit_transaction(now, Some(before), |document| {
+            let after = change(document)?;
+            if after.start > after.end {
+                return Err("Invalid editor selection".into());
+            }
+            Ok(Some(after))
+        })
+    }
+    fn edit_transaction(
+        &mut self,
+        now: u64,
+        selection_before: Option<EditorSelection>,
+        change: impl FnOnce(&mut Document) -> Result<Option<EditorSelection>, String>,
+    ) -> Result<(), String> {
         let id = self.selected.ok_or("No note selected")?;
         let d = self.drafts.get_mut(&id).ok_or("No draft")?;
         let before = d.html.clone();
-        if let Err(error) = change(&mut d.doc) {
-            d.doc = Document::load(&before)?;
-            return Err(error);
-        }
+        let selection_after = match change(&mut d.doc) {
+            Ok(selection) => selection,
+            Err(error) => {
+                d.doc = Document::load(&before)?;
+                return Err(error);
+            }
+        };
         let after = d.doc.html();
         if after != before {
             d.html = after.clone();
-            d.undo.push(Patch::between(&before, &after));
+            let mut patch = Patch::between(&before, &after);
+            patch.selection = selection_before
+                .zip(selection_after)
+                .map(|(before, after)| SelectionChange { before, after });
+            d.undo.push(patch);
             while d.undo.len() > 100
                 || d.undo
                     .iter()
@@ -657,15 +708,18 @@ impl Notes {
         Ok(())
     }
     pub fn undo(&mut self, redo: bool, now: u64) -> bool {
+        self.undo_with_selection(redo, now).changed
+    }
+    pub fn undo_with_selection(&mut self, redo: bool, now: u64) -> UndoResult {
         let Some(id) = self.selected else {
-            return false;
+            return UndoResult::default();
         };
         let Some(d) = self.drafts.get_mut(&id) else {
-            return false;
+            return UndoResult::default();
         };
         let from = if redo { &mut d.redo } else { &mut d.undo };
-        let Some(patch) = from.pop() else {
-            return false;
+        let Some(patch) = from.last() else {
+            return UndoResult::default();
         };
         let mut html = d.html.clone();
         let (remove, insert) = if redo {
@@ -674,12 +728,20 @@ impl Notes {
             (&patch.inserted, &patch.removed)
         };
         if html.get(patch.start..patch.start + remove.len()) != Some(remove) {
-            return false;
+            return UndoResult::default();
         }
         html.replace_range(patch.start..patch.start + remove.len(), insert);
         let Ok(doc) = Document::load(&html) else {
-            return false;
+            return UndoResult::default();
         };
+        let selection = patch.selection.map(|selection| {
+            if redo {
+                selection.after
+            } else {
+                selection.before
+            }
+        });
+        let patch = from.pop().expect("undo patch was checked above");
         d.doc = doc;
         d.html = html;
         if redo {
@@ -690,7 +752,10 @@ impl Notes {
         d.revision += 1;
         d.deadline = now + 260;
         self.save_states.insert(id, SaveState::Dirty);
-        true
+        UndoResult {
+            changed: true,
+            selection,
+        }
     }
     pub fn tick(&mut self, now: u64) -> Vec<Effect> {
         let ready: Vec<_> = self
@@ -908,6 +973,7 @@ struct Patch {
     start: usize,
     removed: String,
     inserted: String,
+    selection: Option<SelectionChange>,
 }
 impl Patch {
     fn between(before: &str, after: &str) -> Self {
@@ -936,6 +1002,7 @@ impl Patch {
             start,
             removed: before[start..before.len() - suffix].into(),
             inserted: after[start..after.len() - suffix].into(),
+            selection: None,
         }
     }
 }
@@ -1335,5 +1402,150 @@ mod opus_html_fixtures {
             warm.as_secs_f64() * 1000.,
             idle.as_secs_f64() * 1000.
         );
+    }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    fn selected_notes() -> Notes {
+        let mut notes = Notes::default();
+        notes.rows.push(Note {
+            created_at: 1,
+            updated_at: 0,
+            text: "<div>A<strong>雪</strong>😀</div>".into(),
+        });
+        notes.rows.push(Note {
+            created_at: 2,
+            updated_at: 0,
+            text: "<div>Second</div>".into(),
+        });
+        notes.select(1).unwrap();
+        notes
+    }
+    #[test]
+    fn rich_undo_and_redo_restore_the_selection_owned_by_the_same_patch() {
+        let mut notes = selected_notes();
+        let original = notes.document().unwrap().html();
+        let before = EditorSelection {
+            start: 1,
+            end: 4,
+            reversed: true,
+        };
+        let after = EditorSelection {
+            start: 4,
+            end: 4,
+            reversed: false,
+        };
+        notes
+            .edit_with_selection(0, before, |doc| {
+                doc.replace(1, 2, "猫")?;
+                Ok(after)
+            })
+            .unwrap();
+        let edited = notes.document().unwrap().html();
+        assert!(edited.contains("猫"));
+        assert_eq!(
+            notes.undo_with_selection(false, 1),
+            UndoResult {
+                changed: true,
+                selection: Some(before)
+            }
+        );
+        assert_eq!(notes.document().unwrap().html(), original);
+        assert_eq!(
+            notes.undo_with_selection(true, 2),
+            UndoResult {
+                changed: true,
+                selection: Some(after)
+            }
+        );
+        assert_eq!(notes.document().unwrap().html(), edited);
+    }
+    #[test]
+    fn failed_and_selection_only_changes_never_create_content_history() {
+        let mut notes = selected_notes();
+        let before = EditorSelection {
+            start: 1,
+            end: 4,
+            reversed: true,
+        };
+        let after = EditorSelection {
+            start: 4,
+            end: 4,
+            reversed: false,
+        };
+        notes
+            .edit_with_selection(0, before, |doc| {
+                doc.replace(1, 2, "猫")?;
+                Ok(after)
+            })
+            .unwrap();
+        let edited = notes.document().unwrap().html();
+        assert!(notes
+            .edit_with_selection(1, after, |doc| {
+                doc.replace(0, 1, "Z")?;
+                Err("Synthetic failure".into())
+            })
+            .is_err());
+        assert_eq!(notes.document().unwrap().html(), edited);
+        notes.edit_with_selection(2, after, |_| Ok(before)).unwrap();
+        assert_eq!(notes.undo_with_selection(false, 3).selection, Some(before));
+        assert!(!notes.undo_with_selection(false, 4).changed);
+        notes.edit(5, |doc| doc.replace(0, 1, "B")).unwrap();
+        assert_eq!(
+            notes.undo_with_selection(false, 6),
+            UndoResult {
+                changed: true,
+                selection: None
+            }
+        );
+    }
+    #[test]
+    fn selection_history_stays_with_its_note_and_invalid_metadata_rolls_back() {
+        let mut notes = selected_notes();
+        let a = EditorSelection {
+            start: 0,
+            end: 1,
+            reversed: false,
+        };
+        let b = EditorSelection {
+            start: 1,
+            end: 1,
+            reversed: false,
+        };
+        notes
+            .edit_with_selection(0, a, |doc| {
+                doc.replace(0, 1, "B")?;
+                Ok(b)
+            })
+            .unwrap();
+        notes.select(2).unwrap();
+        let c = EditorSelection {
+            start: 0,
+            end: 6,
+            reversed: true,
+        };
+        notes
+            .edit_with_selection(1, c, |doc| {
+                doc.replace(0, 6, "C")?;
+                Ok(b)
+            })
+            .unwrap();
+        assert_eq!(notes.undo_with_selection(false, 2).selection, Some(c));
+        notes.select(1).unwrap();
+        let before = notes.document().unwrap().html();
+        assert!(notes
+            .edit_with_selection(3, b, |doc| {
+                doc.replace(0, 1, "X")?;
+                Ok(EditorSelection {
+                    start: 2,
+                    end: 1,
+                    reversed: false,
+                })
+            })
+            .is_err());
+        assert_eq!(notes.document().unwrap().html(), before);
+        assert_eq!(notes.undo_with_selection(false, 4).selection, Some(a));
     }
 }

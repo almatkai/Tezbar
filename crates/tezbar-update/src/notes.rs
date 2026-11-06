@@ -1,5 +1,9 @@
 //! Demand-driven release notes; no automatic request or duplicated update policy.
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "native")]
+pub mod http;
+const RELEASE_TAG_PREFIX: &str = "https://api.github.com/repos/almatkai/Tezbar/releases/tags/v";
+const RELEASE_ACCEPT: &str = "application/vnd.github+json";
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseNotes {
@@ -72,8 +76,8 @@ impl Notes {
         };
         effects.push(Effect::Fetch {
             generation: self.generation,
-            url: format!("https://api.github.com/repos/almatkai/Tezbar/releases/tags/v{version}"),
-            accept: "application/vnd.github+json",
+            url: format!("{RELEASE_TAG_PREFIX}{version}"),
+            accept: RELEASE_ACCEPT,
         });
         effects
     }
