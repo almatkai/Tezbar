@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod assets;
 #[cfg(feature = "native-ui-instant")]
 pub mod instant;
 pub mod common;
@@ -56,6 +57,7 @@ impl Default for StartupOptions {
 /// reach the compatibility process; there is no general sidecar fallback.
 pub struct NativeCore {
     pub ctx: CoreContext,
+    pub assets: assets::AssetService,
     pub ai: ai::AiCore,
     pub knowledge: knowledge::KnowledgeCore,
     pub launcher: launcher::LauncherCore,
@@ -81,6 +83,7 @@ impl NativeCore {
     fn configured(ctx: CoreContext, launch: Option<extension_worker::WorkerLaunch>) -> Result<Arc<Self>,String> {
         let extensions=match launch {Some(launch)=>extensions::ExtensionsCore::with_worker_launch(ctx.clone(),launch),None=>extensions::ExtensionsCore::new(ctx.clone())};
         let core = Arc::new(Self {
+            assets: assets::AssetService::default(),
             ai: ai::AiCore::new(ctx.clone()),
             knowledge: knowledge::KnowledgeCore::new(ctx.clone()),
             launcher: launcher::LauncherCore::new(ctx.clone()),

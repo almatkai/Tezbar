@@ -124,8 +124,13 @@ pub fn safe_link(raw: &str) -> Option<String> {
     matches!(u.scheme(), "https" | "http" | "mailto").then(|| u.into())
 }
 pub fn safe_image(raw: &str) -> Option<String> {
+    if raw.starts_with("data:") {
+        return safe_image_data(raw).then(|| raw.to_owned());
+    }
+
     if let Ok(u) = url::Url::parse(raw) {
-        return (u.scheme() == "https").then(|| u.into());
+        return (u.scheme() == "https" && u.username().is_empty() && u.password().is_none())
+            .then(|| u.into());
     }
     let path = std::path::Path::new(raw);
     (!raw.is_empty()
@@ -135,6 +140,49 @@ pub fn safe_image(raw: &str) -> Option<String> {
             .all(|c| matches!(c, std::path::Component::Normal(_)))
         && !raw.contains('\\'))
     .then(|| format!("asset:{raw}"))
+}
+// Strict canonical base64 validation without allocating a decoded copy during parsing.
+fn safe_image_data(raw: &str) -> bool {
+    const LIMIT: usize = 8 * 1024 * 1024;
+    if raw.len() > LIMIT.div_ceil(3) * 4 + 64 {
+        return false;
+    }
+    let Some((header, data)) = raw.split_once(',') else {
+        return false;
+    };
+    if !matches!(
+        header,
+        "data:image/png;base64"
+            | "data:image/jpeg;base64"
+            | "data:image/webp;base64"
+            | "data:image/gif;base64"
+            | "data:image/tiff;base64"
+            | "data:image/svg+xml;base64"
+    ) || data.is_empty()
+        || data.len() % 4 != 0
+    {
+        return false;
+    }
+    let padding = data.bytes().rev().take_while(|b| *b == b'=').count();
+    if padding > 2 || data.len() / 4 * 3 - padding > LIMIT {
+        return false;
+    }
+    let body = &data.as_bytes()[..data.len() - padding];
+    let value = |b: u8| -> Option<u8> {
+        match b {
+            b'A'..=b'Z' => Some(b - b'A'),
+            b'a'..=b'z' => Some(b - b'a' + 26),
+            b'0'..=b'9' => Some(b - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    };
+    if body.iter().any(|b| value(*b).is_none()) {
+        return false;
+    }
+    let last = value(*body.last().unwrap()).unwrap();
+    padding == 0 || (padding == 1 && last & 3 == 0) || (padding == 2 && last & 15 == 0)
 }
 impl Document {
     pub fn update(&mut self, revision: u64, source: &str, settled: bool) -> bool {
@@ -1652,5 +1700,45 @@ mod image_tests {
         view.update(cx, |v, cx| v.reset_images(cx));
         let third = view.read_with(cx, |v, _| v.image_requests().pop().unwrap());
         assert_ne!(second, third);
+    }
+}
+
+#[cfg(test)]
+mod image_data_tests {
+    use super::*;
+    use ::core::prelude::v1::test;
+    #[test]
+    fn image_data_admission_is_strict_bounded_and_update_owned() {
+        let source = "data:image/png;base64,AQ==";
+        assert_eq!(safe_image(source), Some(source.into()));
+        for bad in [
+            "data:image/png;base64,AR==",
+            "data:image/png;base64,AQ",
+            "data:image/png;base64,A===",
+            "data:text/html;base64,AQ==",
+            "data:image/png,abc",
+            "https://name:secret@invalid/image",
+        ] {
+            assert!(safe_image(bad).is_none(), "{bad}");
+        }
+        assert!(
+            safe_image(&format!(
+                "data:image/png;base64,{}",
+                "AAAA".repeat(3 * 1024 * 1024)
+            ))
+            .is_none()
+        );
+        let mut doc = Document::default();
+        doc.update(1, &format!("![image]({source})"), true);
+        assert_eq!(
+            doc.blocks
+                .iter()
+                .flat_map(|b| &b.images)
+                .map(|(src, _)| src.clone())
+                .collect::<Vec<_>>(),
+            vec![source.to_string()]
+        );
+        doc.update(2, "Removed", true);
+        assert!(doc.blocks.iter().all(|b| b.images.is_empty()));
     }
 }

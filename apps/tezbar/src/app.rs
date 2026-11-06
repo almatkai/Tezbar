@@ -1,4 +1,5 @@
 mod m7;
+mod m8;
 #[cfg(test)]
 mod m7_tests;
 gpui::actions!(
@@ -429,6 +430,7 @@ impl Owner {
         self.save_error = None;
         self.snapshot(cx);
         self.flush();
+        let chat_drain = self.m8_prepare_quit(cx);
         let settings_drain = self
             .settings
             .map(|window| window.update(cx, |view, _, _| view.drain_writes()));
@@ -463,8 +465,10 @@ impl Owner {
                 .map_err(|e| e.to_string())
                 .and_then(|v| v.map_err(|e| e.to_string()))
                 .and_then(|error| error.map_or(Ok(()), Err));
+            let chat_result = chat_drain.await;
             let prepared = gpui_tokio::Tokio::spawn(cx, async move {
                 launcher_error?;
+                chat_result?;
                 shared_settings.drain_with(m7_barrier).await?;
                 if let Some(settings_drain) = settings_drain {
                     settings_drain
@@ -1034,6 +1038,7 @@ impl Owner {
                 }
             }
             Event::Quit => self.quit(cx),
+            Event::ChatEffect(source, effect) => self.m8_effect(source, effect, cx),
             Event::RetryCore => self.start_core(cx),
             Event::CloseSettings => {
                 let _ = self.surface(SurfaceOp::CloseCurrent, cx);

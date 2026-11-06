@@ -289,21 +289,7 @@ pub(super) fn image_bytes(data: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 fn decode_image(bytes: &[u8]) -> Option<image::RgbaImage> {
-    if bytes.len() > MAX_IMAGE_BYTES {
-        return None;
-    }
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
-        .with_guessed_format()
-        .ok()?;
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(16384);
-    limits.max_image_height = Some(16384);
-    limits.max_alloc = Some(128 * 1024 * 1024);
-    reader.limits(limits);
-    let decoded = reader.decode().ok()?;
-    let mut preview = decoded.thumbnail(1024, 1024).into_rgba8();
-    tezbar_ui::image_cache::rgba_to_bgra(preview.as_mut());
-    Some(preview)
+    crate::asset_transport::decode_chat_preview(bytes)
 }
 pub(super) fn thumbnail_key(session: &str, turn: &str, index: usize, r: &Reference) -> String {
     if let Reference::Image { blob_id, .. } = r {

@@ -855,6 +855,19 @@ impl ChatView {
             self.action(Action::Back, w, cx);
             return;
         }
+        if (modifiers.platform || modifiers.control) && !composing {
+            let action = match key {
+                "n" => Some(Action::New),
+                "." => Some(Action::Stop),
+                "," => Some(Action::Settings),
+                _ => None,
+            };
+            if let Some(action) = action {
+                cx.stop_propagation();
+                self.action(action, w, cx);
+                return;
+            }
+        }
         if key == "s" && modifiers.shift && (modifiers.platform || modifiers.control) {
             cx.stop_propagation();
             self.action(Action::Capture, w, cx);
@@ -864,6 +877,13 @@ impl ChatView {
             return;
         }
         if self.input.read(cx).marked_range.is_some() {
+            return;
+        }
+        if key == "enter" && modifiers.shift {
+            cx.stop_propagation();
+            self.input.update(cx, |input, cx| {
+                input.replace_text_in_range(None, "\n", w, cx)
+            });
             return;
         }
         let items = self.slash_items(cx);
@@ -1043,7 +1063,11 @@ impl Render for ChatView {
         }
         let statuses = self.controller.background();
         let mut footer = controls::footer(t).child("AI");
-        for status in statuses.into_iter().take(8) {
+        // In parent composition the shared footer owns these statuses and routing.
+        for status in statuses
+            .into_iter()
+            .take(if self.footer.is_some() { 0 } else { 8 })
+        {
             footer = footer.child(self.b(
                 format!("background-{}", status.session_id),
                 format!(

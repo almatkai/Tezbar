@@ -1,5 +1,7 @@
 //! Native command bar. All I/O starts in event/effect methods; Render only constructs elements.
 mod arguments;
+pub(crate) mod chat_integration;
+pub use chat_integration::ChatSource;
 mod interactions;
 pub(crate) mod locale;
 mod model_picker;
@@ -83,6 +85,7 @@ struct PinDrag {
     target: Option<usize>,
 }
 pub struct Launcher {
+    chat: chat_integration::ChatIntegration,
     pub(crate) settings_store: Option<super::settings::SettingsStore>,
     settings_owner: u64,
     pub(crate) onboarding: Option<Entity<super::onboarding::Onboarding>>,
@@ -205,6 +208,7 @@ impl Launcher {
         let core = Arc::new(core);
         let mut launcher =
             Self::with_adapter_and_settings(core.clone(), relay, Some(path), Some(store), w, cx);
+        launcher.configure_chat((*core).clone());
         launcher.utility_transport = Some(core);
         launcher.utility_save_directory = directory;
         launcher
@@ -392,6 +396,7 @@ impl Launcher {
             .set_scroll_handler(cx.listener(|this, _, w, cx| this.schedule_icon_viewport(w, cx)));
         Self {
             settings_store: store,
+            chat: chat_integration::ChatIntegration::default(),
             settings_owner,
             onboarding: None,
             onboarding_active: false,
@@ -590,7 +595,11 @@ impl Launcher {
             self.show_onboarding(w, cx);
             return;
         }
-        let utility_active = self.show_utilities(w, cx);
+        let was_visible = self.visible;
+        self.visible = true;
+        let chat_active = self.show_chat(cx);
+        self.visible = was_visible;
+        let utility_active = chat_active || self.show_utilities(w, cx);
         if !self.visible {
             self.visible = true;
             self.checked_update = false;
@@ -612,6 +621,7 @@ impl Launcher {
     }
     pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.hide_onboarding(cx);
+        self.hide_chat(cx);
         self.acknowledge_navigation(cx);
         self.hide_utilities(w, cx);
         self.visible = false;
@@ -1428,6 +1438,7 @@ impl Launcher {
             let _ = self.relay.send(Event::Navigate(intent));
             return;
         }
+        self.hide_chat(cx);
         self.navigation = Some(intent.clone());
         self.sync_task_indicator(cx);
         self.form = None;
@@ -1459,6 +1470,7 @@ impl Launcher {
         cx.notify();
     }
     pub fn receive_navigation(&mut self, intent: Navigation, cx: &mut Context<Self>) {
+        self.nonce = self.nonce.max(intent.nonce);
         if matches!(intent.surface, Surface::Settings(_)) {
             if cx.has_global::<navigation::NavigationInbox>() {
                 cx.global_mut::<navigation::NavigationInbox>()
@@ -1483,7 +1495,8 @@ impl Launcher {
             });
             return;
         }
-        self.navigation = Some(intent);
+        self.navigation = Some(intent.clone());
+        self.route_chat_navigation(intent, cx);
         self.sync_task_indicator(cx);
         cx.notify();
     }
@@ -1583,7 +1596,7 @@ impl Launcher {
     }
     pub fn core_ready(&mut self, cx: &mut Context<Self>) {
         self.sync_task_indicator(cx);
-        if self.ready && self.visible {
+        if self.ready && self.visible && !self.onboarding_active && self.navigation.is_none() {
             self.form = None;
             self.form_activation = None;
             self.argument_revision += 1;

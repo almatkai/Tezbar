@@ -10,6 +10,7 @@ pub(super) struct OpenTask(pub TaskStatus);
 pub(super) struct TaskIndicator {
     adapter: Arc<dyn RequestAdapter>,
     state: Background,
+    chat: Vec<TaskStatus>,
     visible: bool,
     open: bool,
     generation: u64,
@@ -21,6 +22,41 @@ pub(super) struct TaskIndicator {
 }
 impl EventEmitter<OpenTask> for TaskIndicator {}
 impl TaskIndicator {
+    fn all(&self) -> Vec<TaskStatus> {
+        let mut all = self.chat.clone();
+        all.extend(self.state.all());
+        all
+    }
+    pub(super) fn chat_status(
+        &mut self,
+        status: &[tezbar_ui_model::chat::BackgroundStatus],
+        cx: &mut Context<Self>,
+    ) {
+        self.chat = status
+            .iter()
+            .filter(|s| s.busy)
+            .map(|s| TaskStatus {
+                id: format!("chat:{}", s.session_id),
+                kind: "chat".into(),
+                title: "AI Chat".into(),
+                detail: if s.waiting_approval {
+                    "Waiting for approval…"
+                } else {
+                    "Generating…"
+                }
+                .into(),
+                progress: None,
+                remaining_seconds: None,
+                extension_id: None,
+                command_name: None,
+            })
+            .collect();
+        if self.all().is_empty() {
+            self.open = false;
+        }
+        cx.notify();
+    }
+
     pub(super) fn new(adapter: Arc<dyn RequestAdapter>, cx: &mut Context<Self>) -> Self {
         let events = cx.try_global::<CoreEvents>().cloned().map(|hub| {
             hub.subscribe(
@@ -33,6 +69,7 @@ impl TaskIndicator {
         Self {
             adapter,
             state: Background::default(),
+            chat: vec![],
             visible: false,
             open: false,
             generation: 0,
@@ -65,7 +102,7 @@ impl TaskIndicator {
         cx: &mut Context<Self>,
     ) {
         self.state.update = serde_json::to_value(status).ok();
-        if self.state.all().is_empty() {
+        if self.all().is_empty() {
             self.open = false;
         }
         cx.notify();
@@ -110,7 +147,7 @@ impl TaskIndicator {
                     tasks.truncate(128);
                     this.state.tasks = tasks;
                 }
-                if this.state.all().is_empty() {
+                if this.all().is_empty() {
                     this.open = false;
                 }
                 if this.dirty {
@@ -135,7 +172,7 @@ impl TaskIndicator {
         if !self.visible {
             return;
         }
-        if let Some(task) = self.state.all().into_iter().find(|t| t.id == id) {
+        if let Some(task) = self.all().into_iter().find(|t| t.id == id) {
             self.open = false;
             cx.emit(OpenTask(task));
             cx.notify();
@@ -169,7 +206,7 @@ fn value(task: &TaskStatus) -> String {
 impl Render for TaskIndicator {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::tokens(window);
-        let tasks = self.state.all();
+        let tasks = self.all();
         let primary = tasks
             .iter()
             .find(|t| t.kind == "update")
@@ -227,15 +264,27 @@ impl Launcher {
         let visible = self.ready
             && self.visible
             && !self.onboarding_active
-            && self
-                .navigation
-                .as_ref()
-                .is_none_or(|n| n.surface == Surface::AiChat);
+            && self.navigation.as_ref().is_none_or(|_| self.chat_mounted());
         self.task_indicator
             .update(cx, |indicator, cx| indicator.set_visible(visible, cx));
     }
     pub(super) fn open_background_task(&mut self, task: &TaskStatus, cx: &mut Context<Self>) {
         use crate::surfaces::utilities::UtilityEffect;
+        if task.kind == "chat" {
+            if let Some(id) = task.id.strip_prefix("chat:") {
+                self.navigate(
+                    Surface::AiChat,
+                    Payload::Ai {
+                        prompt: None,
+                        cwd: None,
+                        resume: Some(id.into()),
+                        capture: false,
+                    },
+                    cx,
+                );
+            }
+            return;
+        }
         let effect = match task.kind.as_str() {
             "update"
                 if matches!(

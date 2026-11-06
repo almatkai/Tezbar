@@ -1,0 +1,25 @@
+{
+  "source_hashes": "composition-source-freeze-02.json (26 owned/coowned files)",
+  "documents": {
+    "docs/native-m08/composition-artifact-01.json": "c5c22ce65fa17b3ee3c5b304d1643947f1ec59ee126618e63b9b13e4f0004374",
+    "docs/native-m08/composition-artifact-02.json": "3a22c19483bf841f345f3ef52ce63cd6f182b0a0c3364edac374727f73cecb47",
+    "docs/native-m08/composition-audit-02.json": "0ad7a632746938771ed856797427c1784866e3484858f3fc4d25553b38b74b88",
+    "docs/native-m08/composition-case-map.json": "7a6fe68daf599ac8d653774261b2fe40eef32b9bd2070ca0b53133bb3c338ffe",
+    "docs/native-m08/composition-contracts.md": "cb67019651fd4f2148c14c73306c65273e79d6c56596cb634759eab2809bf829",
+    "docs/native-m08/composition-gates-01.json": "3bcfc73499b98eac0f2cc3511522d61ebb60a2a3972ba2a63fad49ba5503ec3a",
+    "docs/native-m08/composition-gates-02.json": "9de50b37da02578f5029528acbd5c3d41ef522e0a52d1bdda77bb509942dd7c5",
+    "docs/native-m08/composition-receipt.json": "60b1ce8bd344321dd6334bead5fbfdfdf781432a2b02838397c45732c702a862",
+    "docs/native-m08/composition-release-m10.json": "d5d8f9e606b3c115c0fe63483543cfa55b1fbcbf9639a56252adbce8e24fb49c",
+    "docs/native-m08/composition-source-draft.json": "7d766ebf9e3d7e3d727ace6d97db25de16fd0af9bfdeae13f12713811aa17694",
+    "docs/native-m08/composition-source-freeze-01.json": "48114783ce05444595eaf42bf894136cbd225deb272b35d1db8c93f55e956455",
+    "docs/native-m08/composition-source-freeze-02.json": "17fbaffb6973d2a4a7d89d30fec1ffed2068581636ceb00ba730cb0d321fdab6",
+    "docs/native-m08/composition-static-02.json": "c090925f32ab4f9168769e85acd8a3a7b6bd46118d935717ffe62fdebf1f8b90",
+    "docs/native-m08/composition-ts-freeze.json": "3d14f674175e50c684e787dfcc95d850325efebccc71fc5e240c1d403d6804cd",
+    "docs/native-m08/composition-verification.md": "aa3e98f864471f018643087607c13d1a651c323793e12968b4b82ceeef6b1445",
+    "docs/native-m09/asset-parent-api.md": "7bef3cbf02b50b9cacd0588270dbcd78b515072a2543199466e65be14552efb4",
+    "docs/native-m09/asset-parent-final.json": "bbc9787e81194e9401d481667f9f1a250e81d2f8c9f9ef164e6b76e7273631bb",
+    "docs/native-m09/asset-parent-source-draft.json": "9e43a852ba4d9f51ff3378c499cd8320f23c3565f29ecfbfe66de6194db752b8"
+  },
+  "raw_logs": "composition-logs/ (preserved; git-ignore rules may hide log files from status)",
+  "parent_owns_commit_and_review": true
+}

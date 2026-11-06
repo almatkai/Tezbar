@@ -1,0 +1,31 @@
+{
+  "protected_M7_equal_HEAD": [
+    "apps/tezbar/src/app/m7.rs",
+    "apps/tezbar/src/surfaces/onboarding.rs",
+    "apps/tezbar/src/windows/settings.rs",
+    "apps/tezbar/src/surfaces/settings/request.rs",
+    "apps/tezbar/src/surfaces/settings/barrier.rs",
+    "apps/tezbar/src/surfaces/settings/store.rs",
+    "apps/tezbar/src/surfaces/settings/mod.rs",
+    "apps/tezbar/src/surfaces/settings/tests.rs",
+    "apps/tezbar/src/surfaces/settings/contributions.rs",
+    "apps/tezbar/src/surfaces/settings/view.rs",
+    "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs",
+    "apps/tezbar/src/surfaces/command_bar/settings_integration.rs",
+    "apps/tezbar/src/surfaces/command_bar/interactions.rs"
+  ],
+  "historical_first_gate_equal_HEAD": [
+    "docs/native-m08/integration.md",
+    "docs/native-m08/parent-contracts.md",
+    "docs/native-m08/verification.md",
+    "docs/native-m08/source-freeze-first-gate.json",
+    "docs/native-m08/source-case-map.json",
+    "apps/tezbar/src/surfaces/ai_chat/tests.rs",
+    "apps/tezbar/src/surfaces/ai_chat/tests/core_loopback.rs"
+  ],
+  "index_empty": true,
+  "root_workspace_pin_toolchain_changed": false,
+  "scope": "Current HEAD 409dbf3; no checkout/branch/stage/commit/push/PR/release/install/GUI commands performed by M8. Tests use headless GPUI TestPlatform, synthetic adapters, temp paths and loopback. See verification disclosure for early Keychain availability path.",
+  "lock_delta": "diff --git a/Cargo.lock b/Cargo.lock\nindex 49f0c76..775b436 100644\n--- a/Cargo.lock\n+++ b/Cargo.lock\n@@ -6376,6 +6376,7 @@ dependencies = [\n  \"objc2-foundation 0.3.2\",\n  \"proc-macro-crate 2.0.0\",\n  \"raw-window-handle\",\n+ \"resvg\",\n  \"serde\",\n  \"serde_json\",\n  \"tempfile\",\n",
+  "rustc_185": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n"
+}

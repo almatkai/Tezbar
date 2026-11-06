@@ -30,6 +30,7 @@ impl CoreEvent {
     }
 }
 pub enum Event {
+    ChatEffect(crate::surfaces::command_bar::ChatSource, crate::surfaces::ai_chat::ChatEffect),
     SettingsEffect(gpui::EntityId, crate::surfaces::settings::SettingsEffect),
     OnboardingFinished(gpui::EntityId),
     Navigate(crate::surfaces::command_bar::navigation::Navigation),
@@ -242,6 +243,7 @@ impl Relay {
         if matches!(
             &event,
             Event::Dialog(..) | Event::Capture(_) | Event::SavePng { .. }
+            | Event::ChatEffect(_, crate::surfaces::ai_chat::ChatEffect::ChooseImages { .. })
         ) {
             if q.leases >= 128 {
                 return Err("Native interaction ownership limit reached".into());

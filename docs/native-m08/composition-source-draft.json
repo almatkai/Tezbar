@@ -1,0 +1,38 @@
+{
+  "utc": "2026-11-06T22:03:31.893214+00:00",
+  "status": "draft-unexported-uncompiled; parent M7 ownership hold",
+  "head": "9d0c910fa1bf4b1ab50d04cae8a5a93dd01907fe",
+  "branch": "feat/native-gpui-app",
+  "files": {
+    "apps/tezbar/src/app/m8.rs": "f372aa636e3170a5e635cb1d8c37b3ee72e4171fc58ecddc2f7ccfc0d800f969",
+    "apps/tezbar/src/app/m8_tests.rs": "341d605a1809e40371baeb7f3d31d8e0c23056b03f9b35ae7e3589eeb0588c13",
+    "apps/tezbar/src/asset_transport.rs": "1cdf585835282b6c57861f964ea0fc1a382e2ac7092070d4e5851efa0b99ae8d",
+    "apps/tezbar/src/asset_transport_tests.rs": "7965c547220bdbb15e59d552c53911ab1f6b10e23941a7c7744b7e08272315f6",
+    "apps/tezbar/src/surfaces/command_bar/chat_integration.rs": "e3bbae9e4056d616f761e76943b45be8c2b3d96e9f2c4cb0a3f0aa037b685511",
+    "apps/tezbar/src/surfaces/command_bar/chat_integration_tests.rs": "46b8a37793c18cd50999f6865c4726c2f317367e51bcfbb9644c1a036351dcbc",
+    "apps/tezbar/src/surfaces/extension_runtime/assets.rs": "fe33523eecc29791fb6d980e1de9ff318404ac164a0f21271764f95337b3dd7a",
+    "crates/tezbar-core/src/assets.rs": "73accb570c9258e6e374a9aa257eeb6cd8f761af10273e3d2c2312e2e1f2899a",
+    "crates/tezbar-core/src/extensions/asset_scope.rs": "94556156599f73f65231b7165ecfe4e1143621a9a2c6e051d7b1658adaa40ea4"
+  },
+  "first_gate_frozen_files_checked": 8,
+  "first_gate_changed": [],
+  "cargo_executed": false,
+  "compiled_exports_changed_by_M8": false,
+  "manifest_lock_deltas_by_M8": [],
+  "pending_manifest_edges": [
+    "tezbar-native -> resvg =0.46.0 (already locked transitively)"
+  ],
+  "verification": [
+    "rustfmt +1.98.1 --edition2024 NEW app source (parse/format only)",
+    "rustfmt +1.98.1 --edition2021 NEW core source (parse/format only)",
+    "git diff --check"
+  ],
+  "not_claimed": [
+    "compilation",
+    "new fixture passes",
+    "actual App/Launcher linkage",
+    "native platform/GUI/accessibility acceptance",
+    "full migration acceptance"
+  ],
+  "next": "Parent freeze/release required before compiled linkage or Cargo"
+}

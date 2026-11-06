@@ -46,7 +46,7 @@ pub enum ChatEffect {
 }
 impl EventEmitter<ChatEffect> for ChatView {}
 #[derive(Clone)]
-enum Action {
+pub(crate) enum Action {
     Back,
     Panel,
     New,
@@ -101,7 +101,7 @@ pub struct ChatView {
     owner: OwnerId,
     state: UiState,
     window: AnyWindowHandle,
-    input: Entity<TextInput>,
+    pub(crate) input: Entity<TextInput>,
     filter: Entity<TextInput>,
     model_filter: Entity<TextInput>,
     _subscriptions: Vec<Subscription>,
@@ -156,7 +156,8 @@ pub struct ChatView {
     runs: BTreeMap<String, String>,
     last_background: Vec<chat::BackgroundStatus>,
     footer: Option<AnyView>,
-    effects: Vec<ChatEffect>,
+    effects: Vec<(u64, ChatEffect)>,
+    mutation_jobs: std::collections::BTreeSet<u64>,
     scroll: ScrollHandle,
     transcript: ListState,
     projection: Vec<view::Row>,
@@ -235,6 +236,9 @@ impl ChatView {
             v.images.release_all_windows(cx);
             v.document_images.clear();
             v.store.retire(v.owner);
+            if v.disposed {
+                return;
+            }
             let effects = v.controller.unmount();
             let mut requests = vec![];
             for e in effects {
@@ -339,6 +343,7 @@ impl ChatView {
             last_background: vec![],
             footer: None,
             effects: vec![],
+            mutation_jobs: Default::default(),
             scroll: ScrollHandle::new(),
             transcript,
             projection: vec![],
@@ -350,13 +355,27 @@ impl ChatView {
         cx.notify();
     }
     pub fn take_effects(&mut self) -> Vec<ChatEffect> {
+        self.take_host_effects()
+            .into_iter()
+            .map(|(_, effect)| effect)
+            .collect()
+    }
+    pub(crate) fn take_host_effects(&mut self) -> Vec<(u64, ChatEffect)> {
         std::mem::take(&mut self.effects)
+    }
+    pub(crate) fn host_generation(&self) -> u64 {
+        self.mount
+    }
+    #[cfg(test)]
+    pub(crate) fn footer_entity_id(&self) -> Option<EntityId> {
+        self.footer.as_ref().map(|v| v.entity_id())
     }
     fn emit(&mut self, e: ChatEffect, cx: &mut Context<Self>) {
         if self.effects.len() < 64 {
-            self.effects.push(e.clone());
+            self.effects.push((self.mount, e.clone()));
         }
         cx.emit(e);
+        cx.notify();
     }
     pub fn activate(
         &mut self,
@@ -526,7 +545,7 @@ impl ChatView {
             .map(|c| c.selection.clone())
             .unwrap_or_default()
     }
-    fn action(&mut self, a: Action, w: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn action(&mut self, a: Action, w: &mut Window, cx: &mut Context<Self>) {
         if self.disposed {
             return;
         }
@@ -547,6 +566,7 @@ impl ChatView {
         {
             return;
         }
+        let restore_focus = self.approval_has_focus(w);
         let id = self.controller.active.clone();
         let result: Result<Vec<Effect>, String> = (|| {
             Ok(match a {
@@ -856,8 +876,20 @@ impl ChatView {
         self.sync_input(w, cx);
         self.refresh_documents(cx);
         self.refresh_thumbnails(w, cx);
+        if restore_focus
+            && self.controller.visible
+            && self.active().is_some_and(|c| c.approval.is_none())
+        {
+            self.input.focus_handle(cx).focus(w, cx);
+        }
         self.publish(cx);
         cx.notify();
+    }
+    fn approval_has_focus(&self, w: &Window) -> bool {
+        self.controller.visible
+            && [&self.allow_focus, &self.deny_focus, &self.always_focus]
+                .iter()
+                .any(|f| f.is_focused(w))
     }
     /// Actual dispose is explicit; hiding never calls this. Parent retains entity until settled.
     pub fn pending(&self) -> bool {
@@ -868,11 +900,36 @@ impl ChatView {
                     .is_some_and(|c| c.busy() || c.unsaved())
             })
     }
+    pub(crate) fn quit_settlement(&self) -> Result<bool, String> {
+        if !self.mutation_jobs.is_empty() {
+            return Ok(false);
+        }
+        if self.owners.iter().any(|id| {
+            self.controller
+                .conversation(id)
+                .is_some_and(|c| c.unsaved())
+        }) {
+            return Err("Chat response could not be saved. Retry quit to save it again.".into());
+        }
+        Ok(true)
+    }
+    pub(crate) fn retry_quit_persistence(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        if !self.disposed || !self.mutation_jobs.is_empty() {
+            return;
+        }
+        let mut effects = Vec::new();
+        for id in self.owners.clone() {
+            effects.extend(self.controller.retry_persistence(&id));
+        }
+        self.execute(effects, w, cx);
+        cx.notify();
+    }
     pub fn dispose(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if self.disposed {
             return;
         }
         self.disposed = true;
+        self.jobs.retain(|id, _| self.mutation_jobs.contains(id));
         self.mount += 1;
         self.init_generation += 1;
         self.read_generation += 1;

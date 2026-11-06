@@ -6376,6 +6376,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "proc-macro-crate 2.0.0",
  "raw-window-handle",
+ "resvg",
  "serde",
  "serde_json",
  "tempfile",

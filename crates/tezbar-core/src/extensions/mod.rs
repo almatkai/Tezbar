@@ -70,6 +70,15 @@ pub struct ExtensionsCore {
 }
 
 impl ExtensionsCore {
+    pub fn asset_scope(&self, id: &str) -> Result<crate::assets::AssetScope, String> {
+        registry::asset_scope(&self.ctx, id)
+    }
+    pub fn asset_scope_for_root(
+        &self,
+        root: &std::path::Path,
+    ) -> Result<crate::assets::AssetScope, String> {
+        registry::asset_scope_for_root(&self.ctx, root)
+    }
     pub fn start(&self) -> Result<(), String> {
         self.native.start(&self.ctx)
     }

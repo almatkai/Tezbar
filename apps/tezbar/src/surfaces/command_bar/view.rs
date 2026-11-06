@@ -154,6 +154,7 @@ impl Launcher {
     }
     pub(super) fn return_home(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.acknowledge_navigation(cx);
+        self.hide_chat(cx);
         self.hide_utilities(w, cx);
         self.prefix = None;
         self.model_menu = false;
@@ -892,7 +893,7 @@ impl Launcher {
                     } else {
                         t.text3
                     })
-                    .child(self.rows[index].subtitle.clone()),
+                    .child(self.chat_row_status(&self.rows[index]).map(str::to_owned).unwrap_or_else(|| self.rows[index].subtitle.clone())),
             )
         })
         .when(!grid, |d| {
@@ -920,6 +921,9 @@ impl Render for Launcher {
                     .child(onboarding.clone())
                     .into_any_element();
             }
+        }
+        if self.chat_mounted() {
+            return div().size_full().child(self.chat.view.clone().unwrap()).into_any_element();
         }
         w.set_rem_size(px(16. * self.zoom));
         let t = tokens::tokens(w);

@@ -1,4 +1,5 @@
 pub mod app;
+pub mod asset_transport;
 pub mod cli;
 pub mod core_client;
 pub mod events;

@@ -12,6 +12,9 @@ use std::{
 
 #[path = "command_inputs.rs"]
 mod inputs;
+#[path = "asset_scope.rs"]
+mod asset_scope;
+pub(crate) use asset_scope::{scope as asset_scope, scope_for_root as asset_scope_for_root};
 pub(super) use inputs::command_inputs;
 
 pub(super) struct Installed {

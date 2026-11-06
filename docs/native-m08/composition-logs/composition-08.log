@@ -1,0 +1,157 @@
+warning: variable does not need to be mutable
+  --> crates/tezbar-core/src/assets.rs:97:21
+   |
+97 |                 let mut response = self
+   |                     ----^^^^^^^^
+   |                     |
+   |                     help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `validate_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:16:8
+   |
+16 | pub fn validate_images(
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+
+warning: function `save` is never used
+  --> crates/tezbar-core/src/ai/runtime/store.rs:52:8
+   |
+52 | pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
+   |        ^^^^
+
+warning: methods `gemma_pending`, `gemma_save`, `gemma_clear`, `gemma_has`, `gemma_counts`, and `vector_backfill` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1219:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1219 |     pub fn gemma_pending(&self, roots: &[String], limit: usize) -> Result<Vec<Value>, String> {
+     |            ^^^^^^^^^^^^^
+...
+1246 |     pub fn gemma_save(&mut self, chunks: &[Value], vectors: &[Vec<f64>]) -> Result<usize, String> {
+     |            ^^^^^^^^^^
+...
+1301 |     pub fn gemma_clear(&self) -> Result<(), String> {
+     |            ^^^^^^^^^^^
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+...
+1354 |     pub fn vector_backfill(&self) -> Result<bool, String> {
+     |            ^^^^^^^^^^^^^^^
+
+warning: constant `REVISION` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:32:7
+   |
+32 | const REVISION: &str = runtime_models::Q8.revision;
+   |       ^^^^^^^^
+
+warning: constant `MODEL_FILE` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:33:7
+   |
+33 | const MODEL_FILE: &str = runtime_models::Q8.file;
+   |       ^^^^^^^^^^
+
+warning: constant `MODEL_SHA` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:34:7
+   |
+34 | const MODEL_SHA: &str = runtime_models::Q8.sha256;
+   |       ^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/tezbar-core/src/knowledge/runtime.rs:217:12
+    |
+216 | impl Runtime {
+    | ------------ associated function in this implementation
+217 |     pub fn new(ctx: CoreContext) -> Self {
+    |            ^^^
+
+warning: function `output` is never used
+  --> crates/tezbar-core/src/launcher/providers.rs:17:14
+   |
+17 | pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+   |              ^^^^^^
+
+warning: `tezbar-core` (lib) generated 12 warnings (run `cargo fix --lib -p tezbar-core` to apply 3 suggestions)
+   Compiling tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+   Compiling tezbar-ui v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui)
+warning: variant `Open` is never constructed
+  --> apps/tezbar/src/surfaces/ai_chat/mod.rs:85:5
+   |
+49 | pub(crate) enum Action {
+   |                 ------ variant in this enum
+...
+85 |     Open(String),
+   |     ^^^^
+   |
+   = note: `Action` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `scroll` is never read
+   --> apps/tezbar/src/surfaces/ai_chat/mod.rs:161:5
+    |
+ 97 | pub struct ChatView {
+    |            -------- field in this struct
+...
+161 |     scroll: ScrollHandle,
+    |     ^^^^^^
+
+warning: `tezbar-native` (lib test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.47s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_native-3daa795adae271ce)
+
+running 8 tests
+test surfaces::command_bar::chat_integration::tests::actual_chat_uses_parent_footer_entity_and_hide_stops_its_polling ... ok
+test surfaces::command_bar::chat_integration::tests::actual_launcher_prompt_mounts_once_acknowledges_and_retains_across_return ... ok
+test surfaces::command_bar::chat_integration::tests::boot_payloads_keep_exact_identity_and_every_fresh_nonce ... ok
+test surfaces::command_bar::chat_integration::tests::actual_navigation_screen_resume_back_and_footer_use_fresh_identity ... FAILED
+test surfaces::command_bar::chat_integration::tests::persistent_events_reach_hidden_run_and_approval_without_switching_active_owner ... ok
+test surfaces::command_bar::chat_integration::tests::quit_disposes_once_failed_persist_remains_owned_and_retry_saves_same_turn ... ok
+test surfaces::command_bar::chat_integration::tests::same_retained_entity_rejects_previous_mount_effect_before_host_io ... ok
+test surfaces::command_bar::chat_integration::tests::shared_picker_and_config_payload_events_change_next_snapshot_without_approving ... ok
+
+failures:
+
+---- surfaces::command_bar::chat_integration::tests::actual_navigation_screen_resume_back_and_footer_use_fresh_identity stdout ----
+
+thread 'surfaces::command_bar::chat_integration::tests::actual_navigation_screen_resume_back_and_footer_use_fresh_identity' (19622981) panicked at apps/tezbar/src/surfaces/command_bar/chat_integration_tests.rs:430:5:
+assertion `left == right` failed
+  left: None
+ right: Some("Waiting for approval…")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    surfaces::command_bar::chat_integration::tests::actual_navigation_screen_resume_back_and_footer_use_fresh_identity
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 244 filtered out; finished in 2.57s
+
+error: test failed, to rerun pass `-p tezbar-native --lib`

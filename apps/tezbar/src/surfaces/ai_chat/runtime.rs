@@ -199,6 +199,18 @@ impl ChatView {
         }
         self.next_job += 1;
         let job = self.next_job;
+        if matches!(
+            &completion,
+            Completion::Quiet
+                | Completion::Start { .. }
+                | Completion::Persist { .. }
+                | Completion::Delete { .. }
+                | Completion::DeleteStored(_)
+                | Completion::Clear(_)
+                | Completion::DeleteTurn(_)
+        ) {
+            self.mutation_jobs.insert(job);
+        }
         let window = self.window;
         let task = cx.spawn(async move |this, cx| {
             let result = gpui_tokio::Tokio::spawn(cx, future)
@@ -207,6 +219,7 @@ impl ChatView {
             let _ = cx.update_window(window, |_, w, cx| {
                 let _ = this.update(cx, |v, cx| {
                     v.jobs.remove(&job);
+                    v.mutation_jobs.remove(&job);
                     v.complete(completion, result, w, cx);
                 });
             });
@@ -982,11 +995,15 @@ impl ChatView {
                     .collect(),
             );
         }
+        let restore_focus = self.approval_has_focus(w);
         if let Ok(event) = serde_json::from_value::<chat::Event>(payload) {
             let e = self.controller.event(event);
             if !e.is_empty() {
                 self.execute(e, w, cx);
             }
+        }
+        if restore_focus && self.active().is_some_and(|c| c.approval.is_none()) {
+            self.input.focus_handle(cx).focus(w, cx);
         }
         self.publish(cx);
         if self.controller.visible && self.frame.is_none() {

@@ -9,6 +9,18 @@ pub struct GpuiHost {
     registry: PreviewShortcuts,
 }
 impl GpuiHost {
+    #[cfg(test)]
+    pub(crate) fn fixture(relay: Relay) -> Self {
+        let desktop = NativeDesktop::new(Arc::new(|_| {
+            Err("Desktop operations forbidden in fixture".into())
+        }));
+        Self {
+            registry: PreviewShortcuts(desktop.clone(), false),
+            desktop,
+            relay,
+        }
+    }
+
     pub fn new(relay: Relay) -> Self {
         Self::with_desktop_integration(relay, false)
     }
