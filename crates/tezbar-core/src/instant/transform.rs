@@ -2,6 +2,13 @@
 use base64::{engine::general_purpose, Engine};
 use chrono::{DateTime, Utc};
 use regex::Regex;
+macro_rules! cached_regex {
+    ($pattern:literal) => {{
+        static RE: std::sync::LazyLock<Regex> =
+            std::sync::LazyLock::new(|| Regex::new($pattern).unwrap());
+        &*RE
+    }};
+}
 use sha2::{Digest, Sha256, Sha512};
 pub type TransformResult = Result<String, String>;
 fn bound(input: &str) -> Result<(), String> {
@@ -13,19 +20,14 @@ fn bound(input: &str) -> Result<(), String> {
 }
 pub fn json_format(s: &str, pretty: bool) -> TransformResult {
     bound(s)?;
-    if s.trim().is_empty() {
+    if js_trim(s).is_empty() {
         return Err("Nothing to format — paste some JSON first.".into());
     }
-    let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("Invalid JSON: {e}"))?;
-    // serde_json's map is sorted; JS insertion ordering is restored by the dedicated serializer below.
-    json_ordered(s, pretty).or_else(|_| {
-        if pretty {
-            serde_json::to_string_pretty(&v)
-        } else {
-            serde_json::to_string(&v)
-        }
-        .map_err(|e| e.to_string())
-    })
+    json_ordered(js_trim(s), pretty).map_err(|e| format!("Invalid JSON: {e}"))
+}
+/// ECMAScript trim includes BOM, but excludes NEL (Rust's is_whitespace includes it).
+pub fn js_trim(s: &str) -> &str {
+    s.trim_matches(|c: char| c == '\u{feff}' || (c.is_whitespace() && c != '\u{85}'))
 }
 // Preserve object insertion order without adding a second JSON dependency. Deserialize to a tiny
 // ordered tree using serde's visitor, then use serde_json's serializer for escaping and numbers.
@@ -33,7 +35,7 @@ pub fn json_format(s: &str, pretty: bool) -> TransformResult {
 enum Json {
     Null,
     Bool(bool),
-    Number(serde_json::Number),
+    Number(f64),
     String(String),
     Array(Vec<Json>),
     Object(Vec<(String, Json)>),
@@ -53,15 +55,13 @@ impl<'de> serde::Deserialize<'de> for Json {
                 Ok(Json::Bool(v))
             }
             fn visit_i64<E>(self, v: i64) -> Result<Json, E> {
-                Ok(Json::Number(v.into()))
+                Ok(Json::Number(v as f64))
             }
             fn visit_u64<E>(self, v: u64) -> Result<Json, E> {
-                Ok(Json::Number(v.into()))
+                Ok(Json::Number(v as f64))
             }
             fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Json, E> {
-                Ok(serde_json::Number::from_f64(v)
-                    .map(Json::Number)
-                    .unwrap_or(Json::Null))
+                Ok(Json::Number(v))
             }
             fn visit_str<E>(self, v: &str) -> Result<Json, E> {
                 Ok(Json::String(v.into()))
@@ -78,10 +78,12 @@ impl<'de> serde::Deserialize<'de> for Json {
             }
             fn visit_map<A: serde::de::MapAccess<'de>>(self, mut a: A) -> Result<Json, A::Error> {
                 let mut v: Vec<(String, Json)> = vec![];
+                let mut indices = std::collections::HashMap::<String, usize>::new();
                 while let Some((k, x)) = a.next_entry::<String, Json>()? {
-                    if let Some(e) = v.iter_mut().find(|e| e.0 == k) {
-                        e.1 = x;
+                    if let Some(&index) = indices.get(&k) {
+                        v[index].1 = x;
                     } else {
+                        indices.insert(k.clone(), v.len());
                         v.push((k, x));
                     }
                 }
@@ -98,39 +100,71 @@ impl<'de> serde::Deserialize<'de> for Json {
         d.deserialize_any(V)
     }
 }
-impl serde::Serialize for Json {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::{SerializeMap, SerializeSeq};
-        match self {
-            Self::Null => s.serialize_unit(),
-            Self::Bool(v) => s.serialize_bool(*v),
-            Self::Number(v) => v.serialize(s),
-            Self::String(v) => s.serialize_str(v),
-            Self::Array(v) => {
-                let mut a = s.serialize_seq(Some(v.len()))?;
-                for e in v {
-                    a.serialize_element(e)?;
-                }
-                a.end()
+fn json_render(v: &Json, pretty: bool) -> String {
+    fn write(v: &Json, pretty: bool, depth: usize, out: &mut String) {
+        let newline = |out: &mut String, n: usize| {
+            if pretty {
+                out.push('\n');
+                out.push_str(&"  ".repeat(n));
             }
-            Self::Object(v) => {
-                let mut a = s.serialize_map(Some(v.len()))?;
-                for (k, v) in v {
-                    a.serialize_entry(k, v)?;
+        };
+        match v {
+            Json::Null => out.push_str("null"),
+            Json::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+            Json::Number(n) => out.push_str(&if n.is_finite() {
+                super::number(*n)
+            } else {
+                "null".into()
+            }),
+            Json::String(s) => out.push_str(&serde_json::to_string(s).unwrap()),
+            Json::Array(values) => {
+                out.push('[');
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    newline(out, depth + 1);
+                    write(v, pretty, depth + 1, out);
                 }
-                a.end()
+                if !values.is_empty() {
+                    newline(out, depth);
+                }
+                out.push(']');
+            }
+            Json::Object(values) => {
+                out.push('{');
+                for (i, (k, v)) in values.iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    newline(out, depth + 1);
+                    out.push_str(&serde_json::to_string(k).unwrap());
+                    out.push(':');
+                    if pretty {
+                        out.push(' ');
+                    }
+                    write(v, pretty, depth + 1, out);
+                }
+                if !values.is_empty() {
+                    newline(out, depth);
+                }
+                out.push('}');
             }
         }
     }
+    let mut out = String::new();
+    write(v, pretty, 0, &mut out);
+    out
 }
 fn json_ordered(s: &str, pretty: bool) -> TransformResult {
     let v: Json = serde_json::from_str(s).map_err(|e| e.to_string())?;
-    if pretty {
-        serde_json::to_string_pretty(&v)
-    } else {
-        serde_json::to_string(&v)
-    }
-    .map_err(|e| e.to_string())
+    Ok(json_render(&v, pretty))
+}
+fn atob_engine() -> general_purpose::GeneralPurpose {
+    general_purpose::GeneralPurpose::new(
+        &base64::alphabet::STANDARD,
+        general_purpose::GeneralPurposeConfig::new().with_decode_allow_trailing_bits(true),
+    )
 }
 pub fn base64_encode(s: &str) -> TransformResult {
     bound(s)?;
@@ -148,7 +182,7 @@ pub fn base64_decode(s: &str) -> TransformResult {
         .replace('-', "+")
         .replace('_', "/");
     let s = format!("{}{}", s, "=".repeat((4 - s.len() % 4) % 4));
-    let bytes = general_purpose::STANDARD
+    let bytes = atob_engine()
         .decode(s)
         .map_err(|_| "Input is not valid base64.")?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
@@ -271,16 +305,13 @@ pub struct WordCount {
     pub lines: usize,
 }
 pub fn count_text(s: &str) -> WordCount {
-    let words = Regex::new(r"[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*")
-        .unwrap()
+    let words = cached_regex!(r"[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*")
         .find_iter(s)
         .count();
-    let sentences = Regex::new(r"[^.!?…\n][.!?…]+(?:\s|$)")
-        .unwrap()
+    let sentences = cached_regex!(r"[^.!?…\n][.!?…]+(?:\s|$)")
         .find_iter(s)
         .count();
-    let paragraphs = Regex::new(r"\n\s*\n+")
-        .unwrap()
+    let paragraphs = cached_regex!(r"\n\s*\n+")
         .split(s)
         .filter(|s| !s.trim().is_empty())
         .count();
@@ -306,14 +337,9 @@ pub fn word_count(s: &str) -> TransformResult {
     Ok(format!("Words: {}\nCharacters: {}\nCharacters (no spaces): {}\nSentences: {}\nParagraphs: {}\nLines: {}",c.words,c.characters,c.characters_no_spaces,c.sentences,c.paragraphs,c.lines))
 }
 pub fn split_words(s: &str) -> Vec<String> {
-    let s = Regex::new(r"([a-z\d])([A-Z])")
-        .unwrap()
-        .replace_all(s, "$1 $2");
-    let s = Regex::new(r"([A-Z]+)([A-Z][a-z])")
-        .unwrap()
-        .replace_all(&s, "$1 $2");
-    Regex::new(r"[\s_\-./\\]+")
-        .unwrap()
+    let s = cached_regex!(r"([a-z\d])([A-Z])").replace_all(s, "$1 $2");
+    let s = cached_regex!(r"([A-Z]+)([A-Z][a-z])").replace_all(&s, "$1 $2");
+    cached_regex!(r"[\s_\-./\\]+")
         .split(&s)
         .filter(|s| !s.is_empty())
         .map(String::from)
@@ -353,33 +379,81 @@ pub fn convert_case(s: &str, style: CaseStyle) -> TransformResult {
         CaseStyle::Upper => lower.join(" ").to_uppercase(),
     })
 }
-/// UTC deterministic representation; adapters supply localized `Local` text when rendering.
-pub fn parse_timestamp(s: &str, now_ms: i64) -> TransformResult {
-    bound(s)?;
-    if !Regex::new(r"^-?\d+(\.\d+)?$").unwrap().is_match(s.trim()) {
-        return Err("Input is not a numeric unix timestamp.".into());
-    }
-    let mut ms = s
-        .trim()
-        .parse::<f64>()
-        .map_err(|_| "Timestamp is out of range.")?;
-    if ms.abs() < 1e11 {
-        ms = (ms * 1000. + 0.5).floor();
-    }
-    if !ms.is_finite() || ms.abs() > 8.64e15 {
-        return Err("Timestamp is out of range.".into());
-    }
-    let d =
-        DateTime::<Utc>::from_timestamp_millis(ms as i64).ok_or("Timestamp is out of range.")?;
-    Ok(format!(
-        "Unix (ms): {}\nISO 8601: {}\nLocal: {}\nRelative: {}",
-        super::number(ms),
-        d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-        d,
-        format_relative(ms as i64, now_ms)
-    ))
+/// Presentation data remains structured until the platform locale formatter is injected.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RelativeTime {
+    pub unit: &'static str,
+    pub value: i64,
 }
-pub fn format_relative(target: i64, now: i64) -> String {
+#[derive(Clone, Debug, PartialEq)]
+pub struct Timestamp {
+    pub ms: i64,
+    pub iso: String,
+    pub relative: RelativeTime,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClipboardCount {
+    pub characters: usize,
+    pub words: usize,
+    pub lines: usize,
+    pub bytes: usize,
+}
+/// M5/M6 inject the OS locale implementation; portable default is explicitly English.
+pub trait PresentationFormatter {
+    fn local_timestamp(&self, ms: i64) -> String;
+    fn relative(&self, relative: &RelativeTime) -> String;
+    fn count(&self, count: usize) -> String;
+}
+pub struct EnglishFormatter;
+impl PresentationFormatter for EnglishFormatter {
+    fn local_timestamp(&self, ms: i64) -> String {
+        DateTime::<Utc>::from_timestamp_millis(ms)
+            .unwrap()
+            .with_timezone(&chrono::Local)
+            .to_string()
+    }
+    fn relative(&self, r: &RelativeTime) -> String {
+        let (unit, n) = (r.unit, r.value);
+        if n == 0 {
+            return if unit == "second" {
+                "now".into()
+            } else {
+                format!("this {unit}")
+            };
+        }
+        if n.abs() == 1 {
+            if unit == "day" {
+                return if n < 0 {
+                    "yesterday".into()
+                } else {
+                    "tomorrow".into()
+                };
+            }
+            if matches!(unit, "week" | "month" | "year") {
+                return format!("{} {unit}", if n < 0 { "last" } else { "next" });
+            }
+        }
+        format!(
+            "{}{} {unit}{}{}",
+            if n > 0 { "in " } else { "" },
+            n.abs(),
+            if n.abs() == 1 { "" } else { "s" },
+            if n < 0 { " ago" } else { "" }
+        )
+    }
+    fn count(&self, count: usize) -> String {
+        let raw = count.to_string();
+        let mut out = String::new();
+        for (i, c) in raw.chars().enumerate() {
+            if i > 0 && (raw.len() - i) % 3 == 0 {
+                out.push(',');
+            }
+            out.push(c);
+        }
+        out
+    }
+}
+pub fn relative_time(target: i64, now: i64) -> RelativeTime {
     let diff = target as f64 - now as f64;
     for (limit, unit, step) in [
         (60000., "second", 1000.),
@@ -391,33 +465,78 @@ pub fn format_relative(target: i64, now: i64) -> String {
         (f64::INFINITY, "year", 31536000000.),
     ] {
         if diff.abs() < limit {
-            let n = (diff / step + 0.5).floor() as i64;
-            if n == 0 {
-                return if unit == "second" {
-                    "now".into()
-                } else {
-                    format!("this {unit}")
-                };
-            }
-            if unit == "day" && n.abs() == 1 {
-                return if n < 0 {
-                    "yesterday".into()
-                } else {
-                    "tomorrow".into()
-                };
-            }
-            return format!(
-                "{}{} {unit}{}{}",
-                if n > 0 { "in " } else { "" },
-                n.abs(),
-                if n.abs() == 1 { "" } else { "s" },
-                if n < 0 { " ago" } else { "" }
-            );
+            return RelativeTime {
+                unit,
+                value: (diff / step + 0.5).floor() as i64,
+            };
         }
     }
     unreachable!()
 }
-#[derive(Clone, Copy, Debug)]
+pub fn parse_timestamp_data(s: &str, now_ms: i64) -> Result<Timestamp, String> {
+    bound(s)?;
+    let s = js_trim(s);
+    if !cached_regex!(r"^-?\d+(\.\d+)?$").is_match(s) {
+        return Err("Input is not a numeric unix timestamp.".into());
+    }
+    let mut ms = s.parse::<f64>().map_err(|_| "Timestamp is out of range.")?;
+    if ms.abs() < 1e11 {
+        ms = (ms * 1000. + 0.5).floor();
+    }
+    if !ms.is_finite() || ms.abs() > 8.64e15 {
+        return Err("Timestamp is out of range.".into());
+    }
+    let ms = ms as i64;
+    let d = DateTime::<Utc>::from_timestamp_millis(ms).ok_or("Timestamp is out of range.")?;
+    Ok(Timestamp {
+        ms,
+        iso: d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        relative: relative_time(ms, now_ms),
+    })
+}
+pub fn format_timestamp(data: &Timestamp, formatter: &impl PresentationFormatter) -> String {
+    format!(
+        "Unix (ms): {}\nISO 8601: {}\nLocal: {}\nRelative: {}",
+        data.ms,
+        data.iso,
+        formatter.local_timestamp(data.ms),
+        formatter.relative(&data.relative)
+    )
+}
+pub fn parse_timestamp(s: &str, now_ms: i64) -> TransformResult {
+    Ok(format_timestamp(
+        &parse_timestamp_data(s, now_ms)?,
+        &EnglishFormatter,
+    ))
+}
+pub fn format_relative(target: i64, now: i64) -> String {
+    EnglishFormatter.relative(&relative_time(target, now))
+}
+pub fn clipboard_count(s: &str) -> ClipboardCount {
+    ClipboardCount {
+        characters: s.chars().count(),
+        words: s.split_whitespace().count(),
+        lines: if s.is_empty() {
+            0
+        } else {
+            cached_regex!(r"\r\n|\r|\n").split(s).count()
+        },
+        bytes: s.len(),
+    }
+}
+pub fn format_clipboard_count(
+    c: &ClipboardCount,
+    formatter: &impl PresentationFormatter,
+) -> String {
+    format!(
+        "Characters : {}\nWords      : {}\nLines      : {}\nBytes (utf-8): {}",
+        formatter.count(c.characters),
+        formatter.count(c.words),
+        formatter.count(c.lines),
+        formatter.count(c.bytes)
+    )
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ClipboardAction {
     Json,
     Base64,
@@ -431,18 +550,24 @@ pub fn apply_clipboard_action(a: ClipboardAction, s: &str) -> TransformResult {
     bound(s)?;
     match a {
         ClipboardAction::Json => {
-            if serde_json::from_str::<serde_json::Value>(s).is_ok() {
-                json_format(s, true)
-            } else {
-                Ok(serde_json::to_string(s).unwrap())
+            let trimmed = js_trim(s);
+            match serde_json::from_str::<Json>(trimmed) {
+                Ok(v) => Ok(json_render(&v, true)),
+                Err(e)
+                    if e.to_string().contains("recursion limit exceeded")
+                        || e.to_string().contains("number out of range") =>
+                {
+                    Err("JSON exceeds the supported nesting (128) or finite-number range".into())
+                }
+                Err(_) => Ok(serde_json::to_string(s).unwrap()),
             }
         }
         ClipboardAction::Base64 => {
             let c = s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
             if !c.is_empty()
                 && c.len() % 4 == 0
-                && Regex::new(r"^[A-Za-z0-9+/]+={0,2}$").unwrap().is_match(&c)
-                && general_purpose::STANDARD.decode(&c).is_ok()
+                && cached_regex!(r"^[A-Za-z0-9+/]+={0,2}$").is_match(&c)
+                && atob_engine().decode(&c).is_ok()
             {
                 base64_decode(&c)
             } else {
@@ -450,27 +575,17 @@ pub fn apply_clipboard_action(a: ClipboardAction, s: &str) -> TransformResult {
             }
         }
         ClipboardAction::Encode => {
-            if Regex::new(r"%[0-9a-fA-F]{2}").unwrap().is_match(s) {
+            if cached_regex!(r"%[0-9a-fA-F]{2}").is_match(s) {
                 url_decode(s, false)
             } else {
                 url_encode(s)
             }
         }
         ClipboardAction::Hash => Ok(format!("{:x}", Sha256::digest(s.as_bytes()))),
-        ClipboardAction::Count => {
-            let lines = if s.is_empty() {
-                0
-            } else {
-                Regex::new(r"\r\n|\r|\n").unwrap().split(s).count()
-            };
-            Ok(format!(
-                "Characters : {}\nWords      : {}\nLines      : {}\nBytes (utf-8): {}",
-                s.chars().count(),
-                s.split_whitespace().count(),
-                lines,
-                s.len()
-            ))
-        }
+        ClipboardAction::Count => Ok(format_clipboard_count(
+            &clipboard_count(s),
+            &EnglishFormatter,
+        )),
         ClipboardAction::Case => Ok(if s == s.to_lowercase() {
             s.to_uppercase()
         } else if s == s.to_uppercase() {

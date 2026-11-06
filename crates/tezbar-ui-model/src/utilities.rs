@@ -105,6 +105,13 @@ pub enum ClipboardEffect {
         request: u64,
         id: String,
     },
+    /// Execute on the blocking worker pool, then return TransformComplete to the owning selection.
+    Transform {
+        request: u64,
+        id: String,
+        action: tezbar_core::instant::transform::ClipboardAction,
+        text: String,
+    },
     WriteText(String),
     SaveQr {
         png: Vec<u8>,
@@ -122,18 +129,33 @@ pub enum ClipboardEffect {
 #[derive(Default, Debug)]
 pub struct Clipboard {
     pub rows: Vec<ClipboardEntry>,
-    pub query: String,
-    pub filter: ClipboardFilter,
+    query: String,
+    filter: ClipboardFilter,
     pub selected: usize,
     pub loading: bool,
     pub error: Option<String>,
     pub conversion: Option<Result<String, String>>,
     next: u64,
     pending: BTreeMap<u64, ClipboardEffect>,
-    image_cache: VecDeque<(String, String)>,
+    image_cache: VecDeque<(String, Option<String>)>,
     selection_owner: Option<String>,
 }
 impl Clipboard {
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+    pub fn filter(&self) -> ClipboardFilter {
+        self.filter
+    }
+    pub fn set_query(&mut self, query: String) -> Option<ClipboardEffect> {
+        self.query = query;
+        self.select(self.selected)
+    }
+    pub fn set_filter(&mut self, filter: ClipboardFilter) -> Option<ClipboardEffect> {
+        self.filter = filter;
+        self.select(self.selected)
+    }
+
     fn request(&mut self, f: impl FnOnce(u64) -> ClipboardEffect) -> ClipboardEffect {
         self.next += 1;
         let e = f(self.next);
@@ -165,10 +187,16 @@ impl Clipboard {
         let id = e.as_ref().map(|e| e.id.clone());
         if id != self.selection_owner {
             self.conversion = None;
+            self.pending
+                .retain(|_, e| !matches!(e, ClipboardEffect::Transform { .. }));
             self.selection_owner = id.clone();
         }
         let e = e?;
-        if matches!(e.content, ClipboardContent::Image { .. })
+        if !e.is_secret
+            && matches!(
+                e.content,
+                ClipboardContent::Image { .. } | ClipboardContent::File { .. }
+            )
             && !self.image_cache.iter().any(|(id, _)| *id == e.id)
             && !self
                 .pending
@@ -247,38 +275,75 @@ impl Clipboard {
         }
     }
     pub fn image_loaded(&mut self, request: u64, result: Result<String, String>) {
+        self.image_preview_loaded(request, result.map(Some));
+    }
+    pub fn image_preview_loaded(&mut self, request: u64, result: Result<Option<String>, String>) {
         let Some(ClipboardEffect::LoadImage { id, .. }) = self.pending.remove(&request) else {
             return;
         };
         match result {
-            Ok(data) if data.len() <= 8 * 1024 * 1024 => {
+            Ok(data) if data.as_ref().is_none_or(|d| d.len() <= 8 * 1024 * 1024) => {
                 self.image_cache.retain(|(i, _)| *i != id);
                 self.image_cache.push_back((id, data));
                 while self.image_cache.len() > 8
-                    || self.image_cache.iter().map(|(_, d)| d.len()).sum::<usize>()
+                    || self
+                        .image_cache
+                        .iter()
+                        .map(|(_, d)| d.as_ref().map_or(0, String::len))
+                        .sum::<usize>()
                         > 16 * 1024 * 1024
                 {
                     self.image_cache.pop_front();
                 }
             }
-            Ok(_) => self.error = Some("Clipboard image exceeds preview budget".into()),
-            Err(e) => self.error = Some(e),
+            Ok(_) => {
+                self.image_cache.push_back((id, None));
+                self.error = Some("Clipboard image exceeds preview budget".into());
+            }
+            Err(e) => {
+                self.image_cache.push_back((id, None));
+                self.error = Some(e);
+            }
+        }
+        while self.image_cache.len() > 8 {
+            self.image_cache.pop_front();
         }
     }
     pub fn image(&self, id: &str) -> Option<&str> {
         self.image_cache
             .iter()
             .find(|(i, _)| i == id)
-            .map(|(_, d)| d.as_str())
+            .and_then(|(_, d)| d.as_deref())
     }
-    pub fn convert(&mut self, action: tezbar_core::instant::transform::ClipboardAction) -> bool {
-        if self.selected_entry().is_some_and(|e| e.is_secret) {
-            return false;
+    pub fn convert(
+        &mut self,
+        action: tezbar_core::instant::transform::ClipboardAction,
+    ) -> Option<ClipboardEffect> {
+        let e = self.selected_entry()?;
+        if e.is_secret {
+            return None;
         }
-        let Some(text) = self.selected_entry().and_then(ClipboardEntry::text) else {
+        let (id, text) = (e.id.clone(), e.text()?.to_owned());
+        self.conversion = None;
+        self.pending
+            .retain(|_, e| !matches!(e, ClipboardEffect::Transform { .. }));
+        Some(self.request(|request| ClipboardEffect::Transform {
+            request,
+            id,
+            action,
+            text,
+        }))
+    }
+    pub fn conversion_complete(&mut self, request: u64, result: Result<String, String>) -> bool {
+        let Some(ClipboardEffect::Transform { id, .. }) = self.pending.remove(&request) else {
             return false;
         };
-        let result = tezbar_core::instant::transform::apply_clipboard_action(action, text);
+        if self
+            .selected_entry()
+            .is_none_or(|e| e.id != id || e.is_secret)
+        {
+            return false;
+        }
         self.conversion = Some(result);
         true
     }
@@ -374,6 +439,7 @@ pub enum CrudEffect {
         id: Option<String>,
         draft: SnippetDraft,
         revision: u64,
+        owner: u64,
     },
     Delete {
         request: u64,
@@ -398,6 +464,7 @@ pub struct Crud {
     pub error: Option<String>,
     pub loading: bool,
     revision: u64,
+    owner: u64,
     next: u64,
     pending: BTreeMap<u64, CrudEffect>,
 }
@@ -412,6 +479,7 @@ impl Crud {
             error: None,
             loading: false,
             revision: 0,
+            owner: 0,
             next: 0,
             pending: BTreeMap::new(),
         }
@@ -466,6 +534,7 @@ impl Crud {
         }
     }
     pub fn create(&mut self) {
+        self.owner += 1;
         self.revision += 1;
         self.draft = Some((None, SnippetDraft::default()));
         self.error = None;
@@ -474,6 +543,7 @@ impl Crud {
         let Some(r) = self.rows.iter().find(|r| r.id == id && !r.readonly) else {
             return false;
         };
+        self.owner += 1;
         self.draft = Some((
             Some(r.id.clone()),
             SnippetDraft {
@@ -493,11 +563,15 @@ impl Crud {
         }
     }
     pub fn cancel(&mut self) {
+        self.owner += 1;
         self.revision += 1;
         self.draft = None;
     }
     pub fn save(&mut self) -> Result<CrudEffect, String> {
-        let (id, draft) = self.draft.clone().ok_or("No editor draft")?;
+        let (id, mut draft) = self.draft.clone().ok_or("No editor draft")?;
+        draft.label = draft.label.trim().into();
+        draft.trigger = draft.trigger.trim().into();
+        draft.body = draft.body.replace("\r\n", "\n");
         {
             for (value, max, name) in [
                 (draft.label.trim(), 200, "Title"),
@@ -516,7 +590,7 @@ impl Crud {
             }
             if self.rows.iter().any(|r| {
                 Some(&r.id) != id.as_ref()
-                    && r.trigger.trim().eq_ignore_ascii_case(draft.trigger.trim())
+                    && r.trigger.trim().to_lowercase() == draft.trigger.trim().to_lowercase()
             }) {
                 return Err("Another snippet already uses this trigger".into());
             }
@@ -524,11 +598,12 @@ impl Crud {
         if self
             .pending
             .values()
-            .any(|e| matches!(e,CrudEffect::Write{revision,..}if *revision==self.revision))
+            .any(|e| matches!(e,CrudEffect::Write{owner,..}if *owner==self.owner))
         {
             return Err("Save already in flight".into());
         }
         let revision = self.revision;
+        let owner = self.owner;
         let kind = self.kind.clone();
         Ok(self.request(|request| CrudEffect::Write {
             request,
@@ -536,6 +611,7 @@ impl Crud {
             id,
             draft,
             revision,
+            owner,
         }))
     }
     pub fn delete(&mut self, id: &str, confirmed: bool) -> Option<CrudEffect> {
@@ -563,7 +639,57 @@ impl Crud {
             id: id.into(),
         }))
     }
+    /// Core create returns an ID. Adopt it even when the draft has newer unsaved edits.
+    pub fn write_completed(
+        &mut self,
+        request: u64,
+        result: Result<String, String>,
+    ) -> Vec<CrudEffect> {
+        let Some(CrudEffect::Write {
+            owner,
+            revision,
+            id,
+            ..
+        }) = self.pending.get(&request).cloned()
+        else {
+            return vec![];
+        };
+        match result {
+            Ok(created) if id.is_some() || !created.is_empty() => {
+                self.pending.remove(&request);
+                if owner == self.owner {
+                    if revision == self.revision {
+                        self.draft = None;
+                    } else if let Some((draft_id, _)) = &mut self.draft {
+                        *draft_id = id.or(Some(created));
+                    }
+                }
+                self.error = None;
+                vec![self.load()]
+            }
+            result => {
+                self.pending.remove(&request);
+                if owner == self.owner {
+                    self.error = Some(
+                        result
+                            .err()
+                            .unwrap_or_else(|| "Create returned no snippet ID".into()),
+                    );
+                }
+                vec![]
+            }
+        }
+    }
     pub fn completed(&mut self, request: u64, result: Result<(), String>) -> Vec<CrudEffect> {
+        if matches!(
+            self.pending.get(&request),
+            Some(CrudEffect::Write { id: None, .. })
+        ) && result.is_ok()
+        {
+            self.error =
+                Some("Create completion requires write_completed with the created ID".into());
+            return vec![]; // retain ownership so an ID-bearing completion can still arrive
+        }
         let Some(e) = self.pending.remove(&request) else {
             return vec![];
         };
@@ -573,8 +699,19 @@ impl Crud {
         }
         self.error = None;
         match e {
-            CrudEffect::Write { revision, .. } => {
-                if revision == self.revision {
+            CrudEffect::Write {
+                revision,
+                owner,
+                id,
+                ..
+            } => {
+                if id.is_none() {
+                    self.error = Some(
+                        "Create completion requires write_completed with the created ID".into(),
+                    );
+                    return vec![];
+                }
+                if owner == self.owner && revision == self.revision {
                     self.draft = None;
                 }
                 vec![self.load()]
@@ -796,12 +933,26 @@ mod tests {
             },
         ];
         assert_eq!(c.visible()[0].id, "2");
-        c.filter = ClipboardFilter::Text;
+        c.set_filter(ClipboardFilter::Text);
         assert_eq!(c.visible()[0].id, "1");
         c.select(0);
-        c.convert(tezbar_core::instant::transform::ClipboardAction::Case);
+        let ClipboardEffect::Transform {
+            request,
+            action,
+            text,
+            ..
+        } = c
+            .convert(tezbar_core::instant::transform::ClipboardAction::Case)
+            .unwrap()
+        else {
+            panic!()
+        };
+        c.conversion_complete(
+            request,
+            tezbar_core::instant::transform::apply_clipboard_action(action, &text),
+        );
         assert_eq!(c.conversion, Some(Ok("HELLO".into())));
-        c.filter = ClipboardFilter::All;
+        c.set_filter(ClipboardFilter::All);
         c.select(0);
         assert!(c.conversion.is_none());
         let ClipboardEffect::Restore { request, .. } = c.restore().unwrap() else {
@@ -1228,7 +1379,9 @@ mod lifecycle_tests {
             },
         });
         assert_eq!(c.preview_text(), Some("Secure item".into()));
-        assert!(!c.convert(tezbar_core::instant::transform::ClipboardAction::Base64));
+        assert!(c
+            .convert(tezbar_core::instant::transform::ClipboardAction::Base64)
+            .is_none());
         assert!(c.qr_export().is_err());
     }
     #[test]
@@ -1285,5 +1438,128 @@ mod auto_refresh_tests {
         assert!(p.tick(99999).is_none());
         p.set_auto_refresh(true, 100000);
         assert!(p.tick(100000).is_some());
+    }
+}
+
+#[cfg(test)]
+mod opus_repairs {
+    use super::*;
+    fn text(id: &str) -> ClipboardEntry {
+        ClipboardEntry {
+            id: id.into(),
+            created_at: 1,
+            pinned: false,
+            is_secret: false,
+            content: ClipboardContent::Text {
+                text: id.into(),
+                preview: id.into(),
+                char_count: 1,
+                line_count: 1,
+            },
+        }
+    }
+    #[test]
+    fn opus_clipboard_file_negative_preview_filter_clamp() {
+        let mut c = Clipboard::default();
+        c.rows = vec![
+            text("one"),
+            ClipboardEntry {
+                id: "file".into(),
+                created_at: 0,
+                pinned: false,
+                is_secret: false,
+                content: ClipboardContent::File {
+                    paths: vec!["/fixture".into()],
+                    preview: "file".into(),
+                },
+            },
+        ];
+        let ClipboardEffect::LoadImage { request, .. } = c.select(1).unwrap() else {
+            panic!()
+        };
+        c.image_preview_loaded(request, Ok(None));
+        assert!(c.select(1).is_none());
+        c.set_query("one".into());
+        assert_eq!(c.selected, 0);
+        assert_eq!(c.selected_entry().unwrap().id, "one");
+        c.set_query("".into());
+        assert!(c.select(1).is_none());
+        c.image_cache.clear();
+        let ClipboardEffect::LoadImage { request, .. } = c.select(1).unwrap() else {
+            panic!()
+        };
+        c.image_loaded(request, Err("missing".into()));
+        assert!(c.select(1).is_none());
+    }
+    #[test]
+    fn opus_clipboard_transform_is_off_thread_and_selection_owned() {
+        let mut c = Clipboard::default();
+        c.rows = vec![text("A"), text("B")];
+        c.select(0);
+        let ClipboardEffect::Transform { request, text, .. } = c
+            .convert(tezbar_core::instant::transform::ClipboardAction::Json)
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(text, "A");
+        assert!(c.conversion.is_none());
+        c.select(1);
+        assert!(!c.conversion_complete(request, Ok("late".into())));
+        assert!(c.conversion.is_none());
+    }
+    #[test]
+    fn opus_snippet_create_adopts_id_for_newer_revision_and_unicode_uniqueness() {
+        let mut c = Crud::new(CrudKind::Snippet);
+        c.create();
+        c.change(SnippetDraft {
+            label: "Title".into(),
+            trigger: "ТЕСТ".into(),
+            body: "Body".into(),
+        });
+        let CrudEffect::Write { request, .. } = c.save().unwrap() else {
+            panic!()
+        };
+        c.change(SnippetDraft {
+            label: "Title".into(),
+            trigger: "ТЕСТ".into(),
+            body: "New".into(),
+        });
+        assert!(c.save().is_err());
+        c.write_completed(request, Ok("created-id".into()));
+        assert_eq!(c.draft.as_ref().unwrap().0.as_deref(), Some("created-id"));
+        assert!(matches!(c.save().unwrap(),CrudEffect::Write{id:Some(id),..}if id=="created-id"));
+        c.create();
+        c.rows.push(Item {
+            id: "other".into(),
+            title: "Other".into(),
+            subtitle: String::new(),
+            body: "B".into(),
+            preview: "B".into(),
+            trigger: "тест".into(),
+            readonly: false,
+        });
+        c.change(SnippetDraft {
+            label: "Title".into(),
+            trigger: "ТЕСТ".into(),
+            body: "Body".into(),
+        });
+        assert!(c.save().is_err());
+    }
+    #[test]
+    fn opus_snippet_late_create_cannot_adopt_into_different_draft() {
+        let mut c = Crud::new(CrudKind::Snippet);
+        c.create();
+        c.change(SnippetDraft {
+            label: "One".into(),
+            trigger: "one".into(),
+            body: "B".into(),
+        });
+        let CrudEffect::Write { request, .. } = c.save().unwrap() else {
+            panic!()
+        };
+        c.create();
+        c.write_completed(request, Ok("old-id".into()));
+        assert_eq!(c.draft.as_ref().unwrap().0, None);
     }
 }

@@ -557,3 +557,96 @@ fn qr_png_raster_is_512_and_error_is_explicit() {
     assert_eq!((img.width(), img.height()), (512, 512));
     assert!(qr::png("").is_err());
 }
+
+#[test]
+fn opus_json_js_numbers_bom_and_depth() {
+    assert_eq!(
+        json_format(
+            "\u{feff}{\"a\":10.0,\"b\":1e2,\"c\":-0.0,\"d\":12345678901234567890}",
+            false
+        )
+        .unwrap(),
+        r#"{"a":10,"b":100,"c":0,"d":12345678901234567000}"#
+    );
+    let deep = "[".repeat(150) + &"]".repeat(150);
+    assert!(apply_clipboard_action(ClipboardAction::Json, &deep).is_err());
+}
+#[test]
+fn opus_base64_atob_trailing_bits() {
+    assert_eq!(base64_decode("QR==").unwrap(), "A");
+}
+
+#[test]
+fn opus_json_duplicate_order_large_objects_scaling() {
+    assert_eq!(
+        json_format(r#"{"z":1,"2":2,"a":3,"z":4,"1":5}"#, false).unwrap(),
+        r#"{"1":5,"2":2,"z":4,"a":3}"#
+    );
+    fn base36(mut n: usize) -> String {
+        let mut s = vec![];
+        loop {
+            s.push(b"0123456789abcdefghijklmnopqrstuvwxyz"[n % 36] as char);
+            n /= 36;
+            if n == 0 {
+                break;
+            }
+        }
+        s.into_iter().rev().collect()
+    }
+    for n in [5_000, 20_000, 40_000, 100_000] {
+        let s = format!(
+            "{{{}}}",
+            (0..n)
+                .map(|i| format!("\"k{}\":1", base36(i)))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        assert!(s.len() <= super::super::MAX_INPUT_BYTES);
+        let start = std::time::Instant::now();
+        let output = json_format(&s, false).unwrap();
+        let elapsed = start.elapsed();
+        assert_eq!(output, s); // no data loss, all keys survive, deterministic order
+        eprintln!(
+            "json_scaling keys={n} bytes={} debug_ms={:.3}",
+            s.len(),
+            elapsed.as_secs_f64() * 1000.
+        );
+    }
+}
+#[test]
+fn opus_locale_structured_data_and_injected_formatter() {
+    struct Locale;
+    impl PresentationFormatter for Locale {
+        fn local_timestamp(&self, ms: i64) -> String {
+            format!("local({ms})")
+        }
+        fn relative(&self, r: &RelativeTime) -> String {
+            format!("{}:{}", r.unit, r.value)
+        }
+        fn count(&self, n: usize) -> String {
+            format!("#{n}")
+        }
+    }
+    let t = parse_timestamp_data("1704067200", 1704672000000).unwrap();
+    assert_eq!(t.ms, 1704067200000);
+    assert_eq!(
+        t.relative,
+        RelativeTime {
+            unit: "week",
+            value: -1
+        }
+    );
+    assert!(
+        format_timestamp(&t, &Locale).contains("Local: local(1704067200000)\nRelative: week:-1")
+    );
+    assert_eq!(format_relative(0, 604800000), "last week");
+    assert_eq!(format_relative(2592000000, 0), "next month");
+    assert_eq!(format_relative(0, 31536000000), "last year");
+    let c = clipboard_count(&"x".repeat(1234));
+    assert!(format_clipboard_count(&c, &Locale).starts_with("Characters : #1234"));
+    assert!(
+        apply_clipboard_action(ClipboardAction::Count, &"x".repeat(1234))
+            .unwrap()
+            .starts_with("Characters : 1,234")
+    );
+}

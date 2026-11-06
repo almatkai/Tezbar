@@ -84,7 +84,7 @@ pub fn search(query: &str, category: Option<&str>, limit: usize) -> Vec<&'static
         .filter(|(_, e)| category.is_none_or(|c| c == "All" || e.category == c))
         .filter_map(|(i, e)| {
             if query.trim().is_empty() || assembled.is_empty() {
-                return Some((0., i, e));
+                return Some((0., 0., i, e));
             }
             let mut matched = false;
             let mut score = 1.;
@@ -101,6 +101,7 @@ pub fn search(query: &str, category: Option<&str>, limit: usize) -> Vec<&'static
             if !matched {
                 return None;
             }
+            let initial_score = score;
             let name = normalize(&e.name);
             if name == q {
                 score *= 0.2;
@@ -110,13 +111,17 @@ pub fn search(query: &str, category: Option<&str>, limit: usize) -> Vec<&'static
             if e.keywords.iter().any(|k| normalize(k) == q) {
                 score *= 0.5;
             }
-            Some((score, i, e))
+            Some((score, initial_score, i, e))
         })
         .collect();
-    hits.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    hits.sort_by(|a, b| {
+        a.0.total_cmp(&b.0)
+            .then(a.1.total_cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+    });
     hits.into_iter()
         .take(limit.min(DATA.len()))
-        .map(|(_, _, e)| e)
+        .map(|(_, _, _, e)| e)
         .collect()
 }
 #[cfg(test)]

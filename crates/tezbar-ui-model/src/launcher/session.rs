@@ -115,6 +115,9 @@ impl<R> SearchSession<R> {
         self.enter = None;
         self.begin_activation()
     }
+    pub fn cancel_enter(&mut self) {
+        self.enter = None;
+    }
     pub fn expire_enter(&mut self, now: u64) -> bool {
         if self.enter.is_some_and(|(_, expiry)| now >= expiry) {
             self.enter = None;

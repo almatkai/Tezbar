@@ -1,5 +1,12 @@
 //! Rich HTML document and note save ownership; the core remains the sole note store.
 use regex::Regex;
+macro_rules! cached_regex {
+    ($pattern:literal) => {{
+        static RE: std::sync::LazyLock<Regex> =
+            std::sync::LazyLock::new(|| Regex::new($pattern).unwrap());
+        &*RE
+    }};
+}
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 const EMPTY: &str = "<div><br></div>";
@@ -52,18 +59,24 @@ fn decode(s: &str) -> String {
 }
 fn strip_markdown(s: &str) -> String {
     let mut s = s.to_string();
-    for (p, r) in [
-        (r"\*\*([^*\n]+)\*\*", "$1"),
-        (r"__([^_\n]+)__", "$1"),
-        (r"\*([^*\n]+)\*", "$1"),
-        (r"_([^_\n]+)_", "$1"),
-        (r"`([^`\n]+)`", "$1"),
-        (r"\[([^\]]+)\]\([^)]+\)", "$1"),
-        (r"(?m)^#{1,6}\s+", ""),
-        (r"(?m)^\s*[-*+]\s+", ""),
-        (r"(?m)^\s*\d+\.\s+", ""),
-    ] {
-        s = Regex::new(p).unwrap().replace_all(&s, r).into_owned();
+    static RULES: std::sync::LazyLock<Vec<(Regex, &str)>> = std::sync::LazyLock::new(|| {
+        [
+            (r"\*\*([^*\n]+)\*\*", "$1"),
+            (r"__([^_\n]+)__", "$1"),
+            (r"\*([^*\n]+)\*", "$1"),
+            (r"_([^_\n]+)_", "$1"),
+            (r"`([^`\n]+)`", "$1"),
+            (r"\[([^\]]+)\]\([^)]+\)", "$1"),
+            (r"(?m)^#{1,6}\s+", ""),
+            (r"(?m)^\s*[-*+]\s+", ""),
+            (r"(?m)^\s*\d+\.\s+", ""),
+        ]
+        .into_iter()
+        .map(|(p, r)| (Regex::new(p).unwrap(), r))
+        .collect()
+    });
+    for (re, replacement) in RULES.iter() {
+        s = re.replace_all(&s, *replacement).into_owned();
     }
     s
 }
@@ -71,27 +84,76 @@ pub fn sanitize_html(s: &str) -> Result<String, String> {
     if s.len() > 1_048_576 {
         return Err("Note exceeds 1 MiB".into());
     }
-    let s = Regex::new(r"(?is)<script.*?</script>|<style.*?</style>")
-        .unwrap()
-        .replace_all(s, "");
-    let s = Regex::new(r"(?i)<(/?)([a-z0-9-]+)(?:\s[^>]*)?\s*/?>")
-        .unwrap()
-        .replace_all(&s, |c: &regex::Captures| {
-            let n = c[2].to_lowercase();
-            if TAGS.contains(&n.as_str()) {
-                format!("<{}{n}>", &c[1])
-            } else {
-                String::new()
+    use html5ever::tokenizer::{
+        states::RawKind, BufferQueue, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer,
+        TokenizerOpts,
+    };
+    use std::cell::RefCell;
+    #[derive(Default)]
+    struct Clean {
+        html: String,
+        suppressed: Option<String>,
+    }
+    struct Sink(RefCell<Clean>);
+    impl TokenSink for Sink {
+        type Handle = ();
+        fn process_token(&self, token: Token, _: u64) -> TokenSinkResult<()> {
+            let mut state = self.0.borrow_mut();
+            match token {
+                Token::TagToken(tag) => {
+                    let name = tag.name.as_ref();
+                    if state.suppressed.is_some() {
+                        if tag.kind == TagKind::EndTag && state.suppressed.as_deref() == Some(name)
+                        {
+                            state.suppressed = None;
+                        }
+                    } else if tag.kind == TagKind::StartTag && matches!(name, "script" | "style") {
+                        state.suppressed = Some(name.into());
+                        return TokenSinkResult::RawData(if name == "script" {
+                            RawKind::ScriptData
+                        } else {
+                            RawKind::Rawtext
+                        });
+                    } else if TAGS.contains(&name) {
+                        if tag.kind == TagKind::StartTag {
+                            state.html.push_str(&format!("<{name}>"));
+                        } else if name != "br" {
+                            state.html.push_str(&format!("</{name}>"));
+                        }
+                    }
+                }
+                Token::CharacterTokens(text) if state.suppressed.is_none() => {
+                    state.html.push_str(&escape(&text))
+                }
+                Token::NullCharacterToken if state.suppressed.is_none() => {
+                    state.html.push('\u{fffd}')
+                }
+                _ => {} // comments, doctype, processing instructions and unknown tags carry no visible text
             }
-        });
-    Ok(if s.trim().is_empty() {
+            TokenSinkResult::Continue
+        }
+    }
+    let tokenizer = Tokenizer::new(
+        Sink(RefCell::new(Clean::default())),
+        TokenizerOpts {
+            discard_bom: false,
+            ..Default::default()
+        },
+    );
+    let input = BufferQueue::default();
+    input.push_back(s.into());
+    let _ = tokenizer.feed(&input);
+    tokenizer.end();
+    let html = tokenizer.sink.0.into_inner().html;
+    Ok(if html.trim().is_empty() {
         EMPTY.into()
     } else {
-        s.trim().into()
+        html.trim().into()
     })
 }
+
 pub fn normalize_stored(s: &str) -> Result<String, String> {
-    if Regex::new(r"(?is)</?[a-z].*>").unwrap().is_match(s) {
+    if cached_regex!(r"(?is)<(?:/?[a-z]|!|\?).*>").is_match(s) {
         sanitize_html(s)
     } else {
         if s.len() > 1_048_576 {
@@ -115,17 +177,17 @@ pub fn normalize_stored(s: &str) -> Result<String, String> {
     }
 }
 pub fn plain_text(s: &str) -> String {
-    let s = Regex::new(r"(?i)<br\s*/?\s*>|</(?:div|p|li|h[1-6])>")
-        .unwrap()
-        .replace_all(s, "\n");
+    // Normalize raw legacy HTML structurally before the canonical subset's text projection.
+    let clean = sanitize_html(s).unwrap_or_default();
+    let s = clean.as_str();
+    let s = cached_regex!(r"(?i)<br\s*/?\s*>|</(?:div|p|li|h[1-6])>").replace_all(s, "\n");
     let s = s.replace("<li>", "- ");
-    let s = Regex::new(r"<[^>]+>").unwrap().replace_all(&s, "");
+    let s = cached_regex!(r"<[^>]+>").replace_all(&s, "");
     let s = strip_markdown(&decode(&s))
         .replace('\r', "")
         .replace('\u{a0}', " ");
-    let s = Regex::new(r"[ \t]+\n").unwrap().replace_all(&s, "\n");
-    Regex::new(r"\n{3,}")
-        .unwrap()
+    let s = cached_regex!(r"[ \t]+\n").replace_all(&s, "\n");
+    cached_regex!(r"\n{3,}")
         .replace_all(&s, "\n\n")
         .trim()
         .into()
@@ -142,7 +204,7 @@ pub struct Document {
 impl Document {
     pub fn load(s: &str) -> Result<Self, String> {
         let html = normalize_stored(s)?;
-        let re = Regex::new(r"</?([a-z]+)>").unwrap();
+        let re = cached_regex!(r"</?([a-z]+)>");
         let mut stack: Vec<(String, Vec<Node>)> = vec![(String::new(), vec![])];
         let mut pos = 0;
         for c in re.captures_iter(&html) {
@@ -221,6 +283,32 @@ impl Document {
             out
         }
     }
+    fn html_len(&self) -> usize {
+        fn len(n: &Node) -> usize {
+            match n {
+                Node::Text(t) => t
+                    .chars()
+                    .map(|c| match c {
+                        '&' => 5,
+                        '<' | '>' => 4,
+                        '"' => 6,
+                        '\'' => 6,
+                        _ => c.len_utf8(),
+                    })
+                    .sum(),
+                Node::Element { tag, children } => {
+                    tag.len()
+                        + 2
+                        + if tag == "br" {
+                            0
+                        } else {
+                            tag.len() + 3 + children.iter().map(len).sum::<usize>()
+                        }
+                }
+            }
+        }
+        self.nodes.iter().map(len).sum()
+    }
     pub fn text_len(&self) -> usize {
         fn len(n: &Node) -> usize {
             match n {
@@ -241,7 +329,18 @@ impl Document {
         if start > end || end > self.text_len() {
             return Err("Selection outside document".into());
         }
-        if self.html().len() + text.len() > 1_048_576 {
+        if self.html_len()
+            + text
+                .chars()
+                .map(|c| match c {
+                    '&' => 5,
+                    '<' | '>' => 4,
+                    '"' | '\'' => 6,
+                    _ => c.len_utf8(),
+                })
+                .sum::<usize>()
+            > 1_048_576
+        {
             return Err("Note exceeds 1 MiB".into());
         }
         fn walk(
@@ -395,12 +494,14 @@ pub enum Effect {
         note_id: u64,
     },
     Copy(String),
+    Message(String),
 }
 #[derive(Debug)]
 struct Draft {
     doc: Document,
     revision: u64,
     persisted: String,
+    html: String,
     deadline: u64,
     undo: Vec<Patch>,
     redo: Vec<Patch>,
@@ -417,6 +518,7 @@ pub struct Notes {
     pub loading: bool,
     pub save_states: BTreeMap<u64, SaveState>,
     saved_until: BTreeMap<u64, u64>,
+    plain_cache: std::cell::RefCell<BTreeMap<u64, (u64, String)>>,
 }
 impl Notes {
     fn request(&mut self, e: impl FnOnce(u64) -> Effect) -> Effect {
@@ -439,6 +541,7 @@ impl Notes {
         match result {
             Ok(rows) => {
                 self.rows = rows;
+                self.plain_cache.get_mut().clear();
                 self.error = None;
             }
             Err(e) => self.error = Some(e),
@@ -446,10 +549,24 @@ impl Notes {
     }
     pub fn visible(&self) -> Vec<&Note> {
         let q = self.query.trim().to_lowercase();
+        let mut cache = self.plain_cache.borrow_mut();
+        let ids: std::collections::BTreeSet<_> = self.rows.iter().map(|n| n.created_at).collect();
+        cache.retain(|id, _| ids.contains(id));
         let mut rows: Vec<_> = self
             .rows
             .iter()
-            .filter(|n| q.is_empty() || plain_text(&n.text).to_lowercase().contains(&q))
+            .filter(|n| {
+                if q.is_empty() {
+                    return true;
+                }
+                let cached = cache
+                    .entry(n.created_at)
+                    .or_insert_with(|| (n.updated_at, plain_text(&n.text).to_lowercase()));
+                if cached.0 != n.updated_at {
+                    *cached = (n.updated_at, plain_text(&n.text).to_lowercase());
+                }
+                cached.1.contains(&q)
+            })
             .collect();
         rows.sort_by_key(|n| std::cmp::Reverse(n.updated_at));
         rows
@@ -474,7 +591,7 @@ impl Notes {
                     .iter()
                     .find(|(key, d)| {
                         Some(**key) != self.selected
-                            && d.doc.html() == d.persisted
+                            && d.html == d.persisted
                             && !self
                                 .pending
                                 .values()
@@ -491,6 +608,7 @@ impl Notes {
             self.drafts.insert(
                 id,
                 Draft {
+                    html: doc.html(),
                     persisted: doc.html(),
                     doc,
                     revision: 0,
@@ -513,13 +631,14 @@ impl Notes {
     ) -> Result<(), String> {
         let id = self.selected.ok_or("No note selected")?;
         let d = self.drafts.get_mut(&id).ok_or("No draft")?;
-        let before = d.doc.html();
+        let before = d.html.clone();
         if let Err(error) = change(&mut d.doc) {
             d.doc = Document::load(&before)?;
             return Err(error);
         }
         let after = d.doc.html();
         if after != before {
+            d.html = after.clone();
             d.undo.push(Patch::between(&before, &after));
             while d.undo.len() > 100
                 || d.undo
@@ -548,7 +667,7 @@ impl Notes {
         let Some(patch) = from.pop() else {
             return false;
         };
-        let mut html = d.doc.html();
+        let mut html = d.html.clone();
         let (remove, insert) = if redo {
             (&patch.removed, &patch.inserted)
         } else {
@@ -562,6 +681,7 @@ impl Notes {
             return false;
         };
         d.doc = doc;
+        d.html = html;
         if redo {
             d.undo.push(patch);
         } else {
@@ -577,7 +697,7 @@ impl Notes {
             .drafts
             .iter()
             .filter(|(id, d)| {
-                d.doc.html() != d.persisted
+                d.html != d.persisted
                     && d.deadline <= now
                     && self.save_states.get(id) == Some(&SaveState::Dirty)
                     && !self
@@ -585,7 +705,7 @@ impl Notes {
                         .values()
                         .any(|e| matches!(e,Effect::Save{note_id,..}if note_id==*id))
             })
-            .map(|(id, d)| (*id, d.revision, d.doc.html()))
+            .map(|(id, d)| (*id, d.revision, d.html.clone()))
             .collect();
         let mut out = vec![];
         for (id, revision, html) in ready {
@@ -619,6 +739,7 @@ impl Notes {
         };
         match result {
             Ok(()) => {
+                self.plain_cache.get_mut().remove(&note_id);
                 d.persisted = html.clone();
                 if let Some(n) = self.rows.iter_mut().find(|n| n.created_at == note_id) {
                     n.text = html;
@@ -671,6 +792,7 @@ impl Notes {
         match result {
             Ok(n) => {
                 let id = n.created_at;
+                self.plain_cache.get_mut().remove(&id);
                 self.rows.insert(0, n);
                 self.query.clear();
                 let _ = self.select(id);
@@ -691,6 +813,7 @@ impl Notes {
         };
         match result {
             Ok(()) => {
+                self.plain_cache.get_mut().remove(&note_id);
                 self.rows.retain(|n| n.created_at != note_id);
                 self.drafts.remove(&note_id);
                 self.save_states.remove(&note_id);
@@ -705,7 +828,13 @@ impl Notes {
         true
     }
     pub fn copy(&self) -> Option<Effect> {
-        self.document().map(|d| Effect::Copy(plain_text(&d.html())))
+        let d = self.drafts.get(&self.selected?)?;
+        let text = plain_text(&d.html);
+        Some(if text.is_empty() {
+            Effect::Message("Note is empty".into())
+        } else {
+            Effect::Copy(text)
+        })
     }
 }
 #[cfg(test)]
@@ -1118,5 +1247,93 @@ mod legacy_html_compatibility_tests {
         let document =
             Document::load("<div>&amp;copy; &#x80; &#0; &copy &NotEqualTilde;</div>").unwrap();
         assert_eq!(document.html(), "<div>&amp;copy; € � © ≂̸</div>");
+    }
+}
+
+#[cfg(test)]
+mod opus_repairs {
+    use super::*;
+    #[test]
+    fn opus_html_structural_tokens() {
+        for (s, want) in [
+            ("<div><!--StartFragment-->Hello<o:p></o:p></div>", "Hello"),
+            ("<div title=\"a>b\">x", "x"),
+            (
+                "<div><?xml version='1.0'?><span>Office</span></div>",
+                "Office",
+            ),
+        ] {
+            let d = Document::load(s).unwrap();
+            assert_eq!(plain_text(&d.html()), want);
+        }
+    }
+    #[test]
+    fn opus_empty_note_copy() {
+        let mut n = Notes::default();
+        n.rows.push(Note {
+            created_at: 1,
+            updated_at: 1,
+            text: EMPTY.into(),
+        });
+        n.select(1).unwrap();
+        assert_eq!(n.copy(), Some(Effect::Message("Note is empty".into())));
+    }
+}
+
+#[cfg(test)]
+mod opus_html_fixtures {
+    use super::*;
+    #[test]
+    fn opus_jsdom_office_webkit_structural_reference() {
+        let fixtures: serde_json::Value =
+            serde_json::from_str(include_str!("notes/opus_html_fixtures.json")).unwrap();
+        for fixture in fixtures["fixtures"].as_array().unwrap() {
+            let input = fixture["input"].as_str().unwrap();
+            let doc = Document::load(input).unwrap();
+            assert_eq!(
+                plain_text(&doc.html()),
+                fixture["plain"].as_str().unwrap(),
+                "{input}"
+            );
+            assert_eq!(Document::load(&doc.html()).unwrap().html(), doc.html());
+        }
+    }
+    #[test]
+    fn opus_notes_revision_cache_and_idle_tick_scaling() {
+        let mut notes = Notes::default();
+        for id in 0..500 {
+            notes.rows.push(Note {
+                created_at: id,
+                updated_at: 1,
+                text: format!("<div>Note {id}</div><div>body &amp; more text</div>"),
+            });
+        }
+        notes.query = "body".into();
+        let start = std::time::Instant::now();
+        assert_eq!(notes.visible().len(), 500);
+        let cold = start.elapsed();
+        let start = std::time::Instant::now();
+        for _ in 0..20 {
+            assert_eq!(notes.visible().len(), 500);
+        }
+        let warm = start.elapsed();
+        assert_eq!(notes.plain_cache.borrow().len(), 500);
+        notes.rows[0].text = "<div>different</div>".into();
+        notes.rows[0].updated_at += 1;
+        assert_eq!(notes.visible().len(), 499);
+        for id in 0..32 {
+            notes.select(id).unwrap();
+        }
+        let start = std::time::Instant::now();
+        for _ in 0..1000 {
+            assert!(notes.tick(1000).is_empty());
+        }
+        let idle = start.elapsed();
+        eprintln!(
+            "notes_scaling notes=500 cold_ms={:.3} warm20_ms={:.3} drafts=32 idle1000_ms={:.3}",
+            cold.as_secs_f64() * 1000.,
+            warm.as_secs_f64() * 1000.,
+            idle.as_secs_f64() * 1000.
+        );
     }
 }

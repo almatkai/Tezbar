@@ -221,3 +221,57 @@ fn parent_review_native_state_defaults_only_missing_fields() {
     assert!(super::UiState::decode(r#"{"version":2}"#).is_err());
     assert!(super::UiState::decode(r#"{"version":1,"pins":"broken"}"#).is_err());
 }
+
+#[test]
+fn opus_legacy_pins_numeric_null_and_trimmed_recents() {
+    let mut s = UiState::default();
+    s.import_key("tezbar:pinned-commands",r#"[{"id":123,"title":" Note ","subtitle":null,"category":"commands","action":{"type":"invoke-command","commandId":"open-notes"}}]"#).unwrap();
+    assert_eq!(s.pins[0].id, "123");
+    assert_eq!(s.pins[0].subtitle, "");
+    s.import_key("tezbar:recent-emojis", r#"[" 😀 "," "]"#)
+        .unwrap();
+    assert_eq!(s.recent_emojis, ["😀"]);
+    s.import_key(
+        "tezbar:recent-extension-commands",
+        r#"[" extcmd:test ","bad"]"#,
+    )
+    .unwrap();
+    assert_eq!(s.recent_extension_commands, ["extcmd:test"]);
+}
+#[test]
+fn opus_windows_sharing_retry_is_bounded_and_other_errors_immediate() {
+    let mut calls = 0;
+    super::rename_with_retry(
+        || {
+            calls += 1;
+            if calls < 3 {
+                Err(std::io::Error::from_raw_os_error(32))
+            } else {
+                Ok(())
+            }
+        },
+        true,
+    )
+    .unwrap();
+    assert_eq!(calls, 3);
+    let mut calls = 0;
+    assert!(super::rename_with_retry(
+        || {
+            calls += 1;
+            Err(std::io::Error::from_raw_os_error(33))
+        },
+        true
+    )
+    .is_err());
+    assert_eq!(calls, 6);
+    let mut calls = 0;
+    assert!(super::rename_with_retry(
+        || {
+            calls += 1;
+            Err(std::io::Error::from_raw_os_error(5))
+        },
+        true
+    )
+    .is_err());
+    assert_eq!(calls, 1);
+}

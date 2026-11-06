@@ -89,7 +89,7 @@ pub fn evaluate_expression(input: &str) -> Option<CalcResult> {
         return None;
     }
     let mut parser = Parser {
-        chars: s.chars().collect(),
+        chars: s.replace('°', "*(pi/180)").chars().collect(),
         pos: 0,
         depth: 0,
     };
@@ -125,33 +125,48 @@ impl Parser {
         if self.depth > 128 {
             return None;
         }
+        self.space();
+        let unary = matches!(self.chars.get(self.pos), Some('+' | '-'));
         let mut lhs = self.atom()?;
         loop {
             self.space();
             let Some(&op) = self.chars.get(self.pos) else {
                 break;
             };
-            let (prec, right) = match op {
-                '+' | '-' => (1, false),
-                '*' | '/' | '%' => (2, false),
-                '^' => (3, true),
-                _ => break,
+            let exponent = op == '^' || (op == '*' && self.chars.get(self.pos + 1) == Some(&'*'));
+            let (prec, right) = if exponent {
+                (3, true)
+            } else {
+                match op {
+                    '+' | '-' => (1, false),
+                    '*' | '/' | '%' => (2, false),
+                    _ => break,
+                }
             };
             if prec < min {
                 break;
             }
             self.pos += 1;
-            if op == '*' && self.chars.get(self.pos) == Some(&'*') {
-                return None;
+            if exponent {
+                if unary {
+                    return None;
+                }
+                if op == '*' {
+                    self.pos += 1;
+                }
             }
             let rhs = self.expr(if right { prec } else { prec + 1 })?;
-            lhs = match op {
-                '+' => lhs + rhs,
-                '-' => lhs - rhs,
-                '*' => lhs * rhs,
-                '/' => lhs / rhs,
-                '%' => lhs % rhs,
-                _ => lhs.powf(rhs),
+            lhs = if exponent {
+                lhs.powf(rhs)
+            } else {
+                match op {
+                    '+' => lhs + rhs,
+                    '-' => lhs - rhs,
+                    '*' => lhs * rhs,
+                    '/' => lhs / rhs,
+                    '%' => lhs % rhs,
+                    _ => unreachable!(),
+                }
             };
         }
         self.depth -= 1;
@@ -163,7 +178,7 @@ impl Parser {
             return None;
         }
         self.space();
-        let mut v = if self.take('+') {
+        let v = if self.take('+') {
             self.atom()?
         } else if self.take('-') {
             -self.atom()?
@@ -232,14 +247,25 @@ impl Parser {
                     .ok()?
             }
         };
-        if self.take('°') {
-            v *= std::f64::consts::PI / 180.;
-        }
+
         self.depth -= 1;
         Some(v)
     }
 }
+/// Math.round without an intermediate x+0.5 rounding across the half boundary.
+fn js_round(x: f64) -> f64 {
+    let floor = x.floor();
+    let rounded = if x - floor < 0.5 { floor } else { floor + 1. };
+    if rounded == 0. {
+        0_f64.copysign(x)
+    } else {
+        rounded
+    }
+}
 fn function(n: &str, a: &[f64]) -> Option<f64> {
+    if matches!(n, "min" | "max") && a.iter().any(|x| x.is_nan()) {
+        return Some(f64::NAN);
+    }
     if n == "min" {
         return Some(a.iter().copied().fold(f64::INFINITY, f64::min));
     }
@@ -269,7 +295,7 @@ fn function(n: &str, a: &[f64]) -> Option<f64> {
         "abs" => x.abs(),
         "floor" => x.floor(),
         "ceil" => x.ceil(),
-        "round" => (x + 0.5).floor(),
+        "round" => js_round(x),
         "trunc" => x.trunc(),
         "exp" => x.exp(),
         "sign" => {
@@ -343,5 +369,27 @@ mod tests {
             assert!(evaluate_expression(s).is_none());
         }
         assert_eq!(evaluate_expression("2^3^2").unwrap().formatted, "512");
+    }
+}
+
+#[cfg(test)]
+mod opus_repairs {
+    use super::*;
+    #[test]
+    fn opus_calculator_js_edges() {
+        for s in ["-2^2", "+2**2", "max(1,sqrt(-1))"] {
+            assert!(evaluate_expression(s).is_none(), "{s}");
+        }
+        assert_eq!(evaluate_expression("2**3").unwrap().formatted, "8");
+        assert_eq!(
+            evaluate_expression("round(0.49999999999999994)")
+                .unwrap()
+                .formatted,
+            "0"
+        );
+        assert_eq!(
+            evaluate_expression("2°^2").unwrap().formatted,
+            number(2. * (std::f64::consts::PI / 180.).powi(2))
+        );
     }
 }

@@ -180,7 +180,20 @@ pub fn parse_pins(v: &Value) -> Vec<Pin> {
         let mut p = p.clone();
         if let Some(m) = p.as_object_mut() {
             m.insert("slot".into(), json!(1));
-            m.entry("subtitle").or_insert(json!(""));
+            for key in ["id", "title", "subtitle"] {
+                let v = m
+                    .get(key)
+                    .filter(|v| !v.is_null())
+                    .map(|v| {
+                        if let Some(s) = v.as_str() {
+                            s.to_owned()
+                        } else {
+                            v.to_string()
+                        }
+                    })
+                    .unwrap_or_default();
+                m.insert(key.into(), json!(v));
+            }
         }
         if let Ok(mut p) = serde_json::from_value::<Pin>(p) {
             p.id = p.id.trim().into();
@@ -205,6 +218,10 @@ pub struct ImportReport {
     pub used_existing: bool,
 }
 impl UiState {
+    pub fn record_launcher_query(&mut self, entry: &str) {
+        self.launcher_query_history = vec![entry.into()];
+    }
+
     /// Existing valid native state always wins. Corrupt existing state is an error to avoid overwriting it.
     pub fn import_legacy(
         existing: Option<&str>,
@@ -259,8 +276,12 @@ impl UiState {
                 self.pins = parse_pins(&v);
             }
             "tezbar:recent-extension-commands" => {
-                self.recent_extension_commands =
-                    strings(&parsed()?, 20, |s| s.starts_with("extcmd:"))
+                self.recent_extension_commands = strings(&parsed()?, usize::MAX, |_| true)
+                    .into_iter()
+                    .map(|s| s.trim().to_owned())
+                    .filter(|s| s.starts_with("extcmd:"))
+                    .take(20)
+                    .collect()
             }
             "tezbar:launcher-query-history:v1" => {
                 self.launcher_query_history = strings(&parsed()?, 1, |s| !s.trim().is_empty())
@@ -269,7 +290,12 @@ impl UiState {
                 self.terminal_pinned_sessions = strings(&parsed()?, 512, |_| true)
             }
             "tezbar:recent-emojis" => {
-                self.recent_emojis = strings(&parsed()?, 24, |s| !s.trim().is_empty())
+                self.recent_emojis = strings(&parsed()?, usize::MAX, |_| true)
+                    .into_iter()
+                    .map(|s| s.trim().to_owned())
+                    .filter(|s| !s.is_empty())
+                    .take(24)
+                    .collect()
             }
             "tezbar:terminal-defaults" => {
                 let v = parsed()?;
@@ -426,7 +452,7 @@ impl UiState {
             .map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         drop(file);
-        std::fs::rename(&cleanup.0, path).map_err(|e| e.to_string())?;
+        rename_with_retry(|| std::fs::rename(&cleanup.0, path), cfg!(windows))?;
         #[cfg(unix)]
         std::fs::File::open(parent)
             .and_then(|f| f.sync_all())
@@ -455,3 +481,21 @@ fn temp_file(parent: &Path) -> Result<(std::path::PathBuf, std::fs::File), Strin
 }
 #[cfg(test)]
 mod tests;
+
+// Windows may temporarily deny replacement while an antivirus/reader holds a handle.
+// Retry only sharing/lock violations, bounded to 150 ms; never delete the destination.
+fn rename_with_retry(
+    mut rename: impl FnMut() -> std::io::Result<()>,
+    windows: bool,
+) -> Result<(), String> {
+    for attempt in 0..=5 {
+        match rename() {
+            Ok(()) => return Ok(()),
+            Err(e) if windows && matches!(e.raw_os_error(), Some(32 | 33)) && attempt < 5 => {
+                std::thread::sleep(std::time::Duration::from_millis(10 * (attempt + 1)))
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    unreachable!()
+}

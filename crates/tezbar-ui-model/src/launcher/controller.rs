@@ -1,4 +1,4 @@
-//! Event owner used by the GPUI surface. Optimistic rows are never activation authority.
+//! Event owner used by GPUI. Pending previews never authorize activation; one-unit Basic local results do.
 use super::*;
 #[derive(Clone, Debug)]
 pub enum Input {
@@ -23,7 +23,15 @@ pub enum Input {
     },
     Hide,
     Show,
-    Invalidate,
+    Invalidate {
+        text: Option<String>,
+    },
+    ArgumentValue(Option<String>),
+    DirectoryResolved {
+        ticket: u64,
+        result: Result<String, String>,
+    },
+    SelectTerminalSession(Option<String>),
     BackendChanged,
     TerminalMode(bool),
 }
@@ -56,6 +64,23 @@ pub enum Effect {
         query: String,
         rank: usize,
     },
+    ResolveDirectory {
+        ticket: u64,
+        path: String,
+    },
+    OpenAiChat {
+        ticket: u64,
+        boot: Option<AiBoot>,
+    },
+    OpenTerminal {
+        ticket: u64,
+        command: Option<String>,
+        session_id: Option<String>,
+    },
+    OpenNote {
+        ticket: u64,
+        note_id: u64,
+    },
     Hide,
     RecordQuery(String),
 }
@@ -68,6 +93,11 @@ pub struct Launcher {
     pub composing: bool,
     pub input: String,
     pub terminal_mode: bool,
+    pub list_selection_active: bool,
+    pub selected_terminal_session: Option<String>,
+    argument_value: Option<String>,
+    resolving: Option<(u64, InputMode)>,
+    dirty: bool,
     composition_draft: Option<String>,
     ticket: u64,
     activation: Option<(u64, u64)>,
@@ -80,20 +110,86 @@ impl Launcher {
             self.session.rows.clone()
         }
     }
+    fn retire_activation(&mut self) {
+        self.activation = None;
+        self.resolving = None;
+        self.session.activating = false;
+    }
+    fn reset_hidden(&mut self) {
+        self.visible = false;
+        self.composing = false;
+        self.composition_draft = None;
+        self.input.clear();
+        self.terminal_mode = false;
+        self.list_selection_active = false;
+        self.selected_terminal_session = None;
+        self.argument_value = None;
+        self.retire_activation();
+        self.session.reset_transport();
+        self.session.hide();
+        self.dirty = true;
+    }
+    fn begin_submit(&mut self) -> u64 {
+        self.ticket += 1;
+        self.session.activating = true;
+        self.activation = Some((self.ticket, self.session.generation));
+        self.ticket
+    }
+    fn submit(&mut self, mode: InputMode) -> Vec<Effect> {
+        let ticket = self.begin_submit();
+        if mode.mode == Mode::Terminal {
+            return vec![Effect::OpenTerminal {
+                ticket,
+                command: if self.selected_terminal_session.is_some() {
+                    None
+                } else {
+                    let command = self.input.trim().trim_start_matches('>').trim();
+                    (!command.is_empty()).then(|| command.to_owned())
+                },
+                session_id: self.selected_terminal_session.clone(),
+            }];
+        }
+        if let Some(path) = mode.ai_working_directory.clone() {
+            self.resolving = Some((ticket, mode));
+            vec![Effect::ResolveDirectory { ticket, path }]
+        } else {
+            let mut out = vec![Effect::OpenAiChat {
+                ticket,
+                boot: ai_boot(&mode, None),
+            }];
+            if let Some(q) = history_entry(&self.input, false) {
+                out.push(Effect::RecordQuery(q));
+            }
+            out
+        }
+    }
     fn activation_effects(&mut self) -> Vec<Effect> {
         let Some(row) = self.session.rows.get(self.session.selected) else {
             return vec![];
         };
         self.ticket += 1;
         self.activation = Some((self.ticket, self.session.generation));
-        let mut out = vec![Effect::Execute {
-            ticket: self.ticket,
-            generation: self.session.generation,
-            row_id: row.id.clone(),
-            action: row.action.clone(),
-            query: self.session.query.clone(),
-            rank: self.session.selected,
-        }];
+        let mut out = if row.category == "quick-notes" {
+            if let Some(id) = row.id.strip_prefix("note:").and_then(|id| id.parse().ok()) {
+                vec![Effect::OpenNote {
+                    ticket: self.ticket,
+                    note_id: id,
+                }]
+            } else {
+                self.retire_activation();
+                self.error = Some("Invalid note identity".into());
+                return vec![];
+            }
+        } else {
+            vec![Effect::Execute {
+                ticket: self.ticket,
+                generation: self.session.generation,
+                row_id: row.id.clone(),
+                action: row.action.clone(),
+                query: self.session.query.clone(),
+                rank: self.session.selected,
+            }]
+        };
         if let Some(q) = history_entry(&self.input, self.terminal_mode) {
             out.push(Effect::RecordQuery(q));
         }
@@ -112,6 +208,11 @@ impl Launcher {
                 Mode::Terminal => {
                     self.session.fail(generation, now);
                 }
+                Mode::Basic if query.encode_utf16().count() == 1 => {
+                    // This synchronous, current-generation local result is activation authority.
+                    let rows = self.cache.preview(&query);
+                    self.session.complete(generation, rows, now);
+                }
                 _ => out.push(Effect::Search { generation, query }),
             }
         } else if let Some(delay) = self.session.request_delay_ms(now) {
@@ -125,6 +226,10 @@ impl Launcher {
         match input {
             Input::Composition(active) => {
                 self.composing = active;
+                if active {
+                    self.retire_activation();
+                    self.session.cancel_enter();
+                }
                 if !active {
                     if let Some(s) = self.composition_draft.take() {
                         self.input = s.clone();
@@ -135,6 +240,8 @@ impl Launcher {
             }
             Input::Edit(s) => {
                 self.error = None;
+                self.list_selection_active = false;
+                self.selected_terminal_session = None;
                 if self.composing {
                     self.composition_draft = Some(s);
                 } else {
@@ -143,6 +250,7 @@ impl Launcher {
                         != input_mode(&self.input, self.terminal_mode).mode;
                     self.input = s;
                     if q != self.session.query || changed_mode {
+                        self.retire_activation();
                         self.session.commit(q, now);
                         self.drain(now, &mut out);
                     }
@@ -177,13 +285,24 @@ impl Launcher {
                         self.session.fail(generation, now)
                     }
                 };
+                if accepted {
+                    self.list_selection_active = false;
+                }
                 if accepted && success && self.session.deferred_enter(now) {
                     out.extend(self.activation_effects());
                 }
                 self.drain(now, &mut out);
             }
             Input::Enter { repeat } => {
-                if !self.composing && self.session.enter(now, repeat) {
+                let mode = input_mode(&self.input, self.terminal_mode);
+                if !repeat
+                    && !self.composing
+                    && !self.session.activating
+                    && (mode.mode == Mode::Terminal
+                        || (mode.mode == Mode::Ai && !self.list_selection_active))
+                {
+                    out.extend(self.submit(mode));
+                } else if !self.composing && self.session.enter(now, repeat) {
                     out.extend(self.activation_effects());
                 } else if self.session.pending() && !repeat && !self.composing {
                     out.push(Effect::Schedule {
@@ -195,12 +314,50 @@ impl Launcher {
                 if generation == self.session.generation && !self.composing {
                     if let Some(index) = self.session.rows.iter().position(|r| r.id == id) {
                         if self.session.click(index) {
+                            self.list_selection_active = true;
                             out.extend(self.activation_effects());
                         }
                     }
                 }
             }
-            Input::Move(delta) => self.session.move_selection(delta),
+            Input::Move(delta) => {
+                if !self.composing && !self.session.pending() && !self.session.rows.is_empty() {
+                    self.list_selection_active = true;
+                    self.session.move_selection(delta);
+                }
+            }
+            Input::ArgumentValue(value) => self.argument_value = value,
+            Input::SelectTerminalSession(id) => {
+                self.selected_terminal_session = id;
+                self.list_selection_active = self.selected_terminal_session.is_some();
+            }
+            Input::DirectoryResolved { ticket, result } => {
+                if self
+                    .resolving
+                    .as_ref()
+                    .is_some_and(|(owner, _)| *owner == ticket)
+                    && self.activation == Some((ticket, self.session.generation))
+                {
+                    let (_, mode) = self.resolving.take().unwrap();
+                    match result {
+                        Ok(path) if !path.is_empty() => {
+                            out.push(Effect::OpenAiChat {
+                                ticket,
+                                boot: ai_boot(&mode, Some(path)),
+                            });
+                            if let Some(q) = history_entry(&self.input, false) {
+                                out.push(Effect::RecordQuery(q));
+                            }
+                        }
+                        result => {
+                            self.retire_activation();
+                            self.error = Some(result.err().unwrap_or_else(|| {
+                                "Directory resolution returned an empty path".into()
+                            }));
+                        }
+                    }
+                }
+            }
             Input::ActivationComplete { ticket, result } => {
                 if let Some((owned, generation)) = self.activation {
                     if owned == ticket {
@@ -209,8 +366,7 @@ impl Launcher {
                         if current {
                             match result {
                                 Ok(()) => {
-                                    self.session.hide();
-                                    self.visible = false;
+                                    self.reset_hidden();
                                     out.push(Effect::Hide);
                                 }
                                 Err(e) => self.error = Some(e),
@@ -219,34 +375,45 @@ impl Launcher {
                     }
                 }
             }
-            Input::Hide => {
-                self.visible = false;
-                self.composing = false;
-                self.composition_draft = None;
-                self.input.clear();
-                self.session.hide();
-            }
+            Input::Hide => self.reset_hidden(),
             Input::Show => {
-                self.visible = true;
-                if self.session.query.is_empty() {
-                    self.session.commit(String::new(), now);
+                if !self.visible || self.dirty {
+                    self.visible = true;
+                    self.dirty = false;
+                    self.session.commit(request_input(&self.input), now);
                     self.drain(now, &mut out);
                 }
             }
-            Input::Invalidate => {
-                self.cache.invalidate();
-                self.session.commit(request_input(&self.input), now);
-                self.drain(now, &mut out);
+            Input::Invalidate { text } => {
+                if input_mode(&self.input, self.terminal_mode).mode != Mode::Deep
+                    && text.as_ref().is_none_or(|t| {
+                        *t == request_input(&self.input) || self.argument_value.as_ref() == Some(t)
+                    })
+                {
+                    self.list_selection_active = false;
+                    self.dirty = true;
+                    if self.visible {
+                        self.dirty = false;
+                        self.session.commit(request_input(&self.input), now);
+                        self.drain(now, &mut out);
+                    }
+                }
             }
             Input::BackendChanged => {
+                self.list_selection_active = false;
+                self.retire_activation();
                 self.session.reset_transport();
-                self.cache.invalidate();
-                self.session.commit(request_input(&self.input), now);
-                self.drain(now, &mut out);
+                self.dirty = true;
+                if self.visible {
+                    self.dirty = false;
+                    self.session.commit(request_input(&self.input), now);
+                    self.drain(now, &mut out);
+                }
             }
             Input::TerminalMode(active) => {
+                self.reset_hidden();
+                self.visible = true;
                 self.terminal_mode = active;
-                self.session.hide();
                 self.input = if active { ">".into() } else { String::new() };
             }
         }
@@ -260,14 +427,14 @@ mod tests {
     fn ime_search_errors_and_activation_owner() {
         let mut l = Launcher::default();
         l.update(Input::Composition(true), 0);
-        assert!(l.update(Input::Edit("雪".into()), 1).is_empty());
+        assert!(l.update(Input::Edit("雪山".into()), 1).is_empty());
         assert!(l.update(Input::Tick, 100).is_empty());
         l.update(Input::Composition(false), 101);
         assert_eq!(
             l.update(Input::Tick, 109),
             vec![Effect::Search {
                 generation: 1,
-                query: "雪".into()
+                query: "雪山".into()
             }]
         );
         l.update(Input::Enter { repeat: false }, 110);
@@ -345,9 +512,344 @@ mod mode_tests {
         l.update(Input::Edit("draft".into()), 10);
         l.update(Input::Hide, 11);
         assert!(!l.composing);
-        l.update(Input::BackendChanged, 12);
+        assert!(l.update(Input::BackendChanged, 12).is_empty());
+        l.update(Input::Show, 12);
         assert!(
             matches!(l.update(Input::Tick,20).as_slice(),[Effect::Search{query,..}]if query.is_empty())
         );
+    }
+}
+
+#[cfg(test)]
+mod opus_repairs {
+    use super::*;
+    fn result(l: &mut Launcher, rows: Vec<Row>, now: u64) {
+        let generation = l.session.generation;
+        l.update(
+            Input::SearchComplete {
+                generation,
+                result: Ok(rows),
+            },
+            now,
+        );
+    }
+    fn ticket(e: &[Effect]) -> u64 {
+        match e[0] {
+            Effect::Execute { ticket, .. }
+            | Effect::OpenAiChat { ticket, .. }
+            | Effect::OpenTerminal { ticket, .. }
+            | Effect::ResolveDirectory { ticket, .. } => ticket,
+            _ => panic!("{e:?}"),
+        }
+    }
+    #[test]
+    fn opus_h1_ai_enter_submits_until_history_deliberately_selected() {
+        let mut l = Launcher::default();
+        l.update(Input::Edit(" summarize my day".into()), 0);
+        l.update(Input::Tick, 8);
+        result(&mut l, vec![Row::command("resume", "Old chat")], 9);
+        let e = l.update(Input::Enter { repeat: false }, 10);
+        assert!(
+            matches!(&e[0],Effect::OpenAiChat{boot:Some(AiBoot::Submit{prompt,..}),..}if prompt=="summarize my day")
+        );
+        assert!(l.update(Input::Enter { repeat: true }, 11).is_empty());
+        assert!(l.update(Input::Enter { repeat: false }, 11).is_empty());
+        l.update(
+            Input::ActivationComplete {
+                ticket: ticket(&e),
+                result: Err("failed".into()),
+            },
+            12,
+        );
+        l.update(Input::Move(1), 13);
+        assert!(l.list_selection_active);
+        assert!(
+            matches!(&l.update(Input::Enter{repeat:false},14)[0],Effect::Execute{row_id,..}if row_id=="command:resume")
+        );
+    }
+    #[test]
+    fn opus_h1_directory_resolution_is_once_owned_and_error_preserves_draft() {
+        let mut l = Launcher::default();
+        l.update(Input::Edit("/work  task".into()), 0);
+        let e = l.update(Input::Enter { repeat: false }, 1);
+        let old = ticket(&e);
+        l.update(Input::Edit("/else  ".into()), 2);
+        assert!(l
+            .update(
+                Input::DirectoryResolved {
+                    ticket: old,
+                    result: Ok("/work".into())
+                },
+                3
+            )
+            .is_empty());
+        let e = l.update(Input::Enter { repeat: false }, 4);
+        let t = ticket(&e);
+        l.update(
+            Input::DirectoryResolved {
+                ticket: t,
+                result: Err("Not a directory".into()),
+            },
+            5,
+        );
+        assert_eq!(l.error.as_deref(), Some("Not a directory"));
+        assert_eq!(l.input, "/else  ");
+        let e = l.update(Input::Enter { repeat: false }, 6);
+        let t = ticket(&e);
+        let e = l.update(
+            Input::DirectoryResolved {
+                ticket: t,
+                result: Ok("/resolved".into()),
+            },
+            7,
+        );
+        assert!(
+            matches!(&e[0],Effect::OpenAiChat{boot:Some(AiBoot::NewChat{working_directory}),..}if working_directory=="/resolved")
+        );
+        assert!(l
+            .update(
+                Input::DirectoryResolved {
+                    ticket: t,
+                    result: Ok("/again".into())
+                },
+                8
+            )
+            .is_empty());
+        l.update(Input::Hide, 9);
+        assert!(l
+            .update(
+                Input::ActivationComplete {
+                    ticket: t,
+                    result: Ok(())
+                },
+                10
+            )
+            .is_empty());
+    }
+    #[test]
+    fn opus_h1_empty_chat_terminal_command_session_and_ime() {
+        let mut l = Launcher::default();
+        l.update(Input::Edit(" ".into()), 0);
+        assert!(matches!(
+            l.update(Input::Enter { repeat: false }, 1)[0],
+            Effect::OpenAiChat { boot: None, .. }
+        ));
+        l.update(Input::TerminalMode(true), 2);
+        l.update(Input::Edit(">echo hi".into()), 3);
+        l.update(Input::Composition(true), 4);
+        assert!(l.update(Input::Enter { repeat: false }, 5).is_empty());
+        l.update(Input::Composition(false), 6);
+        let e = l.update(Input::Enter { repeat: false }, 7);
+        assert!(
+            matches!(&e[0],Effect::OpenTerminal{command:Some(c),session_id:None,..}if c=="echo hi")
+        );
+        l.update(
+            Input::ActivationComplete {
+                ticket: ticket(&e),
+                result: Err("failed".into()),
+            },
+            8,
+        );
+        l.update(Input::SelectTerminalSession(Some("session:1".into())), 9);
+        assert!(
+            matches!(&l.update(Input::Enter{repeat:false},10)[0],Effect::OpenTerminal{command:None,session_id:Some(id),..}if id=="session:1")
+        );
+    }
+    #[test]
+    fn opus_m1_invalidation_payload_deep_hidden_and_cache() {
+        let mut l = Launcher::default();
+        l.update(Input::Show, 0);
+        l.update(Input::Edit("alpha".into()), 0);
+        l.update(Input::Tick, 8);
+        result(&mut l, vec![Row::command("alpha", "Alpha")], 9);
+        assert!(l
+            .update(
+                Input::Invalidate {
+                    text: Some("other".into())
+                },
+                10
+            )
+            .is_empty());
+        assert!(!l.session.pending());
+        l.update(Input::ArgumentValue(Some("arg".into())), 10);
+        l.update(
+            Input::Invalidate {
+                text: Some("arg".into()),
+            },
+            11,
+        );
+        assert_eq!(l.display_rows().len(), 1);
+        assert!(matches!(&l.update(Input::Tick,19)[0],Effect::Search{query,..}if query=="alpha"));
+        l.update(Input::Hide, 20);
+        assert!(l.update(Input::Invalidate { text: None }, 21).is_empty());
+        assert!(l.update(Input::BackendChanged, 22).is_empty());
+        assert!(l.update(Input::Tick, 30).is_empty());
+        l.update(Input::Show, 31);
+        assert!(matches!(&l.update(Input::Tick,39)[0],Effect::Search{query,..}if query.is_empty()));
+        l.update(Input::Edit("!deep".into()), 40);
+        let g = l.session.generation;
+        assert!(l.update(Input::Invalidate { text: None }, 41).is_empty());
+        assert_eq!(l.session.generation, g);
+    }
+    #[test]
+    fn opus_m2_backend_retires_activation_and_stale_completion_cannot_unlock_new() {
+        let mut l = Launcher::default();
+        l.update(Input::Show, 0);
+        l.update(Input::Edit("query".into()), 0);
+        l.update(Input::Tick, 8);
+        result(&mut l, vec![Row::command("x", "X")], 9);
+        let old = ticket(&l.update(Input::Enter { repeat: false }, 10));
+        l.update(Input::BackendChanged, 11);
+        assert!(!l.session.activating);
+        l.update(Input::Tick, 19);
+        result(&mut l, vec![Row::command("new", "New")], 20);
+        let new = ticket(&l.update(Input::Enter { repeat: false }, 21));
+        assert_ne!(new, old);
+        assert!(l
+            .update(
+                Input::ActivationComplete {
+                    ticket: old,
+                    result: Ok(())
+                },
+                22
+            )
+            .is_empty());
+        assert!(l.session.activating);
+        assert_eq!(l.input, "query");
+        l.update(
+            Input::ActivationComplete {
+                ticket: new,
+                result: Ok(()),
+            },
+            23,
+        );
+        assert!(!l.visible);
+    }
+    #[test]
+    fn opus_m3_all_hides_reset_input_composition_and_mode() {
+        let mut l = Launcher::default();
+        l.update(Input::TerminalMode(true), 0);
+        l.update(Input::Edit(">pwd".into()), 1);
+        let t = ticket(&l.update(Input::Enter { repeat: false }, 2));
+        l.update(
+            Input::ActivationComplete {
+                ticket: t,
+                result: Ok(()),
+            },
+            3,
+        );
+        assert!(l.input.is_empty());
+        assert!(!l.terminal_mode);
+        assert!(!l.composing);
+        l.update(Input::Show, 4);
+        assert!(matches!(&l.update(Input::Tick,12)[0],Effect::Search{query,..}if query.is_empty()));
+    }
+    #[test]
+    fn opus_m4_one_utf16_unit_has_local_authority_and_stale_click_fails() {
+        let mut l = Launcher::default();
+        l.cache
+            .accept("", vec![Arc::new(Row::command("alpha", "Alpha"))]);
+        l.update(Input::Edit("a".into()), 0);
+        assert!(l.update(Input::Tick, 8).is_empty());
+        assert!(!l.session.pending());
+        assert_eq!(l.session.rows.len(), 1);
+        assert!(matches!(
+            l.update(
+                Input::Click {
+                    generation: l.session.generation,
+                    id: "command:alpha".into()
+                },
+                9
+            )[0],
+            Effect::Execute { .. }
+        ));
+        l.update(Input::Hide, 10);
+        l.update(Input::Edit("😀".into()), 11);
+        assert!(matches!(
+            l.update(Input::Tick, 19)[0],
+            Effect::Search { .. }
+        ));
+    }
+    #[test]
+    fn opus_note_rows_emit_typed_navigation_identity() {
+        let mut l = Launcher::default();
+        l.update(Input::Edit("note".into()), 0);
+        l.update(Input::Tick, 8);
+        let mut r = Row::command("x", "Note");
+        r.id = "note:123".into();
+        r.category = "quick-notes".into();
+        result(&mut l, vec![r], 9);
+        assert!(matches!(
+            l.update(Input::Enter { repeat: false }, 10)[0],
+            Effect::OpenNote { note_id: 123, .. }
+        ));
+    }
+}
+
+#[cfg(test)]
+mod composition_ownership_repair {
+    use super::*;
+    #[test]
+    fn opus_ime_cancels_deferred_enter_before_async_result() {
+        let mut l = Launcher::default();
+        l.update(Input::Edit("query".into()), 0);
+        l.update(Input::Tick, 8);
+        l.update(Input::Enter { repeat: false }, 9);
+        l.update(Input::Composition(true), 10);
+        assert!(l
+            .update(
+                Input::SearchComplete {
+                    generation: l.session.generation,
+                    result: Ok(vec![Row::command("x", "X")])
+                },
+                11
+            )
+            .is_empty());
+        l.update(Input::Composition(false), 12);
+        assert!(l.update(Input::Tick, 13).is_empty());
+        assert!(!l.session.activating);
+    }
+}
+
+#[cfg(test)]
+mod refreshed_selection_repair {
+    use super::*;
+    #[test]
+    fn opus_ai_history_selection_cannot_transfer_to_refreshed_first_row() {
+        for backend_change in [false, true] {
+            let mut l = Launcher::default();
+            l.update(Input::Show, 0);
+            l.update(Input::Edit(" task".into()), 0);
+            l.update(Input::Tick, 8);
+            l.update(
+                Input::SearchComplete {
+                    generation: l.session.generation,
+                    result: Ok(vec![Row::command("old", "Old")]),
+                },
+                9,
+            );
+            l.update(Input::Move(1), 10);
+            assert!(l.list_selection_active);
+            l.update(
+                if backend_change {
+                    Input::BackendChanged
+                } else {
+                    Input::Invalidate { text: None }
+                },
+                11,
+            );
+            assert!(!l.list_selection_active);
+            l.update(Input::Tick, 19);
+            l.update(
+                Input::SearchComplete {
+                    generation: l.session.generation,
+                    result: Ok(vec![Row::command("new", "New")]),
+                },
+                20,
+            );
+            assert!(
+                matches!(&l.update(Input::Enter{repeat:false},21)[0],Effect::OpenAiChat{boot:Some(AiBoot::Submit{prompt,..}),..}if prompt=="task")
+            );
+        }
     }
 }

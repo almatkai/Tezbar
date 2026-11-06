@@ -1,5 +1,12 @@
 //! CSS colour parsing and stable copy rows, ported from renderer/colorConverter.ts.
 use regex::Regex;
+macro_rules! cached_regex {
+    ($pattern:literal) => {{
+        static RE: std::sync::LazyLock<Regex> =
+            std::sync::LazyLock::new(|| Regex::new($pattern).unwrap());
+        &*RE
+    }};
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Rgba {
     pub r: f64,
@@ -28,9 +35,7 @@ fn f(x: f64) -> String {
     super::number(x)
 }
 fn float(s: &str) -> Option<f64> {
-    let c = Regex::new(r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
-        .unwrap()
-        .find(s.trim())?;
+    let c = cached_regex!(r"^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?").find(s.trim())?;
     c.as_str().parse::<f64>().ok().filter(|n| n.is_finite())
 }
 pub fn parse_color(s: &str) -> Option<Rgba> {
@@ -60,9 +65,7 @@ pub fn parse_color(s: &str) -> Option<Rgba> {
             source: Source::Hex,
         });
     }
-    let c = Regex::new(r"(?i)^(rgba?|hsla?)\((.+)\)$")
-        .unwrap()
-        .captures(s)?;
+    let c = cached_regex!(r"(?i)^(rgba?|hsla?)\((.+)\)$").captures(s)?;
     let body = c[2].replace('/', " / ");
     let p: Vec<_> = if body.contains(',') {
         body.split(',').map(str::trim).collect()

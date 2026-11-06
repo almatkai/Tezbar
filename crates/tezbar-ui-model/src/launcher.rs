@@ -115,6 +115,12 @@ pub enum Mode {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InputMode {
+    pub parsed_search_query: ParsedSearchQuery,
+    pub is_deep_search_mode: bool,
+    pub slash_query: String,
+    pub is_slash_input: bool,
+    pub is_application_input: bool,
+    pub is_completion_input: bool,
     pub mode: Mode,
     pub query: String,
     pub ai_task: String,
@@ -155,7 +161,15 @@ pub fn input_mode(value: &str, terminal: bool) -> InputMode {
     } else {
         Mode::Basic
     };
+    let slash = !terminal && value.trim_start().starts_with('/');
+    let app = !terminal && value.trim_start().starts_with('`');
     InputMode {
+        parsed_search_query: parse_search_query(value),
+        is_deep_search_mode: !terminal && deep,
+        slash_query: value.trim_start().into(),
+        is_slash_input: slash,
+        is_application_input: app,
+        is_completion_input: !terminal && !ai && (slash || app),
         query: if deep {
             value[1..].trim().into()
         } else {
@@ -166,13 +180,16 @@ pub fn input_mode(value: &str, terminal: bool) -> InputMode {
         ai_working_directory: cwd,
     }
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum AiBoot {
     NewChat {
+        #[serde(rename = "workingDirectory")]
         working_directory: String,
     },
     Submit {
         prompt: String,
+        #[serde(rename = "workingDirectory", skip_serializing_if = "Option::is_none")]
         working_directory: Option<String>,
     },
 }
@@ -189,6 +206,24 @@ pub fn ai_boot(m: &InputMode, resolved: Option<String>) -> Option<AiBoot> {
     } else {
         None
     }
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ParsedSearchQuery {
+    pub mode: &'static str,
+    pub query: String,
+}
+pub fn parse_search_query(s: &str) -> ParsedSearchQuery {
+    let deep = s.starts_with('!');
+    ParsedSearchQuery {
+        mode: if deep { "deep" } else { "basic" },
+        query: if deep { s[1..].trim() } else { s.trim() }.into(),
+    }
+}
+pub fn deep_search_input(s: &str) -> String {
+    format!("!{}", s.trim())
+}
+pub fn deep_search_draft_input(s: &str) -> String {
+    format!("!{s}")
 }
 pub fn request_input(s: &str) -> String {
     let m = input_mode(s, false);
@@ -389,7 +424,7 @@ pub fn optimistic<'a>(rows: &'a [Arc<Row>], query: &str) -> Vec<&'a Arc<Row>> {
 }
 pub fn good_metadata(query: &str, rows: &[Arc<Row>]) -> bool {
     let q = query.trim().to_lowercase();
-    if q.chars().count() < 2 || text::tokens(&q).is_empty() {
+    if q.encode_utf16().count() < 2 || text::tokens(&q).is_empty() {
         return true;
     }
     let variants = text::variants(&q);
@@ -418,7 +453,8 @@ pub fn good_metadata(query: &str, rows: &[Arc<Row>]) -> bool {
                         m == q
                             || m.starts_with(q)
                             || q.starts_with(m)
-                                && m.chars().count() >= 3.max((q.chars().count() * 7).div_ceil(10))
+                                && m.encode_utf16().count()
+                                    >= 3.max((q.encode_utf16().count() * 7).div_ceil(10))
                     })
                 })
                 && (terms.len() > 1 || r.score >= 650.)
@@ -427,7 +463,7 @@ pub fn good_metadata(query: &str, rows: &[Arc<Row>]) -> bool {
 }
 pub fn deep_recommendation(query: &str, rows: &[Arc<Row>]) -> Option<Row> {
     let q = query.trim();
-    if q.chars().count() < 3 || good_metadata(q, rows) {
+    if q.encode_utf16().count() < 3 || good_metadata(q, rows) {
         return None;
     }
     let mut r = Row::command(

@@ -1,6 +1,7 @@
 # M3 Lane A — launcher and utilities models
 
-Status: **Rust-model-ready**, with the validation below. No GPUI view ledger row is
+Status: **model repairs implemented; fresh independent closure and native adapters pending**.
+Current evidence supersedes historical validation below: [M3A repair evidence](launcher-review-repair-evidence.md) and [per-finding dispositions](launcher-review-repairs.md). No GPUI view ledger row is
 marked native. Parent continues the full application migration and integrates the
 controllers with GPUI surfaces and effect executors. This document does not claim
 completion of the full migration.
@@ -17,14 +18,14 @@ Parent supplied the documented `launcher::text` export and refreshed shared lock
 | --- | --- |
 | `tezbar-ui-model/src/launcher.rs` | `Row`/`Action` serde wire types; `input_mode`, `ai_boot`, request normalization/history; validated integer and multi-field `Arguments`; borrowed optimistic filtering using core `variants`, `tokens`, `app_match`, `surface_boost`; complete metadata coverage/deep recommendation; stable candidate merge; bounded `ResultCache`; keyboard and two-step `escape_result`; owner-token `EscapeGate`; Quick Look navigation; release-note row policy and recents |
 | `launcher/session.rs` | Promoted `SearchSession<R>` and all six unchanged prototype regression case bodies; fixed 8 ms coalescing, one running request/one replaceable pending input, generation suppression, one-second deferred Enter, repeat suppression, stale click rejection, activation ownership; explicit transport-epoch reset for backend recovery |
-| `launcher/controller.rs` | `Launcher::update(Input, now_ms) -> Vec<Effect>`; IME suppression, raw AI sentinel preservation, mode-specific search/path/application/chat-history effects, invalidation/backend restart, identity-bearing click and activation tickets, failed activation keeps input/error, successful current activation hides; speculative cached rows never authorize activation |
+| `launcher/controller.rs` | `Launcher::update(Input, now_ms) -> Vec<Effect>`; IME suppression, raw AI sentinel preservation, mode-specific search/path/application/chat-history effects, invalidation/backend restart, identity-bearing click and activation tickets, failed activation keeps input/error, successful current activation hides; pending speculative cached rows never authorize activation; completed one-UTF-16-unit Basic local results are authoritative |
 | `ui_state.rs`, `ui_state/tests.rs` | `UiState`, `Pin`, `Theme`, terminal defaults, import/export/validation; existing valid native state wins, corrupt existing native file is an error and is not overwritten; unknown native JSON fields preserved; import report identifies rejected keys and ignored caches; explicit-path atomic private-file write adapter and temporary-directory fixture |
 | `notes.rs` | Sanitized rich HTML subset; `Document::{load,html,replace,format,toggle_style,enter}` using code-point selections; block/list and inline formatting preserved, paste sanitization, list continuation, bounded delta undo/redo; title/summary derivation; `Notes` CRUD and revision/identity-owned 260 ms autosave, 1200 ms saved feedback, retry, stale/deleted-save suppression, per-note dirty drafts |
 | `utilities.rs` | `Clipboard` typed content/filter/selection/restore/delete/pin/clear/image/convert/QR/vault-draft effects; secure previews and conversions concealed; bounded lazy image storage; snippets `Crud`/`SnippetDraft` with readonly safeguards, field/trigger bounds and uniqueness, confirmation for snippet deletion, revision-owned saves; legacy `Quicklink` schema only; `EmojiPicker` visible grid/recent identity and hide-then-paste effect; bounded UTF-16-accounted LRU `StringCache`; visible/manual `UtilityPoll<T>`, `Permissions`, paged `Indexing` with stale filter suppression/retry |
 | `tezbar-core/src/instant.rs`, `instant/calculator.rs` | Bounded recursive-descent parser/evaluator; arithmetic, functions/constants, degrees, percentage-of, length/mass/temperature conversion; finite output, nesting and input limits. No eval, scripting engine or subprocess |
 | `instant/currency.rs` | Natural/multilingual parsing, owned aliases, Fuse-compatible fuzzy matching, preference frequency/recency/pin policy; generation-owned rate effects and finite conversion; hook-equivalent `ScheduledConversion` at 110 ms; injected `AmountFormatter` for target/source currency text |
 | `instant/color.rs` | CSS hex/RGB/HSL parsing, clamping and alpha; stable format keys/order, HEX/RGB/percent/HSLA/HSVA clipboard strings |
-| `instant/transform.rs`, `transform_tests.rs` | JSON insertion/integer-key ordering; Unicode base64 and URL encoding; MD5/SHA-256/SHA-512; counts and report; all case styles; timestamp parsing with injected clock; clipboard auto-detection actions; bounded input |
+| `instant/transform.rs`, `transform_tests.rs` | JSON insertion/integer-key ordering; Unicode base64 and URL encoding; MD5/SHA-256/SHA-512; counts and report; all case styles; timestamp parsing with injected clock; clipboard auto-detection actions; one ordered JSON parse with indexed duplicates and JS finite-number display; structured locale formatter seam; bounded input |
 | `instant/qr.rs` | Offline byte-mode level-M versions 1–10 QR, SVG compatibility data URL, direct 512×512 PNG and PNG data URL through existing image and optional qrcode; 213 UTF-8 byte cap; independent matrix decoder tests include multiblock RS and Unicode |
 | `instant/emoji.rs`, `fuzzy.rs` and data/fixture JSON | All 585 project emoji rows and all 98 project currency aliases; UTF-16 Bitap ignore-location matching, field norm/weights and keyword product scoring; source-order ties, query expansion/stemming/category filtering; 57 source-generated top-20 fixtures. Fuse Apache-2.0 license retained alongside the adaptation |
 | `tezbar-update/src/notes.rs` | `Notes::{open,complete,close}`, typed fetch/cancel effects, bundled current-version notes without HTTP, missing-bundle error without remote substitution, exact-tag verification, untruncated Markdown, bounded response, stale/cancel suppression; first-install/read/unread policy |
@@ -88,7 +89,7 @@ colour, currency and emoji input at 4096 bytes. Notes cap at 1 MiB with nesting 
 undo stores changed spans, max 100 entries/4 MiB per draft, and open note drafts have
 count/retained-size guards. No whole history/tree clone occurs on each editor input.
 
-## Validation
+## Historical initial validation (superseded by repair evidence)
 
 Raw logs: `/tmp/tezbar-native-m03-launcher-utilities-evidence/`.
 All Cargo commands used `CARGO_BUILD_JOBS=2`, existing locks and the assigned feature.
@@ -127,9 +128,7 @@ PTY, HTTP rate call or release-note HTTP request is started by controller constr
 
 No unresolved dependency or export request remains. Parent supplied the core text
 export and clarified the legacy-only quicklink contract. `AmountFormatter` is the
-intentional locale seam; connect it to the native platform formatter. Timestamp
-`Local` is deterministic UTC in the portable function; native localized presentation
-can use the parsed instant. Native code always has SHA-256, so a browser insecure-context
+intentional locale seam; connect it to the native platform formatter. Timestamp/count/relative data is now structured and formatted through injected `PresentationFormatter`; English fallback uses the actual local timezone and corrected numeric-auto wording. Native OS locale acceptance remains explicit. Native code always has SHA-256, so a browser insecure-context
 FNV fallback is unnecessary.
 
 Required remaining acceptance includes GPUI view wiring, marked-text/IME and native

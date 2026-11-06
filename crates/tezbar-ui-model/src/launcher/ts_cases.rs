@@ -32,32 +32,17 @@ fn run(c: &Value) -> Value {
     match c["function"].as_str().unwrap() {
         "commandBarInputMode" => {
             let m = input_mode(s(0), a[1].as_bool().unwrap());
-            let terminal = a[1].as_bool().unwrap();
-            let deep = !terminal && s(0).starts_with('!');
-            let ai = m.mode == Mode::Ai;
-            let slash = !terminal && s(0).trim_start().starts_with('/');
-            let app = !terminal && s(0).trim_start().starts_with('`');
-            let mut v = json!({"parsedSearchQuery":{"mode":if s(0).starts_with('!'){"deep"}else{"basic"},"query":if s(0).starts_with('!'){s(0)[1..].trim()}else{s(0).trim()}},"isDeepSearchMode":deep,"isAiMode":ai,"aiTask":m.ai_task,"slashQuery":s(0).trim_start(),"isSlashInput":slash,"isApplicationInput":app,"isCompletionInput":!terminal&&!ai&&(slash||app)});
+            let mut v = json!({"parsedSearchQuery":m.parsed_search_query,"isDeepSearchMode":m.is_deep_search_mode,"isAiMode":m.mode == Mode::Ai,"aiTask":m.ai_task,"slashQuery":m.slash_query,"isSlashInput":m.is_slash_input,"isApplicationInput":m.is_application_input,"isCompletionInput":m.is_completion_input});
             if let Some(cwd) = m.ai_working_directory {
                 v["aiWorkingDirectory"] = json!(cwd);
             }
             v
         }
         "aiChatBootForInput" => {
-            let task = a[0]["aiTask"].as_str().unwrap_or("");
-            let cwd = a[0]["aiWorkingDirectory"].as_str();
-            let resolved = a[1].as_str();
-            if cwd.is_some() && resolved.is_some() && task.is_empty() {
-                json!({"kind":"newChat","workingDirectory":resolved})
-            } else if !task.is_empty() {
-                let mut v = json!({"kind":"submit","prompt":task});
-                if let Some(cwd) = resolved {
-                    v["workingDirectory"] = json!(cwd);
-                }
-                v
-            } else {
-                Value::Null
-            }
+            let mut mode = input_mode(" ", false);
+            mode.ai_task = a[0]["aiTask"].as_str().unwrap_or("").into();
+            mode.ai_working_directory = a[0]["aiWorkingDirectory"].as_str().map(String::from);
+            serde_json::to_value(ai_boot(&mode, a[1].as_str().map(String::from))).unwrap()
         }
         "sanitizeLauncherArgument" | "validateLauncherArgument" => {
             let v = if a[1].is_object() {
@@ -78,17 +63,15 @@ fn run(c: &Value) -> Value {
         }
         "optimisticSearchResults" => row_json(optimistic(&rows(&a[0]), s(1)).into_iter().cloned()),
         "launcherQueryHistoryEntry" => json!(history_entry(s(0), a[1].as_bool().unwrap())),
-        "addLauncherQueryHistoryEntry" => json!([s(0)]),
+        "addLauncherQueryHistoryEntry" => {
+            let mut state = crate::ui_state::UiState::default();
+            state.record_launcher_query(s(0));
+            json!(state.launcher_query_history)
+        }
         "parseLauncherQueryHistory" => {
-            let v: Value = serde_json::from_str(s(0)).unwrap_or(Value::Null);
-            json!(v
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str)
-                .filter(|s| !s.trim().is_empty())
-                .take(1)
-                .collect::<Vec<_>>())
+            let mut state = crate::ui_state::UiState::default();
+            let _ = state.import_key("tezbar:launcher-query-history:v1", s(0));
+            json!(state.launcher_query_history)
         }
         "shouldRecallLastLauncherQuery" => {
             let v = &a[0];
@@ -100,11 +83,9 @@ fn run(c: &Value) -> Value {
                 v["visibleResultCount"].as_u64().unwrap() as usize
             ))
         }
-        "parseSearchQuery" => {
-            json!({"mode":if s(0).starts_with('!'){"deep"}else{"basic"},"query":if s(0).starts_with('!'){s(0)[1..].trim()}else{s(0).trim()}})
-        }
-        "deepSearchInput" => json!(format!("!{}", s(0).trim())),
-        "deepSearchDraftInput" => json!(format!("!{}", s(0))),
+        "parseSearchQuery" => json!(parse_search_query(s(0))),
+        "deepSearchInput" => json!(deep_search_input(s(0))),
+        "deepSearchDraftInput" => json!(deep_search_draft_input(s(0))),
         "searchRequestInput" => json!(request_input(s(0))),
         "hasGoodMetadataMatch" => json!(good_metadata(s(0), &rows(&a[1]))),
         "buildDeepSearchRecommendation" => deep_recommendation(s(0), &rows(&a[1]))

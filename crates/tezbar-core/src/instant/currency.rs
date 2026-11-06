@@ -1,5 +1,12 @@
 //! Natural currency intents and deterministic preferences. Transport remains in core.
 use regex::Regex;
+macro_rules! cached_regex {
+    ($pattern:literal) => {{
+        static RE: std::sync::LazyLock<Regex> =
+            std::sync::LazyLock::new(|| Regex::new($pattern).unwrap());
+        &*RE
+    }};
+}
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::LazyLock};
 static SYNONYMS: LazyLock<Vec<(String, String)>> =
@@ -54,7 +61,25 @@ fn symbol(c: char) -> Option<&'static str> {
     }
 }
 fn tokens(s: &str) -> Vec<String> {
-    s.split(|c: char| !c.is_alphanumeric() && c != '.' && symbol(c).is_none())
+    let cleaned: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric()
+                || ('а'..='я').contains(&c)
+                || ('А'..='Я').contains(&c)
+                || matches!(c, 'ё' | 'Ё')
+                || c.is_whitespace()
+                || c == '.'
+                || symbol(c).is_some()
+            {
+                c
+            } else {
+                ' '
+            }
+        })
+        .collect();
+    cleaned
+        .split_whitespace()
         .filter(|s| !s.is_empty() && !['\0'].contains(&s.chars().next().unwrap()))
         .filter(|s| {
             ![
@@ -67,17 +92,31 @@ fn tokens(s: &str) -> Vec<String> {
         .collect()
 }
 fn first(s: &str) -> Option<String> {
-    tokens(s).iter().find_map(|t| fuzzy_currency(t))
+    tokens(s)
+        .iter()
+        .find_map(|t| fuzzy_currency(t))
+        .or_else(|| {
+            let compact = s.split_whitespace().collect::<String>();
+            (compact.encode_utf16().count() >= 3)
+                .then(|| fuzzy_currency(&compact))
+                .flatten()
+        })
 }
 fn extract(s: &str) -> Option<(f64, Option<String>, String)> {
     let s = s.trim();
-    let (prefix, s) = if s.chars().next().and_then(symbol).is_some() {
+    let (prefix, s) = if s
+        .chars()
+        .next()
+        .filter(|c| *c != '฿')
+        .and_then(symbol)
+        .is_some()
+    {
         let c = s.chars().next()?;
         (symbol(c).map(String::from), s[c.len_utf8()..].trim_start())
     } else {
         (None, s)
     };
-    let m = Regex::new(r"^\d+(?:[.,]\d+)?\s*").unwrap().find(s)?;
+    let m = cached_regex!(r"^\d+(?:[.,]\d+)?\s*").find(s)?;
     let mut n = m.as_str().trim().to_string();
     if n.contains(',') {
         let tail = n.split(',').next_back()?;
@@ -92,7 +131,11 @@ fn extract(s: &str) -> Option<(f64, Option<String>, String)> {
         return None;
     }
     let rest = s[m.end()..].trim_start();
-    let (sym, rest) = if let Some(c) = rest.chars().next().filter(|c| symbol(*c).is_some()) {
+    let (sym, rest) = if let Some(c) = rest
+        .chars()
+        .next()
+        .filter(|c| *c != '฿' && symbol(*c).is_some())
+    {
         (
             symbol(c).map(String::from),
             rest[c.len_utf8()..].trim_start(),
@@ -103,21 +146,24 @@ fn extract(s: &str) -> Option<(f64, Option<String>, String)> {
     Some((amount, prefix.or(sym), rest.into()))
 }
 pub fn parse_currency_query(s: &str, default_to: &str) -> Option<Intent> {
-    if s.len() > 4096 || looks_like_pure_arithmetic(s) || Regex::new(r"\d\s*%").unwrap().is_match(s)
-    {
+    if s.len() > 4096 || looks_like_pure_arithmetic(s) {
         return None;
     }
     let s = s.trim();
-    let parts: Vec<_> = Regex::new(r"(?i)\s*(?:into|to|in|→|=>|➝|в|к|на|из)\s+")
-        .unwrap()
+    let parts: Vec<_> = cached_regex!(r"(?i)\s*(?:into|to|in|→|=>|➝|в|к|на|из)\s+")
         .split(s)
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .collect();
-    let (amount, sym, rest) = extract(parts.first().copied().unwrap_or(s))?;
+    let left = parts.first().copied().unwrap_or(s);
+    if cached_regex!(r"\d\s*%").is_match(left) {
+        return None;
+    }
+    let (amount, sym, rest) = extract(left)?;
     let (from, to, explicit) = if parts.len() >= 2 {
         (
             sym.or_else(|| first(&rest))
+                .or_else(|| first(left))
                 .unwrap_or_else(|| default_to.into()),
             first(&parts[1..].join(" "))?,
             true,
@@ -451,5 +497,19 @@ mod scheduled_tests {
         s.input("2$", false, &Preferences::default(), 111);
         s.input("/1$", true, &Preferences::default(), 112);
         assert!(s.tick(1000).is_none());
+    }
+}
+
+#[cfg(test)]
+mod opus_repairs {
+    use super::*;
+    #[test]
+    fn opus_currency_compact_fallback_script_and_percent_side() {
+        assert_eq!(first("u s d"), Some("USD".into()));
+        assert_eq!(tokens("ңusd ң eur"), vec!["usd", "eur"]);
+        let c = parse_currency_query("100 usd to eur 20%", "KZT").unwrap();
+        assert_eq!((c.from, c.to), ("USD".into(), "EUR".into()));
+        assert!(parse_currency_query("100% usd to eur", "KZT").is_none());
+        assert!(parse_currency_query("฿100 to usd", "EUR").is_none());
     }
 }

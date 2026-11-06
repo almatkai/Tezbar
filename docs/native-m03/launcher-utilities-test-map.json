@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "Rust-model-ready; native views pending",
+  "status": "M3A repairs implemented; fresh independent closure and native adapter acceptance pending",
   "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
   "branch": "feat/native-gpui-app",
   "original_ts_cases": 170,
@@ -495,7 +495,13 @@
       "rust_test": "launcher::ts_cases::ts_000_gives_ai_mode_priority_over_slash_path_completion_after_double_space",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "launcher::ai_boot",
+        "launcher::input_mode",
+        "launcher::parse_search_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/renderer/commandBarInputMode.test.ts",
@@ -503,7 +509,13 @@
       "rust_test": "launcher::ts_cases::ts_001_keeps_ai_mode_active_and_searches_chats_after_typing_beyond_the_double_space_switch",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "launcher::ai_boot",
+        "launcher::input_mode",
+        "launcher::parse_search_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/renderer/commandBarInputMode.test.ts",
@@ -511,7 +523,12 @@
       "rust_test": "launcher::ts_cases::ts_002_preserves_regular_ai_activation_when_two_spaces_are_trailing",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "launcher::input_mode",
+        "launcher::parse_search_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/renderer/commandBarInputMode.test.ts",
@@ -519,7 +536,12 @@
       "rust_test": "launcher::ts_cases::ts_003_does_not_treat_an_ordinary_internal_double_space_query_as_ai_mode",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "launcher::input_mode",
+        "launcher::parse_search_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/renderer/commandBarInputMode.test.ts",
@@ -527,7 +549,13 @@
       "rust_test": "launcher::ts_cases::ts_004_preserves_leading_space_ai_prompts_without_treating_them_as_directories",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "launcher::ai_boot",
+        "launcher::input_mode",
+        "launcher::parse_search_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/renderer/commandBarInputMode.test.ts",
@@ -535,7 +563,13 @@
       "rust_test": "launcher::ts_cases::ts_005_returns_null_boot_for_empty_ai_mode_prompt_so_newchat_can_be_opened",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "launcher::ai_boot",
+        "launcher::input_mode",
+        "launcher::parse_search_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/renderer/launcherArgument.test.ts",
@@ -615,7 +649,11 @@
       "rust_test": "launcher::ts_cases::ts_015_keeps_only_the_latest_query",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "ui_state::UiState::record_launcher_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/renderer/launcherQueryHistory.test.ts",
@@ -647,7 +685,11 @@
       "rust_test": "launcher::ts_cases::ts_019_safely_parses_persisted_history",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "ui_state::UiState::import_key"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/shared/searchMode.test.ts",
@@ -655,7 +697,13 @@
       "rust_test": "launcher::ts_cases::ts_020_treats_a_leading_bang_as_deep_search_and_removes_it_from_the_indexed_query",
       "status": "model-ready",
       "package": "tezbar-ui-model",
-      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed."
+      "remaining": "Native view/effect-executor acceptance; no GPUI view parity claimed.",
+      "production_functions": [
+        "launcher::deep_search_draft_input",
+        "launcher::deep_search_input",
+        "launcher::parse_search_query"
+      ],
+      "coverage_kind": "production-function replay (wire serialization only in harness)"
     },
     {
       "ts_file": "src/shared/searchMode.test.ts",
@@ -1507,6 +1555,7 @@
     }
   ],
   "owned_files": [
+    "crates/tezbar-core/src/instant.rs",
     "crates/tezbar-core/src/instant/calculator.rs",
     "crates/tezbar-core/src/instant/color.rs",
     "crates/tezbar-core/src/instant/currency.rs",
@@ -1519,43 +1568,44 @@
     "crates/tezbar-core/src/instant/qr.rs",
     "crates/tezbar-core/src/instant/transform.rs",
     "crates/tezbar-core/src/instant/transform_tests.rs",
-    "crates/tezbar-core/src/instant.rs",
+    "crates/tezbar-ui-model/src/launcher.rs",
     "crates/tezbar-ui-model/src/launcher/controller.rs",
     "crates/tezbar-ui-model/src/launcher/session.rs",
     "crates/tezbar-ui-model/src/launcher/ts_cases.json",
     "crates/tezbar-ui-model/src/launcher/ts_cases.rs",
-    "crates/tezbar-ui-model/src/launcher.rs",
     "crates/tezbar-ui-model/src/notes.rs",
+    "crates/tezbar-ui-model/src/notes/opus_html_fixtures.json",
     "crates/tezbar-ui-model/src/router.rs",
-    "crates/tezbar-ui-model/src/ui_state/tests.rs",
     "crates/tezbar-ui-model/src/ui_state.rs",
+    "crates/tezbar-ui-model/src/ui_state/tests.rs",
     "crates/tezbar-ui-model/src/utilities.rs",
     "crates/tezbar-update/src/notes.rs"
   ],
   "owned_sha256": {
-    "crates/tezbar-core/src/instant/calculator.rs": "867ad5bcfc69b6c3b26b013c5ac6476c07bc0f419da719bf66beedc3972758fc",
-    "crates/tezbar-core/src/instant/color.rs": "bc9fe65256b82b2e9553465eb43da0c38ab76d0b453ff85d8749a8ad9df9924a",
-    "crates/tezbar-core/src/instant/currency.rs": "a8e5db51cfae8f20561f9efeb338f35b13b28adea0eed7017b13bd3d3f808ebe",
+    "crates/tezbar-core/src/instant/calculator.rs": "58649ca24197651c9316644345b66210823ed209e8fac2a35c251f4b55c0c558",
+    "crates/tezbar-core/src/instant/color.rs": "8891021fbc24cc18d6706b7c7351b50e65c0a1f33b96e40909eb3e4c5e295ac1",
+    "crates/tezbar-core/src/instant/currency.rs": "4fea31f63a96d858b8bb59383bd48409d62297c18d4e347184dd20455e451c3c",
     "crates/tezbar-core/src/instant/currency_synonyms.json": "f88d5a19c08da7b6d157701b036ae22e9d11fe70205d170413d9db63c6a129cc",
-    "crates/tezbar-core/src/instant/emoji.rs": "09b1ca7e977dfc57d33e542232f8a5b9897c126335eb5e854a9ae23f5dabee0b",
+    "crates/tezbar-core/src/instant/emoji.rs": "b5c78494f4e630874dc69062d8898725c7d1d723376e6f0c6a0b300c5449f6a1",
     "crates/tezbar-core/src/instant/emoji_data.json": "e6ea7de54a1e7ed5f7d4346bbfa4708cb976fbe8b8633861e908f10dabf5f5db",
     "crates/tezbar-core/src/instant/emoji_fixtures.json": "d19f449fa3ca633bc279e911105713f05432ef40b69df82664f5e6ea5d07af82",
     "crates/tezbar-core/src/instant/fuse-license.txt": "cc807e3caa26cdee316bab2ff6fdb508a2f619b74959fe59e513ef6e61635ebe",
     "crates/tezbar-core/src/instant/fuzzy.rs": "0cd31cdad3ae4084705e8342d6bf381d1a83eb87b37c62826c7608324b9df8d0",
     "crates/tezbar-core/src/instant/qr.rs": "f0be74d43f0bfc25b02cdcfacce0b2654ff63c843fd2c5747982e1f7b3405809",
-    "crates/tezbar-core/src/instant/transform.rs": "ef4a2cf4c6e4b050dc0dd6912e414fed6979d469b437dbc1364228c9e2b760de",
-    "crates/tezbar-core/src/instant/transform_tests.rs": "f5194bdeec935b663e193986eacb1d55d7c34b220e20b12048f75f2980ead692",
+    "crates/tezbar-core/src/instant/transform.rs": "8979434f1c4f7fd93bade4b1aaaaa42471a3db7e3e5bc50de26fe5d07d069429",
+    "crates/tezbar-core/src/instant/transform_tests.rs": "a9d6141c38bfdecff31ea71e1a71ffa2e50eec5a577e1d6987d75ff1b6f21fc6",
     "crates/tezbar-core/src/instant.rs": "293410928cd09fa8ea90cbc39d89301a310d7624618d4a5160af760e14ad6ccf",
-    "crates/tezbar-ui-model/src/launcher/controller.rs": "0aa0f5af51ccc6d1655f2f0a9b67ee8d4fc512312a4faa15d3cc9980cb89cca8",
-    "crates/tezbar-ui-model/src/launcher/session.rs": "039bf0736d023e0d24cade1f52667db62c4964cc126bc0cbfc0374d373f08f4e",
+    "crates/tezbar-ui-model/src/launcher/controller.rs": "ee84af224c055983ae823ff983c6aec92c6b61abde32d84c37956613a8ece0d6",
+    "crates/tezbar-ui-model/src/launcher/session.rs": "844551e5d97059f74edbc0f6d3ff7ecda2a950cb6e11f14d85b2184809d7e4de",
     "crates/tezbar-ui-model/src/launcher/ts_cases.json": "2134c82699c63096279979d0b1378a0e99c6b3f4e795115f101602adf9fad495",
-    "crates/tezbar-ui-model/src/launcher/ts_cases.rs": "9cad5be00b7f4a4545f579f408e43579294bfec8a2b5b67b8eeb536a5789ea96",
-    "crates/tezbar-ui-model/src/launcher.rs": "e7597173f71fbf3be6929ce372b22310831fb11caeae0a79c2cef7941f308229",
-    "crates/tezbar-ui-model/src/notes.rs": "e7a1d8d18f7acc677b084548cba636aa7691562165e209bd0388173c3830a56b",
-    "crates/tezbar-ui-model/src/router.rs": "9c743feaeb0192cd36bc1efe3aa8c542331f4593af9bc12069d906d71c7c8c8a",
-    "crates/tezbar-ui-model/src/ui_state/tests.rs": "1c84669d943ba98a9155dc6dc24a6d8a883d09524b0a6129a3e37b23a95dd62e",
-    "crates/tezbar-ui-model/src/ui_state.rs": "d1bb6f3443e5b87e92b734fbc0bec1791cdfbb0dce3ee0ecabd45de761ab423e",
-    "crates/tezbar-ui-model/src/utilities.rs": "4384150734c233ea6266b6106488a8e816ad921df683507ac0b3c8758d2119d9",
+    "crates/tezbar-ui-model/src/launcher/ts_cases.rs": "7075df9233e7db02aa07e1952881d5333f2188f637b2c853049881e688bfec83",
+    "crates/tezbar-ui-model/src/launcher.rs": "96194ef666f4112146184f199a540bdaaf2b366c09871313ec7d1cf5feff9cfd",
+    "crates/tezbar-ui-model/src/notes/opus_html_fixtures.json": "b8b807cf0cd549ed051835b2006f3a10ad10d27c1718e874f2d19b930fa896b1",
+    "crates/tezbar-ui-model/src/notes.rs": "347ee19e4e8caf524f03ff8ca807302cfb1de20c7d4f98215aeb34b317a592f4",
+    "crates/tezbar-ui-model/src/router.rs": "a0263a73610c89a0d7a435ab52eb8e13cf3fe8f942bb01eb7888a3adf8b27bd1",
+    "crates/tezbar-ui-model/src/ui_state/tests.rs": "3c076f1ae020d5a68fa887be94b7e1a9f1ebef99f7369f7c6f91821d5aa14887",
+    "crates/tezbar-ui-model/src/ui_state.rs": "a2cc49263fe5201a684b7e1b89da6cf0decf6eeb2b0b58cd8d6bc56f4699e97d",
+    "crates/tezbar-ui-model/src/utilities.rs": "ee4f8d173a2366ecc2fbcb24b2d97f5024ecfd2321c1c1fdefcf853e8e260c19",
     "crates/tezbar-update/src/notes.rs": "0e7a31087d594a88215ae2c91cdd67e227c09470db70b133c1ef7c1731245dd4"
   },
   "browser_storage": {
@@ -1570,10 +1620,18 @@
   "limits": [
     "GPUI views, accessibility, native input and effect execution are subsequent integration work",
     "M11 discovers real WebKit/WebView2 storage; no real profiles read here",
-    "Locale formatting uses injected AmountFormatter; timestamp Local label is deterministic UTC in core",
-    "Quicklinks remain legacy read/search/open-url through core; no CRUD exists or is added"
+    "Quicklinks remain legacy read/search/open-url through core; no CRUD exists or is added",
+    "Timestamp/relative/count use structured data + PresentationFormatter; English fallback uses local timezone. Native OS locale adapter requires separate acceptance.",
+    "Timestamp/relative/count use structured data + PresentationFormatter; English fallback uses local timezone. Native OS locale adapter requires separate acceptance.",
+    "Timestamp/relative/count use structured data + PresentationFormatter; English fallback uses local timezone. Native OS locale adapter requires separate acceptance."
   ],
   "validation": [
+    {
+      "current_evidence": "launcher-review-repair-evidence.json",
+      "raw_logs": "/tmp/tezbar-native-m03a-repair-evidence"
+    }
+  ],
+  "historical_validation": [
     {
       "command": "CARGO_BUILD_JOBS=2 cargo +1.98.1 test --locked -p tezbar-ui-model --features launcher-models",
       "log": "ui-handoff.log",
@@ -1610,5 +1668,35 @@
       "log": "msrv-notes-final.log",
       "result": "passed"
     }
-  ]
+  ],
+  "review_repairs": {
+    "report": "docs/reviews/GPUI_M3A_OPUS_c741388.md",
+    "sha256": "010f95a36b90bfe9ac576353f6ff427c94454e2ec56c3075b8f48f79f854a98c",
+    "dispositions": "launcher-review-repairs.md",
+    "evidence": "launcher-review-repair-evidence.json",
+    "production_bindings": {
+      "commandBarInputMode": [
+        "launcher::input_mode",
+        "launcher::parse_search_query"
+      ],
+      "aiChatBootForInput": [
+        "launcher::ai_boot"
+      ],
+      "addLauncherQueryHistoryEntry": [
+        "ui_state::UiState::record_launcher_query"
+      ],
+      "parseLauncherQueryHistory": [
+        "ui_state::UiState::import_key"
+      ],
+      "parseSearchQuery": [
+        "launcher::parse_search_query"
+      ],
+      "deepSearchInput": [
+        "launcher::deep_search_input"
+      ],
+      "deepSearchDraftInput": [
+        "launcher::deep_search_draft_input"
+      ]
+    }
+  }
 }
