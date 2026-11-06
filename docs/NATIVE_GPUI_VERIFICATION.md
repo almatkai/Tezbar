@@ -41,6 +41,13 @@ effectSequence field is additive and generated backend files were restored.
 Fresh Opus confirmation is still required; native focus, paint and decoding remain
 view acceptance work. The M4 owner has been notified that model compilation is ready.
 
+M3A's Opus repairs are saved at `42e22e4`. The [parent check](native-m03/parent-launcher-repair-check.md)
+records 25 verified source hashes, all 30 regression filters, 82 unchanged TS test
+sources, and a full core rerun with **657 passed / zero failed / eight existing
+ignores** using two test threads. The repair lane's earlier five concurrent
+failures remain in evidence. Combined models pass 361 cases on Rust 1.98.1 and
+1.85; instant tests pass 93 on both. M3A and M3B fresh Opus closure is pending.
+
 M4 foundation is saved at `ac03a37`; its [handoff](native-m04/foundation.md) and
 [test map](native-m04/foundation-test-map.json) identify 53 unique UI/app tests
 (normal run: 22 app + 30 UI; control-feature app: 23). The parent verified all 27
