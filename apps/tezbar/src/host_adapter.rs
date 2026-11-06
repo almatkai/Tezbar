@@ -162,13 +162,12 @@ impl PrimaryTray {
 
 struct PreviewShortcuts(NativeDesktop);
 fn preview_shortcut_allowed(accelerator: &str) -> bool {
-    !matches!(
-        accelerator
-            .to_ascii_lowercase()
-            .replace("control", "ctrl")
-            .as_str(),
-        "alt+space" | "ctrl+space"
-    )
+    let Ok(key) = tezbar_host::desktop::parse_shortcut(accelerator) else {
+        return false;
+    };
+    ["Alt+Space", "Control+Space"].into_iter().all(|blocked| {
+        tezbar_host::desktop::parse_shortcut(blocked).is_ok_and(|blocked| blocked.id != key.id)
+    })
 }
 impl ShortcutRegistry for PreviewShortcuts {
     fn available(&self) -> bool {
@@ -196,6 +195,11 @@ mod tests {
     fn preview_cannot_register_production_launcher_accelerators() {
         assert!(!super::preview_shortcut_allowed("Alt+Space"));
         assert!(!super::preview_shortcut_allowed("Control+Space"));
+        assert!(!super::preview_shortcut_allowed("Option+Space"));
+        assert!(!super::preview_shortcut_allowed("Alt + Space"));
+        assert!(!super::preview_shortcut_allowed("Space+Alt"));
+        #[cfg(target_os = "windows")]
+        assert!(!super::preview_shortcut_allowed("CmdOrCtrl+Space"));
         assert!(super::preview_shortcut_allowed("Alt+F19"));
     }
 }

@@ -7,10 +7,7 @@ pub const BOTTOM: f32 = 86.;
 pub const MIN_HEIGHT: f32 = 260.;
 pub fn bounds(parent: Bounds<Pixels>) -> Bounds<Pixels> {
     Bounds::new(
-        point(
-            parent.right() - px(WIDTH - OVERHANG),
-            parent.top() + px(TOP),
-        ),
+        point(parent.left() - px(OVERHANG), parent.top() + px(TOP)),
         size(
             px(WIDTH),
             (parent.size.height - px(TOP + BOTTOM)).max(px(MIN_HEIGHT)),
@@ -64,7 +61,7 @@ mod tests {
             point(px(20.), px(30.)),
             size(px(760.), px(640.)),
         ));
-        assert_eq!(b.origin, point(px(746.), px(126.)));
+        assert_eq!(b.origin, point(px(-246.), px(126.)));
         assert_eq!(b.size, size(px(300.), px(458.)));
     }
 }

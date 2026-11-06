@@ -231,8 +231,6 @@ pub fn action_button(
     t: Tokens,
     activate: impl Fn(&mut Window, &mut App) + 'static,
 ) -> Stateful<Div> {
-    let activate = std::rc::Rc::new(activate);
-    let keyboard = activate.clone();
     button(id, label, tone, disabled, t)
         .when(disabled, |d| d.tab_index(-1).aria_description("Disabled"))
         .border_1()
@@ -241,12 +239,6 @@ pub fn action_button(
         .on_click(move |_, w, cx| {
             if !disabled {
                 activate(w, cx);
-            }
-        })
-        .on_key_down(move |e, w, cx| {
-            if !disabled && !e.is_held && matches!(e.keystroke.key.as_str(), "enter" | "space") {
-                keyboard(w, cx);
-                cx.stop_propagation();
             }
         })
 }
@@ -299,15 +291,39 @@ mod tests {
             let focus = view.read(cx).focus.clone();
             w.focus(&focus, cx);
         });
-        cx.simulate_keystrokes("enter");
-        assert_eq!(hits.get(), 1);
+        cx.run_until_parked();
+        for (index, key) in ["enter", "space"].into_iter().enumerate() {
+            let keystroke = Keystroke::parse(key).unwrap();
+            cx.simulate_event(KeyDownEvent {
+                keystroke: keystroke.clone(),
+                is_held: false,
+                prefer_character_input: false,
+            });
+            assert_eq!(hits.get(), index);
+            for _ in 0..3 {
+                cx.simulate_event(KeyDownEvent {
+                    keystroke: keystroke.clone(),
+                    is_held: true,
+                    prefer_character_input: false,
+                });
+            }
+            assert_eq!(hits.get(), index);
+            cx.simulate_event(KeyUpEvent { keystroke });
+            assert_eq!(hits.get(), index + 1);
+        }
         view.update(cx, |v, cx| {
             v.disabled = true;
             cx.notify();
         });
         cx.run_until_parked();
-        cx.simulate_keystrokes("enter");
-        assert_eq!(hits.get(), 1);
+        let keystroke = Keystroke::parse("enter").unwrap();
+        cx.simulate_event(KeyDownEvent {
+            keystroke: keystroke.clone(),
+            is_held: false,
+            prefer_character_input: false,
+        });
+        cx.simulate_event(KeyUpEvent { keystroke });
+        assert_eq!(hits.get(), 2);
     }
     #[gpui::test]
     fn focus_scope_cycles_and_restores(cx: &mut gpui::TestAppContext) {
