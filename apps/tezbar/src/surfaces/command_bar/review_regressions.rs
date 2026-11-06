@@ -1,4 +1,122 @@
 // Included in tests.rs to exercise the same real-view fixture and transport contracts.
+#[gpui::test]
+fn review_deep_search_row_retains_live_model_and_pin_activation(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let adapter = Arc::new(Loopback::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    cx.update(|w, cx| view.update(cx, |view, cx| {
+        let mut row = Row::command("deep-search:needle", "Deep Search needle");
+        row.action = Action::InvokeCommand {
+            command_id: "activate-deep-search".into(),
+            payload: json!({"query":"needle"}),
+        };
+        seed(view, vec![row]);
+        let mut pin = Row::command("deep-row-pin", "Saved action");
+        pin.action = Action::CopyText { text: "synthetic".into() };
+        ui_state::insert_pin(&mut view.state.pins, &pin, None);
+        view.input.focus_handle(cx).focus(w, cx);
+    }));
+    cx.simulate_keystrokes("enter");
+    settle(&rt, cx);
+    view.read_with(cx, |view, _| {
+        assert!(view.visible && view.model.visible);
+        assert_eq!(view.model.input, "!needle");
+        assert!(!view.model.session.activating);
+    });
+    cx.simulate_keystrokes("alt-1");
+    settle(&rt, cx);
+    assert_eq!(adapter.calls.lock().unwrap().iter().filter(|(channel, args)| {
+        channel == "search:execute" && args[0]["context"]["resultId"] == "command:deep-row-pin"
+    }).count(), 1);
+}
+
+struct ReviewHeldQuit {
+    base: Loopback,
+    gate: Arc<tokio::sync::Notify>,
+    fail: bool,
+}
+impl RequestAdapter for ReviewHeldQuit {
+    fn send(&self, request: Request) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send>> {
+        if matches!(request, Request::ConfirmQuit) {
+            let (channel, args) = request.wire();
+            self.base.calls.lock().unwrap().push((channel.into(), args));
+            let gate = self.gate.clone();
+            let fail = self.fail;
+            return Box::pin(async move {
+                gate.notified().await;
+                if fail { Err("Retired confirmation failed".into()) } else { Ok(json!(false)) }
+            });
+        }
+        self.base.send(request)
+    }
+}
+#[gpui::test]
+fn review_quit_completion_releases_its_ticket_after_results_refresh(cx: &mut TestAppContext) {
+    for fail in [false, true] {
+        let rt = runtime(cx);
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let adapter = Arc::new(ReviewHeldQuit { base: Loopback::default(), gate: gate.clone(), fail });
+        let (relay, _rx) = Relay::new();
+        let (view, cx) = cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+        cx.update(|w, cx| view.update(cx, |view, cx| {
+            seed(view, vec![Row::command("quit-tezbar", "Quit Tezbar")]);
+            let mut pin = Row::command("quit-race-pin", "Saved action");
+            pin.action = Action::CopyText { text: "synthetic".into() };
+            ui_state::insert_pin(&mut view.state.pins, &pin, None);
+            view.input.focus_handle(cx).focus(w, cx);
+        }));
+        cx.simulate_keystrokes("enter");
+        settle(&rt, cx);
+        view.update(cx, |view, cx| {
+            assert!(view.model.session.activating);
+            view.dispatch(Input::Invalidate { text: None }, cx);
+            view.error = Some("Current surface message".into());
+        });
+        settle(&rt, cx);
+        gate.notify_one();
+        settle(&rt, cx);
+        view.read_with(cx, |view, _| {
+            assert!(!view.model.session.activating);
+            assert!(view.model.visible);
+            assert_eq!(view.error.as_deref(), Some("Current surface message"));
+        });
+        cx.simulate_keystrokes("alt-1");
+        settle(&rt, cx);
+        assert_eq!(adapter.base.calls.lock().unwrap().iter().filter(|(channel, args)| {
+            channel == "search:execute" && args[0]["context"]["resultId"] == "command:quit-race-pin"
+        }).count(), 1);
+    }
+}
+
+#[gpui::test]
+fn review_delivered_settings_and_placeholder_routes_retire_admission(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let (relay, _rx) = Relay::new();
+    cx.update(|cx| cx.set_global(navigation::NavigationInbox::default()));
+    let (view, cx) = cx.add_window_view(|w, cx| Launcher::with_adapter(Arc::new(Loopback::default()), relay, None, w, cx));
+    for nonce in 1..=64 {
+        let surface = match nonce % 5 {
+            0 => Surface::Command,
+            1 => Surface::Settings("ai".into()),
+            2 => Surface::AiChat,
+            3 => Surface::Terminal,
+            _ => Surface::ExtensionRuntime,
+        };
+        let intent = Navigation { nonce, surface, payload: Payload::None };
+        view.update(cx, |view, cx| {
+            cx.global_mut::<navigation::NavigationInbox>().put(intent.clone()).unwrap();
+            view.receive_navigation(intent.clone(), cx);
+            assert!(cx.global::<navigation::NavigationInbox>().pending().is_none());
+        });
+        settle(&rt, cx);
+        if intent.surface != Surface::Command {
+            assert_eq!(view.read_with(cx, |view, _| view.navigation.clone()), Some(intent));
+        }
+    }
+}
+
 struct ReviewRuns {
     base: Loopback,
     extension: Value,

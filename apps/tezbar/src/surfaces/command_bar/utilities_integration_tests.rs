@@ -124,6 +124,66 @@ fn parent_utility_routes_mount_native_content_and_ack_each_admitted_intent(
     );
 }
 #[gpui::test]
+fn parent_utility_hide_and_show_resume_the_same_native_note_editor(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let adapter = Arc::new(Fixture::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    view.update(cx, |view, cx| {
+        view.ready = true;
+        view.visible = true;
+        view.utility_transport = Some(adapter.clone());
+        view.receive_navigation(nav(1, Surface::Notes, Payload::Note { created_at: 11 }), cx);
+    });
+    settle(&rt, cx);
+    let utility = view.read_with(cx, |view, _| view.utilities.clone().unwrap());
+    cx.update(|w, cx| view.update(cx, |view, cx| view.hide(w, cx)));
+    assert!(!utility.read_with(cx, |utility, _| utility.visible));
+    let reads = adapter
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(channel, _)| channel == "search:all")
+        .count();
+    cx.update(|w, cx| view.update(cx, |view, cx| view.show(w, cx)));
+    settle(&rt, cx);
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.utilities.as_ref(), Some(&utility))
+    });
+    cx.update(|w, cx| {
+        utility.read_with(cx, |utility, cx| {
+            assert!(utility.visible);
+            assert_eq!(utility.surface, Surface::Notes);
+            assert_eq!(utility.notes.selected, Some(11));
+            assert!(utility.editor.focus_handle(cx).is_focused(w));
+        })
+    });
+    assert!(cx.debug_bounds("drag-handle").is_none());
+    assert_eq!(
+        adapter
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(channel, _)| channel == "search:all")
+            .count(),
+        reads
+    );
+    cx.simulate_input("native resume");
+    settle(&rt, cx);
+    assert!(utility.read_with(cx, |utility, _| {
+        utility
+            .notes
+            .document()
+            .unwrap()
+            .html()
+            .contains("native resume")
+    }));
+}
+
+#[gpui::test]
 fn parent_utility_back_restores_command_input_and_stops_the_hidden_surface(
     cx: &mut TestAppContext,
 ) {

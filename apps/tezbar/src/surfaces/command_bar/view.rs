@@ -153,6 +153,7 @@ impl Launcher {
         }
     }
     pub(super) fn return_home(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        self.acknowledge_navigation(cx);
         self.hide_utilities(w, cx);
         self.prefix = None;
         self.model_menu = false;

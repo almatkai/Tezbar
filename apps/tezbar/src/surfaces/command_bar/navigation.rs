@@ -74,6 +74,9 @@ impl NavigationInbox {
     /// Every admitted intent remains until its matching surface consumes/acknowledges it.
     /// A full inbox reports backpressure instead of silently replacing an older intent.
     pub fn put(&mut self, intent: Navigation) -> Result<(), String> {
+        if intent.surface == Surface::Command {
+            return Ok(());
+        }
         if self.pending.contains(&intent) {
             return Ok(());
         }
@@ -116,6 +119,11 @@ pub struct UpdateInbox {
 impl gpui::Global for UpdateInbox {}
 impl UpdateInbox {
     pub fn put(&mut self, action: UpdateAction) -> Result<u64, String> {
+        // An identical outstanding check/download/restart already has an owner. Repeated clicks
+        // do not create additional work while the production executor is being mounted.
+        if let Some(pending) = self.pending.iter().find(|pending| pending.action == action) {
+            return Ok(pending.nonce);
+        }
         if self.pending.len() >= 16 {
             return Err("Update requests are still pending. Try again shortly.".into());
         }
@@ -250,5 +258,26 @@ mod tests {
         );
         assert!(updates.take().is_none());
         assert_eq!(updates.put(UpdateAction::Check).unwrap(), 3);
+    }
+    #[test]
+    fn repeated_pending_updates_coalesce_and_command_never_consumes_admission() {
+        let mut updates = UpdateInbox::default();
+        let mut navigation = NavigationInbox::default();
+        for nonce in 1..=64 {
+            navigation.put(intent(nonce, Surface::Command)).unwrap();
+            assert!(navigation.pending().is_none());
+            assert_eq!(updates.put(UpdateAction::Check).unwrap(), 1);
+            assert_eq!(updates.put(UpdateAction::Download).unwrap(), 2);
+            assert_eq!(updates.put(UpdateAction::Restart).unwrap(), 3);
+        }
+        for (nonce, action) in [
+            (1, UpdateAction::Check),
+            (2, UpdateAction::Download),
+            (3, UpdateAction::Restart),
+        ] {
+            assert_eq!(updates.take(), Some(UpdateIntent { nonce, action }));
+        }
+        assert!(updates.take().is_none());
+        assert_eq!(updates.put(UpdateAction::Check).unwrap(), 4);
     }
 }

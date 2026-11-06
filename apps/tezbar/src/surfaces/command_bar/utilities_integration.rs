@@ -86,6 +86,29 @@ impl Launcher {
             utility.update(cx, |view, cx| view.set_visible(false, window, cx));
         }
     }
+    pub(super) fn show_utilities(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(utility) = &self.utilities else {
+            return false;
+        };
+        if !self
+            .navigation
+            .as_ref()
+            .is_some_and(|intent| intent.surface == utility.read(cx).surface)
+        {
+            return false;
+        }
+        utility.update(cx, |view, cx| {
+            if !view.visible {
+                view.set_visible(true, window, cx);
+                if view.surface == Surface::Notes && view.notes.selected.is_some() {
+                    view.editor.focus_handle(cx).focus(window, cx);
+                } else {
+                    view.search.focus_handle(cx).focus(window, cx);
+                }
+            }
+        });
+        true
+    }
     fn utility_effect(&mut self, effect: &UtilityEffect, cx: &mut Context<Self>) {
         match effect {
             UtilityEffect::Navigate(surface, payload) => {

@@ -522,21 +522,27 @@ impl Launcher {
         }
     }
     pub fn show(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        let utility_active = self.show_utilities(w, cx);
         if !self.visible {
             self.visible = true;
             self.checked_update = false;
             self.model.session.reset_transport();
-            if self.ready {
+            if self.ready && !utility_active {
                 self.dispatch(Input::Show, cx);
             }
-            self.rows = self.home.clone();
+            if !utility_active {
+                self.rows = self.home.clone();
+            }
         }
         cx.activate(true);
         w.activate_window();
-        self.input.focus_handle(cx).focus(w, cx);
+        if !utility_active {
+            self.input.focus_handle(cx).focus(w, cx);
+        }
         cx.notify();
     }
     pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        self.acknowledge_navigation(cx);
         self.hide_utilities(w, cx);
         self.visible = false;
         self.dispatch(Input::Hide, cx);
@@ -563,7 +569,15 @@ impl Launcher {
         self.model_config_epoch += 1;
         self.model_config_task = None;
         self.terminal_settings = false;
-        self.navigation = None;
+        // A normal hide does not reset the current surface (legacy resetUi:false). Settings
+        // has its own window, so its launch intent is not a resumable launcher surface.
+        if self
+            .navigation
+            .as_ref()
+            .is_some_and(|intent| matches!(intent.surface, Surface::Settings(_)))
+        {
+            self.navigation = None;
+        }
         self.notice_timer = None;
         self.notice = None;
         self.message_kind = None;
@@ -1062,7 +1076,7 @@ impl Launcher {
         {
             if command_id == "activate-deep-search" {
                 self.record(&a, cx);
-                self.finish_local(&a);
+                self.finish_open(&a);
                 self.dispatch(
                     Input::Edit(format!(
                         "!{}",
@@ -1368,6 +1382,12 @@ impl Launcher {
     }
     pub fn receive_navigation(&mut self, intent: Navigation, cx: &mut Context<Self>) {
         self.route_utility_navigation(intent.clone(), cx);
+        // This retained owner now has the intent. Deferred child delivery keeps its own clone;
+        // the admission inbox must not retain a second copy for the whole app session.
+        if cx.has_global::<navigation::NavigationInbox>() {
+            cx.global_mut::<navigation::NavigationInbox>()
+                .acknowledge(&intent);
+        }
         if intent.surface == Surface::Command {
             let entity = cx.entity();
             let window = self.window;
@@ -1381,6 +1401,14 @@ impl Launcher {
         self.navigation = Some(intent);
         cx.notify();
     }
+    fn acknowledge_navigation(&self, cx: &mut Context<Self>) {
+        if let Some(intent) = &self.navigation {
+            if cx.has_global::<navigation::NavigationInbox>() {
+                cx.global_mut::<navigation::NavigationInbox>()
+                    .acknowledge(intent);
+            }
+        }
+    }
     fn confirm_quit(&mut self, activation: Activation, cx: &mut Context<Self>) {
         let adapter = self.adapter.clone();
         self.tasks.push(cx.spawn(async move |this, cx| {
@@ -1392,12 +1420,11 @@ impl Launcher {
                 .await
                 .unwrap_or_else(|error| Err(error.to_string()));
             let _ = this.update(cx, |this, cx| {
-                if activation.generation != this.model.session.generation {
-                    return;
-                }
                 this.finish_open(&activation);
-                if let Err(error) = result {
-                    this.error = Some(error);
+                if activation.generation == this.model.session.generation {
+                    if let Err(error) = result {
+                        this.error = Some(error);
+                    }
                 }
                 cx.notify();
             });
