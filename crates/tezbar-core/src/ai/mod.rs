@@ -382,6 +382,7 @@ impl AiCore {
         requested: Option<String>,
         mut options: AgentOptions,
     ) -> CoreResult {
+        let selection = config::RunSelection::parse(options.history.get("runSelection"))?;
         let id = requested.unwrap_or_else(|| {
             format!(
                 "{}-{}",
@@ -464,8 +465,7 @@ impl AiCore {
                 let cwd_path=tokio::fs::canonicalize(cwd_path).await.map_err(err)?;
                 core.revoke_changed_projects(&cwd_path).await?;
                 let raw=core.extension_config(core.read_config().await?,Some(&cwd_path)).await?;
-                config::validate_selection(&raw,Some("chat"),None)?;
-                let mut cfg = config::selected(&raw,Some("chat"),None);
+                let mut cfg = config::for_run(&raw,selection.as_ref())?;
                 cfg["sessionId"] = options.history["sessionId"].clone();
                 cfg["runId"]=json!(run);
                 if cfg["agentRuntime"]=="pi"&&!core.inner.legacy_runtime_noticed.swap(true,std::sync::atomic::Ordering::SeqCst){core.agent_event(&run,json!({"type":"log","source":"native","line":"The saved runtime preference now uses the native AI runtime."}));}

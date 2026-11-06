@@ -509,15 +509,26 @@ fn parse_at(source: &str, offset: usize) -> Vec<Block> {
 #[derive(Clone, Debug)]
 pub enum DocumentEffect {
     OpenLink(String),
-    Image(String),
+    Image(ImageTicket),
     Copy(String),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImageTicket {
+    pub source: String,
+    generation: u64,
+}
+enum ImageState {
+    Loading,
+    Ready(std::sync::Weak<RenderImage>),
+    Unavailable,
 }
 pub struct MarkdownView {
     pub document: Document,
     pub selection: Option<Range<usize>>,
     anchor: Option<usize>,
     focus: Option<FocusHandle>,
-    requested_images: std::collections::HashSet<String>,
+    images: std::collections::HashMap<String, (ImageTicket, ImageState)>,
+    image_generation: u64,
     expanded: std::collections::HashSet<usize>,
     highlight_task: Option<Task<()>>,
     highlight_theme: Option<bool>,
@@ -531,7 +542,8 @@ impl Default for MarkdownView {
             selection: None,
             anchor: None,
             focus: None,
-            requested_images: Default::default(),
+            images: Default::default(),
+            image_generation: 0,
             expanded: Default::default(),
             highlight_task: None,
             highlight_theme: None,
@@ -551,8 +563,67 @@ impl MarkdownView {
             self.highlight_task = None;
             self.selection = None;
             self.anchor = None;
+            self.discover_images(cx);
             cx.notify();
         }
+    }
+    fn discover_images(&mut self, cx: &mut Context<Self>) {
+        let mut sources = Vec::new();
+        for (source, _) in self.document.blocks.iter().flat_map(|b| &b.images) {
+            if !sources.contains(source) && sources.len() < 128 {
+                sources.push(source.clone());
+            }
+        }
+        self.images.retain(|source, _| sources.contains(source));
+        for source in sources {
+            if self.images.contains_key(&source) {
+                continue;
+            }
+            self.image_generation = self.image_generation.wrapping_add(1);
+            let ticket = ImageTicket {
+                source: source.clone(),
+                generation: self.image_generation,
+            };
+            self.images
+                .insert(source, (ticket.clone(), ImageState::Loading));
+            cx.emit(DocumentEffect::Image(ticket));
+        }
+    }
+    /// Pending sources are discovered by content updates, never by Render.
+    pub fn image_requests(&self) -> Vec<ImageTicket> {
+        self.images
+            .values()
+            .filter_map(|(ticket, state)| {
+                matches!(state, ImageState::Loading).then(|| ticket.clone())
+            })
+            .collect()
+    }
+    /// The adapter's bounded ImageCache owns decoded bytes and uploaded textures.
+    /// A document keeps only a weak reference, so eviction/hide can release them.
+    /// Removed/re-added sources get a new ticket and reject an old decode result.
+    pub fn set_image(
+        &mut self,
+        ticket: &ImageTicket,
+        image: Option<std::sync::Arc<RenderImage>>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some((current, state)) = self.images.get_mut(&ticket.source) else {
+            return false;
+        };
+        if current != ticket {
+            return false;
+        }
+        *state = image.map_or(ImageState::Unavailable, |image| {
+            ImageState::Ready(std::sync::Arc::downgrade(&image))
+        });
+        cx.notify();
+        true
+    }
+    /// Call from an explicit show/retry after the adapter released its image cache.
+    pub fn reset_images(&mut self, cx: &mut Context<Self>) {
+        self.images.clear();
+        self.discover_images(cx);
+        cx.notify();
     }
 }
 impl MarkdownView {
@@ -885,16 +956,26 @@ impl Render for MarkdownView {
                 light,
             });
             for (i, (url, alt)) in block.images.iter().enumerate() {
-                if self.requested_images.len() < 128 && self.requested_images.insert(url.clone()) {
-                    cx.emit(DocumentEffect::Image(url.clone()));
-                }
-                row = row.child(
-                    div()
-                        .id(("image", i))
-                        .role(Role::Image)
-                        .aria_label(alt.clone())
-                        .child(alt.clone()),
-                );
+                let image = self.images.get(url).and_then(|(_, state)| match state {
+                    ImageState::Ready(image) => image.upgrade(),
+                    _ => None,
+                });
+                let placeholder = match self.images.get(url).map(|(_, state)| state) {
+                    Some(ImageState::Loading) => "Loading image…",
+                    _ => "Image unavailable",
+                };
+                let mut image_row = div()
+                    .id(("image", i))
+                    .role(Role::Image)
+                    .aria_label(alt.clone());
+                image_row = if let Some(image) = image {
+                    image_row.child(img(image).max_w_full().max_h(px(320. * t.zoom)))
+                } else {
+                    image_row
+                        .text_color(t.text3)
+                        .child(format!("{placeholder} · {alt}"))
+                };
+                row = row.child(image_row);
             }
             rows.push(row);
             base += block_len + 1;
@@ -1508,5 +1589,68 @@ mod repair_tests {
         let light = syntax_spans("rust".into(), "let value = 42;".into(), true);
         assert!(!dark.is_empty());
         assert_ne!(dark, light);
+    }
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::*;
+    use ::core::prelude::v1::test;
+    #[gpui::test]
+    fn images_are_update_owned_rendered_weakly_and_stale_results_are_rejected(
+        cx: &mut TestAppContext,
+    ) {
+        let (view, cx) = cx.add_window_view(|_, _| MarkdownView::default());
+        let events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = events.clone();
+        cx.update(|_, cx| {
+            cx.subscribe(&view, move |_, effect: &DocumentEffect, _| {
+                if let DocumentEffect::Image(ticket) = effect {
+                    sink.lock().unwrap().push(ticket.clone());
+                }
+            })
+            .detach()
+        });
+        view.update(cx, |v, cx| {
+            v.set_content(1, "![Preview](https://example.test/p.png)", true, cx)
+        });
+        cx.run_until_parked();
+        let first = view.read_with(cx, |v, _| v.image_requests().pop().unwrap());
+        assert_eq!(events.lock().unwrap().len(), 1);
+        for _ in 0..3 {
+            view.update(cx, |_, cx| cx.notify());
+            cx.run_until_parked();
+        }
+        assert_eq!(
+            events.lock().unwrap().len(),
+            1,
+            "render starts no image effect"
+        );
+        let image = std::sync::Arc::new(RenderImage::new(vec![image::Frame::new(
+            image::RgbaImage::from_raw(1, 1, vec![255, 0, 0, 255]).unwrap(),
+        )]));
+        view.update(cx, |v, cx| {
+            assert!(v.set_image(&first, Some(image.clone()), cx))
+        });
+        assert_eq!(
+            std::sync::Arc::strong_count(&image),
+            1,
+            "document cannot retain cache allocations"
+        );
+        cx.run_until_parked();
+        view.update(cx, |v, cx| {
+            v.set_content(2, "removed", true, cx);
+            v.set_content(3, "![Preview](https://example.test/p.png)", true, cx);
+        });
+        let second = view.read_with(cx, |v, _| v.image_requests().pop().unwrap());
+        assert_ne!(first, second);
+        view.update(cx, |v, cx| {
+            assert!(!v.set_image(&first, Some(image.clone()), cx));
+            assert!(v.set_image(&second, None, cx));
+            assert!(v.image_requests().is_empty());
+        });
+        view.update(cx, |v, cx| v.reset_images(cx));
+        let third = view.read_with(cx, |v, _| v.image_requests().pop().unwrap());
+        assert_ne!(second, third);
     }
 }

@@ -701,6 +701,46 @@ impl ChatController {
             }
         }
     }
+    /// A stale failure cannot unlock a newer capture request.
+    pub fn capture_failed(&mut self, token: u64) {
+        if self.capture.as_ref().is_some_and(|(t, _, _)| *t == token) {
+            self.capture = None;
+        }
+    }
+    /// Append canonical image references to the current draft. The adapter owns
+    /// decoding/storage and must additionally fence its asynchronous load revision.
+    /// Admission is atomic; duplicates do not consume the eight-image limit.
+    pub fn attach_references(
+        &mut self,
+        session: &str,
+        images: Vec<Reference>,
+    ) -> Result<usize, &'static str> {
+        if !self.visible || self.active.as_deref() != Some(session) {
+            return Err("Conversation is no longer active");
+        }
+        let c = self
+            .owners
+            .get_mut(session)
+            .ok_or("Conversation is unavailable")?;
+        if c.deleted.is_some() || c.busy() {
+            return Err("Conversation is unavailable for attachments");
+        }
+        if images.iter().any(|i| !matches!(i, Reference::Image { .. })) {
+            return Err("Only image references can be attached");
+        }
+        let mut next = c.attachments.clone();
+        for image in images {
+            if !next.contains(&image) {
+                next.push(image);
+            }
+        }
+        if next.len() > 8 {
+            return Err("Attach up to eight images");
+        }
+        let added = next.len() - c.attachments.len();
+        c.attachments = next;
+        Ok(added)
+    }
     pub fn remove_attachment(&mut self, id: &str, index: usize) {
         if let Some(c) = self.owners.get_mut(id) {
             if index < c.attachments.len() {
@@ -1149,6 +1189,29 @@ impl ChatController {
                 turn: turn.clone(),
             })
             .collect()
+    }
+    /// Fence every retained conversation before the adapter sends one canonical
+    /// chat:clear. Settle each returned ticket with delete_result, including on
+    /// failure, and execute its deferred persistence effects.
+    pub fn begin_clear(&mut self) -> Vec<Effect> {
+        self.boot_generation += 1;
+        self.capture = None;
+        self.load = None;
+        self.prompt = None;
+        self.history_token = None;
+        let ids: Vec<_> = self.owners.keys().cloned().collect();
+        let mut effects = Vec::new();
+        for id in ids {
+            if let Some(token) = self.owners[&id].deleted {
+                effects.push(Effect::DeleteConversation {
+                    token,
+                    session_id: id,
+                });
+            } else {
+                effects.extend(self.delete(&id));
+            }
+        }
+        effects
     }
     pub fn delete(&mut self, id: &str) -> Vec<Effect> {
         let token = self.token();

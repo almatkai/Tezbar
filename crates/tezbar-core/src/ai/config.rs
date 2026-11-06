@@ -42,6 +42,48 @@ pub fn validate_selection(
     }
     Ok(())
 }
+/// A run may freeze routing, while credentials and provider configuration remain
+/// owned by the canonical configuration. No other configuration is accepted here.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RunSelection {
+    provider: String,
+    model: String,
+}
+impl RunSelection {
+    pub(super) fn parse(value: Option<&Value>) -> Result<Option<Self>, String> {
+        let Some(value) = value else { return Ok(None) };
+        let selection: Self = serde_json::from_value(value.clone()).map_err(|_| {
+            "Invalid agent runSelection: provider and model are required".to_string()
+        })?;
+        if [&selection.provider, &selection.model].iter().any(|s| {
+            s.trim().is_empty()
+                || s.len() > 512
+                || s.trim() != s.as_str()
+                || s.chars().any(char::is_control)
+        }) {
+            return Err(
+                "Invalid agent runSelection: provider and model must be nonempty identifiers"
+                    .into(),
+            );
+        }
+        Ok(Some(selection))
+    }
+}
+pub(super) fn for_run(raw: &Value, selection: Option<&RunSelection>) -> Result<Value, String> {
+    if let Some(selection) = selection {
+        if !ids(raw).contains(&selection.provider) {
+            return Err("Native configuration: the selected run provider is disabled or unavailable in this folder. Choose a provider in AI settings.".into());
+        }
+        validate_selection(raw, Some("chat"), Some(&selection.provider))?;
+        let mut cfg = selected(raw, Some("chat"), Some(&selection.provider));
+        cfg["model"] = json!(selection.model);
+        Ok(cfg)
+    } else {
+        validate_selection(raw, Some("chat"), None)?;
+        Ok(selected(raw, Some("chat"), None))
+    }
+}
 pub fn selected(raw: &Value, task: Option<&str>, explicit: Option<&str>) -> Value {
     let all = ids(raw);
     let active = raw["provider"]
@@ -154,7 +196,20 @@ fn normalize_models(cfg: &mut Value) {
                     .collect::<Vec<_>>()
             } else {
                 let mut caps = Vec::new();
-                for(pattern,cap)in [("(?i)vision|vl|llava|gpt-4o|gpt-[56]|gemini|claude|fable|opus|sonnet|haiku","vision"),("(?i)reason|think|r1|o[0-9]|gpt-[56]|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek","thinking")]{if regex::Regex::new(pattern).unwrap().is_match(id){caps.push(json!(cap));}}
+                for (pattern, cap) in [
+                    (
+                        "(?i)vision|vl|llava|gpt-4o|gpt-[56]|gemini|claude|fable|opus|sonnet|haiku",
+                        "vision",
+                    ),
+                    (
+                        "(?i)reason|think|r1|o[0-9]|gpt-[56]|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek",
+                        "thinking",
+                    ),
+                ] {
+                    if regex::Regex::new(pattern).unwrap().is_match(id) {
+                        caps.push(json!(cap));
+                    }
+                }
                 if !regex::Regex::new("(?i)embed|embedding|whisper|tts|audio|speech")
                     .unwrap()
                     .is_match(id)
@@ -195,5 +250,39 @@ mod tests {
         assert_eq!(cfg["apiKey"], "claude");
         assert_eq!(cfg["model"], "custom-model");
         assert!(selected(&raw, None, None).get("apiKey").is_none());
+    }
+    #[test]
+    fn run_selection_keeps_routing_and_uses_only_its_provider_credentials() {
+        let mut raw = json!({"provider":"openai","model":"new-global","apiKey":"unrelated",
+            "providerConfigs":{"openai":{"apiKey":"openai-key"},"anthropic":{"apiKey":"anthropic-key","baseURL":"https://api.anthropic.com"}},
+            "taskProviderOverrides":{"chat":"openai"},"taskModelOverrides":{"chat":"new-global"}});
+        let selection = RunSelection::parse(Some(
+            &json!({"provider":"anthropic","model":"frozen-model"}),
+        ))
+        .unwrap();
+        let frozen = for_run(&raw, selection.as_ref()).unwrap();
+        assert_eq!(frozen["provider"], "anthropic");
+        assert_eq!(frozen["model"], "frozen-model");
+        assert_eq!(frozen["apiKey"], "anthropic-key");
+        assert_eq!(raw["taskProviderOverrides"]["chat"], "openai");
+        raw["customProviders"] = json!([]);
+        let unavailable =
+            RunSelection::parse(Some(&json!({"provider":"custom:removed","model":"x"}))).unwrap();
+        assert!(for_run(&raw, unavailable.as_ref()).is_err());
+        assert_eq!(for_run(&raw, None).unwrap()["model"], "new-global");
+    }
+    #[test]
+    fn run_selection_rejects_partial_or_arbitrary_configuration() {
+        assert!(RunSelection::parse(None).unwrap().is_none());
+        for bad in [
+            json!(null),
+            json!({}),
+            json!({"provider":"ollama"}),
+            json!({"provider":"ollama","model":""}),
+            json!({"provider":"ollama","model":" x"}),
+            json!({"provider":"ollama","model":"x","apiKey":"injected"}),
+        ] {
+            assert!(RunSelection::parse(Some(&bad)).is_err());
+        }
     }
 }

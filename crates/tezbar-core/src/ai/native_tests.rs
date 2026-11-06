@@ -1133,3 +1133,113 @@ async fn verbose_failed_shell_summary_reaches_actual_model_tool_result() {
     assert!(text.len() < 64 * 1024);
     core.shutdown().await;
 }
+
+#[tokio::test]
+async fn native_run_selection_routes_actual_request_and_rejects_bad_snapshot_before_start() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server(vec![Reply::sse(text("frozen answer"))]).await;
+    configure(
+        &core,
+        &http.url,
+        json!({"model":"global-after-picker",
+        "taskModelOverrides":{"chat":"global-after-picker"}}),
+    )
+    .await;
+    let result = core
+        .handle(
+            "agent:run",
+            &[json!({"runId":"agent-frozen-selection","task":"fixture",
+        "runSelection":{"provider":"openai-compatible","model":"frozen-before-picker"}})],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result["ok"], true);
+    assert_eq!(request(&mut http).await["model"], "frozen-before-picker");
+    assert_eq!(
+        next_event(&mut events, "answer").await["text"],
+        "frozen answer"
+    );
+    next_event(&mut events, "done").await;
+    assert_eq!(
+        core.read_config().await.unwrap()["model"],
+        "global-after-picker"
+    );
+    let result = core
+        .handle(
+            "agent:run",
+            &[json!({"runId":"agent-invalid-selection","task":"fixture",
+        "runSelection":{"provider":"openai-compatible","model":"frozen","apiKey":"injected"}})],
+        )
+        .await
+        .unwrap();
+    assert!(result.is_err());
+    assert!(
+        !core
+            .inner
+            .state
+            .lock()
+            .unwrap()
+            .agents
+            .contains_key("agent-invalid-selection")
+    );
+    no_extra(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_legacy_context_is_session_scoped_minimal_and_canonical_first() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server(vec![Reply::sse(text("continued"))]).await;
+    configure(&core, &http.url, json!({})).await;
+    for (session, id, role, text) in [
+        ("legacy", "u1", "user", "legacy canonical duplicate"),
+        ("legacy", "a1", "assistant", "legacy saved answer"),
+        ("foreign", "foreign-turn", "user", "foreign private content"),
+    ] {
+        let reply=core.handle("chat:append",&[json!({"session":{"id":session,"title":"fixture","createdAt":1,"updatedAt":1},"turn":{"id":id,"role":role,"text":text,"createdAt":1,"error":if id=="a1" {Some("previous failure")} else {None},"attachments":if id=="a1" {json!([{"kind":"image","name":"earlier","mimeType":"image/png"}])} else {json!([])}}})]).await.unwrap().unwrap();
+        assert_eq!(reply["ok"], true);
+    }
+    // Legacy UI payloads may be huge or from an old schema. Context never reads them.
+    let db =
+        rusqlite::Connection::open(core.inner.ctx.paths.data_dir.join("chat/sessions.sqlite3"))
+            .unwrap();
+    db.execute(
+        "UPDATE chat_turns SET stages_json=? WHERE id='a1'",
+        ["not presentation JSON".repeat(100000)],
+    )
+    .unwrap();
+    runtime::store::save(
+        &core.inner.ctx.paths.data_dir,
+        "legacy",
+        "u1",
+        &[runtime::transcript::Message::text(
+            "user",
+            "canonical original",
+        )],
+    )
+    .unwrap();
+    core.handle("agent:run",&[json!({"runId":"agent-legacy-fallback","task":"continue","sessionId":"legacy","priorTurnIds":["u1","a1","foreign-turn","unsaved"],"priorTurns":[{"id":"a1","role":"assistant","text":"forged stale answer"},{"id":"unsaved","role":"assistant","text":"dirty unsaved fallback"}]})]).await.unwrap().unwrap();
+    let request = request(&mut http).await;
+    let messages = request["messages"].to_string();
+    for expected in [
+        "canonical original",
+        "legacy saved answer",
+        "previous failure",
+        "Earlier image is no longer available",
+        "dirty unsaved fallback",
+    ] {
+        assert!(messages.contains(expected), "missing {expected}");
+    }
+    for excluded in [
+        "legacy canonical duplicate",
+        "foreign private content",
+        "forged stale answer",
+        "not presentation JSON",
+    ] {
+        assert!(!messages.contains(excluded), "included {excluded}");
+    }
+    assert_eq!(next_event(&mut events, "answer").await["text"], "continued");
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}

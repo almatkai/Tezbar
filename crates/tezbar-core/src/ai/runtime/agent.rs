@@ -83,14 +83,16 @@ impl AiCore {
                 let data = self.inner.ctx.paths.data_dir.clone();
                 let saved_session = session.to_string();
                 let saved_id = id.to_string();
-                let stored = tokio::task::spawn_blocking(move || {
-                    runtime::store::load(&data, &saved_session, &saved_id)
+                let (stored, legacy) = tokio::task::spawn_blocking(move || {
+                    let stored = runtime::store::load(&data, &saved_session, &saved_id)?;
+                    let legacy = if stored.is_none() { chat::prior_turn(&data,&saved_session,&saved_id)? } else { None };
+                    Ok::<_,String>((stored,legacy))
                 })
                 .await
                 .map_err(err)??;
                 if let Some(stored) = stored {
                     messages.extend(stored)
-                } else if let Some(prior) = fallback.iter().find(|p| p["id"] == id) {
+                } else if let Some(prior) = legacy.as_ref().or_else(|| fallback.iter().find(|p| p["id"] == id)) {
                     if !matches!(s(&prior["role"]), "user" | "assistant") {
                         return Err("Native validation: invalid prior turn role".into());
                     }

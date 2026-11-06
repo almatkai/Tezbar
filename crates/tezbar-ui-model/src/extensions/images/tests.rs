@@ -16,13 +16,14 @@ fn local_data_glyph_and_remote_policy() {
         resolve("data:image/png;base64,AA==", root, &BTreeSet::new()),
         Ok(Source::Data(_))
     ));
-    assert!(resolve("file:///outside/icon", root, &BTreeSet::new()).is_err());
-    assert!(resolve(
-        "file:///outside/icon",
-        root,
-        &[PathBuf::from("/outside/icon")].into()
-    )
-    .is_ok());
+    let outside = if cfg!(windows) {
+        PathBuf::from(r"C:\outside\icon")
+    } else {
+        PathBuf::from("/outside/icon")
+    };
+    let outside_uri = url::Url::from_file_path(&outside).unwrap().to_string();
+    assert!(resolve(&outside_uri, root, &BTreeSet::new()).is_err());
+    assert!(resolve(&outside_uri, root, &[outside].into()).is_ok());
 }
 #[test]
 fn coalesces_inflight_and_peeks_only_owned_ready_handles() {

@@ -37,6 +37,22 @@ fn open(path: &Path) -> Result<Connection, String> {
     }
     Ok(db)
 }
+/// Minimal legacy context only; never load presentation stages or image payloads.
+/// This runs on the same blocking-pool task as the canonical transcript lookup.
+pub(super) fn prior_turn(root: &Path, session: &str, turn: &str) -> Result<Option<Value>, String> {
+    let path = root.join("chat/sessions.sqlite3");
+    if !path.is_file() { return Ok(None); }
+    let db = open(&path)?;
+    let row = db.query_row(
+        "SELECT role, CASE WHEN length(CAST(text AS BLOB)) <= 4194304 THEN text ELSE NULL END, substr(error,1,8192), attachments_json IS NOT NULL AND attachments_json NOT IN ('[]','null','') FROM chat_turns WHERE session_id=? AND id=? AND NOT EXISTS(SELECT 1 FROM chat_deleted_sessions WHERE id=?)",
+        params![session,turn,session],
+        |r| Ok((r.get::<_,String>(0)?,r.get::<_,Option<String>>(1)?,r.get::<_,Option<String>>(2)?,r.get::<_,bool>(3)?)),
+    ).optional().map_err(err)?;
+    row.map(|(role,text,error,images)| {
+        let text = text.ok_or("Native limit: legacy turn exceeds the 4 MiB context budget")?;
+        Ok(json!({"id":turn,"role":role,"text":text,"error":error,"hasImages":images}))
+    }).transpose()
+}
 fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let mut v = json!({"id":r.get::<_,String>(0)?,"title":r.get::<_,String>(1)?,"createdAt":r.get::<_,i64>(2)?,"updatedAt":r.get::<_,i64>(3)?});
     if let Some(cwd) = r.get::<_, Option<String>>(4)? {

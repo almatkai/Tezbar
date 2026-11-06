@@ -1141,3 +1141,130 @@ fn resolved_default_selection_belongs_to_preparation_not_later_picker() {
         Some("later")
     );
 }
+
+#[test]
+fn failed_capture_unlocks_only_its_request_and_can_be_retried() {
+    let mut c = controller();
+    let Effect::Capture { token: old, .. } = c.capture().unwrap() else {
+        panic!()
+    };
+    c.capture_failed(old);
+    let Effect::Capture { token: new, .. } = c.capture().unwrap() else {
+        panic!()
+    };
+    assert_ne!(old, new);
+    c.capture_failed(old);
+    assert!(c.capture().is_none());
+    c.capture_failed(new);
+    assert!(c.capture().is_some());
+}
+#[test]
+fn manual_attachment_admission_is_owned_deduplicated_and_atomic() {
+    let mut c = controller();
+    let image = |i| Reference::Image {
+        blob_id: format!("blob-{i}"),
+        mime_type: "image/png".into(),
+        name: format!("image{i}"),
+        width: None,
+        height: None,
+    };
+    assert_eq!(c.attach_references("a", vec![image(0), image(0)]), Ok(1));
+    assert_eq!(c.attach_references("a", (1..8).map(image).collect()), Ok(7));
+    assert!(c.attach_references("a", vec![image(8)]).is_err());
+    assert_eq!(c.conversation("a").unwrap().attachments.len(), 8);
+    assert!(
+        c.attach_references(
+            "a",
+            vec![Reference::SignedHistory {
+                turn_id: "secret".into()
+            }]
+        )
+        .is_err()
+    );
+    c.boot(
+        Boot::NewChat {
+            session_id: "b".into(),
+            cwd: None,
+        },
+        None,
+    )
+    .unwrap();
+    assert!(c.attach_references("a", vec![image(8)]).is_err());
+    assert!(c.conversation("b").unwrap().attachments.is_empty());
+    c.set_visible(false);
+    assert!(c.attach_references("b", vec![image(0)]).is_err());
+}
+
+#[test]
+fn clear_admits_hidden_dirty_and_running_owners_and_recovers_failed_write() {
+    let mut c = controller();
+    start(&mut c, "a", "running-a");
+    c.boot(
+        Boot::NewChat {
+            session_id: "b".into(),
+            cwd: None,
+        },
+        None,
+    )
+    .unwrap();
+    start(&mut c, "b", "settled-b");
+    let effects = c.event(Event::Answer {
+        run_id: "settled-b".into(),
+        text: "answer".into(),
+    });
+    let _ = effects;
+    c.event(Event::Done {
+        run_id: "settled-b".into(),
+    });
+    c.boot(
+        Boot::NewChat {
+            session_id: "c".into(),
+            cwd: None,
+        },
+        None,
+    )
+    .unwrap();
+    c.edit_draft("c", "preparing".into());
+    let Effect::AppendUser {
+        token: prep, turn, ..
+    } = c
+        .send("c", "r-c".into(), "u-c".into(), "a-c".into(), 1)
+        .unwrap()
+    else {
+        panic!()
+    };
+    let clear = c.begin_clear();
+    assert!(
+        clear
+            .iter()
+            .any(|e| matches!(e,Effect::Cancel{run_id} if run_id=="running-a"))
+    );
+    let tickets: Vec<_> = clear
+        .into_iter()
+        .filter_map(|e| match e {
+            Effect::DeleteConversation { token, session_id } => Some((session_id, token)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tickets.len(), 3);
+    assert!(c.prepared("c", prep, Ok(turn), 2).is_empty());
+    for (id, token) in tickets {
+        let deferred = c.delete_result(&id, token, false);
+        if id == "b" {
+            assert!(
+                deferred
+                    .iter()
+                    .any(|e| matches!(e,Effect::PersistTurn{session_id,..} if session_id=="b"))
+            );
+        }
+    }
+    assert_eq!(c.conversation("c").unwrap().draft, "preparing");
+    let tickets = c.begin_clear();
+    for e in tickets {
+        if let Effect::DeleteConversation { token, session_id } = e {
+            c.delete_result(&session_id, token, true);
+        }
+    }
+    assert!(c.owners.is_empty());
+    assert!(c.active.is_none());
+}
