@@ -207,3 +207,17 @@ fn theme_resolves_system_preferences() {
     assert_eq!(Theme::System.resolved(true), Theme::Dark);
     assert_eq!(Theme::System.resolved(false), Theme::White);
 }
+#[test]
+fn parent_review_native_state_defaults_only_missing_fields() {
+    let state =
+        super::UiState::decode(r#"{"version":1,"theme":"dark","futureField":{"kept":true}}"#)
+            .unwrap();
+    assert_eq!(state.theme, super::Theme::Dark);
+    assert_eq!(state.settings_tab, "general");
+    assert_eq!(
+        state.unknown["futureField"],
+        serde_json::json!({"kept":true})
+    );
+    assert!(super::UiState::decode(r#"{"version":2}"#).is_err());
+    assert!(super::UiState::decode(r#"{"version":1,"pins":"broken"}"#).is_err());
+}

@@ -123,7 +123,7 @@ impl Theme {
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct UiState {
     pub version: u32,
     pub imported_legacy: bool,

@@ -38,9 +38,8 @@ pub enum Effect {
     Navigate(Surface),
     NewItem(NewItem),
     Hide,
-    CheckUpdates,
-    DownloadUpdate,
-    RestartUpdate,
+    /// Resolve the requested action against the current updater status at execution time.
+    UpdateAction,
     QuitConfirm,
     ActivateDeepSearch(String),
     RecordUsage(String),
@@ -100,7 +99,8 @@ impl Router {
     }
     pub fn invoke(&mut self, id: &str, query: &str, now: u64) -> Option<Vec<Effect>> {
         let s = match id {
-            "open-settings" | "open-providers" => Surface::Settings("ai".into()),
+            "open-settings" => Surface::Settings("general".into()),
+            "open-providers" => Surface::Settings("ai".into()),
             "open-settings-updates" => Surface::Settings("general".into()),
             "open-extensions-settings" => Surface::Settings("extensions".into()),
             "open-extensions" => Surface::Extensions,
@@ -113,9 +113,9 @@ impl Router {
             "show-updated-version" => Surface::ReleaseNotes,
             "show-system-monitor" => Surface::SystemMonitor,
             "open-clipboard-history" => Surface::Clipboard,
-            "download-app-update" => return Some(vec![Effect::DownloadUpdate]),
-            "restart-app-update" => return Some(vec![Effect::RestartUpdate]),
-            "check-for-updates" => return Some(vec![Effect::CheckUpdates]),
+            "download-app-update" | "restart-app-update" | "check-for-updates" => {
+                return Some(vec![Effect::UpdateAction]);
+            }
             "quit-tezbar" => return Some(vec![Effect::QuitConfirm]),
             "activate-deep-search" => return Some(vec![Effect::ActivateDeepSearch(query.into())]),
             _ => return None,
@@ -126,6 +126,31 @@ impl Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn parent_review_settings_command_selects_general() {
+        let mut r = Router::default();
+        assert_eq!(
+            r.invoke("open-settings", "", 0),
+            Some(vec![Effect::Navigate(Surface::Settings("general".into()))])
+        );
+        assert_eq!(
+            r.invoke("open-providers", "", 0),
+            Some(vec![Effect::Navigate(Surface::Settings("ai".into()))])
+        );
+    }
+    #[test]
+    fn parent_review_update_commands_share_current_status_dispatch() {
+        for command in [
+            "check-for-updates",
+            "download-app-update",
+            "restart-app-update",
+        ] {
+            assert_eq!(
+                Router::default().invoke(command, "", 0),
+                Some(vec![Effect::UpdateAction])
+            );
+        }
+    }
     #[test]
     fn new_item_routing() {
         assert_eq!(new_item(&Surface::Vault), NewItem::Vault);

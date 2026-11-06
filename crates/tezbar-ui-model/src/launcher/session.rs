@@ -105,7 +105,7 @@ impl<R> SearchSession<R> {
         let Some((g, expires)) = self.enter else {
             return false;
         };
-        if g != self.generation || now > expires {
+        if g != self.generation || now >= expires {
             self.enter = None;
             return false;
         }
@@ -153,6 +153,21 @@ impl<R> SearchSession<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn parent_review_enter_deadline_does_not_depend_on_callback_order() {
+        for expire_first in [false, true] {
+            let mut session = SearchSession::default();
+            session.commit("query".into(), 0);
+            assert!(!session.enter(1, false));
+            session.take_request(8);
+            session.complete(1, vec!["row"], 1001);
+            if expire_first {
+                session.expire_enter(1001);
+            }
+            assert!(!session.deferred_enter(1001));
+            assert!(!session.activating);
+        }
+    }
     #[test]
     fn latest_pending_coalesces_without_extending_deadline() {
         let mut s = SearchSession::default();
