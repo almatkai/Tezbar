@@ -1,0 +1,3026 @@
+{
+  "schema_version": 1,
+  "base_head": "c2a36b52fffc191ff09a3b461013bdab6196fefa",
+  "kind": "M7-source-case-and-native-fixture-map",
+  "acceptance": "OPEN. Frozen automated gates passed; no row closed and no one-to-one TS/native test equivalence claimed.",
+  "sources": [
+    {
+      "path": "package.json",
+      "sha256": "2c92e74aa7e5721d6ac31eebb4a4a99b8b149cdee9dd437263b8c43b84cc8802"
+    },
+    {
+      "path": "src/renderer/AppUpdateSettings.tsx",
+      "sha256": "5894a683b3cbc5a72357f57c2f7c6f9f9e01b82ca904b15b1bcfd0dbe72844ec"
+    },
+    {
+      "path": "src/renderer/BackgroundTaskStatus.tsx",
+      "sha256": "028b4b91d5d3cd8fa1781117acce7bb6e160fcde93f92865e31e330974c948b7"
+    },
+    {
+      "path": "src/renderer/CurrencySettings.tsx",
+      "sha256": "c27e0162e4d0a74721dabcc463456090e85a22f3c38244e194d8d2fa2d97a3e6"
+    },
+    {
+      "path": "src/renderer/ExtensionPreferencesEditor.test.ts",
+      "sha256": "60603c53b74fd5a536f431d28ed3c2a6f8abfc25716947f72ae83b8e4b062eb6"
+    },
+    {
+      "path": "src/renderer/ExtensionPreferencesEditor.tsx",
+      "sha256": "c33028362ecf32bb712e277221809ce87ed0b3b9926b7534da4b59301e8f4c86"
+    },
+    {
+      "path": "src/renderer/ExtensionsSettingsTab.tsx",
+      "sha256": "8ec48266f67b957332be0dc08c0a7e37f9884b148e3199b91185efdd47f9dd39"
+    },
+    {
+      "path": "src/renderer/HotkeyRecorder.tsx",
+      "sha256": "ec2eb0e83f1e77776114adf948102c7d71a52af0296ed01f378a6bec84feabc3"
+    },
+    {
+      "path": "src/renderer/KnowledgeEmbeddingSettings.tsx",
+      "sha256": "0380ba538bec6544895455a779ad7f0ecc28a5ea5e42997e625ff35e7811b7a0"
+    },
+    {
+      "path": "src/renderer/LauncherAppearance.tsx",
+      "sha256": "5f42ada527b71726dba033f821cc25bfd1fe2f561f1369ce8fb443d42b1b7c10"
+    },
+    {
+      "path": "src/renderer/OnboardingView.tsx",
+      "sha256": "a09ac05398a6d4c380fcaf8c07d4f4444e88daa001eeb808697c84c2cdb2cb86"
+    },
+    {
+      "path": "src/renderer/ReleaseNotesView.tsx",
+      "sha256": "25687367fe8595f47caeae2f1ed5ba25930f22fc3890706fdad2e337f1782afc"
+    },
+    {
+      "path": "src/renderer/SettingsView.knowledge.test.ts",
+      "sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617"
+    },
+    {
+      "path": "src/renderer/SettingsView.tsx",
+      "sha256": "8e6ecce3a815f462116f1fcdfb65aa818bb8dae5e0a8d92fdc5d611314efa9f9"
+    },
+    {
+      "path": "src/renderer/UpdateChannelSettings.tsx",
+      "sha256": "d767c9a5f5384051fe37b1d88dc2db940fd4fda269375876650784e472dab42a"
+    },
+    {
+      "path": "src/renderer/ai/AiAccountsPanel.tsx",
+      "sha256": "971889c626ef51d7da282d2cee81f4647cf75704c3c616450b34a289f18d77cf"
+    },
+    {
+      "path": "src/renderer/ai/AiContributionsEditor.tsx",
+      "sha256": "eba4425b43108a90c1e07952d20d656b65615d9cbee1378a889bbd872cf7d6b6"
+    },
+    {
+      "path": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317"
+    },
+    {
+      "path": "src/renderer/ai/AiExtensionsSection.tsx",
+      "sha256": "4d201ee7105e2d6dcf411cec6aead88e15b6e263e67d67c2e2ed42a616d75930"
+    },
+    {
+      "path": "src/renderer/ai/api.ts",
+      "sha256": "dac8b879225c64285d753fb94931d6481193eddc461dc5f44a7a2bad63f77627"
+    },
+    {
+      "path": "src/renderer/assets/app-icon.png",
+      "sha256": "ce87918cfb7cbbac7fcbcbf7fc7087224740850e859d985352acc2c2c184d724"
+    },
+    {
+      "path": "src/renderer/calculator.ts",
+      "sha256": "ff739b52a3379bd4bcbd39c78efb2c372f7a2abd571eefe21dbdb95de8153bef"
+    },
+    {
+      "path": "src/renderer/commandBarInputMode.ts",
+      "sha256": "74574b0efc7a9200a995313821eb9a2a99b1eb64bc99af9b0409dbadbb4a60c1"
+    },
+    {
+      "path": "src/renderer/currency/currencyPreferences.ts",
+      "sha256": "db66d6baac03bfcb8a39b09a2af5398fcee3464f7c9876b65703580da3e31c2a"
+    },
+    {
+      "path": "src/renderer/currency/currencySynonyms.ts",
+      "sha256": "c6845c49bce6cd65ae1f4b009d508a5ca77dcc8b10305593e41407805b216fc3"
+    },
+    {
+      "path": "src/renderer/extensionImages.ts",
+      "sha256": "138bc6ae1e4ab7fe2a661f07dd6579ae09b939666cbc98451d0d3d7cf51e6f46"
+    },
+    {
+      "path": "src/renderer/extensionPreferences.ts",
+      "sha256": "73d8534e8e296d7d1bf3ccd7022e9977a3377d73441e34fe489af7efbfe22a77"
+    },
+    {
+      "path": "src/renderer/launcherIcons.tsx",
+      "sha256": "b0b8fdcb6c2f891e92454e904da03881bb89f6760e7b4d469f1fd17a347930ab"
+    },
+    {
+      "path": "src/renderer/releaseNotes.ts",
+      "sha256": "4f676f6f1fbb68fa270137e54759602a5643df5ab9e0a26754f7e6fa013149c8"
+    },
+    {
+      "path": "src/renderer/settingsLifecycle.bridge.test.ts",
+      "sha256": "978da34099ed0026dcb96d3ef380e0cd8fcb527112cb072a3827d468e9ba5459"
+    },
+    {
+      "path": "src/renderer/settingsLifecycle.ts",
+      "sha256": "a287bc7f4b8adc607e5f84df1c1a99d56aecbfd0c0cb1279e08db2e8845daee5"
+    },
+    {
+      "path": "src/renderer/tauri-bridge.ts",
+      "sha256": "8cd44b966596ef466e1c36ed2085c637ea1d9be0811c6eaabe512c41def5ca7b"
+    },
+    {
+      "path": "src/renderer/theme.ts",
+      "sha256": "f55fa6d03bbb9dff7bbb3c932005cf65a7dd4bec312a846b384266b1563ae3a7"
+    },
+    {
+      "path": "src/renderer/ui/CommandSurface.tsx",
+      "sha256": "25aa97c31fc29002e76dad8df05dbfe835cdc8ebd30dd106d4bb8c3ca82450bf"
+    },
+    {
+      "path": "src/renderer/ui/Markdown.tsx",
+      "sha256": "d205312b35293a433d5398e4edf1dcc96662cacd34036e8ee3ec503f65eee2de"
+    },
+    {
+      "path": "src/renderer/ui/primitives.tsx",
+      "sha256": "0bcedb2a1158a00ae7d4237f6ee875a58d9496e8576fb72ac78b79af82365044"
+    },
+    {
+      "path": "src/renderer/useKnowledgeSettings.ts",
+      "sha256": "ea97c700dcaa5b59a0628ba75ae9186491c0eac9618bd935078b59a1d696d96e"
+    },
+    {
+      "path": "src/shared/agent.ts",
+      "sha256": "80e2a625fbcbbd64e714481fc9557b1da9ab43e56ad5e502a68f3fc7084e15e3"
+    },
+    {
+      "path": "src/shared/aiChatSurface.ts",
+      "sha256": "da21466d7f689046eb5d4124bee4bf92da107a6680a085563a1d9831bacde9e2"
+    },
+    {
+      "path": "src/shared/aiExtensions.ts",
+      "sha256": "d8dab7df009f8c55befac2fe017538b473466b077ef474e71a6b429c15eaef43"
+    },
+    {
+      "path": "src/shared/aiProviders.ts",
+      "sha256": "07262230664ee9ba491b35546c6572f62f8e33f787b5cd889e46fe7e61edb5c1"
+    },
+    {
+      "path": "src/shared/applicationSearch.ts",
+      "sha256": "70b65afa2bd6a533902608561322806a8b26924038c7b74fd5045408196f1d3e"
+    },
+    {
+      "path": "src/shared/backgroundTasks.ts",
+      "sha256": "39f0ce096f0172c8fcdfedbe4b90df34045d12f29fdfe109906c3e56ddd3cf6b"
+    },
+    {
+      "path": "src/shared/chat.ts",
+      "sha256": "cd3f63e01e3c484a883106a2698995d157df58be4cb43e8fe211cd9e0c098c9a"
+    },
+    {
+      "path": "src/shared/clipboard.ts",
+      "sha256": "ca85f1068790867458bec4c482a2a460766538f4674afad6544a77577a6d7c95"
+    },
+    {
+      "path": "src/shared/desktop-api.ts",
+      "sha256": "b797e6ad1ca9021b74e52b1c7f5dfc714c4c3a4b0d41f1a37bb29c34bc23089b"
+    },
+    {
+      "path": "src/shared/extensionRuntime.ts",
+      "sha256": "0020e30e9f3aa853e286a63fa4a414f9322c4ce07522ab4a8cc165cb5ab39e1e"
+    },
+    {
+      "path": "src/shared/extensions.ts",
+      "sha256": "68435aa389dbcb8d41462dbdf19cac1b1903fa914e22c0157881310003c56602"
+    },
+    {
+      "path": "src/shared/intent.ts",
+      "sha256": "63af4fc89c12de43a8081ba6f0b4cae3522e3991ea1d20feadb4640af20f0110"
+    },
+    {
+      "path": "src/shared/knowledge.ts",
+      "sha256": "da65dd81dd121d5c500d6fdfd146cc9974b3661613aae17fab1552890ad347f8"
+    },
+    {
+      "path": "src/shared/llmConfig.ts",
+      "sha256": "6561eb2c873d17f3060c53cf909dbd69c757fd4e21426fbf464de8c0f0fb0afe"
+    },
+    {
+      "path": "src/shared/nativeCommands.ts",
+      "sha256": "b8147e361a579c1ccf88cdfd6c5a0dffbb8dea01ebd6b3dff93563c4e3f2970c"
+    },
+    {
+      "path": "src/shared/permissions.ts",
+      "sha256": "6a20e4fc853790a7094d0a7682d9dbcf2c873ea419a4f7f4435899950eb821cb"
+    },
+    {
+      "path": "src/shared/quickNotes.ts",
+      "sha256": "16be15d393e42ce6d07bb5fb4cc1940336fd2b7d9d8315bd5d8209589f5a69c1"
+    },
+    {
+      "path": "src/shared/safety.ts",
+      "sha256": "ad35aaa0bd2347a545a7269df4edd95b2f855335ef7443f988cfb339fb67af52"
+    },
+    {
+      "path": "src/shared/search.ts",
+      "sha256": "bbf9730a38f9b42b4cd6afcc65d6fa7bdb35b2c86fb46c19344c4d79530366ea"
+    },
+    {
+      "path": "src/shared/searchMode.ts",
+      "sha256": "96ae693d2769ba0add3e0855a994219a1f3cea584662caeeec6e0891deaca03f"
+    },
+    {
+      "path": "src/shared/searchQueryVariants.ts",
+      "sha256": "6eac176fea0eb04f846065aa0269041f1765680674ec2d86c85d222596aa6b4c"
+    },
+    {
+      "path": "src/shared/snippets.ts",
+      "sha256": "6bd132a7048b5f0652cbc96ae233ea20849d3a93475b60886c8be6d507ad754e"
+    },
+    {
+      "path": "src/shared/systemStats.ts",
+      "sha256": "1bdb06ca4a2337e553cd6dfe7c4b4cbcbbaea42aea9304189d276286f4073e79"
+    },
+    {
+      "path": "src/shared/terminal.ts",
+      "sha256": "121f3941c58bf10570b67af4cd788fc1130585889e1c64f506a4ee86606f7081"
+    },
+    {
+      "path": "src/shared/updater.ts",
+      "sha256": "e67e190279dd22e845f26e523565c7dff0380307ea1817495f3772d16d072c76"
+    },
+    {
+      "path": "src/shared/vault.ts",
+      "sha256": "147456e65d57998eec5db14cf89a1b119c321f7a62476ed4eed1b43b4890b6ca"
+    },
+    {
+      "path": "src/shared/voice.ts",
+      "sha256": "aed939fa56a96739be2f25cb01a810cd5eed7fc7e2dc52a971c15600be976f93"
+    },
+    {
+      "path": "src/shared/windowLayout.ts",
+      "sha256": "fe3500b80e5dad52fb13c53194e41b9402d9cb673fea1cd654afa2d728492ee6"
+    }
+  ],
+  "expanded_reference_cases": [
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 235,
+      "title": "honors contributed provider form ownership",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "contributed_provider_records_are_not_persisted",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 276,
+      "title": "saves builtin key typed once",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "external_active_and_per_field_changes_survive",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "actual_text_input_provider_edit_is_scoped_and_survives_initial_read"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 320,
+      "title": "native close waits for the real bridge save queue and retains errors: %s",
+      "parameter_index": 0,
+      "parameters": "false",
+      "parameterization_unresolved": false,
+      "model_filter": "close_failure_blocks_and_acknowledged_has_no_deadline",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "close_failure_retry_uses_real_store_and_keeps_secrets_out_of_errors",
+        "settings_window_acknowledges_before_failed_drain_and_keeps_same_content"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 320,
+      "title": "native close waits for the real bridge save queue and retains errors: %s",
+      "parameter_index": 1,
+      "parameters": "true",
+      "parameterization_unresolved": false,
+      "model_filter": "close_failure_blocks_and_acknowledged_has_no_deadline",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "close_failure_retry_uses_real_store_and_keeps_secrets_out_of_errors",
+        "settings_window_acknowledges_before_failed_drain_and_keeps_same_content"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 409,
+      "title": "drains Settings drafts before Permissions and closes through the real window bridge there (save fails: %s)",
+      "parameter_index": 0,
+      "parameters": "false",
+      "parameterization_unresolved": false,
+      "model_filter": "close_failure_blocks_and_acknowledged_has_no_deadline",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 409,
+      "title": "drains Settings drafts before Permissions and closes through the real window bridge there (save fails: %s)",
+      "parameter_index": 1,
+      "parameters": "true",
+      "parameterization_unresolved": false,
+      "model_filter": "close_failure_blocks_and_acknowledged_has_no_deadline",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 486,
+      "title": "preserves an external chat choice while saving provider drafts (pending: %s)",
+      "parameter_index": 0,
+      "parameters": "false",
+      "parameterization_unresolved": false,
+      "model_filter": "external_active_and_per_field_changes_survive",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 486,
+      "title": "preserves an external chat choice while saving provider drafts (pending: %s)",
+      "parameter_index": 1,
+      "parameters": "true",
+      "parameterization_unresolved": false,
+      "model_filter": "external_active_and_per_field_changes_survive",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 540,
+      "title": "removes a model with a conditional selection fallback (external choice: %s)",
+      "parameter_index": 0,
+      "parameters": "false",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r1_removing_interim_fallback_uses_final_list",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 540,
+      "title": "removes a model with a conditional selection fallback (external choice: %s)",
+      "parameter_index": 1,
+      "parameters": "true",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r1_removing_interim_fallback_uses_final_list",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 587,
+      "title": "flushes pending model edits before removing their custom provider: %s (pending save fails: %s)",
+      "parameter_index": 0,
+      "parameters": "['add-then-remove-provider', false]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r2_removal_supersedes_retired_failure",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 587,
+      "title": "flushes pending model edits before removing their custom provider: %s (pending save fails: %s)",
+      "parameter_index": 1,
+      "parameters": "['remove-selected-then-remove-active-provider', false]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r2_removal_supersedes_retired_failure",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 587,
+      "title": "flushes pending model edits before removing their custom provider: %s (pending save fails: %s)",
+      "parameter_index": 2,
+      "parameters": "['add-then-remove-provider', true]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r2_removal_supersedes_retired_failure",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 587,
+      "title": "flushes pending model edits before removing their custom provider: %s (pending save fails: %s)",
+      "parameter_index": 3,
+      "parameters": "['remove-selected-then-remove-active-provider', true]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r2_removal_supersedes_retired_failure",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 684,
+      "title": "keeps a deleted provider absent when retrying an older %s (retry fails again: %s)",
+      "parameter_index": 0,
+      "parameters": "['peer-edit', false]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r3_repeated_retry_cannot_resurrect_deleted_provider",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 684,
+      "title": "keeps a deleted provider absent when retrying an older %s (retry fails again: %s)",
+      "parameter_index": 1,
+      "parameters": "['peer-edit', true]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r3_repeated_retry_cannot_resurrect_deleted_provider",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 684,
+      "title": "keeps a deleted provider absent when retrying an older %s (retry fails again: %s)",
+      "parameter_index": 2,
+      "parameters": "['provider-creation', false]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r3_repeated_retry_cannot_resurrect_deleted_provider",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 684,
+      "title": "keeps a deleted provider absent when retrying an older %s (retry fails again: %s)",
+      "parameter_index": 3,
+      "parameters": "['provider-creation', true]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r3_repeated_retry_cannot_resurrect_deleted_provider",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 784,
+      "title": "allows an intentional custom-provider creation after a failed save (remove and recreate: %s)",
+      "parameter_index": 0,
+      "parameters": "false",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r3_explicit_recreation_has_new_revision",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 784,
+      "title": "allows an intentional custom-provider creation after a failed save (remove and recreate: %s)",
+      "parameter_index": 1,
+      "parameters": "true",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r3_explicit_recreation_has_new_revision",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 940,
+      "title": "keeps a newer custom provider when retrying a failed peer draft",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "t_r6_all_writes_merge_only_owned_ids",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 961,
+      "title": "keeps a newer successful peer URL when retrying an older creation",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "t_r5_newer_field_and_activation_success_win",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 986,
+      "title": "keeps a newer successful activation when retrying an older creation",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "t_r5_newer_field_and_activation_success_win",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1006,
+      "title": "keeps a pending removal across failed retry rounds: %s",
+      "parameter_index": 0,
+      "parameters": "0",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r4_retries_are_deduplicated_and_keep_newer_failed_removal",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1006,
+      "title": "keeps a pending removal across failed retry rounds: %s",
+      "parameter_index": 1,
+      "parameters": "1",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r4_retries_are_deduplicated_and_keep_newer_failed_removal",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1032,
+      "title": "preserves providers saved by a retired retry during a live edit after failed %s",
+      "parameter_index": 0,
+      "parameters": "'provider-creation'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r6_all_writes_merge_only_owned_ids",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1032,
+      "title": "preserves providers saved by a retired retry during a live edit after failed %s",
+      "parameter_index": 1,
+      "parameters": "'peer-url'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r6_all_writes_merge_only_owned_ids",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1089,
+      "title": "preserves provider records during Copilot device sign-in: %s",
+      "parameter_index": 0,
+      "parameters": "'existing'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r7_signin_waits_for_success_and_preserves_peer_records",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "copilot_signin_save_failure_is_an_effect_barrier",
+        "signin_clicked_during_a_slow_save_waits_once_and_freezes_its_provider"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1089,
+      "title": "preserves provider records during Copilot device sign-in: %s",
+      "parameter_index": 1,
+      "parameters": "'late-provider'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r7_signin_waits_for_success_and_preserves_peer_records",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "copilot_signin_save_failure_is_an_effect_barrier",
+        "signin_clicked_during_a_slow_save_waits_once_and_freezes_its_provider"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1089,
+      "title": "preserves provider records during Copilot device sign-in: %s",
+      "parameter_index": 2,
+      "parameters": "'save-throw'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r7_signin_waits_for_success_and_preserves_peer_records",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "copilot_signin_save_failure_is_an_effect_barrier",
+        "signin_clicked_during_a_slow_save_waits_once_and_freezes_its_provider"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1089,
+      "title": "preserves provider records during Copilot device sign-in: %s",
+      "parameter_index": 3,
+      "parameters": "'save-false'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r7_signin_waits_for_success_and_preserves_peer_records",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "copilot_signin_save_failure_is_an_effect_barrier",
+        "signin_clicked_during_a_slow_save_waits_once_and_freezes_its_provider"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1165,
+      "title": "does not let an older retired retry clear a newer live removal failure",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "t_r4_retries_are_deduplicated_and_keep_newer_failed_removal",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1193,
+      "title": "preserves peer credentials when retrying a failed provider removal",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "t_r2_failed_removal_preserves_peer_credentials_on_retry",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1250,
+      "title": "preserves the effective explicit model choice when combined with removal: %s",
+      "parameter_index": 0,
+      "parameters": "'choose-after-remove'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r1_rapid_removal_and_explicit_choice",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1250,
+      "title": "preserves the effective explicit model choice when combined with removal: %s",
+      "parameter_index": 1,
+      "parameters": "'remove-after-add'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r1_rapid_removal_and_explicit_choice",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1311,
+      "title": "rapid removals of the selected model then %s within the debounce fall back",
+      "parameter_index": 0,
+      "parameters": "'fixture-b'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r1_removing_interim_fallback_uses_final_list",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1311,
+      "title": "rapid removals of the selected model then %s within the debounce fall back",
+      "parameter_index": 1,
+      "parameters": "'fixture-c'",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r1_removing_interim_fallback_uses_final_list",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1359,
+      "title": "retired Settings drains a queued get and preserves newer drafts (failure %s, newer %s)",
+      "parameter_index": 0,
+      "parameters": "[false, false]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r6_all_writes_merge_only_owned_ids",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1359,
+      "title": "retired Settings drains a queued get and preserves newer drafts (failure %s, newer %s)",
+      "parameter_index": 1,
+      "parameters": "[true, false]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r6_all_writes_merge_only_owned_ids",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1359,
+      "title": "retired Settings drains a queued get and preserves newer drafts (failure %s, newer %s)",
+      "parameter_index": 2,
+      "parameters": "[false, true]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r6_all_writes_merge_only_owned_ids",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1359,
+      "title": "retired Settings drains a queued get and preserves newer drafts (failure %s, newer %s)",
+      "parameter_index": 3,
+      "parameters": "[true, true]",
+      "parameterization_unresolved": false,
+      "model_filter": "t_r6_all_writes_merge_only_owned_ids",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1460,
+      "title": "a rejected discovery write must not silently block Settings close",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "optional_discovery_failure_does_not_block_close",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1512,
+      "title": "saves latest typing, provider-scoped edits, model mutations and a pending close without hydration writes",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "dirty_hydration_and_stale_tokens_do_not_write",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1577,
+      "title": "retains a chosen protocol and token limit after model rediscovery",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "provider_reload_isolation_and_discovery_preserves_metadata",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "production_discovery_uses_fresh_models_and_keeps_peer_selection"
+      ],
+      "limits": "Selected native adapter assertions only. Original TS parameter rows and complete lifecycle/presentation assertions are not all covered."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1612,
+      "title": "does not borrow the previous provider key or URL when reloading AI settings",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "provider_reload_isolation_and_discovery_preserves_metadata",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1656,
+      "title": "shows unknown/loading rather than built-in, empty roots, or a mutation in progress",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "unknown_loading_and_no_actions_before_snapshot",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1670,
+      "title": "bounds a hung initial load, stops polling, and accepts retry without late overwrite",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "hung_initial_load_is_bounded_and_late_result_ignored",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1696,
+      "title": "allows Refresh status to supersede an outstanding initial request",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "refresh_supersedes_initial_and_rejection",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1706,
+      "title": "shows rejection and genuine zero roots only after successful retry",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "zero_roots_only_after_success",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1719,
+      "title": "preserves the installed model, roots and actions through pending/failed refresh",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "failed_refresh_preserves_snapshot_controls_and_downloads",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1750,
+      "title": "preserves supported download availability after a successful built-in snapshot",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "failed_refresh_preserves_snapshot_controls_and_downloads",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1766,
+      "title": "keeps idle polling from inserting a refresh banner above the controls",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "polling_is_serial_and_quiet_and_failure_requires_retry",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1786,
+      "title": "refreshes an existing snapshot quietly when the window becomes visible",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "visibility_refreshes_once_and_pauses_polling",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1798,
+      "title": "polls serially after success, but does not silently retry a polling failure",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "polling_is_serial_and_quiet_and_failure_requires_retry",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1812,
+      "title": "invalidates a pending snapshot when a model mutation returns newer data",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "mutation_snapshot_invalidates_older_read",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1825,
+      "title": "cleans up timers and safely consumes a late rejection after unmount",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "tab_exit_unmount_and_obsolete_loads",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1844,
+      "title": "does not dispatch an obsolete StrictMode load",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "tab_exit_unmount_and_obsolete_loads",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1851,
+      "title": "invalidates a pending load on tab exit before a fresh load on return",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "tab_exit_unmount_and_obsolete_loads",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1861,
+      "title": "handles a synchronous bridge failure and permits explicit recovery",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "hung_initial_load_is_bounded_and_late_result_ignored",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1872,
+      "title": "keeps Enable semantic search available for an installed but unselected model",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "enable_installed_prefers_standard_without_download",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1884,
+      "title": "safely finishes an embedding operation after its component unmounts",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "late_mutation_after_unmount_is_consumed",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1898,
+      "title": "does not multiply snapshot requests on ordinary rerenders",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "tab_exit_unmount_and_obsolete_loads",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1905,
+      "title": "renders legacy Q8 selection and separate model file rows without offering an implicit download",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_variants_and_weights",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1917,
+      "title": "hides Q8 counts while Q4 prepares and preserves file/chunk/page index status",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "counts_only_for_selected_index_variant",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1938,
+      "title": "reports startup failure as installed but off and offers retry start and repair",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_startup_and_integrity_are_attributed_and_sanitized",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1960,
+      "title": "repairs integrity failures without exposing hashes",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_startup_and_integrity_are_attributed_and_sanitized",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1981,
+      "title": "keeps variant download failures separate and leaves healthy Q8 installed",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "variant_failure_isolation_and_alert_order_dedup",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 1996,
+      "title": "renders separate download and indeterminate verification progress outside live regions",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "separate_progress_and_unknown_totals",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2021,
+      "title": "shows unsupported model files without download actions",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "unsupported_models_have_no_actions",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2034,
+      "title": "selects Q4 explicitly without reindexing extracted text or downloading it",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "pause_resume_and_selection_have_distinct_effects",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2042,
+      "title": "bounds a hung switch, reverts pending selection, and locks until a fresh snapshot is applied",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "switch_timeout_reverts_selection_and_requires_fresh_read",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2064,
+      "title": "ignores a late switch %s after reconciliation",
+      "parameter_index": 0,
+      "parameters": "'resolve'",
+      "parameterization_unresolved": false,
+      "model_filter": "late_switch_resolve_and_reject_after_reconciliation",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2064,
+      "title": "ignores a late switch %s after reconciliation",
+      "parameter_index": 1,
+      "parameters": "'reject'",
+      "parameterization_unresolved": false,
+      "model_filter": "late_switch_resolve_and_reject_after_reconciliation",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2087,
+      "title": "retains the lock through a failed reconcile until explicit Refresh succeeds",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "failed_reconcile_keeps_lock_until_explicit_refresh",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2108,
+      "title": "does not unlock on an old poll or a status event during reconciliation",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "unrelated_mutation_and_old_poll_do_not_reconcile",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2129,
+      "title": "keeps the triggering download focusable, blocks double activation, and permits Refresh",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "trigger_is_focusable_inert_and_double_activation_blocked",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2157,
+      "title": "keeps row button focus when download response turns Download into Cancel",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "download_focus_moves_to_cancel_in_same_row",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2184,
+      "title": "lets Cancel supersede a hung operation and ignores its later result",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "cancel_supersedes_hung_operation_but_cannot_clear_unknown_barrier",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2203,
+      "title": "removes the in-use variant without selecting the other installed variant",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "remove_does_not_auto_select_other_variant",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2216,
+      "title": "drops pending state and late rejection across tab unmount/remount",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "late_mutation_after_unmount_is_consumed",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2231,
+      "title": "pauses hidden polling and refreshes exactly once on becoming visible",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "visibility_refreshes_once_and_pauses_polling",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2245,
+      "title": "keeps no-snapshot rows nonactionable while Refresh remains available",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "unknown_loading_and_no_actions_before_snapshot",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2253,
+      "title": "keeps unknown-outcome protection when Cancel supersedes reconciliation",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "cancel_supersedes_hung_operation_but_cannot_clear_unknown_barrier",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2270,
+      "title": "retains explicit retry after visibility returns from a failed snapshot read",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "polling_is_serial_and_quiet_and_failure_requires_retry",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2283,
+      "title": "does not show a healthy semantic index for a selected missing or failed variant",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "missing_failed_and_unattributed_errors_never_claim_healthy_semantics",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2306,
+      "title": "does not treat an unrelated mutation snapshot as a reconciliation read",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "unrelated_mutation_and_old_poll_do_not_reconcile",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2324,
+      "title": "preserves pause and resume indexing without starting text indexing on version selection",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "pause_resume_and_selection_have_distinct_effects",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2344,
+      "title": "bounds a hung %s and ignores late rejection after timeout",
+      "parameter_index": 0,
+      "parameters": "'download'",
+      "parameterization_unresolved": false,
+      "model_filter": "all_four_mutation_timeout_variants_ignore_late_rejection",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2344,
+      "title": "bounds a hung %s and ignores late rejection after timeout",
+      "parameter_index": 1,
+      "parameters": "'remove'",
+      "parameterization_unresolved": false,
+      "model_filter": "all_four_mutation_timeout_variants_ignore_late_rejection",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2344,
+      "title": "bounds a hung %s and ignores late rejection after timeout",
+      "parameter_index": 2,
+      "parameters": "'cancel'",
+      "parameterization_unresolved": false,
+      "model_filter": "all_four_mutation_timeout_variants_ignore_late_rejection",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2344,
+      "title": "bounds a hung %s and ignores late rejection after timeout",
+      "parameter_index": 3,
+      "parameters": "'speed'",
+      "parameterization_unresolved": false,
+      "model_filter": "all_four_mutation_timeout_variants_ignore_late_rejection",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2382,
+      "title": "enables the available variant with Standard preference and no download",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "only_available_compact_can_enable_without_download",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2400,
+      "title": "orders local operation and independent persistent variant failure alerts",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "variant_failure_isolation_and_alert_order_dedup",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2420,
+      "title": "uses native legacy failure attribution for repair, startup retry, and unattributed alerts",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_startup_and_integrity_are_attributed_and_sanitized",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2494,
+      "title": "shows legacy startup verification truthfully until the installed Q8 check completes (N1)",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_verification_is_not_download_or_cancel",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2516,
+      "title": "offers no legacy Q8 download or cancel capable of interrupting startup verification (N1b)",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_verification_is_not_download_or_cancel",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2529,
+      "title": "hides Cancel during structured %s verification and uses truthful installation copy",
+      "parameter_index": 0,
+      "parameters": "'q8_0'",
+      "parameterization_unresolved": false,
+      "model_filter": "structured_verification_both_variants_has_no_cancel_or_download",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2529,
+      "title": "hides Cancel during structured %s verification and uses truthful installation copy",
+      "parameter_index": 1,
+      "parameters": "'q4_k_m'",
+      "parameterization_unresolved": false,
+      "model_filter": "structured_verification_both_variants_has_no_cancel_or_download",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2545,
+      "title": "keeps actual legacy downloading cancellable even when integrityState is verifying",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "actual_legacy_download_stays_cancellable_during_integrity_flag",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2554,
+      "title": "recovers %s focus to Refresh in its own action row, never Remove (N2/N2b/N2c)",
+      "parameter_index": 0,
+      "parameters": "'enable'",
+      "parameterization_unresolved": false,
+      "model_filter": "model_action_focus_does_not_steal_deliberate_destination",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2554,
+      "title": "recovers %s focus to Refresh in its own action row, never Remove (N2/N2b/N2c)",
+      "parameter_index": 1,
+      "parameters": "'retry-index'",
+      "parameterization_unresolved": false,
+      "model_filter": "model_action_focus_does_not_steal_deliberate_destination",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2554,
+      "title": "recovers %s focus to Refresh in its own action row, never Remove (N2/N2b/N2c)",
+      "parameter_index": 2,
+      "parameters": "'start-index'",
+      "parameterization_unresolved": false,
+      "model_filter": "model_action_focus_does_not_steal_deliberate_destination",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2583,
+      "title": "moves Retry start focus away when the same DOM button becomes destructive Remove",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "focus_never_lands_on_new_destructive_remove",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2598,
+      "title": "does not reclaim deliberate focus on %s when Retry start morphs into Remove",
+      "parameter_index": 0,
+      "parameters": "'body'",
+      "parameterization_unresolved": false,
+      "model_filter": "model_action_focus_does_not_steal_deliberate_destination",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2598,
+      "title": "does not reclaim deliberate focus on %s when Retry start morphs into Remove",
+      "parameter_index": 1,
+      "parameters": "'refresh'",
+      "parameterization_unresolved": false,
+      "model_filter": "model_action_focus_does_not_steal_deliberate_destination",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2618,
+      "title": "recovers a disappearing Repair to its own verifying row when no safe button exists",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "verifying_repair_focus_falls_back_to_own_row",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2632,
+      "title": "sanitizes an explicitly attributed top-level integrity error with a different variant message",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_startup_and_integrity_are_attributed_and_sanitized",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2647,
+      "title": "holds a fresh-read barrier when Cancel supersedes a still-running Remove",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "cancel_supersedes_hung_operation_but_cannot_clear_unknown_barrier",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2667,
+      "title": "keeps a switch trigger focusable and inert through pending, timeout, and failed reconciliation",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "speed_and_switch_control_stay_focusable_but_inert_through_timeout",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2692,
+      "title": "keeps a focused Download inert and focusable through timeout and an unconfirmed refresh",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "trigger_is_focusable_inert_and_double_activation_blocked",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2716,
+      "title": "returns focus to the same model row when its focused %s control disappears",
+      "parameter_index": 0,
+      "parameters": "'repair'",
+      "parameterization_unresolved": false,
+      "model_filter": "download_focus_moves_to_cancel_in_same_row",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2716,
+      "title": "returns focus to the same model row when its focused %s control disappears",
+      "parameter_index": 1,
+      "parameters": "'remove'",
+      "parameterization_unresolved": false,
+      "model_filter": "download_focus_moves_to_cancel_in_same_row",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2746,
+      "title": "does not steal focus when the user moves to %s before its trigger disappears",
+      "parameter_index": 0,
+      "parameters": "'refresh'",
+      "parameterization_unresolved": false,
+      "model_filter": "model_action_focus_does_not_steal_deliberate_destination",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2746,
+      "title": "does not steal focus when the user moves to %s before its trigger disappears",
+      "parameter_index": 1,
+      "parameters": "'body'",
+      "parameterization_unresolved": false,
+      "model_filter": "model_action_focus_does_not_steal_deliberate_destination",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2767,
+      "title": "announces identical local and persisted download failures once in local-first order",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "variant_failure_isolation_and_alert_order_dedup",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2789,
+      "title": "uses legacy model weights rather than runtime-inclusive totals, with an optional authoritative size",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "authoritative_weights_override_download_totals",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2803,
+      "title": "keeps changing chunk counts outside the semantic transition live region",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "counts_do_not_change_live_transition",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2819,
+      "title": "keeps incomplete progress below 100 percent and hides unknown byte totals",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "progress_below_one_hundred_and_unknown_total",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2836,
+      "title": "omits the empty model-files heading before a snapshot arrives",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "unknown_loading_and_no_actions_before_snapshot",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2841,
+      "title": "includes the visible pending %s label and variant in its accessible name",
+      "parameter_index": 0,
+      "parameters": "'download'",
+      "parameterization_unresolved": false,
+      "model_filter": "all_pending_accessible_names_match_visible_verb_and_variant",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2841,
+      "title": "includes the visible pending %s label and variant in its accessible name",
+      "parameter_index": 1,
+      "parameters": "'remove'",
+      "parameterization_unresolved": false,
+      "model_filter": "all_pending_accessible_names_match_visible_verb_and_variant",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2841,
+      "title": "includes the visible pending %s label and variant in its accessible name",
+      "parameter_index": 2,
+      "parameters": "'cancel'",
+      "parameterization_unresolved": false,
+      "model_filter": "all_pending_accessible_names_match_visible_verb_and_variant",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2878,
+      "title": "requires a post-timeout read when an earlier read completes before React commits it",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "post_timeout_read_barrier_is_after_synchronous_read_completion",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2901,
+      "title": "keeps a speed trigger focusable through unknown outcome without sending a duplicate request",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "speed_and_switch_control_stay_focusable_but_inert_through_timeout",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2916,
+      "title": "names a pending startup retry with its visible Starting label",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "all_pending_accessible_names_match_visible_verb_and_variant",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2927,
+      "title": "uses backend weightBytes for row sizes rather than total download bytes",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "structured_authoritative_weight_bytes_and_file_labels",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2954,
+      "title": "passes model as arg0 and optional variant %s as arg1",
+      "parameter_index": 0,
+      "parameters": "undefined",
+      "parameterization_unresolved": false,
+      "model_filter": "core_wire_variant_positions_and_root_mutations",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2954,
+      "title": "passes model as arg0 and optional variant %s as arg1",
+      "parameter_index": 1,
+      "parameters": "'q8_0'",
+      "parameterization_unresolved": false,
+      "model_filter": "core_wire_variant_positions_and_root_mutations",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2954,
+      "title": "passes model as arg0 and optional variant %s as arg1",
+      "parameter_index": 2,
+      "parameters": "'q4_k_m'",
+      "parameterization_unresolved": false,
+      "model_filter": "core_wire_variant_positions_and_root_mutations",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2965,
+      "title": "preserves no-args %s and sends explicit variant as arg0",
+      "parameter_index": 0,
+      "parameters": "['downloadKnowledgeEmbeddingModel', 'download']",
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_variant_argument_contract",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2965,
+      "title": "preserves no-args %s and sends explicit variant as arg0",
+      "parameter_index": 1,
+      "parameters": "['cancelKnowledgeEmbeddingDownload', 'cancel-download']",
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_variant_argument_contract",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/SettingsView.knowledge.test.ts",
+      "source_sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617",
+      "line": 2965,
+      "title": "preserves no-args %s and sends explicit variant as arg0",
+      "parameter_index": 2,
+      "parameters": "['removeKnowledgeEmbeddingModel', 'remove']",
+      "parameterization_unresolved": false,
+      "model_filter": "legacy_variant_argument_contract",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/settingsLifecycle.bridge.test.ts",
+      "source_sha256": "978da34099ed0026dcb96d3ef380e0cd8fcb527112cb072a3827d468e9ba5459",
+      "line": 13,
+      "title": "the window default close consumer acknowledges immediately and drains writes without React",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "close_failure_blocks_and_acknowledged_has_no_deadline",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "settings_window_acknowledges_before_failed_drain_and_keeps_same_content",
+        "indexing_to_knowledge_settings_close_resumes_the_same_indexing_entity"
+      ],
+      "limits": "Native shell acknowledgement/failure and source utility retention fixtures; composition execution pending at initial parent freeze. Physical OS close/focus remains open."
+    },
+    {
+      "source": "src/renderer/ExtensionPreferencesEditor.test.ts",
+      "source_sha256": "60603c53b74fd5a536f431d28ed3c2a6f8abfc25716947f72ae83b8e4b062eb6",
+      "line": 23,
+      "title": "keeps same-named command values isolated while merging setups",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "preferences_keep_command_scopes_and_partition",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ExtensionPreferencesEditor.test.ts",
+      "source_sha256": "60603c53b74fd5a536f431d28ed3c2a6f8abfc25716947f72ae83b8e4b062eb6",
+      "line": 41,
+      "title": "partitions editor values back into extension and command records",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "preferences_keep_command_scopes_and_partition",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 13,
+      "title": "requires a successful test before enabling and keeps the list single-column",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "enable_requires_test_and_review_and_hides_secret_refs",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 80,
+      "title": "reviews changed tools and edits saved secrets in the %s theme",
+      "parameter_index": 0,
+      "parameters": "'dark'",
+      "parameterization_unresolved": false,
+      "model_filter": "enable_requires_test_and_review_and_hides_secret_refs",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 80,
+      "title": "reviews changed tools and edits saved secrets in the %s theme",
+      "parameter_index": 1,
+      "parameters": "'white'",
+      "parameterization_unresolved": false,
+      "model_filter": "enable_requires_test_and_review_and_hides_secret_refs",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 221,
+      "title": "previews imported configuration without testing or enabling in the %s theme",
+      "parameter_index": 0,
+      "parameters": "'dark'",
+      "parameterization_unresolved": false,
+      "model_filter": "import_preview_does_not_test_or_enable",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 221,
+      "title": "previews imported configuration without testing or enabling in the %s theme",
+      "parameter_index": 1,
+      "parameters": "'white'",
+      "parameterization_unresolved": false,
+      "model_filter": "import_preview_does_not_test_or_enable",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 292,
+      "title": "preserves typed multiline arguments, cleared timeout and an unsaved instructions draft across reloads",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "instructions_survive_reload_and_secrets_are_write_only",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [
+        "ai_extension_import_review_and_command_edit_preserve_secret_refs"
+      ],
+      "limits": "Exact multiline arguments and opaque-ref rehydration; timeout/instructions reload not asserted by this fixture."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 366,
+      "title": "offers missing-key recovery as an explicit action and reloads its status",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "stale_replies_cannot_replace_state_and_reset_is_explicit",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    },
+    {
+      "source": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "source_sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317",
+      "line": 399,
+      "title": "scrolls once per review nonce, resolves the panel, and reviews the same folder again",
+      "parameter_index": null,
+      "parameters": null,
+      "parameterization_unresolved": false,
+      "model_filter": "enable_requires_test_and_review_and_hides_secret_refs",
+      "coverage": "partial-native-adapter; full source-case acceptance pending",
+      "native_filters": [],
+      "limits": "Production M3 model evidence is retained but is not substituted for native view acceptance."
+    }
+  ],
+  "native_fixtures": [
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "all_eight_native_tabs_hydrate_without_writes_and_live_navigation",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "actual_text_input_provider_edit_is_scoped_and_survives_initial_read",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "close_failure_retry_uses_real_store_and_keeps_secrets_out_of_errors",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "knowledge_mutation_completion_belongs_to_retained_tab",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "ai_extension_import_review_and_command_edit_preserve_secret_refs",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "copilot_signin_save_failure_is_an_effect_barrier",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "cancelled_native_waiter_does_not_cancel_owned_write",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "settings_and_onboarding_share_fresh_canonical_provider_ownership",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "invalid_draft_blocks_close_until_corrected",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "native_tab_keyboard_roles_and_password_control_use_shared_semantics",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "alias_failure_followed_by_peer_alias_preserves_both_intents",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "settings_window_acknowledges_before_failed_drain_and_keeps_same_content",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "signin_clicked_during_a_slow_save_waits_once_and_freezes_its_provider",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "production_discovery_uses_fresh_models_and_keeps_peer_selection",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "cancellation_ticket_is_not_held_behind_an_unrelated_hung_operation",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "native_saved_secret_uses_only_opaque_scoped_slot_and_clears_password",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "task_override_uses_typed_fresh_map_and_preserves_peer_task",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/onboarding.rs",
+      "name": "native_finish_failure_retains_surface_and_retry_is_durable",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/onboarding.rs",
+      "name": "late_initialization_cannot_replace_a_new_native_shortcut",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/onboarding.rs",
+      "name": "boot_gate_retries_once_then_fails_open",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/onboarding.rs",
+      "name": "native_practice_path_completion_is_scoped_and_never_opens_files",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/onboarding.rs",
+      "name": "native_practice_uses_real_calculator_and_windows_omits_permission_step",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs",
+      "name": "settings_task_override_and_header_picker_share_one_owner_queue",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs",
+      "name": "peer_read_failure_cannot_acknowledge_a_picker_before_its_held_write",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs",
+      "name": "failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs",
+      "name": "indexing_to_knowledge_settings_close_resumes_the_same_indexing_entity",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/app/m7_tests.rs",
+      "name": "settings_preferences_use_the_launcher_atomic_owner_and_retry_real_file_failure",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/app/m7_tests.rs",
+      "name": "boot_gate_mounts_without_a_launcher_flash_and_finish_is_source_fenced",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/app/m7_tests.rs",
+      "name": "close_barrier_keeps_latest_failure_and_waits_for_all_parent_writes",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "finite_request_diagnostics_redact_all_payloads",
+      "kind": "unit",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "project_review_handoff_coalesces_ui_nonce_and_uses_core_review_identity",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "cancelled_oauth_start_cannot_open_a_late_browser",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "native_voice_selects_uninstalled_models_and_keeps_downloads_independent",
+      "kind": "gpui",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "settled_picker_owner_does_not_wait_for_an_unrelated_held_download",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_auth",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "name": "close_drain_rechecks_config_edits_admitted_during_parent_persistence",
+      "kind": "tokio",
+      "current_source_execution": "PASS; /tmp/tezbar-native-m07-final-native-1.log; frozen aggregate ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581"
+    }
+  ],
+  "rows": [
+    {
+      "id": "ST-01",
+      "source_requirement": "Tabs: General, AI, Voice, Knowledge, Extensions, Permissions, Storage, Advanced; initial tab from `settingsInitialTab`/stored tab, live switch from launcher",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::render",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "all_eight_native_tabs_hydrate_without_writes_and_live_navigation"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-02",
+      "source_requirement": "General \u2192 Launcher appearance (size, scale, reset)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action",
+        "apps/tezbar/src/app/m7.rs::m7_effect",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::save_settings_ui"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-03",
+      "source_requirement": "General \u2192 Startup \u201cLaunch Tezbar at login\u201d (read-only checked; **inert**, U3)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "U3 behavior intentionally preserved: Startup read-only checked; Last Screen saves the timeout but remains inert. Physical presentation acceptance remains open."
+    },
+    {
+      "id": "ST-04",
+      "source_requirement": "General \u2192 Onboarding toggle (show on next launch)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-05",
+      "source_requirement": "General \u2192 Tezbar Hotkey recorder (`core:platform:update-launcher-hotkey`, conflict error keeps old)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-06",
+      "source_requirement": "General \u2192 Last Screen retention seconds (`uiStateRetentionMs`; **inert**, U3)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "U3 behavior intentionally preserved: Startup read-only checked; Last Screen saves the timeout but remains inert. Physical presentation acceptance remains open."
+    },
+    {
+      "id": "ST-07",
+      "source_requirement": "General \u2192 Extension/AI/Terminal Return timeouts",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-08",
+      "source_requirement": "General \u2192 Appearance theme (white, dark, system)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action",
+        "apps/tezbar/src/app/m7.rs::m7_effect",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::save_settings_ui"
+      ],
+      "native_fixture_filters": [
+        "settings_preferences_use_the_launcher_atomic_owner_and_retry_real_file_failure"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-09",
+      "source_requirement": "General \u2192 Updates: status, check, download, restart, release notes, channel selector, auto-update",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action",
+        "apps/tezbar/src/app/m7.rs::m7_effect",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::save_settings_ui"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-10",
+      "source_requirement": "General \u2192 Currency conversion preferences",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::general",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action",
+        "apps/tezbar/src/app/m7.rs::m7_effect",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::save_settings_ui"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-11",
+      "source_requirement": "AI \u2192 provider list (built-in + custom), active/selected/configured state",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "actual_text_input_provider_edit_is_scoped_and_survives_initial_read",
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation",
+        "production_discovery_uses_fresh_models_and_keeps_peer_selection"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-12",
+      "source_requirement": "AI \u2192 provider form: protocol, base URL, API key, headers (secret refs), models discovery (`llm-list-models`), per-model selector, token limits, thinking/reasoning, timeout",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "actual_text_input_provider_edit_is_scoped_and_survives_initial_read",
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation",
+        "production_discovery_uses_fresh_models_and_keeps_peer_selection"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-13",
+      "source_requirement": "AI \u2192 GitHub Copilot device flow (`github-device-start/poll/cancel`)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "copilot_signin_save_failure_is_an_effect_barrier",
+        "signin_clicked_during_a_slow_save_waits_once_and_freezes_its_provider"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-14",
+      "source_requirement": "AI \u2192 Antigravity accounts panel (`ai-accounts:antigravity:*`: status, list, sign-in, paste callback URL, switch, remove, cancel)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-15",
+      "source_requirement": "AI \u2192 AI Memory (enabled, max items, include private)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-16",
+      "source_requirement": "AI \u2192 Action Mode (require permission, redaction)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-17",
+      "source_requirement": "AI \u2192 AI Extensions section (C-20\u2026C-30)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "ai_extension_import_review_and_command_edit_preserve_secret_refs",
+        "native_saved_secret_uses_only_opaque_scoped_slot_and_clears_password"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-18",
+      "source_requirement": "AI \u2192 task provider/model overrides",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "task_override_uses_typed_fresh_map_and_preserves_peer_task",
+        "settings_task_override_and_header_picker_share_one_owner_queue",
+        "peer_read_failure_cannot_acknowledge_a_picker_before_its_held_write",
+        "failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-19",
+      "source_requirement": "Voice \u2192 Push to Talk row (**copy only**, U3), Detected Modes (`voice:stt:modes`), STT model list, download/delete/select with `voice:model:progress`",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::voice",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "task_override_uses_typed_fresh_map_and_preserves_peer_task",
+        "native_voice_selects_uninstalled_models_and_keeps_downloads_independent"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open. Current fixture asserts the exact per-model cancel wire, not actual Voice provisioning; parent backend cancellation evidence is separate."
+    },
+    {
+      "id": "ST-20",
+      "source_requirement": "Permissions \u2192 Open Permissions (settles AI saves first)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::permissions_view",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-21",
+      "source_requirement": "Extensions \u2192 installed list, filter, enable toggle, alias, hotkey, preferences editor, uninstall, Browse store",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::extensions",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-22",
+      "source_requirement": "Knowledge \u2192 Depth default, per-root depth, folders (add, add major, remove, enable), semantic search model variants, chunking speed, index status, processing, pause/resume/start",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::knowledge_view",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "knowledge_mutation_completion_belongs_to_retained_tab",
+        "indexing_to_knowledge_settings_close_resumes_the_same_indexing_entity"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-23",
+      "source_requirement": "Storage \u2192 Clipboard (watch, capture images, max megapixels, clear images)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::storage_view",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-24",
+      "source_requirement": "Storage \u2192 Breakdown (`storage:breakdown`)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::storage_view",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-25",
+      "source_requirement": "Storage \u2192 Cleanup (vacuum search DB; clear WebView cache, which natively clears the legacy WebView data after a successful import, \u00a76.3)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::storage_view",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-26",
+      "source_requirement": "Advanced \u2192 Safety Dry-Run toggle",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::render",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-27",
+      "source_requirement": "Advanced \u2192 Danger Zone Quit",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::render",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-28",
+      "source_requirement": "Footer hint bar (Save Enter with saved feedback, Close/Back Esc)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::render",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "settings_window_acknowledges_before_failed_drain_and_keeps_same_content",
+        "close_failure_retry_uses_real_store_and_keeps_secrets_out_of_errors",
+        "native_tab_keyboard_roles_and_password_control_use_shared_semantics"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-29",
+      "source_requirement": "Settings messages (success, error) and close error alert with Retry saved changes",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::render",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "settings_window_acknowledges_before_failed_drain_and_keeps_same_content",
+        "close_failure_retry_uses_real_store_and_keeps_secrets_out_of_errors",
+        "native_tab_keyboard_roles_and_password_control_use_shared_semantics",
+        "close_drain_rechecks_config_edits_admitted_during_parent_persistence"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-30",
+      "source_requirement": "Settings reacts to `llm-config-changed` and `ai-extensions-changed` without clobbering drafts",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::render",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action"
+      ],
+      "native_fixture_filters": [
+        "actual_text_input_provider_edit_is_scoped_and_survives_initial_read",
+        "production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation",
+        "production_discovery_uses_fresh_models_and_keeps_peer_selection"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "ST-31",
+      "source_requirement": "Settings initial-tab persistence (`tezbar:settings-tab` \u2192 ui-state)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::render",
+        "apps/tezbar/src/surfaces/settings/mod.rs::action",
+        "apps/tezbar/src/app/m7.rs::m7_effect",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::save_settings_ui"
+      ],
+      "native_fixture_filters": [
+        "all_eight_native_tabs_hydrate_without_writes_and_live_navigation"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "O-01",
+      "source_requirement": "Step rail: Shortcut, Try the bar, AI model, DeepSearch, Permissions (macOS only); done/detail summaries",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/onboarding.rs",
+        "apps/tezbar/src/app/m7.rs::m7_ready",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::mount_onboarding"
+      ],
+      "native_fixture_filters": [
+        "native_practice_uses_real_calculator_and_windows_omits_permission_step"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "O-02",
+      "source_requirement": "Shortcut step: press keys, recorder (\u201cPress the keys together\u2026\u201d), conflict errors",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/onboarding.rs",
+        "apps/tezbar/src/app/m7.rs::m7_ready",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::mount_onboarding"
+      ],
+      "native_fixture_filters": [
+        "late_initialization_cannot_replace_a_new_native_shortcut"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "O-03",
+      "source_requirement": "Try the bar: practice command bar with tasks (math `=`, folder `/`, terminal `>`, AI Space), uses calculator",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/onboarding.rs",
+        "apps/tezbar/src/app/m7.rs::m7_ready",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::mount_onboarding"
+      ],
+      "native_fixture_filters": [
+        "native_practice_uses_real_calculator_and_windows_omits_permission_step",
+        "native_practice_path_completion_is_scoped_and_never_opens_files"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "O-04",
+      "source_requirement": "AI model step: providers (Anthropic, OpenAI, Ollama\u2026), key entry, model list (`llm-list-models`), open provider site",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/onboarding.rs",
+        "apps/tezbar/src/app/m7.rs::m7_ready",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::mount_onboarding"
+      ],
+      "native_fixture_filters": [
+        "settings_and_onboarding_share_fresh_canonical_provider_ownership"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "O-05",
+      "source_requirement": "DeepSearch step: folders (choose, add major, remove), indexing progress, pause/resume, path validation (\u201cNo folder matches that path.\u201d)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/onboarding.rs",
+        "apps/tezbar/src/app/m7.rs::m7_ready",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::mount_onboarding"
+      ],
+      "native_fixture_filters": [
+        "knowledge_mutation_completion_belongs_to_retained_tab"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "O-06",
+      "source_requirement": "Permissions step (macOS): per-permission request and status",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/onboarding.rs",
+        "apps/tezbar/src/app/m7.rs::m7_ready",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::mount_onboarding"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "O-07",
+      "source_requirement": "Finish/skip sets `hasCompletedOnboarding` and returns to launcher",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/onboarding.rs",
+        "apps/tezbar/src/app/m7.rs::m7_ready",
+        "apps/tezbar/src/surfaces/command_bar/settings_integration.rs::mount_onboarding"
+      ],
+      "native_fixture_filters": [
+        "native_finish_failure_retains_surface_and_retry_is_durable",
+        "boot_gate_retries_once_then_fails_open",
+        "boot_gate_mounts_without_a_launcher_flash_and_finish_is_source_fenced"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "C-20",
+      "source_requirement": "Composer `/` menu (`ai-extensions:composer-items`), prompt argument row (`ai-extensions:prompt-resolve`), Insert in draft",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Composer insertion is M8-owned and remains unexported. Settings administration does not claim chat composer parity."
+    },
+    {
+      "id": "C-21",
+      "source_requirement": "Project extension notice (once per folder per session) \u2192 Review in Settings (`ai-extensions:review-project`, `dismiss-project-review`, `trust-project`)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action",
+        "apps/tezbar/src/app/m7.rs::settings_project_review",
+        "apps/tezbar/src/surfaces/settings/mod.rs::review_project"
+      ],
+      "native_fixture_filters": [
+        "project_review_handoff_coalesces_ui_nonce_and_uses_core_review_identity"
+      ],
+      "remaining_acceptance": "Direct retained Settings owner seam tested with core-issued review identity and duplicate UI nonce suppression. Owner::settings_project_review is unused until M8 wiring; no end-to-end chat notice/session dismissal acceptance claim."
+    },
+    {
+      "id": "C-22",
+      "source_requirement": "AI Extensions list, add (paste/import `parse-import`), update, remove, enable",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [
+        "ai_extension_import_review_and_command_edit_preserve_secret_refs"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open. Current fixture only asserts multiline connection edits and preserved refs, not full import/review acceptance."
+    },
+    {
+      "id": "C-23",
+      "source_requirement": "Secrets: set, reset (`reset-secrets`), never echoed into UI",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [
+        "native_saved_secret_uses_only_opaque_scoped_slot_and_clears_password"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open. AccessKit real-tree acceptance unavailable in pinned TestWindow; retained failed probe is documented."
+    },
+    {
+      "id": "C-24",
+      "source_requirement": "OAuth (`oauth-start/status/cancel`), scopes from challenge, browser sign-in",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [
+        "cancelled_oauth_start_cannot_open_a_late_browser"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "C-25",
+      "source_requirement": "Connection test (`ai-extensions:test`), logs (`logs`), read resource",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "C-26",
+      "source_requirement": "Tool policy (`set-tool`, Allow all with typed confirmation, Ask every time), clear allowance",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "C-27",
+      "source_requirement": "Review flow: pending catalog with before/after descriptors, accept-review, stale review rejection",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [
+        "ai_extension_import_review_and_command_edit_preserve_secret_refs"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open. Current fixture only asserts multiline connection edits and preserved refs, not full import/review acceptance."
+    },
+    {
+      "id": "C-28",
+      "source_requirement": "Instructions (`set-instructions`), prompts and commands contributions, profiles",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [
+        "ai_extension_import_review_and_command_edit_preserve_secret_refs"
+      ],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open. Current fixture only asserts multiline connection edits and preserved refs, not full import/review acceptance."
+    },
+    {
+      "id": "C-29",
+      "source_requirement": "Pi extensions alias list (read-only, not loaded)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    },
+    {
+      "id": "C-30",
+      "source_requirement": "Providers status (`llm-provider-statuses`) and errors (`llmErrors.ts`)",
+      "status": "partial; frozen automated evidence recorded; independent/native-platform acceptance open",
+      "native_owners": [
+        "apps/tezbar/src/surfaces/settings/view.rs::ai_extensions",
+        "apps/tezbar/src/surfaces/settings/contributions.rs::contribution_action"
+      ],
+      "native_fixture_filters": [],
+      "remaining_acceptance": "Frozen integrated automated suite passed; fresh independent M7 review and physical/platform acceptance remain open."
+    }
+  ],
+  "limits": [
+    "No production profiles, secrets, networking, process or desktop effects exercised.",
+    "Pinned TestWindow has no a11y_init implementation; failed tree probe retained separately. Element roles/password options are structural tests only.",
+    "No pixels, IME, VoiceOver/Narrator, Windows, RAM or complete parameterized TS parity claim.",
+    "Frozen automated suites are recorded in verification.md. All ST/O/C rows remain partial pending fresh independent M7 review and platform/manual checks. M8/M9 stay unexported."
+  ]
+}

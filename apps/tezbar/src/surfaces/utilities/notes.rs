@@ -76,15 +76,16 @@ impl Utilities {
             if self
                 .note_labels
                 .get(&note.created_at)
-                .is_none_or(|(revision, _, _)| *revision != note.updated_at)
+                .is_none_or(|label| label.revision != note.updated_at)
             {
                 self.note_labels.insert(
                     note.created_at,
-                    (
-                        note.updated_at,
-                        note_model::title(&note.text),
-                        note_model::summary(&note.text),
-                    ),
+                    NoteLabel {
+                        revision: note.updated_at,
+                        title: note_model::title(&note.text),
+                        summary: note_model::summary(&note.text),
+                        date: note_model::format_date(note.updated_at, &*self.presentation.0),
+                    },
                 );
             }
         }

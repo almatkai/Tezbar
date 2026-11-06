@@ -97,6 +97,8 @@ pub enum ExternalEdit {
     Replace {
         before: String,
         after: String,
+        range: Range<usize>,
+        text: String,
         before_selection: ByteSelection,
         after_selection: ByteSelection,
     },
@@ -104,6 +106,31 @@ pub enum ExternalEdit {
         redo: bool,
     },
     Newline,
+}
+// Map an explicit replacement through the one owned composition span; never infer an edit
+// by comparing characters (identical adjacent characters can have different document owners).
+fn committed_range(
+    range: &Range<usize>,
+    original: Option<&Range<usize>>,
+    before_len: usize,
+    current_len: usize,
+) -> Range<usize> {
+    let Some(original) = original else {
+        return range.clone();
+    };
+    let current_end = current_len - (before_len - original.end);
+    let map = |at: usize, end: bool| {
+        if at <= original.start {
+            at
+        } else if at >= current_end {
+            original.end + (at - current_end)
+        } else if end {
+            original.end
+        } else {
+            original.start
+        }
+    };
+    original.start.min(map(range.start, false))..original.end.max(map(range.end, true))
 }
 impl gpui::EventEmitter<ExternalEdit> for TextInput {}
 #[derive(Clone, Debug, PartialEq)]
@@ -117,6 +144,7 @@ pub struct TextInput {
     styled_ranges: Vec<StyledRange>,
     before_composition_styles: Option<Vec<StyledRange>>,
     before_composition_selection: Option<ByteSelection>,
+    before_composition_range: Option<Range<usize>>,
     pub options: FieldOptions,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
@@ -145,6 +173,7 @@ impl TextInput {
             styled_ranges: Vec::new(),
             before_composition_styles: None,
             before_composition_selection: None,
+            before_composition_range: None,
             undo: Vec::new(),
             redo: Vec::new(),
             focus_handle: cx.focus_handle(),
@@ -211,6 +240,7 @@ impl TextInput {
         self.marked_range = None;
         self.before_composition = None;
         self.before_composition_selection = None;
+        self.before_composition_range = None;
         self.before_composition_styles = None;
         self.lines.clear();
         self.last_layout = None;
@@ -261,6 +291,7 @@ impl TextInput {
         self.marked_range = None;
         self.before_composition = None;
         self.before_composition_selection = None;
+        self.before_composition_range = None;
         self.before_composition_styles = None;
         self.lines.clear();
         self.last_layout = None;
@@ -573,6 +604,7 @@ impl TextInput {
         self.marked_range = None;
         self.before_composition = None;
         self.before_composition_selection = None;
+        self.before_composition_range = None;
         w.notify_text_input_changed(&self.focus_handle);
         cx.emit(Committed(self.content.to_string()));
         cx.notify();
@@ -847,11 +879,17 @@ impl EntityInputHandler for TextInput {
             .take()
             .or_else(|| self.before_composition_selection.take())
             .unwrap_or_else(|| self.selection_bytes());
+        let range = self.before_composition_range.take();
         let before = self.before_composition.take();
         self.before_composition_styles = None;
         if self.external_edits {
             if let Some(before) = before {
+                let range = range.unwrap_or_else(|| before_selection.range.clone());
+                let end = self.content.len() - (before.len() - range.end);
+                let text = self.content[range.start..end].to_owned();
                 cx.emit(ExternalEdit::Replace {
+                    range,
+                    text,
                     before: before.to_string(),
                     after: self.content.to_string(),
                     before_selection,
@@ -884,6 +922,15 @@ impl EntityInputHandler for TextInput {
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
 
+        let changed_range = committed_range(
+            &range,
+            self.before_composition_range.as_ref(),
+            self.before_composition
+                .as_ref()
+                .map(|s| s.len())
+                .unwrap_or(self.content.len()),
+            self.content.len(),
+        );
         let before_selection = self
             .external_action_selection
             .take()
@@ -906,9 +953,14 @@ impl EntityInputHandler for TextInput {
         self.marked_range.take();
         self.before_composition = None;
         self.before_composition_selection = None;
+        self.before_composition_range = None;
         self.before_composition_styles = None;
         if self.external_edits {
+            let end = self.content.len() - (before.len() - changed_range.end);
+            let text = self.content[changed_range.start..end].to_owned();
             cx.emit(ExternalEdit::Replace {
+                range: changed_range,
+                text,
                 before: before.to_string(),
                 after: self.content.to_string(),
                 before_selection,
@@ -941,6 +993,12 @@ impl EntityInputHandler for TextInput {
             .or(self.marked_range.clone())
             .unwrap_or(self.selected_range.clone());
 
+        self.before_composition_range = Some(committed_range(
+            &range,
+            self.before_composition_range.as_ref(),
+            self.before_composition.as_ref().unwrap().len(),
+            self.content.len(),
+        ));
         self.rebase_styles(&range, new_text.len());
         self.content =
             (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..])
@@ -1921,7 +1979,7 @@ mod rich_hook_tests {
         let e = edits.lock().unwrap();
         assert_eq!(e.len(), 1);
         assert!(
-            matches!(&e[0],ExternalEdit::Replace{before,after,..} if before=="a😀b" && after=="a日本b")
+            matches!(&e[0],ExternalEdit::Replace{before,after,range,text,..} if before=="a😀b" && after=="a日本b" && *range==(1..5) && text=="日本")
         );
         assert_eq!(*plain.lock().unwrap(), 0);
     }

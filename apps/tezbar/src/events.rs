@@ -30,6 +30,8 @@ impl CoreEvent {
     }
 }
 pub enum Event {
+    SettingsEffect(gpui::EntityId, crate::surfaces::settings::SettingsEffect),
+    OnboardingFinished(gpui::EntityId),
     Navigate(crate::surfaces::command_bar::navigation::Navigation),
     Reveal(String),
     Update(crate::surfaces::command_bar::navigation::UpdateAction),

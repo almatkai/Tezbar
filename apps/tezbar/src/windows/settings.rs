@@ -1,14 +1,17 @@
-//! Window shell. Settings write ownership and full tab contents are integrated in M7.
+//! Native Settings window and acknowledged durable-close protocol.
 use crate::events::{Event, Relay};
 use gpui::{prelude::*, *};
 pub struct Settings {
     relay: Relay,
+    pub content: Option<Entity<crate::surfaces::settings::SettingsContent>>,
+    content_subscription: Option<Subscription>,
     pub theme: String,
     pub error: Option<String>,
     _activation: Subscription,
     write_owner:
         Option<std::sync::Arc<dyn Fn() -> tezbar_core::host::HostFuture<()> + Send + Sync>>,
     closing: Option<Task<()>>,
+    close_generation: Option<u64>,
 }
 impl Settings {
     pub fn new(relay: Relay, w: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -20,8 +23,11 @@ impl Settings {
         });
         Self {
             _activation: activation,
+            content: None,
+            content_subscription: None,
             write_owner: None,
             closing: None,
+            close_generation: None,
             relay,
             theme: "system".into(),
             error: None,
@@ -29,6 +35,25 @@ impl Settings {
     }
 }
 impl Settings {
+    pub fn set_content(
+        &mut self,
+        content: Entity<crate::surfaces::settings::SettingsContent>,
+        cx: &mut Context<Self>,
+    ) {
+        let store = content.read(cx).store.clone();
+        self.set_write_owner(std::sync::Arc::new(move || store.drain()));
+        let relay = self.relay.clone();
+        self.content_subscription = Some(cx.subscribe(
+            &content,
+            move |_, _, effect: &crate::surfaces::settings::SettingsEffect, _| {
+                if matches!(effect, crate::surfaces::settings::SettingsEffect::Close) {
+                    let _ = relay.send(Event::CloseSettings);
+                }
+            },
+        ));
+        self.content = Some(content);
+        cx.notify();
+    }
     /// M7 registers its real WriteQueue executor here. The window shell owns no provider drafts.
     pub fn set_write_owner(
         &mut self,
@@ -43,6 +68,7 @@ impl Settings {
             .unwrap_or_else(|| Box::pin(async { Ok(()) }))
     }
     pub fn begin_close(&mut self, g: u64, cx: &mut Context<Self>) {
+        self.close_generation = Some(g);
         let _ = self.relay.send(Event::SettingsAck(g));
         let drain = self.drain_writes();
         let relay = self.relay.clone();
@@ -54,9 +80,52 @@ impl Settings {
             let _ = relay.send(Event::SettingsFinish(g, result));
         }));
     }
+    pub fn close_generation(&self) -> Option<u64> {
+        self.close_generation
+    }
+    pub fn close_failed(&mut self, generation: u64, error: String, cx: &mut Context<Self>) {
+        if self.close_generation == Some(generation) {
+            self.error = Some(error);
+            cx.notify();
+        }
+    }
 }
 impl Render for Settings {
     fn render(&mut self, w: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(content) = &self.content {
+            let t = tezbar_ui::tokens::tokens(w);
+            return div()
+                .size_full()
+                .flex()
+                .flex_col()
+                .child(div().flex_1().min_h(px(0.)).child(content.clone()))
+                .when_some(self.error.clone(), |d, error| {
+                    let content = content.clone();
+                    let relay = self.relay.clone();
+                    d.child(
+                        div()
+                            .id("settings-close-error")
+                            .role(Role::Alert)
+                            .text_color(t.danger)
+                            .p(px(12.))
+                            .child(error)
+                            .child(tezbar_ui::controls::action_button(
+                                "retry-close-writes",
+                                "Retry saved changes",
+                                tezbar_ui::controls::ButtonTone::Quiet,
+                                false,
+                                t,
+                                move |w, cx| {
+                                    content.update(cx, |view, cx| {
+                                        view.action(crate::surfaces::settings::Action::Retry, w, cx)
+                                    });
+                                    let _ = relay.send(Event::CloseSettings);
+                                },
+                            )),
+                    )
+                })
+                .into_any_element();
+        }
         let t = tezbar_ui::tokens::tokens(w);
         let mut row = div().flex().gap(px(4.));
         for choice in ["system", "light", "dark"] {
@@ -149,5 +218,6 @@ impl Render for Settings {
                     }
                 },
             ))
+            .into_any_element()
     }
 }

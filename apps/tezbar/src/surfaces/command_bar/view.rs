@@ -159,6 +159,7 @@ impl Launcher {
         self.model_menu = false;
         self.terminal_settings = false;
         self.navigation = None;
+        self.sync_task_indicator(cx);
         self.form = None;
         self.form_activation = None;
         self.clear_argument_results(cx);
@@ -321,6 +322,11 @@ impl Launcher {
     }
     pub(super) fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
         let key = e.keystroke.key.as_str();
+        if key == "escape" && self.task_indicator.update(cx, |view, cx| view.dismiss(cx)) {
+            w.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
         let primary = if cfg!(target_os = "macos") {
             e.keystroke.modifiers.platform
         } else {
@@ -907,6 +913,14 @@ impl Launcher {
 }
 impl Render for Launcher {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.onboarding_active {
+            if let Some(onboarding) = &self.onboarding {
+                return div()
+                    .size_full()
+                    .child(onboarding.clone())
+                    .into_any_element();
+            }
+        }
         w.set_rem_size(px(16. * self.zoom));
         let t = tokens::tokens(w);
         let utility = self
@@ -1598,6 +1612,7 @@ impl Render for Launcher {
                         ).debug_selector(|| "retry-core".into()))
                     })
                     .child(div().flex_1())
+                    .child(self.task_indicator.clone())
                     .child(if self.form.is_some() {
                         "Run"
                     } else if mode == Mode::Deep && !self.deep_navigation {
@@ -1615,5 +1630,6 @@ impl Render for Launcher {
             .children(resize::handles(cx, |view, edge, w, _| {
                 view.resize = resize::Gesture::begin(edge, w)
             }))
+            .into_any_element()
     }
 }

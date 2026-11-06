@@ -120,8 +120,9 @@ impl Utilities {
         .enumerate()
         {
             let field = self.field(name, &text, i == 2, false, w, cx);
-            self.subscriptions
-                .push(cx.subscribe(&field, move |this, _, e: &Committed, cx| {
+            self.field_subscriptions.push(cx.subscribe(
+                &field,
+                move |this, _, e: &Committed, cx| {
                     if let Some((_, d)) = &this.snippets.draft {
                         let mut d = d.clone();
                         match i {
@@ -132,7 +133,8 @@ impl Utilities {
                         this.snippets.change(d);
                         cx.notify();
                     }
-                }));
+                },
+            ));
             self.fields.push(field);
         }
         if let Some(first) = self.fields.first() {

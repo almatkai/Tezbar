@@ -93,9 +93,18 @@ fn review_quit_completion_releases_its_ticket_after_results_refresh(cx: &mut Tes
 #[gpui::test]
 fn review_delivered_settings_and_placeholder_routes_retire_admission(cx: &mut TestAppContext) {
     let rt = runtime(cx);
-    let (relay, _rx) = Relay::new();
+    let (relay, mut rx) = Relay::new();
     cx.update(|cx| cx.set_global(navigation::NavigationInbox::default()));
-    let (view, cx) = cx.add_window_view(|w, cx| Launcher::with_adapter(Arc::new(Loopback::default()), relay, None, w, cx));
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        Launcher::with_adapter(Arc::new(Loopback::default()), relay, None, w, cx)
+    });
+    view.update(cx, |view, _| {
+        view.navigation = Some(Navigation {
+            nonce: 0,
+            surface: Surface::Indexing,
+            payload: Payload::None,
+        });
+    });
     for nonce in 1..=64 {
         let surface = match nonce % 5 {
             0 => Surface::Command,
@@ -104,15 +113,57 @@ fn review_delivered_settings_and_placeholder_routes_retire_admission(cx: &mut Te
             3 => Surface::Terminal,
             _ => Surface::ExtensionRuntime,
         };
-        let intent = Navigation { nonce, surface, payload: Payload::None };
+        let intent = Navigation {
+            nonce,
+            surface,
+            payload: Payload::None,
+        };
+        let origin = view.read_with(cx, |view, _| view.navigation.clone());
+        if matches!(intent.surface, Surface::Settings(_)) {
+            view.update(cx, |view, cx| {
+                view.nonce = nonce - 1;
+                view.navigate(intent.surface.clone(), intent.payload.clone(), cx);
+            });
+            let delivered = rt.block_on(async {
+                let mut routes = Vec::new();
+                while let Ok(Some(event)) =
+                    tokio::time::timeout(Duration::from_millis(1), rx.recv()).await
+                {
+                    if let Event::Navigate(route) = event {
+                        routes.push(route);
+                    }
+                }
+                routes
+            });
+            assert_eq!(
+                delivered,
+                vec![intent.clone()],
+                "Settings is delivered once to its window owner"
+            );
+        }
         view.update(cx, |view, cx| {
-            cx.global_mut::<navigation::NavigationInbox>().put(intent.clone()).unwrap();
+            cx.global_mut::<navigation::NavigationInbox>()
+                .put(intent.clone())
+                .unwrap();
             view.receive_navigation(intent.clone(), cx);
-            assert!(cx.global::<navigation::NavigationInbox>().pending().is_none());
+            assert!(
+                cx.global::<navigation::NavigationInbox>()
+                    .pending()
+                    .is_none()
+            );
         });
         settle(&rt, cx);
-        if intent.surface != Surface::Command {
-            assert_eq!(view.read_with(cx, |view, _| view.navigation.clone()), Some(intent));
+        if matches!(intent.surface, Surface::Settings(_)) {
+            assert_eq!(
+                view.read_with(cx, |view, _| view.navigation.clone()),
+                origin,
+                "Direct Settings delivery preserves the retained main surface"
+            );
+        } else if intent.surface != Surface::Command {
+            assert_eq!(
+                view.read_with(cx, |view, _| view.navigation.clone()),
+                Some(intent)
+            );
         }
     }
 }

@@ -1,4 +1,5 @@
 //! Utility presentation state. Effects call the existing core stores, never a parallel database.
+pub mod monitor;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

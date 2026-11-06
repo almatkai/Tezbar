@@ -68,14 +68,22 @@ pub enum Clipboard {
 }
 impl EventEmitter<Edit> for RichText {}
 impl EventEmitter<Clipboard> for RichText {}
+#[derive(Clone, Copy)]
+struct Position {
+    byte: usize,
+    model: usize,
+    owner: usize,
+}
 #[derive(Default)]
 struct Projection {
     text: String,
     styles: Vec<StyledRange>,
-    points: Vec<(usize, usize)>,
+    points: Vec<Position>,
+    owners: Vec<(Vec<usize>, usize)>,
     boundaries: Vec<(usize, Vec<usize>, Vec<usize>)>,
     blocks: Vec<(usize, usize, Vec<usize>)>,
 }
+const ROOT_OWNER: usize = usize::MAX;
 fn block(tag: &str) -> bool {
     matches!(tag, "div" | "p" | "li")
 }
@@ -85,22 +93,40 @@ fn has_block(nodes: &[Node]) -> bool {
         .any(|n| matches!(n,Node::Element{tag,children} if block(tag)||has_block(children)))
 }
 impl Projection {
+    fn mark(&mut self, model: usize, owner: usize) {
+        let position = Position {
+            byte: self.text.len(),
+            model,
+            owner,
+        };
+        if self.points.last().is_some_and(|p| p.byte == position.byte) {
+            *self.points.last_mut().unwrap() = position;
+        } else {
+            self.points.push(position);
+        }
+    }
+    fn path(&self, owner: usize) -> Vec<usize> {
+        self.owners
+            .get(owner)
+            .map(|(p, _)| p.clone())
+            .unwrap_or_default()
+    }
     fn from_document(doc: &Document) -> Self {
         fn begin(
-            owner: &[usize],
+            owner: usize,
             p: &mut Projection,
-            last: &mut Option<Vec<usize>>,
+            last: &mut Option<usize>,
             model: usize,
             visual: &mut usize,
         ) {
-            if last.as_deref() != Some(owner) {
+            if *last != Some(owner) {
                 if let Some(left) = last.take() {
-                    p.boundaries.push((*visual, left, owner.to_vec()));
-                    p.points.push((p.text.len(), model));
+                    p.boundaries.push((*visual, p.path(left), p.path(owner)));
                     p.text.push('\n');
                     *visual += 1;
                 }
-                *last = Some(owner.to_vec());
+                p.mark(model, owner);
+                *last = Some(owner);
             }
         }
         fn visit(
@@ -108,24 +134,29 @@ impl Projection {
             path: &mut Vec<usize>,
             p: &mut Projection,
             style: (bool, bool, bool),
-            owner: Option<&[usize]>,
+            owner: usize,
             model: &mut usize,
-            last: &mut Option<Vec<usize>>,
+            last: &mut Option<usize>,
             visual: &mut usize,
+            terminal: bool,
         ) {
             for (index, n) in nodes.iter().enumerate() {
                 path.push(index);
+                let terminal = terminal && index + 1 == nodes.len();
                 match n {
                     Node::Text(text) => {
                         if !text.is_empty() {
-                            begin(owner.unwrap_or(&[]), p, last, *model, visual);
+                            begin(owner, p, last, *model, visual);
                         }
                         let start = p.text.len();
-                        for c in text.chars() {
-                            p.points.push((p.text.len(), *model));
-                            p.text.push(c);
+                        for ch in text.chars() {
+                            p.mark(*model, owner);
+                            p.text.push(ch);
                             *model += 1;
                             *visual += 1;
+                        }
+                        if !text.is_empty() {
+                            p.mark(*model, owner);
                         }
                         if style.0 || style.1 || style.2 {
                             p.styles.push(StyledRange {
@@ -138,23 +169,30 @@ impl Projection {
                     }
                     Node::Element { tag, children } => {
                         let is_block = block(tag);
-                        let path_copy = path.clone();
                         let owner = if is_block {
-                            Some(path_copy.as_slice())
+                            let id = p.owners.len();
+                            p.owners.push((path.clone(), *model));
+                            id
                         } else {
                             owner
                         };
                         let leaf = is_block && !has_block(children);
                         if leaf {
-                            begin(path, p, last, *model, visual);
+                            begin(owner, p, last, *model, visual);
                         }
                         let start = *visual;
                         if tag == "br" {
-                            begin(owner.unwrap_or(&[]), p, last, *model, visual);
-                            p.points.push((p.text.len(), *model));
-                            p.text.push('\n');
-                            *model += 1;
-                            *visual += 1;
+                            begin(owner, p, last, *model, visual);
+                            // Contenteditable's final BR is a line placeholder, not an extra line.
+                            if !(terminal && owner != ROOT_OWNER) {
+                                p.mark(*model, owner);
+                                p.text.push('\n');
+                                *visual += 1;
+                                *model += 1;
+                                p.mark(*model, owner);
+                            } else {
+                                *model += 1;
+                            }
                         } else {
                             visit(
                                 children,
@@ -169,6 +207,7 @@ impl Projection {
                                 model,
                                 last,
                                 visual,
+                                if is_block { true } else { terminal },
                             );
                         }
                         if leaf {
@@ -185,30 +224,75 @@ impl Projection {
             &mut vec![],
             &mut p,
             (false, false, false),
-            None,
+            ROOT_OWNER,
             &mut 0,
             &mut None,
             &mut 0,
+            true,
         );
-        p.points.push((p.text.len(), doc.text_len()));
+        if p.points.is_empty() {
+            p.mark(0, ROOT_OWNER);
+        }
         p
     }
-    fn position(&self, byte: usize) -> usize {
-        self.points
-            .iter()
-            .rev()
-            .find(|(offset, _)| *offset <= byte)
-            .map(|(_, p)| *p)
-            .unwrap_or(0)
-    }
-    fn model_at(&self, visual: usize) -> usize {
+    fn location(&self, visual: usize) -> Position {
         let byte = self
             .text
             .char_indices()
             .nth(visual)
             .map(|(b, _)| b)
             .unwrap_or(self.text.len());
-        self.position(byte)
+        *self.points.iter().rev().find(|p| p.byte <= byte).unwrap()
+    }
+    fn position(&self, byte: usize) -> usize {
+        self.points
+            .iter()
+            .rev()
+            .find(|p| p.byte <= byte)
+            .map(|p| p.model)
+            .unwrap_or(0)
+    }
+    fn model_at(&self, visual: usize) -> usize {
+        self.location(visual).model
+    }
+}
+#[cfg(test)]
+mod review_tests {
+    use super::*;
+    #[::core::prelude::v1::test]
+    fn placeholder_lines_and_insertions_keep_their_paragraph_owner() {
+        let mut doc = Document::load("<div><br></div>").unwrap();
+        assert_eq!(Projection::from_document(&doc).text, "");
+        replace_visual(&mut doc, 0, 0, "a").unwrap();
+        assert_eq!(doc.html(), "<div>a</div>");
+        for (source, expected) in [
+            ("<div>abc</div>", "<div>abc</div><div>d</div>"),
+            ("<ul><li>abc</li></ul>", "<ul><li>abc</li><li>d</li></ul>"),
+        ] {
+            let mut doc = Document::load(source).unwrap();
+            enter_visual(&mut doc, 3, 3).unwrap();
+            assert_eq!(Projection::from_document(&doc).text, "abc\n");
+            replace_visual(&mut doc, 4, 4, "d").unwrap();
+            assert_eq!(doc.html(), expected);
+        }
+        let doc = Document::load("<div>a</div><div><br></div><div>b</div>").unwrap();
+        assert_eq!(Projection::from_document(&doc).text, "a\n\nb");
+    }
+    #[::core::prelude::v1::test]
+    fn second_paragraph_start_and_enter_backspace_keep_structure() {
+        let mut doc = Document::load("<div>a</div><div>b</div>").unwrap();
+        replace_visual(&mut doc, 2, 2, "X").unwrap();
+        assert_eq!(doc.html(), "<div>a</div><div>Xb</div>");
+        enter_visual(&mut doc, 2, 2).unwrap();
+        assert_eq!(Projection::from_document(&doc).text, "a\n\nXb");
+        replace_visual(&mut doc, 1, 2, "").unwrap();
+        assert_eq!(Projection::from_document(&doc).text, "a\nXb");
+    }
+    #[::core::prelude::v1::test]
+    fn an_exact_delete_keeps_the_identical_character_with_its_own_style() {
+        let mut doc = Document::load("<div><strong>a</strong>a</div>").unwrap();
+        replace_visual(&mut doc, 0, 1, "").unwrap();
+        assert_eq!(doc.html(), "<div>a</div>");
     }
 }
 fn node<'a>(nodes: &'a [Node], path: &[usize]) -> Option<&'a Node> {
@@ -328,7 +412,10 @@ pub fn replace_visual(
     if start > end || end > projection.text.chars().count() {
         return Err("Selection outside document".into());
     }
-    doc.replace(projection.model_at(start), projection.model_at(end), text)?;
+    let location = projection.location(start);
+    if start < end {
+        doc.replace(location.model, projection.model_at(end), "")?;
+    }
     for (_, left, right) in projection
         .boundaries
         .iter()
@@ -356,7 +443,65 @@ pub fn replace_visual(
             remove(&mut doc.nodes, right);
         }
     }
+    if !text.is_empty() {
+        if let Some((path, base)) = projection.owners.get(location.owner) {
+            let children =
+                children_at(&mut doc.nodes, path).ok_or("Missing insertion paragraph")?;
+            let mut paragraph = Document {
+                nodes: std::mem::take(children),
+            };
+            // A sole BR (possibly inside empty inline markup) is an editable placeholder.
+            fn blank(nodes: &[Node]) -> bool {
+                nodes.iter().all(|n| match n {
+                    Node::Text(s) => s.is_empty(),
+                    Node::Element { tag, children } => tag == "br" || blank(children),
+                })
+            }
+            let offset = location.model.saturating_sub(*base);
+            if offset == 0 && blank(&paragraph.nodes) {
+                paragraph.nodes.clear();
+            }
+            paragraph.replace(offset, offset, text)?;
+            let trailing_newline =
+                text.ends_with('\n') && offset + text.chars().count() == paragraph.text_len();
+            split_newlines(&mut paragraph.nodes);
+            if trailing_newline {
+                paragraph.nodes.push(Node::Element {
+                    tag: "br".into(),
+                    children: vec![],
+                });
+            }
+            *children = paragraph.nodes;
+        } else if doc.nodes.is_empty() {
+            doc.nodes.push(Node::Element {
+                tag: "div".into(),
+                children: vec![Node::Text(text.into())],
+            });
+        } else {
+            doc.replace(location.model, location.model, text)?;
+        }
+    }
     split_newlines(&mut doc.nodes);
+    fn clean(nodes: &mut Vec<Node>) {
+        for n in nodes.iter_mut() {
+            if let Node::Element { tag, children } = n {
+                clean(children);
+                if block(tag) && children.is_empty() {
+                    children.push(Node::Element {
+                        tag: "br".into(),
+                        children: vec![],
+                    });
+                }
+            }
+        }
+        nodes.retain(|n| match n {
+            Node::Text(s) => !s.is_empty(),
+            Node::Element { tag, children } => {
+                !(matches!(tag.as_str(), "b" | "strong" | "i" | "em" | "u") && children.is_empty())
+            }
+        });
+    }
+    clean(&mut doc.nodes);
     if doc.html().len() > 1_048_576 {
         return Err("Note exceeds 1 MiB".into());
     }
@@ -422,7 +567,19 @@ pub fn enter_visual(doc: &mut Document, start: usize, end: usize) -> Result<(), 
             }
         }
     }
-    doc.enter(p.model_at(start))
+    let location = p.location(start);
+    if let Some((path, base)) = p.owners.get(location.owner) {
+        let (&index, parent) = path.split_last().ok_or("Missing paragraph")?;
+        let siblings = children_at(&mut doc.nodes, parent).ok_or("Missing paragraph parent")?;
+        let mut paragraph = Document {
+            nodes: vec![siblings.get(index).cloned().ok_or("Missing paragraph")?],
+        };
+        paragraph.enter(location.model.saturating_sub(*base))?;
+        siblings.splice(index..=index, paragraph.nodes);
+        Ok(())
+    } else {
+        doc.enter(location.model)
+    }
 }
 pub struct RichText {
     pub input: Entity<TextInput>,
@@ -479,25 +636,14 @@ impl RichText {
             match e {
                 ExternalEdit::Replace {
                     before,
-                    after,
+                    range,
+                    text,
                     before_selection,
                     after_selection,
+                    ..
                 } => {
-                    let prefix = before
-                        .chars()
-                        .zip(after.chars())
-                        .take_while(|(a, b)| a == b)
-                        .map(|(c, _)| c.len_utf8())
-                        .sum::<usize>();
-                    let suffix = before[prefix..]
-                        .chars()
-                        .rev()
-                        .zip(after[prefix..].chars().rev())
-                        .take_while(|(a, b)| a == b)
-                        .map(|(c, _)| c.len_utf8())
-                        .sum::<usize>();
-                    let start = before[..prefix].chars().count();
-                    let end = before[..before.len() - suffix].chars().count();
+                    let start = before[..range.start].chars().count();
+                    let end = before[..range.end].chars().count();
                     if this.typing_anchor != Some(before_selection.range.start) {
                         this.typing_styles = [None; 3];
                     }
@@ -517,7 +663,7 @@ impl RichText {
                         styles,
                         start,
                         end,
-                        text: after[prefix..after.len() - suffix].into(),
+                        text: text.clone(),
                         selection: SelectionChange {
                             before: model_selection(before_selection.clone()),
                             after: model_selection(after_selection.clone()),

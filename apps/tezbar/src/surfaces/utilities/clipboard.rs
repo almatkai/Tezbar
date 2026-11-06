@@ -212,10 +212,7 @@ impl Utilities {
                         model::ClipboardContent::File { preview, .. } => preview.clone(),
                     }
                 };
-                (
-                    e.id.clone(),
-                    format!("{}{}", if e.pinned { "Pinned · " } else { "" }, label),
-                )
+                (e.id.clone(), label)
             })
             .collect()
     }
@@ -229,9 +226,6 @@ impl Utilities {
             self.preview_image = self.images.get(&id);
             return;
         };
-        if self.jobs.len() >= 16 {
-            return;
-        }
         self.next_job += 1;
         let job = self.next_job;
         let epoch = self.epoch;
@@ -255,6 +249,11 @@ impl Utilities {
                             .is_some_and(|e| e.id == id && !e.is_secret)
                     {
                         this.preview_image = this.images.get(&id);
+                        if this.preview_image.is_none() {
+                            this.error = Some(
+                                "Image preview is unavailable or exceeds the 8 MiB limit.".into(),
+                            );
+                        }
                     }
                     cx.notify();
                 });
@@ -316,53 +315,21 @@ impl Utilities {
     }
 }
 pub(super) fn encode_png(bytes: &[u8]) -> String {
-    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::from("data:image/png;base64,");
-    for chunk in bytes.chunks(3) {
-        let a = chunk[0] as usize;
-        let b = *chunk.get(1).unwrap_or(&0) as usize;
-        let c = *chunk.get(2).unwrap_or(&0) as usize;
-        out.push(TABLE[a >> 2] as char);
-        out.push(TABLE[((a & 3) << 4) | (b >> 4)] as char);
-        out.push(if chunk.len() > 1 {
-            TABLE[((b & 15) << 2) | (c >> 6)] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            TABLE[c & 63] as char
-        } else {
-            '='
-        });
-    }
-    out
+    use base64::Engine;
+    format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )
 }
-fn decode_url(url: &str) -> Option<Vec<u8>> {
+pub(super) fn decode_url(url: &str) -> Option<Vec<u8>> {
+    use base64::Engine;
     let text = url.strip_prefix("data:image/png;base64,")?;
     if text.len() > 8 * 1024 * 1024 {
         return None;
     }
-    let mut bytes = Vec::with_capacity(text.len() * 3 / 4);
-    let (mut acc, mut bits) = (0u32, 0);
-    for c in text.bytes() {
-        let n = match c {
-            b'A'..=b'Z' => c - b'A',
-            b'a'..=b'z' => c - b'a' + 26,
-            b'0'..=b'9' => c - b'0' + 52,
-            b'+' => 62,
-            b'/' => 63,
-            b'=' => break,
-            _ => return None,
-        };
-        acc = (acc << 6) | n as u32;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            bytes.push((acc >> bits) as u8);
-        }
-    }
-    Some(bytes)
+    base64::engine::general_purpose::STANDARD.decode(text).ok()
 }
+
 impl Utilities {
     fn qr_preview(&mut self, cx: &mut Context<Self>) {
         let Some(entry) = self
@@ -382,9 +349,6 @@ impl Utilities {
             self.qr_image = self.images.get(&key);
             return;
         };
-        if self.jobs.len() >= 16 {
-            return;
-        }
         self.next_job += 1;
         let job = self.next_job;
         let epoch = self.epoch;

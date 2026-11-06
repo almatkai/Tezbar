@@ -1,3 +1,6 @@
+mod m7;
+#[cfg(test)]
+mod m7_tests;
 gpui::actions!(
     native_app,
     [RequestQuit, OpenSettings, ZoomIn, ZoomOut, ZoomReset]
@@ -34,6 +37,7 @@ impl Drop for RuntimeOwner {
     }
 }
 struct Owner {
+    m7: m7::State,
     settings_close: windows::settings_close::CloseHandshake,
     visibility_generation: u64,
     previous_foreground: Option<isize>,
@@ -90,8 +94,17 @@ impl Owner {
                     };
                     cx.notify();
                 });
-                if std::mem::take(&mut owner.show_on_ready) {
-                    owner.show(cx);
+                if owner
+                    .launcher
+                    .update(cx, |view, _, _| view.ready)
+                    .unwrap_or(false)
+                {
+                    owner.m7_ready(cx)
+                } else {
+                    owner.m7.boot = m7::Boot::Ready;
+                    if std::mem::take(&mut owner.show_on_ready) {
+                        owner.show(cx)
+                    }
                 }
                 let _ = owner.launcher.update(cx, |view, _, cx| {
                     view.core_ready(cx);
@@ -119,6 +132,10 @@ impl Owner {
         self.show(cx);
     }
     fn show(&mut self, cx: &mut Context<Self>) {
+        if matches!(self.m7.boot, m7::Boot::Waiting | m7::Boot::Reading) {
+            self.show_on_ready = true;
+            return;
+        }
         self.visibility_generation = self.visibility_generation.wrapping_add(1);
         self.idle = None;
         self.blur = None;
@@ -219,6 +236,9 @@ impl Owner {
         }
     }
     fn flush(&mut self) {
+        if self.m7.layout_pending {
+            return;
+        }
         if self.positions.should_flush(None) {
             match self
                 .writer
@@ -261,18 +281,63 @@ impl Owner {
         }
     }
     fn settings(&mut self, cx: &mut Context<Self>) {
+        self.settings_intent(None, cx)
+    }
+    fn settings_intent(
+        &mut self,
+        intent: Option<crate::surfaces::command_bar::navigation::Navigation>,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(
+            self.m7.boot,
+            m7::Boot::Waiting | m7::Boot::Reading | m7::Boot::Onboarding
+        ) {
+            self.m7.pending_settings = Some(intent);
+            self.show_on_ready = true;
+            if self.m7.boot == m7::Boot::Onboarding {
+                self.show(cx)
+            }
+            return;
+        }
+
         self.lifecycle.settings = true; // window-only hide, before AppKit/foreground handoff
         self.hide(cx);
         if let Some(settings) = self.settings {
-            let _ = settings.update(cx, |_, w, cx| {
+            self.m7_refresh_content(cx);
+            let _ = settings.update(cx, |view, w, cx| {
+                if let Some(content) = &view.content {
+                    content.update(cx, |view, cx| {
+                        view.set_visible(true, cx);
+                        if let Some(intent) = &intent {
+                            view.navigate(intent, w, cx)
+                        }
+                    });
+                }
                 let _ = native::visible(w, true);
                 w.activate_window();
                 cx.activate(true);
             });
+            self.m7_deliver_project_review(cx);
             return;
         }
         let relay = self.relay.clone();
         let on_close = relay.clone();
+        let (ui_state, update) = self
+            .launcher
+            .update(cx, |view, _, _| {
+                (view.state.clone(), view.update_status.clone())
+            })
+            .unwrap_or_else(|_| {
+                (
+                    tezbar_ui_model::ui_state::UiState::default(),
+                    tezbar_update::AppUpdateStatus::Idle,
+                )
+            });
+        let layout = self.m7_layout_snapshot(cx);
+        let store = self.m7.store.clone();
+        let barrier = self.m7.barrier.clone();
+        let events = self.events.clone();
+        let channel = self.m7.channel.clone();
         let settings_bounds = Bounds::centered(None, size(px(920.), px(680.)), cx);
         match cx.open_window(
             WindowOptions {
@@ -289,17 +354,66 @@ impl Owner {
                     let _ = on_close.send(Event::CloseSettings);
                     false
                 });
-                cx.new(|cx| Settings::new(relay, w, cx))
+                cx.new(|cx| {
+                    let mut shell = Settings::new(relay, w, cx);
+                    let content = cx.new(|cx| {
+                        let mut view = crate::surfaces::settings::SettingsContent::new(
+                            store.clone(),
+                            &ui_state,
+                            w,
+                            cx,
+                        );
+                        view.attach_events(&events, cx);
+                        view.set_update(update, channel, cx);
+                        if let Some((name, profile)) = layout {
+                            view.set_layout(name, profile, w, cx)
+                        }
+                        view
+                    });
+                    shell.set_content(content, cx);
+                    shell.set_write_owner(Arc::new(move || {
+                        let store = store.clone();
+                        let barrier = barrier.clone();
+                        store.drain_with(barrier)
+                    }));
+                    shell
+                })
             },
         ) {
             Ok(window) => {
                 self.settings = Some(window);
+                let content = window
+                    .update(cx, |view, _, _| view.content.clone())
+                    .ok()
+                    .flatten();
+                if let Some(content) = content {
+                    let relay = self.relay.clone();
+                    self.m7.subscription = Some(cx.subscribe(
+                        &content,
+                        move |_, view, e: &crate::surfaces::settings::SettingsEffect, _| {
+                            if !matches!(e, crate::surfaces::settings::SettingsEffect::Close) {
+                                let _ =
+                                    relay.send(Event::SettingsEffect(view.entity_id(), e.clone()));
+                            }
+                        },
+                    ));
+                }
                 self.lifecycle.settings = true;
-                let _ = window.update(cx, |_, w, cx| {
+                let _ = window.update(cx, |shell, w, cx| {
+                    if let Some(content) = &shell.content {
+                        content.update(cx, |view, cx| {
+                            if let Some(intent) = &intent {
+                                view.navigate(intent, w, cx)
+                            } else {
+                                view.activate(w, cx)
+                            }
+                        });
+                    }
                     let _ = native::visible(w, true);
                     cx.activate(true);
                     w.activate_window();
                 });
+                self.m7_deliver_project_review(cx);
             }
             Err(e) => {
                 self.lifecycle.settings = false;
@@ -322,6 +436,8 @@ impl Owner {
             .launcher
             .update(cx, |view, _, cx| view.drain_state(cx))
             .unwrap_or_default();
+        let shared_settings = self.m7.store.clone();
+        let m7_barrier = self.m7.barrier.clone();
         let drain = self.writer.drain();
         self.end_snap(cx);
         // Keep dialog, command and Settings fallback owners live if durable saves cancel quit.
@@ -349,6 +465,7 @@ impl Owner {
                 .and_then(|error| error.map_or(Ok(()), Err));
             let prepared = gpui_tokio::Tokio::spawn(cx, async move {
                 launcher_error?;
+                shared_settings.drain_with(m7_barrier).await?;
                 if let Some(settings_drain) = settings_drain {
                     settings_drain
                         .map_err(|e| format!("Settings window: {e}"))?
@@ -366,6 +483,10 @@ impl Owner {
             })
             .await;
             let core = this.update(cx, |this, cx| {
+                let prepared = if matches!(prepared, Ok(Ok(())))
+                    && (this.m7.store.pending() || !this.m7.barrier.is_clean()) {
+                    Ok(Err("Settings changed while quitting; retry quit.".to_string()))
+                } else { prepared };
                 if !matches!(prepared, Ok(Ok(()))) {
                     this.lifecycle.quitting = false;
                     this.save_error = Some(format!(
@@ -396,6 +517,7 @@ impl Owner {
                         view.error = Some(format!(
                             "Could not save changes; quit cancelled: {prepared:?}"
                         ));
+                        if view.onboarding_active {if let Some(onboarding)=&view.onboarding {onboarding.update(cx,|view,cx|{view.error=Some("Could not save changes; quit cancelled. Retry saved changes.".into());cx.notify();});}}
                         cx.notify();
                     });
                     windows::termination::complete(false);
@@ -474,7 +596,10 @@ impl Owner {
                 // actual outcome instead of acknowledging an unowned detached task.
                 tezbar_host::input::press_key(key, modifiers)?;
             }
-            SurfaceOp::ClearLegacyWebviewCache => { /* Isolated preview has no legacy profile and never touches production web data. */
+            SurfaceOp::ClearLegacyWebviewCache => {
+                return Err(
+                    "Import legacy data before clearing its cache. No files were removed.".into(),
+                );
             }
         }
         Ok(())
@@ -555,10 +680,18 @@ impl Owner {
     }
     fn finish_settings_close(&mut self, cx: &mut Context<Self>) {
         self.settings_close_timer = None;
-        if let Some(settings) = self.settings.take() {
+        let settings = self.settings.take();
+        self.lifecycle.settings = false;
+        self.m7.subscription = None;
+        self.show(cx);
+        if let Some(settings) = settings {
             let _ = settings.update(cx, |_, w, _| w.remove_window());
         }
-        self.lifecycle.settings = false;
+        if let Some((surface, payload)) = self.m7.after_close.take() {
+            let _ = self.launcher.update(cx, |view, _, cx| {
+                view.route_from_settings(surface, payload, cx)
+            });
+        }
     }
     fn panel(&mut self, rows: Vec<(String, String)>, cx: &mut Context<Self>) {
         if !self.lifecycle.visible {
@@ -805,19 +938,24 @@ impl Owner {
                     });
                     return;
                 }
-                let settings = matches!(
+                if matches!(
                     intent.surface,
                     tezbar_ui_model::router::Surface::Settings(_)
-                );
-                let _ = self
-                    .launcher
-                    .update(cx, |view, _, cx| view.receive_navigation(intent, cx));
-                if settings {
-                    self.settings(cx);
+                ) {
+                    cx.global_mut::<NavigationInbox>().acknowledge(&intent);
+                    self.settings_intent(Some(intent), cx);
+                } else if intent.surface == tezbar_ui_model::router::Surface::Onboarding {
+                    cx.global_mut::<NavigationInbox>().acknowledge(&intent);
+                    self.m7_open_onboarding(cx);
                 } else {
+                    let _ = self
+                        .launcher
+                        .update(cx, |view, _, cx| view.receive_navigation(intent, cx));
                     self.show(cx);
                 }
             }
+            Event::SettingsEffect(id, effect) => self.m7_effect(id, effect, cx),
+            Event::OnboardingFinished(id) => self.m7_finished(id, cx),
             Event::Reveal(path) => {
                 cx.reveal_path(std::path::Path::new(&path));
             }
@@ -950,12 +1088,14 @@ impl Owner {
             Event::Core(CoreEvent::OpenSurface(payload)) => {
                 self.events
                     .publish(CoreEvent::OpenSurface(payload.clone()), cx);
-                if payload.as_str().is_some_and(|s| s.starts_with("settings")) {
-                    self.settings(cx);
-                }
             }
             Event::Core(event) => {
+                let update =
+                    matches!(&event,CoreEvent::Other{channel,..}if channel=="update-status");
                 self.events.publish(event, cx);
+                if update {
+                    self.m7_refresh_content(cx);
+                }
             }
             Event::Blur(0) => {
                 let g = self.lifecycle.blur_ticket();
@@ -1208,14 +1348,29 @@ impl Owner {
                 self.settings_close.acknowledge(g);
             }
             Event::SettingsFinish(g, result) => {
+                // Check at the actual destruction boundary, after any input queued during drain.
+                if result.is_ok()
+                    && self.settings_close.is_pending()
+                    && (self.m7.store.pending()
+                        || self.m7.store.failures() > 0
+                        || !self.m7.barrier.is_clean())
+                {
+                    if let Some(settings) = self.settings {
+                        let _ = settings.update(cx, |view, _, cx| {
+                            if view.close_generation() == Some(g) {
+                                view.begin_close(g, cx);
+                            }
+                        });
+                    }
+                    return;
+                }
                 let success = result.is_ok();
                 if self.settings_close.finish(g, success) {
                     self.finish_settings_close(cx);
                 } else if let Err(error) = result {
                     if let Some(settings) = self.settings {
                         let _ = settings.update(cx, |view, _, cx| {
-                            view.error = Some(error);
-                            cx.notify();
+                            view.close_failed(g, error, cx);
                         });
                     }
                 }
@@ -1358,6 +1513,8 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
             .with_dev_mode(true)
             .with_legacy_data_dir(None);
         let core = CoreClient::new(tezbar_core::NativeCore::new(context).expect("isolated core"));
+        let settings_store = crate::surfaces::settings::SettingsStore::new(Arc::new(core.clone()));
+        let launcher_settings_store = settings_store.clone();
         let view_core = core.clone();
         let view_relay = relay.clone();
         let launcher = cx
@@ -1387,10 +1544,28 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
                         let _ = close.send(Event::Hide);
                         false
                     });
-                    cx.new(|cx| Launcher::new(view_core, view_relay, w, cx))
+                    cx.new(|cx| {
+                        Launcher::new_with_settings(
+                            view_core,
+                            view_relay,
+                            launcher_settings_store,
+                            w,
+                            cx,
+                        )
+                    })
                 },
             )
             .expect("launcher window");
+        if preview.theme == "system" {
+            if let Ok(theme) = launcher.update(cx, |view, _, _| view.state.theme) {
+                let choice = match theme {
+                    tezbar_ui_model::ui_state::Theme::White => "white",
+                    tezbar_ui_model::ui_state::Theme::Dark => "dark",
+                    tezbar_ui_model::ui_state::Theme::System => "system",
+                };
+                let _ = tezbar_ui::tokens::set(choice);
+            }
+        }
         let tray = preview
             .allow_desktop_integration
             .then(|| PrimaryTray::new(&host.desktop, &preview.resources))
@@ -1416,6 +1591,7 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
         });
         let show = preview.show;
         let owner = cx.new(|_| Owner {
+            m7: m7::State::new(settings_store),
             settings_close: Default::default(),
             visibility_generation: 0,
             previous_foreground: None,

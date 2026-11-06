@@ -49,6 +49,7 @@ pub(super) enum Completion {
     Detail(u64, u64, String),
     Delete(u64, String),
     Effect(u64, E),
+    Save(u64, u64, Option<String>),
 }
 impl VaultScreen {
     pub fn conceal(&mut self) {
@@ -99,6 +100,19 @@ impl Utilities {
         );
     }
     fn vault_effect(&mut self, e: E, cx: &mut Context<Self>) {
+        let completion = if let E::Save { token } = &e {
+            Completion::Save(
+                self.vault.session,
+                *token,
+                self.vault
+                    .model
+                    .draft
+                    .as_ref()
+                    .and_then(|d| d.clipboard_entry_id.clone()),
+            )
+        } else {
+            Completion::Effect(self.vault.session, e.clone())
+        };
         let (request, durable) = match &e {
             E::Status { .. } => (UtilityRequest::VaultStatus, false),
             E::Unlock { .. } => (UtilityRequest::VaultUnlock, false),
@@ -111,26 +125,48 @@ impl Utilities {
             }
             E::Lock => (UtilityRequest::VaultLock, false),
         };
-        self.request(
-            request,
-            super::Completion::Vault(Completion::Effect(self.vault.session, e)),
-            durable,
-            cx,
-        );
+        self.request(request, super::Completion::Vault(completion), durable, cx);
     }
     pub(super) fn vault_complete(&mut self, c: Completion, r: Reply, cx: &mut Context<Self>) {
+        // Cleanup belongs to the durable save, even if its view was concealed/replaced.
+        if let Completion::Save(session, token, source) = c {
+            let ok = r.and_then(success).is_ok();
+            if ok {
+                if let Some(source) = source {
+                    self.request(
+                        UtilityRequest::ClipboardDelete(source),
+                        super::Completion::Simple,
+                        true,
+                        cx,
+                    );
+                }
+            }
+            if session == self.vault.session {
+                self.vault.busy = false;
+                self.vault.model.saved(token, ok);
+                if ok {
+                    self.fields.clear();
+                    self.field_subscriptions.clear();
+                    self.vault_list(cx);
+                    self.defer_vault_form(cx);
+                }
+            }
+            return;
+        }
         let session = match &c {
             Completion::Status(s)
             | Completion::Unlock(s)
             | Completion::List(s, _)
             | Completion::Detail(s, _, _)
             | Completion::Delete(s, _)
-            | Completion::Effect(s, _) => *s,
+            | Completion::Effect(s, _)
+            | Completion::Save(s, _, _) => *s,
         };
         if session != self.vault.session {
             return;
         }
         match c {
+            Completion::Save(_, _, _) => unreachable!(),
             Completion::Status(_) => {
                 self.vault.loading = false;
                 match r {
@@ -222,25 +258,7 @@ impl Utilities {
                         self.vault.model.copied(token, r.and_then(success).is_ok());
                         None
                     }
-                    E::Save { token } => {
-                        self.vault.busy = false;
-                        let ok = r.and_then(success).is_ok();
-                        if let Some(id) = self.vault.model.saved(token, ok) {
-                            self.request(
-                                UtilityRequest::ClipboardDelete(id),
-                                super::Completion::Simple,
-                                true,
-                                cx,
-                            );
-                        }
-                        if ok {
-                            self.fields.clear();
-                            self.field_subscriptions.clear();
-                            self.vault_list(cx);
-                            self.defer_vault_form(cx);
-                        }
-                        None
-                    }
+                    E::Save { .. } => unreachable!("Save uses its durable completion owner"),
                     E::Lock => None,
                 };
                 if let Some(e) = next {
@@ -407,7 +425,7 @@ impl Utilities {
         ];
         for (i, (name, text, password)) in values.into_iter().enumerate() {
             let f = self.field(name, &text, i > 0, password, w, cx);
-            self.subscriptions
+            self.field_subscriptions
                 .push(cx.subscribe(&f, move |this, _, e: &Committed, cx| {
                     match i {
                         0 => this.vault.model.edit_name(e.0.clone()),

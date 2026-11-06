@@ -8,6 +8,7 @@ struct Fixture {
     calls: std::sync::Mutex<Vec<(String, Vec<Value>)>>,
     fail_save: std::sync::atomic::AtomicBool,
     image: std::sync::Mutex<Option<String>>,
+    notes_html: std::sync::Mutex<Option<String>>,
     releases: std::sync::Mutex<Vec<String>>,
     release_reply: std::sync::Mutex<Option<Result<String, String>>>,
     vault_unlocked: std::sync::atomic::AtomicBool,
@@ -26,7 +27,7 @@ impl UtilityTransport for Fixture {
             .push((channel.into(), args.clone()));
         let value = match channel {
             "notes:list" => Ok(
-                json!([{"createdAt":11,"updatedAt":12,"text":"<div>Hello <strong>世界</strong></div>"},{"createdAt":21,"updatedAt":22,"text":"Other note"}]),
+                json!([{"createdAt":11,"updatedAt":12,"text":self.notes_html.lock().unwrap().clone().unwrap_or_else(||"<div>Hello <strong>世界</strong></div>".into())},{"createdAt":21,"updatedAt":22,"text":"Other note"}]),
             ),
             "notes:update" if self.fail_save.load(std::sync::atomic::Ordering::SeqCst) => {
                 Err("Synthetic disk full".into())
@@ -1584,3 +1585,5 @@ fn background_host_update_ready_is_actionable_and_idle_has_no_badge(cx: &mut Tes
     });
     assert_eq!(*sink.borrow(), 1);
 }
+
+include!("review_regressions.rs");

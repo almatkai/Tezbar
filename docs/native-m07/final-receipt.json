@@ -1,0 +1,274 @@
+{
+  "utc": "2026-11-06T21:17:03.603331+00:00",
+  "freeze": "docs/native-m07/source-freeze-final.json",
+  "aggregate_sha256": "ce360d24fcd0a70a22928f4a6427effcce4b06d6c93dcede8edc1ff075afe581",
+  "checked_inputs": 309,
+  "changed_inputs": [],
+  "unchanged_reference_sources": 65,
+  "native_fixtures_verified_in_full_log": 37,
+  "gates": [
+    {
+      "gate": "settings",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline",
+        "--lib",
+        "surfaces::settings",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-settings-1.log",
+      "exit_code": 0,
+      "summaries": [
+        "test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 162 filtered out; finished in 0.49s"
+      ]
+    },
+    {
+      "gate": "onboarding",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline",
+        "--lib",
+        "surfaces::onboarding",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-onboarding-1.log",
+      "exit_code": 0,
+      "summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 182 filtered out; finished in 0.40s"
+      ]
+    },
+    {
+      "gate": "app",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline",
+        "--lib",
+        "app::m7_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-app-1.log",
+      "exit_code": 0,
+      "summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 184 filtered out; finished in 0.43s"
+      ]
+    },
+    {
+      "gate": "launcher",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline",
+        "--lib",
+        "settings_integration_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-launcher-1.log",
+      "exit_code": 0,
+      "summaries": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 183 filtered out; finished in 0.04s"
+      ]
+    },
+    {
+      "gate": "native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-native-1.log",
+      "exit_code": 0,
+      "summaries": [
+        "test result: ok. 187 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.55s"
+      ]
+    },
+    {
+      "gate": "bench",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders,bench-control",
+        "--locked",
+        "--offline",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-bench-1.log",
+      "exit_code": 0,
+      "summaries": [
+        "test result: ok. 188 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.91s"
+      ]
+    },
+    {
+      "gate": "shared-ui",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-ui",
+        "--locked",
+        "--offline",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-shared-ui-1.log",
+      "exit_code": 0,
+      "summaries": [
+        "test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s"
+      ]
+    },
+    {
+      "gate": "check",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "check",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-check-1.log",
+      "exit_code": 0,
+      "summaries": []
+    },
+    {
+      "gate": "build",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline"
+      ],
+      "log": "/tmp/tezbar-native-m07-final-build-1.log",
+      "exit_code": 0,
+      "summaries": []
+    }
+  ],
+  "normal_dependency_tree_log": "/tmp/tezbar-native-m07-final-normal-tree-1.log",
+  "binary_linkage_log": "/tmp/tezbar-native-m07-final-linkage-1.log",
+  "forbidden_normal_packages": [],
+  "webkit_linkage": false,
+  "normal_debug_binary": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/tezbar",
+  "binary_sha256": "13b764a11112c2d1897e1a4fe0826cfc13af26c31fd9f11c87070d095c6ed1da",
+  "immutable_review_hashes": {
+    "docs/reviews/GPUI_M3B_OPUS_a52240a.md": "9305bacfd5527921de98e129148b54cfa7797638b5342c883f297b51a868fe3a",
+    "docs/reviews/GPUI_M6_OPUS_c2a36b5.md": "c413347f35c0b6ac4a0a094b0f7484315fd835c8c5efd5459467fdb1d0a4cb49"
+  },
+  "owned_source_hashes": {
+    "apps/tezbar/src/app.rs": "adef4772935e84eaac076edb77afe89678f2d19e2cdc8ab74c9a54fc53317543",
+    "apps/tezbar/src/app/m7.rs": "9100a00abd6b29b7b10f941ac2cb79814881bf8aa100448427300a4a0216e6b3",
+    "apps/tezbar/src/app/m7_tests.rs": "e74776a2c33e6fe94102134687121d2c58fa92d3a3f2eb355928b731aa7e2e2d",
+    "apps/tezbar/src/core_client.rs": "a6e5717392afd0180c80344951723ce3761c19d4f9e0f1d898fb3d2a3bcd9f6e",
+    "apps/tezbar/src/events.rs": "58445c7c40c97f34de059cb5ece859895b0c86825c277222e4921cbf57f33a79",
+    "apps/tezbar/src/lib.rs": "b8617f6ededadf1b2870234dc0422705a814e966975783408c15805ab0aacad2",
+    "apps/tezbar/src/settings_transport.rs": "44ae549796f9cb13f5d6bd4a7cd36f72faa228906fac3acd0646616dbe75adb5",
+    "apps/tezbar/src/surfaces/command_bar/interactions.rs": "b11d407088e1c3e5093aa5061b12a48e9ee6d4a82c4bb8a3c5650a37119e8ca2",
+    "apps/tezbar/src/surfaces/command_bar/mod.rs": "95739141c305b9686dd189f2a4597e209112d651459fe76fb4087318dfc181fc",
+    "apps/tezbar/src/surfaces/command_bar/settings_integration.rs": "91512983ee7b2104f99d334840ffad1cecce41dcc0e09861fbbc3d6cbfab8b6b",
+    "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs": "f1e76f28c27fd8383e353993aa0f234b4a5a32f34ab399f8c9b66ffb6892efcc",
+    "apps/tezbar/src/surfaces/command_bar/view.rs": "fd2da5c126522d6f431c4dc55577daa7142c9657119e81495dfd32675bb6b2eb",
+    "apps/tezbar/src/surfaces/mod.rs": "2509efec71d5bd2d137316856e0295ab65bda0f9629dd8e965688da6737f56b9",
+    "apps/tezbar/src/surfaces/onboarding.rs": "7b663e00fc175be7ce658e538c9f65fc2bf7c5ecb727e0cedbf19040018b36cb",
+    "apps/tezbar/src/surfaces/settings/barrier.rs": "d6652c7cf0337404f6375dd803b9b36bb8297aa2351fba992b620061d4a9ad24",
+    "apps/tezbar/src/surfaces/settings/contributions.rs": "70863768e7a5de222a3b0e9d155fb8506c44f03db347a03f877ddb7c8a8e1a96",
+    "apps/tezbar/src/surfaces/settings/mod.rs": "af86f09938cd7f9c14e1baf3a76ead601b1a09c257e27a078f3fa187a667b499",
+    "apps/tezbar/src/surfaces/settings/request.rs": "dc1fd75ed5823bcb108b11714d004d78fcef88466653e7baa9196efb75d5a63d",
+    "apps/tezbar/src/surfaces/settings/store.rs": "128bcf74f890b58e6e5528ba2b98ce35bece8c47de3b6e376c50b50eccd677c7",
+    "apps/tezbar/src/surfaces/settings/tests.rs": "f39672b838aceb72629977e5b439ad6f0c41ee9080ff35b472d2311633748a2a",
+    "apps/tezbar/src/surfaces/settings/view.rs": "e0f72d86c01343961eb6cfe0cfedfbbec42242d8eda030e5a8d2ff5a4814315b",
+    "apps/tezbar/src/windows/settings.rs": "2aba9087b044633e048674c56a49009d5bde1e7237e1e7c4ff7bd2306b8ed9df",
+    "apps/tezbar/src/surfaces/command_bar/tests.rs": "03d74e07e7e15c70ebefebbf07972f3cca3696ce5a3c93fd89e5aaa3ee1cafd5",
+    "apps/tezbar/src/surfaces/command_bar/review_tests.rs": "e1faa739353f49566ad8849243aaa85a883db1b2a6e612457062f627a0b59205",
+    "apps/tezbar/src/surfaces/command_bar/review_regressions.rs": "956a598364f900779ddc7e52648e35b284c166b721071ec77db5eda34f18f89e"
+  },
+  "staging": "empty",
+  "limits": [
+    "No app launch, live/provider/OS/manual/platform/GPU/RAM acceptance",
+    "M7 accepted: false; parent owns fresh Opus5.5 review/integration",
+    "M8/M9 unexported"
+  ],
+  "kind": "M7 final implementation handoff; acceptance remains open",
+  "head": "ba3a227dd3dd4084c9dfaea11759bdd299d297ac",
+  "branch": "feat/native-gpui-app",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "final_audit_utc": "2026-11-06T21:18:11.891337+00:00",
+  "final_frozen_input_changes": [],
+  "api_handoff": {
+    "executor": "App constructs one SettingsStore from CoreClient; Settings, Onboarding and Launcher picker share it. No additional runtime/config writer.",
+    "picker": "enqueue typed Select+Activate edits; drain_owner(owner) waits for config settlement and checks owner_failure_count, independent of unrelated operations.",
+    "close_quit": "drain_with(EffectBarrier) waits all admitted operations/config and durable parent UI-state writes, then rechecks. Native close_failed(generation,error,cx) fences late errors.",
+    "settings_navigation": "direct SettingsContent::navigate(&Navigation,window,cx); acknowledge admission once and preserve Launcher.navigation and retained main entity.",
+    "project_review": "Owner::settings_project_review(cwd,nonce,cx) is currently unused until M8 wiring; SettingsContent::review_project selects AI, coalesces UI nonce and uses core projectReviewId for trust/dismiss.",
+    "onboarding": "boot_gate after successful coreReady only, one 400ms retry then fail-open. OnboardingEffect::Finished carries entity identity through the parent Relay event. Finish/Skip await durable save.",
+    "voice": "existing voice:stt:modes plus all-listed-model selection; partial-file Delete and targeted CancelDownload; no implicit download on selection.",
+    "extensions": "M7 owns installed-extension Settings. M9 reuses production Preferences::merge/partitioning, no duplicate writer. BrowseStore routes to Surface::Extensions with fresh nonce after successful close."
+  },
+  "exact_test_only_release": [
+    "command_bar/tests.rs::native_command_ids_route_and_record_usage_once: exactly one Relay Navigate; empty admission; Settings preserves origin; existing exactly-once usage/no execute checks retained.",
+    "command_bar/review_regressions.rs::review_delivered_settings_and_placeholder_routes_retire_admission: real Settings navigate+Relay delivery, 64 admission cycles, retained prior navigation including initial Indexing.",
+    "command_bar/review_tests.rs::model_config_read_failure_does_not_block_durable_launcher_drain: safe visible error retained, real durable UI-state file/no write error retained."
+  ],
+  "document_hashes": {
+    "docs/native-m07/accesskit-red-probe.rs.txt": "66cefde545d94240818802027237469eb2dc08d60dba012d7124e2ca33dabff7",
+    "docs/native-m07/integration.md": "3834217a27b9c350bdfcf77164671998c01222e2ccba474ec9634b4d7ef23711",
+    "docs/native-m07/source-case-map.json": "c2e2350d6f2d5916615dd9b7aefa91d97cf7d78ac998fb408836dc84ba3d24c5",
+    "docs/native-m07/source-freeze-final.json": "a88cd96c89f825543e7cb22da2e035307cffd02f897c8474572ba681f6523d9e",
+    "docs/native-m07/source-freeze-initial.json": "21b796b4b08b615dbcd7a49bbb7c238e8260f75f3eae9ed4cd08c548a638d441",
+    "docs/native-m07/source-freeze-visibility-fix.json": "5005e08b4c2567936270ac3911853e83ebfe43d4c662c5e2fe9c2bd6477103c2",
+    "docs/native-m07/verification.md": "db72cb5e771ef67a6738a8e093d46c28d14fbe8cd7eb76c50fb2cea336cb77fa"
+  }
+}

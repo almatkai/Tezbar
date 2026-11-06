@@ -1,5 +1,30 @@
 use super::*;
 #[test]
+fn failure_counts_are_unique_intents_and_scoped_to_the_requested_owner() {
+    let mut q = WriteQueue::default();
+    let mut c = config();
+    q.enqueue(
+        7,
+        vec![
+            field("ollama", "baseURL", "bad"),
+            field("ollama", "apiKey", "fixture"),
+        ],
+    );
+    flush(&mut q, &mut c, false);
+    assert_eq!(q.failure_count(), 1);
+    assert_eq!(q.owner_failure_count(7), 1);
+    assert_eq!(q.owner_failure_count(8), 0);
+    q.enqueue(8, vec![field("openai", "baseURL", "peer")]);
+    flush(&mut q, &mut c, true);
+    assert_eq!(q.failure_count(), 1);
+    assert_eq!(q.owner_failure_count(8), 0);
+    q.enqueue(8, vec![field("openai", "apiKey", "fixture-peer")]);
+    flush(&mut q, &mut c, false);
+    assert_eq!(q.failure_count(), 2);
+    assert_eq!(q.owner_failure_count(7), 1);
+    assert_eq!(q.owner_failure_count(8), 1);
+}
+#[test]
 fn task_overrides_merge_fresh_peers_and_retry_never_reverts_newer_task_selection() {
     let mut q = WriteQueue::default();
     let mut c = config();

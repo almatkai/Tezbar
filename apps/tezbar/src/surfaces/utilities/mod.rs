@@ -1,7 +1,7 @@
 //! Native utility surfaces; models own transitions, this owner executes each emitted intent once.
 mod request;
 pub use request::UtilityRequest;
-mod background_tasks;
+pub(crate) mod background_tasks;
 mod clipboard;
 mod emoji;
 mod indexing;
@@ -98,7 +98,6 @@ pub enum Action {
     VaultIcon(String),
     ChangeIcon,
     DefaultIcon,
-    ToggleTasks,
     VaultKind(Option<tezbar_ui_model::vault::Kind>),
     OpenTask(usize),
     OpenTaskId(String),
@@ -116,7 +115,6 @@ enum Completion {
     Permissions(u64),
     Permission(u64),
     Vault(vault::Completion),
-    Background(u64),
     Paste(
         WeakEntity<TextInput>,
         u64,
@@ -129,6 +127,12 @@ struct Job {
     _task: Task<()>,
     durable: bool,
 }
+struct NoteLabel {
+    revision: u64,
+    title: String,
+    summary: String,
+    date: String,
+}
 pub struct Utilities {
     pub surface: Surface,
     pub visible: bool,
@@ -139,6 +143,7 @@ pub struct Utilities {
     pub indexing: model::Indexing,
     pub permissions: model::Permissions,
     pub monitor: model::UtilityPoll<Value>,
+    monitor_display: Vec<model::monitor::Row>,
     pub vault: vault::VaultScreen,
     pub background: background_tasks::Background,
     pub release: release_notes::Release,
@@ -174,8 +179,7 @@ pub struct Utilities {
     confirmation: Option<(Action, Vec<String>)>,
     pub message: Option<String>,
     pub error: Option<String>,
-    note_labels: BTreeMap<u64, (u64, String, String)>,
-    tasks_open: bool,
+    note_labels: BTreeMap<u64, NoteLabel>,
     monitor_tab: String,
     requested_note: Option<u64>,
     note_creates: BTreeMap<u64, (u64, Option<u64>)>,
@@ -245,6 +249,7 @@ impl Utilities {
             indexing: Default::default(),
             permissions: Default::default(),
             monitor: model::UtilityPoll::new(model::PollKind::SystemMonitor),
+            monitor_display: vec![],
             vault: Default::default(),
             background: Default::default(),
             release: Default::default(),
@@ -293,7 +298,6 @@ impl Utilities {
             message: None,
             error: None,
             note_labels: Default::default(),
-            tasks_open: false,
             monitor_tab: "overview".into(),
             requested_note: None,
             note_creates: BTreeMap::new(),
@@ -305,7 +309,6 @@ impl Utilities {
             vec![
                 "clipboard:changed".into(),
                 "knowledge:status".into(),
-                "background-tasks:changed".into(),
                 "update-status".into(),
             ],
             |owner, event, cx| owner.update(cx, |this, cx| this.core_event(event, cx)),
@@ -324,6 +327,9 @@ impl Utilities {
         self.nonce = Some(navigation.nonce);
         self.set_visible(false, window, cx);
         self.surface = navigation.surface;
+        if self.surface == Surface::ReleaseNotes {
+            self.release.version = None;
+        }
         self.epoch += 1;
         self.confirmation = None;
         self.fields.clear();
@@ -366,14 +372,17 @@ impl Utilities {
         if visible {
             self.monitor.show(self.now());
             self.refresh(cx);
-            self.refresh_tasks(cx);
             self.schedule(cx);
         } else {
             self.monitor.hide();
+            // A draft is not an admitted durable write; legacy surface unmount discarded it.
+            if self.snippets.draft.is_some() {
+                self.snippets.cancel();
+                self.snippets.error = None;
+            }
             self.indexing
                 .search(self.indexing.query.clone(), self.now());
             self.jobs.retain(|_, j| j.durable);
-            self.background.hidden();
             self.release.hide();
             self.vault.conceal();
             self.fields.clear();
@@ -453,9 +462,6 @@ impl Utilities {
                     cx,
                 );
             }
-        }
-        if self.background.due(now) {
-            self.refresh_tasks(cx);
         }
         if self.surface == Surface::Indexing {
             if let Some(e) = self.indexing.tick(now) {
@@ -558,6 +564,12 @@ impl Utilities {
             Completion::Note(e) => self.note_complete(e, r, cx),
             Completion::Monitor(g) => {
                 self.monitor.complete(g, r, self.now());
+                self.monitor_display = self
+                    .monitor
+                    .value
+                    .as_ref()
+                    .map(|v| model::monitor::rows(v, "overview", &*self.presentation.0))
+                    .unwrap_or_default();
             }
             Completion::Sources(g) => {
                 self.indexing.complete(g, r.and_then(decode));
@@ -589,7 +601,6 @@ impl Utilities {
                 }
             }
             Completion::Vault(c) => self.vault_complete(c, r, cx),
-            Completion::Background(g) => self.background.complete(g, r),
             Completion::Paste(field, epoch, selection) => {
                 if epoch == self.epoch {
                     match r.and_then(decode::<String>) {
@@ -672,7 +683,6 @@ impl Utilities {
         if self.visible {
             match e.channel() {
                 "clipboard:changed" if self.surface == Surface::Clipboard => self.refresh(cx),
-                "background-tasks:changed" => self.refresh_tasks(cx),
                 _ => {}
             }
         }
@@ -695,11 +705,6 @@ impl Utilities {
             self.notes.retry(self.now());
         }
         self.notes.selected = selected;
-        if self.snippets.error.is_some() && self.snippets.draft.is_some() {
-            if let Ok(effect) = self.snippets.save() {
-                self.snippet_effect(effect, cx);
-            }
-        }
         for e in self.notes.tick(u64::MAX) {
             self.note_effect(e, cx);
         }
@@ -719,11 +724,6 @@ impl Utilities {
                             }
                         }) {
                             return Some(Err(e));
-                        }
-                        if this.snippets.draft.is_some() {
-                            if let Some(error) = &this.snippets.error {
-                                return Some(Err(error.clone()));
-                            }
                         }
                         for e in this.notes.tick(u64::MAX) {
                             this.note_effect(e, cx);

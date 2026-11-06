@@ -1,0 +1,7 @@
+{
+  "kind": "parent-authorized two-field visibility-only freeze delta",
+  "utc": "2026-11-06T12:08:12.708987+00:00",
+  "file": "apps/tezbar/src/surfaces/settings/tests.rs",
+  "sha256": "aeba5d034ac16e2cb3285360469b14c287d7ce0c2e811e52d6bc10426d56ff12",
+  "change": "hold_channel and fail_channel pub(crate); no other source changes"
+}

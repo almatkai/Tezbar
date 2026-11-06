@@ -188,52 +188,40 @@ impl Launcher {
         cx.defer(move |cx| {
             let _ = window.update(cx, |_, w, cx| field.focus_handle(cx).focus(w, cx));
         });
-        // Use the M3 write owner to merge only selected keys into a freshly read config.
-        // A model picker never writes a stale cached provider/credential map.
+        let Some(store) = self.settings_store.clone() else {
+            self.model_saving = false;
+            self.error = Some("Settings owner is unavailable".into());
+            cx.notify();
+            return;
+        };
+        use tezbar_ui_model::settings::Edit;
+        store.enqueue(
+            self.settings_owner,
+            vec![
+                Edit::Select {
+                    provider: provider.clone(),
+                    model: model.clone(),
+                },
+                Edit::Activate { provider, model },
+            ],
+        );
         let adapter = self.adapter.clone();
-        let lock = self.state_writer.clone();
+        let owner = self.settings_owner;
         self.writes.push(cx.spawn(async move |this, cx| {
             let result = gpui_tokio::Tokio::spawn(cx, async move {
-                let _guard = lock.lock().await;
-                use tezbar_ui_model::settings::{Edit, Effect, WriteQueue};
-                let mut queue = WriteQueue::default();
-                queue.register(1);
-                queue.enqueue(
-                    1,
-                    vec![
-                        Edit::Select {
-                            provider: provider.clone(),
-                            model: model.clone(),
-                        },
-                        Edit::Activate { provider, model },
-                    ],
-                );
-                let Some(Effect::Read { token }) = queue.next_effect() else {
-                    return Err("Model selection did not produce a config read".into());
-                };
-                let current = adapter.send(Request::LlmConfig).await?;
-                let Some(Effect::Save { token, patch }) = queue.read_result(token, Ok(current))
-                else {
-                    return Err("Model selection could not merge the latest config".into());
-                };
-                let result = adapter.send(Request::LlmSet(patch)).await?;
-                let success = result["ok"] != false;
-                queue.finish(token, success);
-                if !success {
-                    return Err(result["message"]
-                        .as_str()
-                        .unwrap_or("Could not save selected model")
-                        .into());
-                }
+                store.drain_owner(owner).await?;
                 adapter.send(Request::LlmConfig).await
             })
             .await
-            .unwrap_or_else(|e| Err(e.to_string()));
+            .unwrap_or_else(|_| Err("Could not save selected model".into()));
             let _ = this.update(cx, |this, cx| {
                 this.model_saving = false;
                 match result {
                     Ok(config) => this.model_config = config,
-                    Err(e) => this.error = Some(e),
+                    Err(_) => {
+                        this.error =
+                            Some("Could not save selected model. Retry in Settings.".into())
+                    }
                 }
                 cx.notify();
             });

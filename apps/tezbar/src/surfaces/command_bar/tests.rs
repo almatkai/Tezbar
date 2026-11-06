@@ -1585,7 +1585,8 @@ fn native_path_sections_keep_row_height_and_keyboard_identity(cx: &mut TestAppCo
 fn native_command_ids_route_and_record_usage_once(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let adapter = Arc::new(Loopback::default());
-    let (relay, _rx) = Relay::new();
+    let (relay, mut rx) = Relay::new();
+    cx.update(|cx| cx.set_global(navigation::NavigationInbox::default()));
     let (view, cx) =
         cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
     for (command, surface) in [
@@ -1617,12 +1618,37 @@ fn native_command_ids_route_and_record_usage_once(cx: &mut TestAppContext) {
         });
         cx.simulate_keystrokes("enter");
         settle(&rt, cx);
-        view.read_with(cx, |v, _| {
-            assert_eq!(
-                v.navigation.as_ref().map(|n| &n.surface),
-                Some(&surface),
-                "{command}"
-            )
+        let delivered = rt.block_on(async {
+            let mut routes = Vec::new();
+            while let Ok(Some(event)) =
+                tokio::time::timeout(Duration::from_millis(1), rx.recv()).await
+            {
+                if let Event::Navigate(intent) = event {
+                    routes.push(intent);
+                }
+            }
+            routes
+        });
+        assert_eq!(delivered.len(), 1, "{command}: exactly one relay delivery");
+        assert_eq!(delivered[0].surface, surface, "{command}");
+        view.read_with(cx, |v, cx| {
+            if matches!(surface, Surface::Settings(_)) {
+                assert!(
+                    v.navigation.is_none(),
+                    "Settings preserves the command origin"
+                );
+            } else {
+                assert_eq!(
+                    v.navigation.as_ref().map(|n| &n.surface),
+                    Some(&surface),
+                    "{command}"
+                );
+            }
+            assert!(
+                cx.global::<navigation::NavigationInbox>()
+                    .pending()
+                    .is_none()
+            );
         });
         let calls = adapter.calls.lock().unwrap();
         assert_eq!(

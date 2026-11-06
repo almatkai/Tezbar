@@ -10,6 +10,16 @@ macro_rules! cached_regex {
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 const EMPTY: &str = "<div><br></div>";
+pub fn format_date(
+    ms: u64,
+    formatter: &dyn tezbar_core::instant::transform::PresentationFormatter,
+) -> String {
+    i64::try_from(ms)
+        .ok()
+        .filter(|ms| chrono::DateTime::from_timestamp_millis(*ms).is_some())
+        .map(|ms| formatter.local_timestamp(ms))
+        .unwrap_or_else(|| "—".into())
+}
 const TAGS: [&str; 11] = [
     "div", "br", "p", "strong", "b", "em", "i", "u", "ul", "ol", "li",
 ];

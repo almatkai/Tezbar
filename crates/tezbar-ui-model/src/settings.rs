@@ -624,6 +624,14 @@ impl WriteQueue {
             .collect::<BTreeSet<_>>()
             .len()
     }
+    pub fn owner_failure_count(&self, owner: OwnerId) -> usize {
+        self.failures
+            .values()
+            .filter(|intent| intent.owner == owner)
+            .map(|intent| intent.id)
+            .collect::<BTreeSet<_>>()
+            .len()
+    }
     fn collect_owners(&mut self) {
         let busy: BTreeSet<_> = self
             .pending

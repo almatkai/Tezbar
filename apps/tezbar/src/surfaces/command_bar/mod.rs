@@ -7,6 +7,10 @@ pub mod navigation;
 mod presentation;
 #[cfg(test)]
 mod review_tests;
+mod settings_integration;
+#[cfg(test)]
+pub(crate) mod settings_integration_tests;
+mod task_indicator;
 #[cfg(test)]
 mod tests;
 mod utilities_integration;
@@ -79,6 +83,14 @@ struct PinDrag {
     target: Option<usize>,
 }
 pub struct Launcher {
+    pub(crate) settings_store: Option<super::settings::SettingsStore>,
+    settings_owner: u64,
+    pub(crate) onboarding: Option<Entity<super::onboarding::Onboarding>>,
+    pub(crate) onboarding_active: bool,
+    onboarding_subscription: Option<Subscription>,
+    m7_persist_done: u64,
+    m7_state_notify: Arc<tokio::sync::Notify>,
+    m7_state_unavailable: bool,
     resize: Option<resize::Gesture>,
     window: AnyWindowHandle,
     writes: Vec<Task<()>>,
@@ -132,6 +144,7 @@ pub struct Launcher {
     utilities: Option<Entity<super::utilities::Utilities>>,
     utility_transport: Option<Arc<dyn super::utilities::UtilityTransport>>,
     utility_subscription: Option<Subscription>,
+    task_indicator: Entity<task_indicator::TaskIndicator>,
     utility_save_directory: PathBuf,
     utility_save_error: Option<String>,
     utility_drain_serial: u64,
@@ -177,10 +190,21 @@ pub struct Launcher {
 }
 impl Launcher {
     pub fn new(core: CoreClient, relay: Relay, w: &mut Window, cx: &mut Context<Self>) -> Self {
+        let store = super::settings::SettingsStore::new(Arc::new(core.clone()));
+        Self::new_with_settings(core, relay, store, w, cx)
+    }
+    pub fn new_with_settings(
+        core: CoreClient,
+        relay: Relay,
+        store: super::settings::SettingsStore,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let path = core.0.ctx.paths.config_dir.join("ui-state-v1.json");
         let directory = core.0.ctx.paths.home_dir.clone();
         let core = Arc::new(core);
-        let mut launcher = Self::with_adapter(core.clone(), relay, Some(path), w, cx);
+        let mut launcher =
+            Self::with_adapter_and_settings(core.clone(), relay, Some(path), Some(store), w, cx);
         launcher.utility_transport = Some(core);
         launcher.utility_save_directory = directory;
         launcher
@@ -192,6 +216,23 @@ impl Launcher {
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::with_adapter_and_settings(adapter, relay, path, None, w, cx)
+    }
+    pub fn with_adapter_and_settings(
+        adapter: Arc<dyn RequestAdapter>,
+        relay: Relay,
+        path: Option<PathBuf>,
+        store: Option<super::settings::SettingsStore>,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        #[cfg(test)]
+        let store = store.or_else(|| {
+            Some(super::settings::SettingsStore::new(Arc::new(
+                settings_integration::FixtureTransport(adapter.clone()),
+            )))
+        });
+        let settings_owner = store.as_ref().map(|store| store.owner()).unwrap_or(0);
         let input = cx.new(|cx| {
             let mut i = TextInput::new(cx);
             i.configure(FieldOptions {
@@ -294,7 +335,12 @@ impl Launcher {
         let bounds = cx.observe_window_bounds(w, move |_, _, _| {
             let _ = queue.send(Event::Bounds);
         });
-        let release = cx.on_release(|this, cx| this.images.release_all_windows(cx));
+        let release = cx.on_release(|this, cx| {
+            if let Some(store) = &this.settings_store {
+                store.retire(this.settings_owner);
+            }
+            this.images.release_all_windows(cx);
+        });
         let (state, error) = match path
             .as_ref()
             .filter(|p| p.exists())
@@ -308,6 +354,7 @@ impl Launcher {
             None => (UiState::default(), None),
         };
         // Corrupt state is never overwritten. M11 alone owns legacy discovery/import.
+        let m7_state_unavailable = path.is_some() && error.is_some();
         let state_path = if error.is_none() { path } else { None };
         let events = cx.try_global::<CoreEvents>().cloned().map(|hub| {
             hub.subscribe(
@@ -333,10 +380,25 @@ impl Launcher {
                 cx,
             )
         });
+        let task_indicator = cx.new(|cx| task_indicator::TaskIndicator::new(adapter.clone(), cx));
+        let task_subscription = cx.subscribe(
+            &task_indicator,
+            |this, _, event: &task_indicator::OpenTask, cx| {
+                this.open_background_task(&event.0, cx);
+            },
+        );
         let path_list = ListState::new(0, ListAlignment::Top, px(160.));
         path_list
             .set_scroll_handler(cx.listener(|this, _, w, cx| this.schedule_icon_viewport(w, cx)));
         Self {
+            settings_store: store,
+            settings_owner,
+            onboarding: None,
+            onboarding_active: false,
+            onboarding_subscription: None,
+            m7_persist_done: 0,
+            m7_state_notify: Arc::default(),
+            m7_state_unavailable,
             resize: None,
             window: w.window_handle(),
             writes: vec![],
@@ -390,6 +452,7 @@ impl Launcher {
             utilities: None,
             utility_transport: None,
             utility_subscription: None,
+            task_indicator,
             utility_save_directory: std::env::temp_dir(),
             utility_save_error: None,
             utility_drain_serial: 0,
@@ -431,6 +494,7 @@ impl Launcher {
             answer_busy: false,
             _events: events,
             _subscriptions: vec![
+                task_subscription,
                 model_search_committed,
                 model_clipboard,
                 committed,
@@ -522,6 +586,10 @@ impl Launcher {
         }
     }
     pub fn show(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        if self.onboarding_active {
+            self.show_onboarding(w, cx);
+            return;
+        }
         let utility_active = self.show_utilities(w, cx);
         if !self.visible {
             self.visible = true;
@@ -534,6 +602,7 @@ impl Launcher {
                 self.rows = self.home.clone();
             }
         }
+        self.sync_task_indicator(cx);
         cx.activate(true);
         w.activate_window();
         if !utility_active {
@@ -542,9 +611,11 @@ impl Launcher {
         cx.notify();
     }
     pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        self.hide_onboarding(cx);
         self.acknowledge_navigation(cx);
         self.hide_utilities(w, cx);
         self.visible = false;
+        self.sync_task_indicator(cx);
         self.dispatch(Input::Hide, cx);
         self.model.session.reset_transport();
         self.timer = None;
@@ -953,6 +1024,8 @@ impl Launcher {
             .await
             .unwrap_or_else(|e| Err(e.to_string()));
             let _ = this.update(cx, |this, cx| {
+                this.m7_persist_done = this.m7_persist_done.max(serial);
+                this.m7_state_notify.notify_waiters();
                 if this
                     .persist_revision
                     .load(std::sync::atomic::Ordering::SeqCst)
@@ -1351,7 +1424,12 @@ impl Launcher {
             surface,
             payload,
         };
+        if matches!(intent.surface, Surface::Settings(_)) {
+            let _ = self.relay.send(Event::Navigate(intent));
+            return;
+        }
         self.navigation = Some(intent.clone());
+        self.sync_task_indicator(cx);
         self.form = None;
         self.form_activation = None;
         self.clear_argument_results(cx);
@@ -1381,6 +1459,13 @@ impl Launcher {
         cx.notify();
     }
     pub fn receive_navigation(&mut self, intent: Navigation, cx: &mut Context<Self>) {
+        if matches!(intent.surface, Surface::Settings(_)) {
+            if cx.has_global::<navigation::NavigationInbox>() {
+                cx.global_mut::<navigation::NavigationInbox>()
+                    .acknowledge(&intent);
+            }
+            return;
+        }
         self.route_utility_navigation(intent.clone(), cx);
         // This retained owner now has the intent. Deferred child delivery keeps its own clone;
         // the admission inbox must not retain a second copy for the whole app session.
@@ -1399,6 +1484,7 @@ impl Launcher {
             return;
         }
         self.navigation = Some(intent);
+        self.sync_task_indicator(cx);
         cx.notify();
     }
     fn acknowledge_navigation(&self, cx: &mut Context<Self>) {
@@ -1496,6 +1582,7 @@ impl Launcher {
         cx.notify();
     }
     pub fn core_ready(&mut self, cx: &mut Context<Self>) {
+        self.sync_task_indicator(cx);
         if self.ready && self.visible {
             self.form = None;
             self.form_activation = None;
@@ -1558,6 +1645,8 @@ impl Launcher {
             CoreEvent::Other { channel, payload } if channel == "update-status" => {
                 if let Ok(status) = serde_json::from_value(payload.clone()) {
                     self.update_status = status;
+                    self.task_indicator
+                        .update(cx, |view, cx| view.set_update(&self.update_status, cx));
                     if self.checked_update
                         && !matches!(self.update_status, tezbar_update::AppUpdateStatus::Checking)
                     {

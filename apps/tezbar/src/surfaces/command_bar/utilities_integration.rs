@@ -47,7 +47,7 @@ impl Launcher {
                 view.set_update_status(self.update_status.clone(), cx);
                 view.configure_release(
                     env!("CARGO_PKG_VERSION").into(),
-                    option_env!("TEZBAR_APP_RELEASE_NOTES").map(str::to_owned),
+                    Some(include_str!(concat!(env!("OUT_DIR"), "/release-notes.md")).to_owned()),
                 );
             });
             self.utility_subscription = Some(cx.subscribe(
@@ -109,7 +109,7 @@ impl Launcher {
         });
         true
     }
-    fn utility_effect(&mut self, effect: &UtilityEffect, cx: &mut Context<Self>) {
+    pub(super) fn utility_effect(&mut self, effect: &UtilityEffect, cx: &mut Context<Self>) {
         match effect {
             UtilityEffect::Navigate(surface, payload) => {
                 self.navigate(surface.clone(), payload.clone(), cx)

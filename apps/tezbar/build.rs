@@ -1,5 +1,28 @@
 use std::process::Command;
 fn main() {
+    println!("cargo:rerun-if-env-changed=TEZBAR_RELEASE_NOTES_PATH");
+    let notes_path = std::env::var_os("TEZBAR_RELEASE_NOTES_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
+                .join("../../docs/releases")
+                .join(format!(
+                    "{}.md",
+                    std::env::var("CARGO_PKG_VERSION").unwrap()
+                ))
+        });
+    println!("cargo:rerun-if-changed={}", notes_path.display());
+    let notes = std::fs::read_to_string(&notes_path)
+        .expect("Native builds require UTF-8 release notes for their exact version");
+    assert!(
+        !notes.trim().is_empty() && notes.len() <= 1024 * 1024,
+        "Release notes must be non-empty and at most 1 MiB"
+    );
+    std::fs::write(
+        std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("release-notes.md"),
+        notes,
+    )
+    .expect("Stage bundled release notes");
     let compiler = Command::new(std::env::var_os("RUSTC").expect("Cargo RUSTC"))
         .arg("-vV")
         .output()

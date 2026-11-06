@@ -153,8 +153,10 @@ fn model_config_read_failure_does_not_block_durable_launcher_drain(cx: &mut Test
         view.drain_state(cx)
     });
     await_writes(&runtime, cx, writes);
-    assert!(view.read_with(cx, |view, _| view.error.as_deref()
-        == Some("Synthetic config read failure")));
+    assert_eq!(
+        view.read_with(cx, |view, _| view.error.clone()).as_deref(),
+        Some("Could not save selected model. Retry in Settings.")
+    );
     assert!(view.read_with(cx, |view, _| view.state_write_error().is_none()));
     assert!(path.is_file());
 }

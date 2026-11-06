@@ -1,13 +1,96 @@
 use super::*;
 use controls::ButtonTone;
 impl Utilities {
+    fn list_content(&self, id: &str, label: &str, t: tokens::Tokens) -> AnyElement {
+        if self.surface == Surface::Clipboard {
+            let pinned = self
+                .clipboard
+                .visible()
+                .iter()
+                .any(|e| e.id == id && e.pinned);
+            return div()
+                .flex()
+                .w_full()
+                .min_w_0()
+                .gap(px(8.))
+                .child(div().flex_1().truncate().child(label.to_owned()))
+                .when(pinned, |d| {
+                    d.child(div().id(SharedString::from(format!("pinned-{id}"))).aria_label("Pinned").text_color(t.text3).child("⌖"))
+                })
+                .into_any_element();
+        }
+        if self.surface == Surface::Notes {
+            if let Some(note) = id
+                .parse::<u64>()
+                .ok()
+                .and_then(|id| self.note_labels.get(&id))
+            {
+                return div()
+                    .flex()
+                    .flex_col()
+                    .min_w_0()
+                    .gap(px(2.))
+                    .child(div().truncate().child(note.title.clone()))
+                    .child(
+                        div()
+                            .text_size(px(11. * t.zoom))
+                            .text_color(t.text3)
+                            .truncate()
+                            .child(note.summary.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10. * t.zoom))
+                            .text_color(t.text3)
+                            .child(note.date.clone()),
+                    )
+                    .into_any_element();
+            }
+        } else if self.surface == Surface::SystemMonitor {
+            if let Some(row) = self.monitor_display.iter().find(|row| row.id == id) {
+                let mut content = div().flex().flex_col().w_full().gap(px(4.)).child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .gap(px(8.))
+                        .child(format!("{} · {}", row.section, row.label))
+                        .child(row.value.clone()),
+                );
+                if let Some(percent) = row.percent {
+                    let color = if percent >= 85. {
+                        t.danger
+                    } else if percent >= 65. {
+                        t.warning
+                    } else {
+                        t.success
+                    };
+                    content = content.child(
+                        div()
+                            .id(SharedString::from(format!("monitor-meter-{}", row.id)))
+                            .role(Role::ProgressIndicator)
+                            .aria_label(format!("{}: {percent:.0}%", row.label))
+                            .h(px(3.))
+                            .w_full()
+                            .bg(t.hairline)
+                            .child(
+                                div()
+                                    .h_full()
+                                    .w(relative((percent / 100.) as f32))
+                                    .bg(color),
+                            ),
+                    );
+                }
+                return content.into_any_element();
+            }
+        }
+        div().child(label.to_owned()).into_any_element()
+    }
     pub fn act(&mut self, a: Action, w: &mut Window, cx: &mut Context<Self>) {
         if !self.visible {
             return;
         }
         match a {
             Action::Refresh => self.refresh(cx),
-            Action::ToggleTasks => self.tasks_open = !self.tasks_open,
             Action::Confirm(yes) => {
                 if let Some((action, ids)) = self.confirmation.take() {
                     if yes && ids == self.confirmation_keys() {
@@ -81,7 +164,7 @@ impl Utilities {
                         r.created_at.to_string(),
                         self.note_labels
                             .get(&r.created_at)
-                            .map(|(_, title, _)| title.clone())
+                            .map(|label| label.title.clone())
                             .unwrap_or_else(|| "Note".into()),
                     )
                 })
@@ -613,10 +696,7 @@ impl Render for Utilities {
                     tezbar_ui_model::vault::Kind::Password,
                     tezbar_ui_model::vault::Kind::Note,
                 ] {
-                    let label = serde_json::to_value(kind)
-                        .ok()
-                        .and_then(|v| v.as_str().map(String::from))
-                        .unwrap_or_default();
+                    let label = kind_label(kind);
                     bar = bar.child(self.action_button(
                         label,
                         Action::VaultDraftKind(kind),
@@ -708,7 +788,7 @@ impl Render for Utilities {
                     tezbar_ui_model::vault::Kind::Note,
                 ] {
                     filters = filters.child(self.action_button(
-                        format!("{:?}", kind),
+                        kind_label(kind),
                         Action::VaultKind(Some(kind)),
                         false,
                         cx,
@@ -860,7 +940,15 @@ impl Render for Utilities {
                                         this.selected() == i,
                                         t,
                                     )
-                                    .child(label.clone())
+                                    .h(px(if matches!(
+                                        this.surface,
+                                        Surface::Notes | Surface::SystemMonitor
+                                    ) {
+                                        64.
+                                    } else {
+                                        36.
+                                    } * t.zoom))
+                                    .child(this.list_content(id, label, t))
                                     .on_mouse_move(cx.listener(
                                         move |this, e: &MouseMoveEvent, w, cx| {
                                             this.hover(i, e, w, cx)
@@ -935,37 +1023,40 @@ impl Render for Utilities {
                     .aria_label("Utility status")
                     .child(status),
             );
-        let all_tasks = self.background.all();
-        if !all_tasks.is_empty() {
-            root = root.child(self.action_button(
-                format!("{} background tasks", all_tasks.len()),
-                Action::ToggleTasks,
-                false,
-                cx,
-                t,
-            ));
-            if self.tasks_open {
-                let mut tasks = controls::popover("background-tasks", "Background tasks", t);
-                for task in &all_tasks {
-                    tasks = tasks.child(self.action_button(
-                        format!("{} · {}", task.title, task.detail),
-                        Action::OpenTaskId(task.id.clone()),
-                        false,
-                        cx,
-                        t,
-                    ));
-                }
-                root = root.child(tasks);
-            }
-        }
         if self.confirmation.is_some() {
             root = root.child(
                 controls::popover("utility-confirmation", "Confirm deletion", t)
-                    .child("Delete the selected items? This cannot be undone.")
-                    .child(self.action_button("Delete", Action::Confirm(true), false, cx, t))
+                    .child(if matches!(self.confirmation, Some((Action::Clear, _))) {
+                        "Clear all clipboard history? This cannot be undone."
+                    } else {
+                        "Delete the selected items? This cannot be undone."
+                    })
+                    .child(self.action_button(
+                        if matches!(self.confirmation, Some((Action::Clear, _))) {
+                            "Clear history"
+                        } else {
+                            "Delete"
+                        },
+                        Action::Confirm(true),
+                        false,
+                        cx,
+                        t,
+                    ))
                     .child(self.action_button("Cancel", Action::Confirm(false), false, cx, t)),
             );
         }
         root
+    }
+}
+
+pub(super) fn kind_label(kind: tezbar_ui_model::vault::Kind) -> &'static str {
+    use tezbar_ui_model::vault::Kind;
+    match kind {
+        Kind::ApiKey => "API Key",
+        Kind::Token => "Token",
+        Kind::SshKey => "SSH Key",
+        Kind::Server => "Server",
+        Kind::Password => "Password",
+        Kind::Note => "Note",
     }
 }

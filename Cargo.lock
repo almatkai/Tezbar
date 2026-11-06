@@ -6363,6 +6363,7 @@ name = "tezbar-native"
 version = "0.3.0-beta.7"
 dependencies = [
  "anyhow",
+ "base64",
  "global-hotkey",
  "gpui",
  "gpui_platform",

@@ -18,52 +18,8 @@ pub struct Background {
     pub index_summary: String,
     pub index_progress: f32,
     pub update: Option<Value>,
-    pub error: Option<String>,
-    generation: u64,
-    due: u64,
-    pending: bool,
-}
-impl Background {
-    pub fn hidden(&mut self) {
-        self.generation += 1;
-        self.pending = false;
-    }
-    pub fn due(&self, now: u64) -> bool {
-        !self.pending && now >= self.due
-    }
-    pub fn complete(&mut self, g: u64, r: Reply) {
-        if g != self.generation {
-            return;
-        }
-        self.pending = false;
-        match r.and_then(decode::<Vec<TaskStatus>>) {
-            Ok(mut v) => {
-                v.truncate(128);
-                self.tasks = v;
-                self.error = None;
-            }
-            Err(e) => self.error = Some(e),
-        }
-    }
 }
 impl Utilities {
-    pub fn refresh_tasks(&mut self, cx: &mut Context<Self>) {
-        if !self.visible {
-            return;
-        }
-        if self.background.pending {
-            return;
-        }
-        self.background.pending = true;
-        self.background.due = self.now() + 1000;
-        self.background.generation += 1;
-        self.request(
-            UtilityRequest::BackgroundTasks,
-            Completion::Background(self.background.generation),
-            false,
-            cx,
-        );
-    }
     pub(super) fn task_action(&mut self, index: usize, cx: &mut Context<Self>) {
         let tasks = self.background.all();
         let Some(task) = tasks.get(index) else {
