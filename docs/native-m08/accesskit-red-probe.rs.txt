@@ -1,0 +1,9 @@
+// Original first native probe; failed on TestWindow lacking PlatformWindow::a11y_init.
+// Preserved from /tmp/tezbar-m8-native-02-20261107.log, no full native tree claim.
+    let tree = cx
+        .update(|w, _| w.debug_a11y_tree_json())
+        .expect("Native accessibility tree");
+    assert!(tree.contains("Allow once"));
+    assert!(tree.contains("Deny"));
+    assert!(tree.contains("Message"));
+    assert!(!tree.contains("synthetic-peer-key"));

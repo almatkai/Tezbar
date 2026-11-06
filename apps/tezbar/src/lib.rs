@@ -12,3 +12,4 @@ pub mod bench_control;
 pub mod surfaces;
 
 mod settings_transport;
+mod chat_transport;

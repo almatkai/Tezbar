@@ -39,6 +39,7 @@ impl ShutdownOwner {
 pub type SearchRow = tezbar_ui_model::launcher::Row;
 #[derive(Clone, Debug)]
 pub enum Request {
+    Chat(crate::surfaces::ai_chat::ChatRequest),
     Settings(crate::surfaces::settings::SettingsRequest),
     Utility(crate::surfaces::utilities::UtilityRequest),
     Search(String),
@@ -95,6 +96,7 @@ impl Request {
     pub fn wire(self) -> (&'static str, Vec<Value>) {
         let context = |action, query, rank, id: Option<String>| json!({"action":action,"context":{"query":query,"rank":rank,"resultId":id}});
         match self {
+            Self::Chat(request) => request.wire(),
             Self::Utility(request) => request.wire(),
             Self::Settings(request) => request.wire(),
             Self::Search(q) => ("search:all", vec![json!(q)]),
