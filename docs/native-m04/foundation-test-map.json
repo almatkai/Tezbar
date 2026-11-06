@@ -1,0 +1,453 @@
+{
+  "milestone": "M4 foundation; not M5\u2013M11 surface parity",
+  "ownership": [
+    "crates/tezbar-ui/src/**",
+    "crates/tezbar-ui/tests/**",
+    "apps/tezbar/src/**",
+    "apps/tezbar/tests/**"
+  ],
+  "evidence_root": "/tmp/tezbar-native-m04-evidence",
+  "tests": [
+    {
+      "file": "crates/tezbar-ui/src/controls.rs",
+      "test": "keyboard_activation_uses_one_guarded_callback",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/controls.rs",
+      "test": "focus_scope_cycles_and_restores",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/image_cache.rs",
+      "test": "bgra_preserves_alpha",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/image_cache.rs",
+      "test": "stale_and_cancelled_decodes_are_released",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/image_cache.rs",
+      "test": "bounded_decoders_and_duplicate_keys",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/image_cache.rs",
+      "test": "count_byte_lru_and_release_ownership",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/image_cache.rs",
+      "test": "count_limited_even_for_tiny_images",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/image_cache.rs",
+      "test": "oversized_image_cannot_enter_cache",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/image_cache.rs",
+      "test": "png_decode_enforces_dimensions_and_bgra_contract",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "links_reject_executable_schemes",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "revision_cache_does_not_reparse_history",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "native_tasks_tables_links_and_open_fences",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "raw_html_never_executes",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "highlight_stays_lazy_while_streaming",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "streaming_reparses_only_unclosed_tail",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "fixed_html_subset_is_native_and_attribute_safe",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "bare_links_and_sandbox_asset_requests",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "details_survive_without_executing_html",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/markdown.rs",
+      "test": "document_renders_native_roles_and_selection_copy_is_an_effect",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "offset_tables_cover_cyrillic_combining_surrogate_and_emoji",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "composition_emits_only_when_committed",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "grapheme_deletion_and_undo_redo_restore_selection",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "password_render_and_accessibility_never_expose_secret",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "multiline_navigation_and_singleline_normalization",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "cancellation_restores_original_without_committing_composition",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "history_is_bounded_and_partial_utf16_ranges_are_safe",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/text_input.rs",
+      "test": "clicking_placeholder_never_selects_bytes_outside_empty_content",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/virtual_list.rs",
+      "test": "identity_survives_reorder_and_removal",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/virtual_list.rs",
+      "test": "stationary_pointer_during_scroll_does_not_select",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "crates/tezbar-ui/src/virtual_list.rs",
+      "test": "thousand_item_grid_constructs_only_visible_rows",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/bench_control.rs",
+      "test": "authentication_compares_full_token",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-control-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/cli.rs",
+      "test": "explicit_paths_no_production_defaults",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/cli.rs",
+      "test": "nested_profile_symlink_rejected",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/cli.rs",
+      "test": "resources_source_must_match",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/core_client.rs",
+      "test": "owner_cancellation_and_stale_replies",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/events.rs",
+      "test": "closed_relay_cannot_wake_or_replay_effect",
+      "runner": "tokio::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/events.rs",
+      "test": "output_backpressure_preserves_bytes_and_wakes_on_drain",
+      "runner": "tokio::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/events.rs",
+      "test": "activation_and_status_are_coalesced",
+      "runner": "tokio::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/events.rs",
+      "test": "buffered_output_is_owned_until_subscribed_and_unsubscribe_prevents_callbacks",
+      "runner": "gpui::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/events.rs",
+      "test": "cancellation_after_capture_reply_send_still_restores",
+      "runner": "tokio::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/host_adapter.rs",
+      "test": "preview_cannot_register_production_launcher_accelerators",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/mod.rs",
+      "test": "visibility_timers_are_generation_fenced",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/mod.rs",
+      "test": "dialog_and_panel_suppress_blur",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/native.rs",
+      "test": "physical_snapshots_keep_negative_monitor_origins_and_dpi",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/persistence.rs",
+      "test": "serial_snapshots_keep_latest_position_without_overwriting_other_settings",
+      "runner": "tokio::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/settings_close.rs",
+      "test": "acknowledged_drain_does_not_expire",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/settings_close.rs",
+      "test": "unacknowledged_bootstrap_falls_back_after_three_seconds",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/settings_close.rs",
+      "test": "failures_retain_window_and_stale_completions_cannot_close_retry",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/snap.rs",
+      "test": "ended_drag_discards_dwell",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/snap.rs",
+      "test": "stationary_center_acquires_after_host_dwell",
+      "runner": "test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "test": "panel_tracks_parent_and_minimum",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/termination.rs",
+      "test": "two_native_quits_queue_once_and_reentry_is_immediate_after_drain",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/windows/termination.rs",
+      "test": "save_failure_replies_no_and_can_retry",
+      "runner": "::core::prelude::v1::test",
+      "status": "passed",
+      "evidence": "/tmp/tezbar-native-m04-evidence/final-tests.log"
+    }
+  ],
+  "manual_gates": [
+    "VoiceOver and Narrator",
+    "Latin/Cyrillic/Kazakh/dead-key/Japanese/Pinyin OS IME matrix",
+    "mixed-DPI Windows/macOS multi-monitor placement",
+    "live tray/hotkey delivery on Windows; Linux not a supported product target",
+    "full existing-app light/dark visual comparison",
+    "real GPU cache pressure/texture lifetime measurements",
+    "M5\u2013M10 surface integration and M11 clean-source packaging/RAM comparison"
+  ],
+  "source_sha256": {
+    "crates/tezbar-ui/src/controls.rs": "a3541ffc75039a3ea897fa1aaa7f001c08a232fe1e61febe42a8199cb9924716",
+    "crates/tezbar-ui/src/image_cache.rs": "cfd84a6ff26e6ea683cdbced01ad711f7fcff63cac6057f9684105456cfeb2f6",
+    "crates/tezbar-ui/src/lib.rs": "5a6ec2c7dbc2fb2d693c5b88aa699dc742410a337cdb5d2a29072d96e17e02b9",
+    "crates/tezbar-ui/src/markdown.rs": "a043261f3c25cf04cbb37798da0c91e2e9b599e886546a4bca82b86dc9f8079a",
+    "crates/tezbar-ui/src/markdown_html.rs": "aec014553a8cb583249b195ff65a31a11f7eb1e2938385f497eda1d6577369ad",
+    "crates/tezbar-ui/src/text_input.rs": "fdbf0e3e41feff042d55beb7ed021958d9f142f9de25be238f350bd20b0c86bb",
+    "crates/tezbar-ui/src/tokens.rs": "e3b880722ea36cd3930791042e8fb0f08f75584971ed3556cff1b53bac04b3a1",
+    "crates/tezbar-ui/src/virtual_list.rs": "7854c5f9cebdab6af3a397d37990a8f9c7d03a60e66a07882a2be0981cf58d2f",
+    "apps/tezbar/src/app.rs": "45e14ce419032e7de42d7867cf8bf669d8f95abfa94161675ca44a3619dd4a6c",
+    "apps/tezbar/src/bench_control.rs": "df2b7ae1cdc1bb20c509b418c8465f7d041da72e4c11f94ed99754db92d7a9cb",
+    "apps/tezbar/src/cli.rs": "85bf9eabbba267797ff09b51f66155570f0fbb75bc627d536d60faeaa9ae572d",
+    "apps/tezbar/src/core_client.rs": "7d2753726262fe2ae22a46bb11765dd3234002c0336378fa499140433b42788d",
+    "apps/tezbar/src/events.rs": "c815bbcd834615f4a7122094be7fceda4b724ac33fd05c655ba88e8b9d75d8de",
+    "apps/tezbar/src/host_adapter.rs": "d70fc6ba65341ce930b58264ea497d47e32833c4d055e799ffc42913860cfe23",
+    "apps/tezbar/src/lib.rs": "fbcfeede87a5379c9c68422ed4540bb92aac190d8cda3087a4d291309c8610d7",
+    "apps/tezbar/src/main.rs": "90a75cf1cb9bb4c20f18d3b754890d2637a72c65d6ebed00296a86b0a5b9aae9",
+    "apps/tezbar/src/windows/launcher.rs": "b3915847fcbf03a5620eb1e54861cd5a47caa486f0b5a62de853de85db1f5f28",
+    "apps/tezbar/src/windows/mod.rs": "e83c0cc76b5b9995d800f372ddc40ac07c6337535a3ddc45d970f9c940b9f40f",
+    "apps/tezbar/src/windows/native.rs": "217f46a5b1112ccca9cbf2026488d3af8b6d309fd3b6141cf264454995f9fb58",
+    "apps/tezbar/src/windows/persistence.rs": "1cbecc8c968d6d4e9da21f9ba59de2b6762e182abe0ceff19be48ef0afcfdf14",
+    "apps/tezbar/src/windows/resize.rs": "4870586c4e92b1208d58528355b235b355aee6ce184bd1895d4c4882e0c5b9af",
+    "apps/tezbar/src/windows/settings.rs": "2ebf42241c8e2b976d6dbfe4a567b47ea75ab6c48feb60650423612033b9ceb3",
+    "apps/tezbar/src/windows/settings_close.rs": "2ff7506ce1c5ab16060bf26bfc0e48c72ddfa74349ff97caa7c644400450f1ca",
+    "apps/tezbar/src/windows/snap.rs": "986c01e2ad3992c450ef71de02be11c99cfd614a8bb746e16f36d150f47559da",
+    "apps/tezbar/src/windows/snap_overlay.rs": "35356095b292d87b45f08294a93899c680572e38b3dca03f45ceb86de4c7d1f8",
+    "apps/tezbar/src/windows/terminal_sessions.rs": "f404574d91eaa3495c2323f06c3e3e4f838213d649ef8a86ec778b486a12ecb1",
+    "apps/tezbar/src/windows/termination.rs": "8b2e958b14ea0490f7b444086334f4d5fa296e5eea049ad093b3be94689d9251"
+  },
+  "normal_build": {
+    "version": {
+      "version": "0.3.0-beta.7",
+      "source": "86e9ab733815e0396cc2780cbdec64f3e2040eba",
+      "dirty": "true",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true,
+      "bench_control": false
+    },
+    "sha256": "06110b6512b0e0690a964a7117698fd21df6ba8d44ffec049937199f5f0d6f0d",
+    "normal_build_control_feature": false,
+    "no_webkit_link": true,
+    "tests": {
+      "native": 22,
+      "ui": 30,
+      "failures": 0,
+      "ignored": 0
+    },
+    "bench_control_tests": 23
+  },
+  "test_counts": {
+    "normal_app": 22,
+    "ui": 30,
+    "bench_control_app": 23,
+    "unique_source_tests": 53
+  },
+  "app_model_features": [
+    "launcher-models",
+    "agent-models"
+  ]
+}
