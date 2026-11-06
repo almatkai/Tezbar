@@ -5,6 +5,7 @@ pub struct Preview {
     pub root: PathBuf,
     pub resources: PathBuf,
     pub show: bool,
+    pub allow_desktop_integration: bool,
     pub theme: String,
     #[cfg(feature = "bench-control")]
     pub control_token: Option<String>,
@@ -37,6 +38,7 @@ impl Preview {
         let mut root = None;
         let mut resources = None;
         let mut show = false;
+        let mut allow_desktop_integration = false;
         let mut theme = "system".to_string();
         #[cfg(feature = "bench-control")]
         let mut token_file = None;
@@ -64,6 +66,7 @@ impl Preview {
                     }
                 }
                 "--show" => show = true,
+                "--allow-desktop-integration" => allow_desktop_integration = true,
                 _ => anyhow::bail!("unknown preview argument: {}", args[i]),
             }
             i += 1;
@@ -72,14 +75,13 @@ impl Preview {
             ["system", "light", "white", "dark"].contains(&theme.as_str()),
             "theme must be system, light or dark"
         );
-        let preview = Self::open(
+        let mut preview = Self::open(
             &root.ok_or_else(|| anyhow::anyhow!("--profile required"))?,
             &resources.ok_or_else(|| anyhow::anyhow!("--resources required"))?,
             show,
             theme,
         )?;
-        #[cfg(feature = "bench-control")]
-        let mut preview = preview;
+        preview.allow_desktop_integration = allow_desktop_integration;
         #[cfg(feature = "bench-control")]
         if let Some(path) = token_file {
             let path = real(&path)?;
@@ -127,6 +129,7 @@ impl Preview {
             root,
             resources,
             show,
+            allow_desktop_integration: false,
             theme,
             #[cfg(feature = "bench-control")]
             control_token: None,
@@ -168,6 +171,19 @@ mod tests {
         let paths = p.core_paths();
         assert!(paths.home_dir.starts_with(&p.root));
         assert_eq!(paths.resource_dir, p.resources);
+    }
+    #[::core::prelude::v1::test]
+    fn desktop_integration_requires_explicit_opt_in() {
+        let (p, r) = fixture();
+        let mut args = vec![
+            "--profile".into(),
+            p.path().display().to_string(),
+            "--resources".into(),
+            r.path().display().to_string(),
+        ];
+        assert!(!Preview::parse(&args).unwrap().allow_desktop_integration);
+        args.push("--allow-desktop-integration".into());
+        assert!(Preview::parse(&args).unwrap().allow_desktop_integration);
     }
     #[cfg(unix)]
     #[::core::prelude::v1::test]

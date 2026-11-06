@@ -56,10 +56,13 @@ struct Owner {
     relay: Relay,
     startup: Option<Task<()>>,
     show_on_ready: bool,
+    save_error: Option<String>,
     tasks: Vec<Task<()>>,
     idle: Option<Task<()>>,
     blur: Option<Task<()>>,
     snap_timer: Option<Task<()>>,
+    drag_task: Option<Task<()>>,
+    settings_close_timer: Option<Task<()>>,
     positions: placement::PendingWindowPositions,
     layouts: BTreeMap<String, Profile>,
     monitor: String,
@@ -70,19 +73,20 @@ struct Owner {
 }
 impl Owner {
     fn start_core(&mut self, cx: &mut Context<Self>) {
-        if self.lifecycle.quitting {
+        if self.lifecycle.quitting || self.startup.as_ref().is_some_and(|task| !task.is_ready()) {
             return;
         }
         let core = self.core.clone();
         self.startup = Some(cx.spawn(async move |this, cx| {
             let ready = gpui_tokio::Tokio::spawn(cx, async move { core.start().await }).await;
             let _ = this.update(cx, |owner, cx| {
+                let save_error = owner.save_error.clone();
                 let _ = owner.launcher.update(cx, |view, _, cx| {
                     view.ready = matches!(ready, Ok(Ok(())));
                     view.error = match ready {
                         Ok(Err(e)) => Some(e),
                         Err(e) => Some(e.to_string()),
-                        _ => None,
+                        _ => save_error,
                     };
                     cx.notify();
                 });
@@ -90,13 +94,13 @@ impl Owner {
                     owner.show(cx);
                 }
                 let _ = owner.launcher.update(cx, |view, _, cx| {
-                    let query = view.input.read(cx).content.to_string();
-                    view.query(query, cx);
+                    view.core_ready(cx);
                 });
             });
         }));
     }
     fn restore(&mut self, cx: &mut Context<Self>) {
+        cx.set_reduce_motion(native::reduce_motion());
         if self.lifecycle.quitting {
             return;
         }
@@ -191,23 +195,17 @@ impl Owner {
         }
     }
     fn snapshot(&mut self, cx: &mut Context<Self>) {
-        if !self.lifecycle.placed || self.monitor.is_empty() {
+        if !self.lifecycle.placed {
             return;
         }
-        if let Ok((p, profile)) = self.launcher.update(cx, |v, w, _| {
+        if let Ok(Some((monitor, p, profile))) = self.launcher.update(cx, |v, w, cx| {
+            let display = w.display(cx)?;
+            let monitor = native::monitor_key(display.as_ref());
+            let scale = native::display_scale(display.as_ref());
             let b = w.bounds();
-            (
-                PersistedWindowPosition {
-                    x: f64::from(b.left()) * f64::from(w.scale_factor()),
-                    y: f64::from(b.top()) * f64::from(w.scale_factor()),
-                },
-                Profile {
-                    width: f64::from(b.size.width),
-                    height: f64::from(b.size.height),
-                    zoom: v.zoom as f64,
-                },
-            )
+            Some(windows::persistence::capture(monitor, scale, b, v.zoom))
         }) {
+            self.monitor = monitor;
             self.positions.remember(self.monitor.clone(), p);
             self.layouts.insert(self.monitor.clone(), profile);
         }
@@ -255,6 +253,7 @@ impl Owner {
         }
     }
     fn settings(&mut self, cx: &mut Context<Self>) {
+        self.lifecycle.settings = true; // window-only hide, before AppKit/foreground handoff
         self.hide(cx);
         if let Some(settings) = self.settings {
             let _ = settings.update(cx, |_, w, cx| {
@@ -295,6 +294,8 @@ impl Owner {
                 });
             }
             Err(e) => {
+                self.lifecycle.settings = false;
+                self.show(cx);
                 let _ = self.log.write(e.to_string().as_bytes());
             }
         }
@@ -303,13 +304,20 @@ impl Owner {
         if !self.lifecycle.begin_quit() {
             return;
         }
+        self.save_error = None;
         self.snapshot(cx);
         self.flush();
         let settings_drain = self
             .settings
             .map(|window| window.update(cx, |view, _, _| view.drain_writes()));
+        let launcher_writes = self
+            .launcher
+            .update(cx, |view, _, _| view.drain_state())
+            .unwrap_or_default();
         let drain = self.writer.drain();
-        self.tasks.clear();
+        self.end_snap(cx);
+        // Keep dialog, command and Settings fallback owners live if durable saves cancel quit.
+        self.relay.enable_core(true);
         self.startup = None;
         self.idle = None;
         self.blur = None;
@@ -319,12 +327,31 @@ impl Owner {
         self.tasks.push(cx.spawn(async move |this, cx| {
             #[cfg(feature = "bench-control")]
             gate.wait().await;
+            for write in launcher_writes {
+                write.await;
+            }
+            let launcher_error = this
+                .update(cx, |owner, cx| {
+                    owner
+                        .launcher
+                        .update(cx, |view, _, _| view.state_write_error())
+                })
+                .map_err(|e| e.to_string())
+                .and_then(|v| v.map_err(|e| e.to_string()))
+                .and_then(|error| error.map_or(Ok(()), Err));
             let prepared = gpui_tokio::Tokio::spawn(cx, async move {
+                launcher_error.map_err(|e| format!("Launcher state: {e}"))?;
                 if let Some(settings_drain) = settings_drain {
-                    settings_drain.map_err(|e| e.to_string())?.await?;
+                    settings_drain
+                        .map_err(|e| format!("Settings window: {e}"))?
+                        .await
+                        .map_err(|e| format!("Settings: {e}"))?;
                 }
                 if let Some(drain) = drain {
-                    drain.await.map_err(|e| e.to_string())?
+                    drain
+                        .await
+                        .map_err(|e| format!("Window layout: {e}"))?
+                        .map_err(|e| format!("Window layout: {e}"))
                 } else {
                     Ok(())
                 }
@@ -333,14 +360,39 @@ impl Owner {
             let core = this.update(cx, |this, cx| {
                 if !matches!(prepared, Ok(Ok(()))) {
                     this.lifecycle.quitting = false;
+                    this.save_error = Some(format!(
+                        "Could not save changes; quit cancelled: {prepared:?}"
+                    ));
                     this.writer = windows::persistence::Writer::new(
                         this.core.0.ctx.config.clone(),
                         this.preview.root.join("config/launcher-layouts-v1.json"),
                     );
-                    let _=this.log.write(format!("Could not drain Settings/window layout; quit cancelled: {prepared:?}\n").as_bytes());
-                    if let Some(settings)=this.settings{let _=settings.update(cx,|view,_,cx|{view.error=Some("Couldn't save Settings. Retry the edit, or retry saved changes from a previous tab.".into());cx.notify();});}
+                    this.positions.dirty = true;
+                    this.flush();
+                    let _ = this.log.write(
+                        format!(
+                            "Could not drain Settings/window layout; quit cancelled: {prepared:?}\n"
+                        )
+                        .as_bytes(),
+                    );
+                    this.settings(cx); // Keep the durable-save error visible independently of launcher queries.
+                    if let Some(settings) = this.settings {
+                        let _ = settings.update(cx, |view, _, cx| {
+                            view.error = Some(format!(
+                                "Couldn't save changes; quit cancelled. Retry: {prepared:?}"
+                            ));
+                            cx.notify();
+                        });
+                    }
+                    let _ = this.launcher.update(cx, |view, _, cx| {
+                        view.error = Some(format!(
+                            "Could not save changes; quit cancelled: {prepared:?}"
+                        ));
+                        cx.notify();
+                    });
                     windows::termination::complete(false);
                     this.restore(cx);
+                    this.start_core(cx); // Reattach the UI waiter after a cancelled quit.
                     return None;
                 }
                 this.events.dispose();
@@ -352,7 +404,9 @@ impl Owner {
                     instance.begin_shutdown();
                 }
                 if let Some(tray) = this.tray.take() {
-                    let _ = this.host.desktop.unregister(&tray.shortcut);
+                    if let Some(shortcut) = &tray.shortcut {
+                        let _ = this.host.desktop.unregister(shortcut);
+                    }
                 }
                 Some(this.core.clone())
             });
@@ -362,17 +416,14 @@ impl Owner {
             let result = gpui_tokio::Tokio::spawn(cx, async move { core.shutdown().await }).await;
             let _ = this.update(cx, |this, cx| {
                 if !matches!(result, Ok(Ok(()))) {
-                    let error = format!("Quit deferred: {result:?}");
-                    let _ = this.log.write(error.as_bytes());
-                    this.lifecycle.quitting = false;
-                    let _ = this.launcher.update(cx, |view, _, cx| {
-                        view.error = Some(error);
-                        cx.notify();
-                    });
-                    windows::termination::complete(false);
-                    return;
+                    let _ = this.log.write(
+                        format!("Shutdown bound/failure; proceeding to exit: {result:?}\n")
+                            .as_bytes(),
+                    );
                 }
                 this.relay.close();
+                #[cfg(feature = "bench-control")]
+                this._control.take(); // AppKit may exit without dropping GPUI entities.
                 this.instance.take();
                 if !windows::termination::complete(true) {
                     cx.quit();
@@ -408,10 +459,7 @@ impl Owner {
                 cx.hide();
             }
             SurfaceOp::Quit => self.quit(cx),
-            SurfaceOp::SnapDragStart => {
-                self.snap.begin();
-                let _ = self.launcher.update(cx, |_, w, _| w.start_window_move());
-            }
+            SurfaceOp::SnapDragStart => self.begin_snap(cx),
             SurfaceOp::SnapDragEnd => self.end_snap(cx),
             SurfaceOp::PressKey { key, modifiers } => {
                 // This is the intentional native input effect, not a core request. Return its
@@ -431,7 +479,7 @@ impl Owner {
     ) -> Result<serde_json::Value, String> {
         match request["op"].as_str().unwrap_or("") {
             "status" => Ok(
-                serde_json::json!({"visible":self.lifecycle.visible,"settings":self.lifecycle.settings,"quitting":self.lifecycle.quitting,"pid":std::process::id()}),
+                serde_json::json!({"visible":self.lifecycle.visible,"settings":self.lifecycle.settings,"quitting":self.lifecycle.quitting,"pid":std::process::id(),"suppression":self.lifecycle.suppress,"tray":self.tray.is_some(),"error":self.launcher.update(cx,|view,_,_| view.error.clone()).ok().flatten()}),
             ),
             "show" => {
                 self.show(cx);
@@ -464,6 +512,10 @@ impl Owner {
                 self.quit(cx);
                 Ok(serde_json::Value::Null)
             }
+            "hold-core-stop" => {
+                self.core.hold_shutdown_for_fixture();
+                Ok(serde_json::Value::Null)
+            }
             "hold-shutdown" => {
                 self.shutdown_gate.hold();
                 Ok(serde_json::Value::Null)
@@ -487,13 +539,14 @@ impl Owner {
             );
             let _ = settings.update(cx, |view, _, cx| view.begin_close(g, cx));
             let relay = self.relay.clone();
-            self.tasks.push(cx.spawn(async move |_, cx| {
+            self.settings_close_timer = Some(cx.spawn(async move |_, cx| {
                 cx.background_executor().timer(Duration::from_secs(3)).await;
                 let _ = relay.send(Event::SettingsClose(g));
             }));
         }
     }
     fn finish_settings_close(&mut self, cx: &mut Context<Self>) {
+        self.settings_close_timer = None;
         if let Some(settings) = self.settings.take() {
             let _ = settings.update(cx, |_, w, _| w.remove_window());
         }
@@ -525,6 +578,7 @@ impl Owner {
         self.panel = cx
             .open_window(
                 WindowOptions {
+                    window_background: WindowBackgroundAppearance::Transparent,
                     kind: WindowKind::Floating,
                     titlebar: None,
                     focus: false,
@@ -532,6 +586,7 @@ impl Owner {
                     ..Default::default()
                 },
                 move |w, cx| {
+                    let _ = native::no_shadow(w);
                     if let Ok(parent) = parent {
                         let _ = native::attach(w, parent);
                     }
@@ -584,7 +639,7 @@ impl Owner {
             timer,
             Instant::now(),
         ) {
-            if locked.x || locked.y {
+            if (locked.x || locked.y) && (cfg!(windows) || !native::left_button_down()) {
                 let _ = self.launcher.update(cx, |_, w, _| {
                     native::place(
                         w,
@@ -608,7 +663,7 @@ impl Owner {
                             show: false,
                             is_resizable: false,
                             window_background: WindowBackgroundAppearance::Transparent,
-                            window_bounds: Some(WindowBounds::Windowed(monitor)),
+                            window_bounds: Some(WindowBounds::Windowed(display.visible_bounds())),
                             ..Default::default()
                         },
                         |w, cx| {
@@ -622,7 +677,7 @@ impl Owner {
                 let _ = overlay.update(cx, |view, w, cx| {
                     view.x = locked.x;
                     view.y = locked.y;
-                    let _ = native::place_scaled(w, monitor, scale);
+                    let _ = native::place_scaled(w, display.visible_bounds(), scale);
                     let _ = native::visible(w, locked.x || locked.y);
                     cx.notify();
                 });
@@ -639,7 +694,79 @@ impl Owner {
             }
         }
     }
+    fn begin_snap(&mut self, cx: &mut Context<Self>) {
+        self.end_snap(cx);
+        if self.lifecycle.quitting {
+            return;
+        }
+        let generation = self.snap.begin();
+        self.lifecycle.suppress(true);
+        let initial = self
+            .launcher
+            .update(cx, |_, w, _| (w.bounds(), w.scale_factor() as f64))
+            .ok();
+        let origin = tezbar_host::monitors::cursor_point();
+        self.drag_task = Some(cx.spawn(async move |owner, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(16))
+                    .await;
+                let active = owner
+                    .update(cx, |owner, cx| {
+                        if !owner.snap.active || owner.snap.generation != generation {
+                            return false;
+                        }
+                        if !native::left_button_down() {
+                            owner.end_snap(cx);
+                            return false;
+                        }
+                        #[cfg(windows)]
+                        if let (Some((initial, initial_scale)), Some((ox, oy)), Some((x, y))) =
+                            (initial, origin, tezbar_host::monitors::cursor_point())
+                        {
+                            let _ =
+                                owner.launcher.update(cx, |_, w, _| {
+                                    let scale = w.scale_factor() as f64;
+                                    native::place(
+                                        w,
+                                        Bounds::new(
+                                            point(
+                                                px(((f64::from(initial.left()) * initial_scale + x
+                                                    - ox)
+                                                    / scale)
+                                                    as f32),
+                                                px(((f64::from(initial.top()) * initial_scale + y
+                                                    - oy)
+                                                    / scale)
+                                                    as f32),
+                                            ),
+                                            initial.size,
+                                        ),
+                                    )
+                                });
+                        }
+                        #[cfg(not(windows))]
+                        let _ = (initial, origin);
+                        owner.snap_update(None, cx);
+                        true
+                    })
+                    .unwrap_or(false);
+                if !active {
+                    break;
+                }
+            }
+        }));
+        #[cfg(target_os = "macos")]
+        let _ = self.launcher.update(cx, |_, w, _| w.start_window_move());
+    }
     fn end_snap(&mut self, cx: &mut Context<Self>) {
+        if self.snap.active {
+            if !native::left_button_down() {
+                self.snap_update(None, cx);
+            }
+            self.lifecycle.suppress(false);
+        }
+        self.drag_task = None;
         self.snap_timer = None;
         self.snap.end();
         if let Some(overlay) = self.overlay.take() {
@@ -650,6 +777,41 @@ impl Owner {
     fn event(&mut self, event: Event, cx: &mut Context<Self>) {
         self.tasks.retain(|task| !task.is_ready());
         match event {
+            Event::Navigate(intent) => {
+                use crate::surfaces::command_bar::navigation::NavigationInbox;
+                if !cx.has_global::<NavigationInbox>() {
+                    cx.set_global(NavigationInbox::default());
+                }
+                cx.global_mut::<NavigationInbox>().put(intent.clone());
+                let settings = matches!(
+                    intent.surface,
+                    tezbar_ui_model::router::Surface::Settings(_)
+                );
+                let _ = self
+                    .launcher
+                    .update(cx, |view, _, cx| view.receive_navigation(intent, cx));
+                if settings {
+                    self.settings(cx);
+                }
+            }
+            Event::Reveal(path) => {
+                cx.reveal_path(std::path::Path::new(&path));
+            }
+            Event::Update(action) => {
+                use crate::surfaces::command_bar::navigation::{
+                    Navigation, NavigationInbox, Payload,
+                };
+                if !cx.has_global::<NavigationInbox>() {
+                    cx.set_global(NavigationInbox::default());
+                }
+                // M11 installs the production updater executor. Preview retains explicit intent and
+                // never contacts the live feed, stages an installer, or replaces an installed app.
+                cx.global_mut::<NavigationInbox>().put(Navigation {
+                    nonce: 0,
+                    surface: tezbar_ui_model::router::Surface::Settings("general".into()),
+                    payload: Payload::Update(action),
+                });
+            }
             #[cfg(feature = "bench-control")]
             Event::Control(request, reply) => {
                 let result = self.control(request, cx);
@@ -721,10 +883,7 @@ impl Owner {
                 self.follow_panel(cx);
                 self.snap_update(None, cx);
             }
-            Event::SnapBegin => {
-                self.snap.begin();
-                let _ = self.launcher.update(cx, |_, w, _| w.start_window_move());
-            }
+            Event::SnapBegin => self.begin_snap(cx),
             Event::SnapEnd => self.end_snap(cx),
             Event::SnapDwell(g) => self.snap_update(Some(g), cx),
             Event::Surface(op, reply) => {
@@ -742,7 +901,11 @@ impl Owner {
                 }
             },
             Event::Hotkey(id) => {
-                if self.tray.as_ref().is_some_and(|t| t.shortcut.id() == id) {
+                if self.tray.as_ref().is_some_and(|t| {
+                    t.shortcut
+                        .as_ref()
+                        .is_some_and(|shortcut| shortcut.id() == id)
+                }) {
                     if self.lifecycle.visible {
                         self.hide(cx)
                     } else {
@@ -752,7 +915,10 @@ impl Owner {
                     let core = self.core.clone();
                     self.tasks.push(cx.spawn(async move |_, cx| {
                         let _ = gpui_tokio::Tokio::spawn(cx, async move {
-                            core.0.execute_command_shortcut(&command).await
+                            tokio::spawn(
+                                async move { core.0.execute_command_shortcut(&command).await },
+                            )
+                            .await
                         })
                         .await;
                     }));
@@ -884,6 +1050,8 @@ impl Owner {
                 reply,
             } => {
                 if reply.is_closed() {
+                    self.lifecycle.suppress(true);
+                    let _ = self.relay.send(Event::DialogClosed);
                     return;
                 }
                 self.lifecycle.suppress(true);
@@ -923,17 +1091,40 @@ impl Owner {
             }
             Event::Dialog(req, reply) => {
                 if reply.is_closed() {
+                    self.lifecycle.suppress(true);
+                    let _ = self.relay.send(Event::DialogClosed);
                     return;
                 }
                 self.lifecycle.suppress(true);
                 let lease = events::DialogLease(self.relay.clone());
                 match req {
                     DialogRequest::Confirm(value) => {
-                        let message = value["title"].as_str().unwrap_or("Confirm").to_string();
-                        let detail = value["detail"]
-                            .as_str()
-                            .or_else(|| value["message"].as_str())
-                            .map(str::to_owned);
+                        let title = value["title"].as_str().unwrap_or("Confirm");
+                        let message = value["message"].as_str().unwrap_or(title);
+                        let body = value["detail"].as_str().unwrap_or("");
+                        let detail = if message != title {
+                            Some(format!(
+                                "{message}{}",
+                                if body.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!("\n\n{body}")
+                                }
+                            ))
+                        } else {
+                            (!body.is_empty()).then(|| body.to_owned())
+                        };
+                        let message = title.to_owned();
+                        let level = match value["type"].as_str() {
+                            Some("warning") => PromptLevel::Warning,
+                            Some("error") => PromptLevel::Critical,
+                            _ => PromptLevel::Info,
+                        };
+                        if self.settings.is_some() {
+                            self.restore(cx);
+                        } else {
+                            self.show(cx);
+                        }
                         let buttons = value["buttons"]
                             .as_array()
                             .map(|v| {
@@ -945,15 +1136,15 @@ impl Owner {
                             .unwrap_or_else(|| vec!["Cancel".into(), "Confirm".into()]);
                         let affirmative = buttons.len() - 1;
                         let answers = buttons.iter().map(String::as_str).collect::<Vec<_>>();
-                        let prompt = self.launcher.update(cx, |_, w, cx| {
-                            w.prompt(
-                                PromptLevel::Warning,
-                                &message,
-                                detail.as_deref(),
-                                &answers,
-                                cx,
-                            )
-                        });
+                        let prompt = if let Some(settings) = self.settings {
+                            settings.update(cx, |_, w, cx| {
+                                w.prompt(level, &message, detail.as_deref(), &answers, cx)
+                            })
+                        } else {
+                            self.launcher.update(cx, |_, w, cx| {
+                                w.prompt(level, &message, detail.as_deref(), &answers, cx)
+                            })
+                        };
                         self.tasks.push(cx.spawn(async move |_, _| {
                             let _lease = lease;
                             let result = match prompt {
@@ -984,7 +1175,12 @@ impl Owner {
                     }
                 }
             }
-            Event::DialogClosed => self.lifecycle.suppress(false),
+            Event::DialogClosed => {
+                self.lifecycle.suppress(false);
+                if !self.lifecycle.quitting {
+                    self.restore(cx);
+                }
+            }
             Event::SettingsAck(g) => {
                 self.settings_close.acknowledge(g);
             }
@@ -1013,6 +1209,7 @@ use tezbar_core::host::Host;
 pub fn run(preview: Preview) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
+        .max_blocking_threads(16)
         .enable_all()
         .build()?;
     let handle = runtime.handle().clone();
@@ -1046,6 +1243,7 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
     });
     application.run(move |cx| {
         gpui_tokio::init_from_handle(cx, handle);
+        cx.set_reduce_motion(native::reduce_motion());
         cx.set_global(RuntimeOwner(Some(runtime)));
         cx.set_window_appearance(match preview.theme.as_str() {
             "light" | "white" => Some(WindowAppearance::Light),
@@ -1058,26 +1256,17 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
         tezbar_ui::markdown::bind_keys(cx);
         events::install_native_handlers(&relay);
         windows::termination::install(&relay).expect("native termination adapter");
-        cx.bind_keys([
-            KeyBinding::new(
-                if cfg!(target_os = "macos") {
-                    "cmd-q"
-                } else {
-                    "alt-f4"
-                },
-                RequestQuit,
-                None,
-            ),
-            KeyBinding::new(
-                if cfg!(target_os = "macos") {
-                    "cmd-,"
-                } else {
-                    "ctrl-,"
-                },
-                OpenSettings,
-                None,
-            ),
-        ]);
+        #[cfg(target_os = "macos")]
+        cx.bind_keys([KeyBinding::new("cmd-q", RequestQuit, None)]);
+        cx.bind_keys([KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-,"
+            } else {
+                "ctrl-,"
+            },
+            OpenSettings,
+            None,
+        )]);
         let quit_relay = relay.clone();
         cx.on_action(move |_: &RequestQuit, _| {
             let _ = quit_relay.send(Event::Quit);
@@ -1138,7 +1327,10 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
         }]);
         let events = events::CoreEvents::new(relay.clone());
         cx.set_global(events.clone());
-        let host = Arc::new(GpuiHost::new(relay.clone()));
+        let host = Arc::new(GpuiHost::with_desktop_integration(
+            relay.clone(),
+            preview.allow_desktop_integration,
+        ));
         let context = CoreContext::new(preview.core_paths(), Some(host.clone()))
             .with_dev_mode(true)
             .with_legacy_data_dir(None);
@@ -1158,7 +1350,11 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
                         cx,
                     ))),
                     window_min_size: Some(size(px(480.), px(360.))),
-                    window_background: WindowBackgroundAppearance::Transparent,
+                    window_background: if cfg!(target_os = "macos") {
+                        WindowBackgroundAppearance::Blurred
+                    } else {
+                        WindowBackgroundAppearance::Transparent
+                    },
                     app_id: Some("com.tezbar.preview.native".into()),
                     ..Default::default()
                 },
@@ -1172,11 +1368,15 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
                 },
             )
             .expect("launcher window");
-        let tray = PrimaryTray::new(&host.desktop, &preview.resources)
+        let tray = preview
+            .allow_desktop_integration
+            .then(|| PrimaryTray::new(&host.desktop, &preview.resources))
+            .transpose()
             .map_err(|e| {
                 let _ = log.write(e.as_bytes());
             })
-            .ok();
+            .ok()
+            .flatten();
         let config = core.0.ctx.config.read().unwrap_or_default();
         let layouts = std::fs::read_to_string(preview.root.join("config/launcher-layouts-v1.json"))
             .ok()
@@ -1216,9 +1416,12 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
             tasks: vec![],
             startup: None,
             show_on_ready: show,
+            save_error: None,
             idle: None,
             blur: None,
             snap_timer: None,
+            drag_task: None,
+            settings_close_timer: None,
             positions: Default::default(),
             layouts,
             monitor: String::new(),

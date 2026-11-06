@@ -19,6 +19,11 @@ pub fn button(
     div()
         .id(id)
         .role(Role::Button)
+        .a11y_synthetic_children(move |b| {
+            if disabled {
+                b.parent_node().set_disabled();
+            }
+        })
         .aria_label(label.clone())
         .tab_index(0)
         .px(px(10. * t.zoom))

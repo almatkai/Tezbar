@@ -61,6 +61,18 @@ Its direct libraries contain no WebKit. Receipt:
 replace the explicitly dirty/intermediate lifecycle fixture evidence. Fresh Opus
 review and visual, accessibility, OS IME and Windows GUI acceptance remain open.
 
+M4's 23 review repairs and the current M5 integration seams are implemented;
+see [repair dispositions](native-m04/foundation-review-repair-evidence.md) and
+[parent verification](native-m04/parent-repair-check.md). The parent checked
+25 source hashes, 14 proof artifacts and 35 regression filters, then reran all
+57 app / 37 UI bench-control tests with two test threads and identical 35-file
+source snapshots before/after: zero failures or ignores. The separate earlier
+failed M5 run overlapped a negative-test source mutation and remains preserved.
+All three repair lifecycle fixtures passed and cleaned up. Fresh Opus closure
+and all manual platform gates remain pending. M5 still has explicit functional
+and visual gaps; its current code is an integration checkpoint, not accepted
+full command-bar parity.
+
 Exact-source Windows M2/M3 validation of `86e9ab7` verified all 1,800 source hashes
 but exhausted disk during compilation: no tests ran. The [Windows report](native-m03/windows-86e9ab7.md)
 retains every failure and all artifacts. A later read-only parent inventory at

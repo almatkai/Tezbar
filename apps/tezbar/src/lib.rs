@@ -7,3 +7,5 @@ pub mod windows;
 
 #[cfg(feature = "bench-control")]
 pub mod bench_control;
+
+pub mod surfaces;

@@ -3,6 +3,7 @@ use gpui::{prelude::*, *};
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use std::{ops::Range, sync::OnceLock};
 use syntect::{easy::HighlightLines, highlighting::ThemeSet, parsing::SyntaxSet};
+use unicode_segmentation::UnicodeSegmentation;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     Paragraph,
@@ -13,6 +14,7 @@ pub enum Kind {
     Quote,
     Rule,
     Details,
+    Footnote(String),
 }
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Span {
@@ -70,7 +72,15 @@ impl Document {
         if self.revision == Some(revision) && self.settled == settled {
             return false;
         }
-        if self.source != source {
+        if settled && (!self.settled || self.source != source) {
+            self.blocks = parse(source);
+            self.prefix = self.blocks.clone();
+            self.prefix_len = source.len();
+            self.parsed_bytes += source.len();
+            self.parses += 1;
+            self.source = source.into();
+            self.highlighted.clear();
+        } else if self.source != source {
             if !source.starts_with(self.source.get(..self.prefix_len).unwrap_or("")) {
                 self.prefix_len = 0;
                 self.prefix.clear();
@@ -103,6 +113,7 @@ impl Document {
         true
     }
     /// Explicitly invoked for visible, settled code blocks. Grammars and themes are never loaded at app boot.
+    #[cfg(test)]
     pub fn highlight(&mut self, index: usize) {
         if !self.settled || self.highlighted.iter().any(|(i, _)| *i == index) {
             return;
@@ -117,32 +128,7 @@ impl Document {
         if text.len() > 12000 {
             return;
         }
-        static SYNTAX: OnceLock<SyntaxSet> = OnceLock::new();
-        static THEMES: OnceLock<ThemeSet> = OnceLock::new();
-        let set = SYNTAX.get_or_init(SyntaxSet::load_defaults_newlines);
-        let themes = THEMES.get_or_init(ThemeSet::load_defaults);
-        let syntax = set
-            .find_syntax_by_token(language)
-            .unwrap_or_else(|| set.find_syntax_plain_text());
-        let theme = &themes.themes["base16-ocean.dark"];
-        let mut h = HighlightLines::new(syntax, theme);
-        let mut at = 0;
-        let mut spans = vec![];
-        for line in text.split_inclusive('\n') {
-            if let Ok(parts) = h.highlight_line(line, set) {
-                for (style, text) in parts {
-                    let end = at + text.len();
-                    spans.push((
-                        at..end,
-                        rgb((style.foreground.r as u32) << 16
-                            | (style.foreground.g as u32) << 8
-                            | style.foreground.b as u32)
-                        .into(),
-                    ));
-                    at = end;
-                }
-            }
-        }
+        let spans = syntax_spans(language.clone(), text, false);
         self.highlighted.push((index, spans));
     }
     pub fn selected_text(&self, range: Range<usize>) -> String {
@@ -160,6 +146,39 @@ impl Document {
             String::new()
         }
     }
+}
+fn syntax_spans(language: String, text: String, light: bool) -> Vec<(Range<usize>, Hsla)> {
+    static SYNTAX: OnceLock<SyntaxSet> = OnceLock::new();
+    static THEMES: OnceLock<ThemeSet> = OnceLock::new();
+    let set = SYNTAX.get_or_init(SyntaxSet::load_defaults_newlines);
+    let themes = THEMES.get_or_init(ThemeSet::load_defaults);
+    let syntax = set
+        .find_syntax_by_token(&language)
+        .unwrap_or_else(|| set.find_syntax_plain_text());
+    let theme = &themes.themes[if light {
+        "InspiredGitHub"
+    } else {
+        "base16-ocean.dark"
+    }];
+    let mut h = HighlightLines::new(syntax, theme);
+    let mut at = 0;
+    let mut spans = vec![];
+    for line in text.split_inclusive('\n') {
+        if let Ok(parts) = h.highlight_line(line, set) {
+            for (style, text) in parts {
+                let end = at + text.len();
+                spans.push((
+                    at..end,
+                    rgb((style.foreground.r as u32) << 16
+                        | (style.foreground.g as u32) << 8
+                        | style.foreground.b as u32)
+                    .into(),
+                ));
+                at = end;
+            }
+        }
+    }
+    spans
 }
 pub(crate) fn append_span(target: &mut Vec<Span>, span: Span) {
     if let Some(last) = target.last_mut() {
@@ -238,6 +257,13 @@ fn parse(source: &str) -> Vec<Block> {
     let mut lists: Vec<Option<u64>> = vec![];
     let mut html = crate::markdown_html::Html::default();
     let flush = |blocks: &mut Vec<Block>, current: &mut Block| {
+        if matches!(current.kind, Kind::Details) {
+            current.spans.push(Span {
+                text: "\n".into(),
+                ..Default::default()
+            });
+            return;
+        }
         if !current.spans.is_empty() || !current.images.is_empty() {
             blocks.push(current.clone());
         }
@@ -259,21 +285,27 @@ fn parse(source: &str) -> Vec<Block> {
             Event::Start(tag) => match tag {
                 Tag::Heading { level, .. } => {
                     flush(&mut blocks, &mut current);
-                    current.kind = Kind::Heading(level as u8);
+                    if !matches!(current.kind, Kind::Details) {
+                        current.kind = Kind::Heading(level as u8);
+                    }
                 }
                 Tag::CodeBlock(kind) => {
                     flush(&mut blocks, &mut current);
-                    current.kind = Kind::Code(match kind {
-                        CodeBlockKind::Fenced(s) => s.into_string(),
-                        _ => String::new(),
-                    });
+                    if !matches!(current.kind, Kind::Details) {
+                        current.kind = Kind::Code(match kind {
+                            CodeBlockKind::Fenced(s) => s.into_string(),
+                            _ => String::new(),
+                        });
+                    }
                 }
                 Tag::List(start) => {
                     lists.push(start);
                 }
                 Tag::Item => {
                     flush(&mut blocks, &mut current);
-                    current.kind = Kind::List;
+                    if !matches!(current.kind, Kind::Details) {
+                        current.kind = Kind::List;
+                    }
                     let marker = if let Some(Some(n)) = lists.last_mut() {
                         let marker = format!("{n}. ");
                         *n += 1;
@@ -288,11 +320,23 @@ fn parse(source: &str) -> Vec<Block> {
                 }
                 Tag::Table(_) => {
                     flush(&mut blocks, &mut current);
-                    current.kind = Kind::Table;
+                    if !matches!(current.kind, Kind::Details) {
+                        current.kind = Kind::Table;
+                    }
                 }
                 Tag::BlockQuote(_) => {
                     flush(&mut blocks, &mut current);
-                    current.kind = Kind::Quote;
+                    if !matches!(current.kind, Kind::Details) {
+                        current.kind = Kind::Quote;
+                    }
+                }
+                Tag::FootnoteDefinition(label) => {
+                    flush(&mut blocks, &mut current);
+                    current.kind = Kind::Footnote(label.to_string());
+                    current.spans.push(Span {
+                        text: format!("[{}] ", label),
+                        ..Default::default()
+                    });
                 }
                 Tag::Strong => style.strong = true,
                 Tag::Emphasis => style.emphasis = true,
@@ -359,6 +403,11 @@ fn parse(source: &str) -> Vec<Block> {
                     current.spans.remove(0);
                 }
             }
+            Event::FootnoteReference(label) => current.spans.push(Span {
+                text: format!("[{}]", label),
+                link: Some(format!("#footnote:{label}")),
+                ..Default::default()
+            }),
             Event::Rule => {
                 flush(&mut blocks, &mut current);
                 blocks.push(Block {
@@ -391,6 +440,9 @@ pub struct MarkdownView {
     focus: Option<FocusHandle>,
     requested_images: std::collections::HashSet<String>,
     expanded: std::collections::HashSet<usize>,
+    highlight_task: Option<Task<()>>,
+    highlight_theme: Option<bool>,
+    scroll: ScrollHandle,
 }
 impl gpui::EventEmitter<DocumentEffect> for MarkdownView {}
 impl Default for MarkdownView {
@@ -402,6 +454,9 @@ impl Default for MarkdownView {
             focus: None,
             requested_images: Default::default(),
             expanded: Default::default(),
+            highlight_task: None,
+            highlight_theme: None,
+            scroll: ScrollHandle::new(),
         }
     }
 }
@@ -414,10 +469,82 @@ impl MarkdownView {
         cx: &mut Context<Self>,
     ) {
         if self.document.update(revision, content, settled) {
+            self.highlight_task = None;
             self.selection = None;
             self.anchor = None;
             cx.notify();
         }
+    }
+}
+impl MarkdownView {
+    fn open_link(&mut self, url: String, cx: &mut Context<Self>) {
+        if let Some(label) = url.strip_prefix("#footnote:") {
+            if let Some(index) = self
+                .document
+                .blocks
+                .iter()
+                .position(|b| matches!(&b.kind,Kind::Footnote(id) if id == label))
+            {
+                self.scroll.scroll_to_item(index);
+                cx.notify();
+            }
+        } else {
+            cx.emit(DocumentEffect::OpenLink(url));
+        }
+    }
+    fn highlight_visible(&mut self, index: usize, light: bool, cx: &mut Context<Self>) {
+        if !self.document.settled
+            || self.document.highlighted.iter().any(|(i, _)| *i == index)
+            || self.highlight_task.as_ref().is_some_and(|t| !t.is_ready())
+        {
+            return;
+        }
+        let Some(block) = self.document.blocks.get(index) else {
+            return;
+        };
+        let Kind::Code(language) = &block.kind else {
+            return;
+        };
+        let text = block.text();
+        if text.len() > 12000 {
+            return;
+        }
+        static RUNNING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        if RUNNING
+            .fetch_update(
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+                |n| (n < 2).then_some(n + 1),
+            )
+            .is_err()
+        {
+            return;
+        }
+        struct Admission;
+        impl Drop for Admission {
+            fn drop(&mut self) {
+                RUNNING.fetch_sub(1, std::sync::atomic::Ordering::Release);
+            }
+        }
+        let admission = Admission;
+        let revision = self.document.revision;
+        let language = language.clone();
+        let work = cx.background_executor().spawn(async move {
+            let _admission = admission;
+            syntax_spans(language, text, light)
+        });
+        self.highlight_task = Some(cx.spawn(async move |view, cx| {
+            let spans = work.await;
+            let _ = view.update(cx, |view, cx| {
+                if view.document.revision == revision && view.highlight_theme == Some(light) {
+                    if view.document.highlighted.len() >= 32 {
+                        view.document.highlighted.remove(0);
+                    }
+                    view.document.highlighted.push((index, spans));
+                    cx.notify();
+                }
+            });
+        }));
     }
 }
 impl Render for MarkdownView {
@@ -426,15 +553,11 @@ impl Render for MarkdownView {
         let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
         let mut children = vec![];
         let mut base = 0;
-        let code_indices = self
-            .document
-            .blocks
-            .iter()
-            .enumerate()
-            .filter_map(|(i, b)| matches!(b.kind, Kind::Code(_)).then_some(i))
-            .collect::<Vec<_>>();
-        for i in code_indices {
-            self.document.highlight(i);
+        let light = t.light;
+        if self.highlight_theme != Some(light) {
+            self.highlight_theme = Some(light);
+            self.highlight_task = None;
+            self.document.highlighted.clear();
         }
         for (index, block) in self.document.blocks.iter().enumerate() {
             let text = block.text();
@@ -481,18 +604,22 @@ impl Render for MarkdownView {
                 .id(index)
                 .flex()
                 .flex_col()
-                .gap(px(4.))
-                .py(px(4.))
-                .text_size(px(match block.kind {
-                    Kind::Heading(1) => 22.,
-                    Kind::Heading(2) => 18.,
-                    Kind::Heading(_) => 15.,
-                    _ => 13.,
-                }));
+                .gap(px(4. * t.zoom))
+                .py(px(4. * t.zoom))
+                .text_size(px(t.zoom
+                    * match block.kind {
+                        Kind::Heading(1) => 22.,
+                        Kind::Heading(2) => 18.,
+                        Kind::Heading(_) => 15.,
+                        _ => 13.,
+                    }));
+            if matches!(block.kind, Kind::List) {
+                row = row.role(Role::List);
+            }
             if let Some(checked) = block.checked {
                 row = row.child(crate::controls::checkbox(
                     ("task", index),
-                    "Task",
+                    text.clone(),
                     checked,
                     t,
                 ));
@@ -502,11 +629,11 @@ impl Render for MarkdownView {
                 row = row
                     .font_family(crate::tokens::font_family(cx, true))
                     .bg(t.field)
-                    .p(px(8.))
+                    .p(px(8. * t.zoom))
                     .child(
                         div()
                             .flex()
-                            .gap(px(8.))
+                            .gap(px(8. * t.zoom))
                             .child(div().text_color(t.text3).child(language.clone()))
                             .child(
                                 crate::controls::button(
@@ -590,7 +717,7 @@ impl Render for MarkdownView {
                                 .iter()
                                 .find(|(range, _, _)| range.contains(&index))
                             {
-                                cx.emit(DocumentEffect::OpenLink(url.clone()));
+                                this.open_link(url.clone(), cx);
                             }
                         }
                     }),
@@ -607,6 +734,8 @@ impl Render for MarkdownView {
                 links,
                 selection: selected,
                 owner: cx.entity(),
+                code_index: matches!(block.kind, Kind::Code(_)).then_some(index),
+                light,
             });
             for (i, (url, alt)) in block.images.iter().enumerate() {
                 if self.requested_images.len() < 128 && self.requested_images.insert(url.clone()) {
@@ -626,12 +755,16 @@ impl Render for MarkdownView {
         div()
             .id("document")
             .role(Role::Document)
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll)
             .track_focus(&focus)
             .key_context("MarkdownDocument")
             .size_full()
             .flex()
             .flex_col()
             .text_color(t.text1)
+            .text_size(px(13. * t.zoom))
+            .line_height(relative(1.5))
             .on_action(cx.listener(|this, _: &crate::text_input::Copy, _, cx| {
                 if let Some(range) = &this.selection {
                     cx.emit(DocumentEffect::Copy(
@@ -726,6 +859,8 @@ struct RichBlock {
     links: Vec<(Range<usize>, String, String)>,
     selection: Option<Range<usize>>,
     owner: Entity<MarkdownView>,
+    code_index: Option<usize>,
+    light: bool,
 }
 impl IntoElement for RichBlock {
     type Element = Self;
@@ -777,20 +912,51 @@ impl Element for RichBlock {
         actions: &mut Self::PrepaintState,
         b: &mut A11ySubtreeBuilder,
     ) {
+        if self.role == Role::Table {
+            let mut rows = vec![];
+            let mut column_count = 0;
+            for (r, line) in self.text.lines().enumerate() {
+                let mut cells = vec![];
+                for (c, text) in line.trim_end_matches('\t').split('\t').enumerate() {
+                    let id = b.synthetic_node_id(("cell", r, c));
+                    let mut cell = accesskit::Node::new(if r == 0 {
+                        Role::ColumnHeader
+                    } else {
+                        Role::Cell
+                    });
+                    cell.set_label(text.to_owned());
+                    cell.set_row_index(r);
+                    cell.set_column_index(c);
+                    b.push_child(id, cell);
+                    cells.push(id);
+                }
+                column_count = column_count.max(cells.len());
+                let id = b.synthetic_node_id(("row", r));
+                let mut row = accesskit::Node::new(Role::Row);
+                row.set_row_index(r);
+                row.set_children(cells);
+                b.push_child(id, row);
+                rows.push(id);
+            }
+            b.parent_node().set_row_count(rows.len());
+            b.parent_node().set_column_count(column_count);
+            b.parent_node().set_children(rows);
+            return;
+        }
         let id = b.synthetic_node_id("text");
         let mut run = accesskit::Node::new(Role::TextRun);
         run.set_value(self.text.clone());
         run.set_character_lengths(
             self.text
-                .chars()
-                .map(|c| c.len_utf8() as u8)
+                .graphemes(true)
+                .map(|c| c.len().min(255) as u8)
                 .collect::<Vec<_>>(),
         );
         b.push_child(id, run);
         if let Some(selection) = &self.selection {
             let pos = |at| accesskit::TextPosition {
                 node: id,
-                character_index: self.text[..at].chars().count(),
+                character_index: self.text[..at].graphemes(true).count(),
             };
             b.parent_node()
                 .set_text_selection(accesskit::TextSelection {
@@ -823,17 +989,24 @@ impl Element for RichBlock {
         &mut self,
         _: Option<&GlobalElementId>,
         _: Option<&InspectorElementId>,
-        _: Bounds<Pixels>,
+        bounds: Bounds<Pixels>,
         _: &mut (),
         actions: &mut Self::PrepaintState,
         w: &mut Window,
         cx: &mut App,
     ) {
+        if let Some(index) = self.code_index {
+            if bounds.intersects(&Bounds::new(point(px(0.), px(0.)), w.viewport_size())) {
+                self.owner
+                    .update(cx, |view, cx| view.highlight_visible(index, self.light, cx));
+            }
+        }
+
         self.inner.paint(w, cx);
         for (id, url) in actions.drain(..) {
             let owner = self.owner.clone();
             w.on_a11y_action(id, AccessibleAction::Click, move |_, _, cx| {
-                owner.update(cx, |_, cx| cx.emit(DocumentEffect::OpenLink(url.clone())))
+                owner.update(cx, |view, cx| view.open_link(url.clone(), cx))
             });
         }
     }
@@ -906,7 +1079,7 @@ mod tests {
         d.update(1, "```rust\nlet x=1;\n```", true);
         d.highlight(0);
         assert_eq!(d.highlighted.len(), 1);
-        assert_eq!(d.parses, 1);
+        assert_eq!(d.parses, 2);
     }
     #[::core::prelude::v1::test]
     fn streaming_reparses_only_unclosed_tail() {
@@ -1000,5 +1173,74 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e,DocumentEffect::Copy(text)if text=="Heading"))
         );
+    }
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    #[::core::prelude::v1::test]
+    fn settled_stream_matches_full_parse_for_global_markdown_constructs() {
+        for source in [
+            "[docs][1]\n\n[1]: https://example.com",
+            "word[^one]\n\n[^one]: footnote",
+            "- first\n\n  continuation\n\n- second",
+            "<details><summary>Summary</summary>\n\nFirst\n\nSecond\n\n</details>",
+        ] {
+            let mut stream = Document::default();
+            for (n, (end, ch)) in source.char_indices().enumerate() {
+                stream.update(n as u64, &source[..end + ch.len_utf8()], false);
+            }
+            let before = stream.parses;
+            stream.update(source.len() as u64, source, true);
+            let full = parse(source);
+            assert_eq!(
+                stream
+                    .blocks
+                    .iter()
+                    .map(|b| (&b.kind, &b.spans))
+                    .collect::<Vec<_>>(),
+                full.iter().map(|b| (&b.kind, &b.spans)).collect::<Vec<_>>(),
+                "{source}"
+            );
+            assert_eq!(stream.parses, before + 1);
+            stream.update(source.len() as u64, source, true);
+            assert_eq!(stream.parses, before + 1);
+        }
+    }
+    #[::core::prelude::v1::test]
+    fn all_details_paragraphs_collapse_and_footnotes_have_internal_anchors() {
+        let blocks = parse(
+            "<details><summary>Summary</summary>\n\nFirst\n\nSecond\n\n</details>\n\nOutside\n\nword[^one]\n\n[^one]: Footnote",
+        );
+        let details = blocks
+            .iter()
+            .find(|b| matches!(b.kind, Kind::Details))
+            .unwrap();
+        assert!(details.text().contains("First") && details.text().contains("Second"));
+        assert!(
+            !blocks
+                .iter()
+                .filter(|b| !matches!(b.kind, Kind::Details))
+                .any(|b| b.text().contains("Second"))
+        );
+        assert!(
+            blocks
+                .iter()
+                .any(|b| matches!(&b.kind,Kind::Footnote(id) if id == "one"))
+        );
+        assert!(
+            blocks
+                .iter()
+                .flat_map(|b| &b.spans)
+                .any(|s| s.link.as_deref() == Some("#footnote:one"))
+        );
+    }
+    #[::core::prelude::v1::test]
+    fn syntax_palette_depends_on_appearance() {
+        let dark = syntax_spans("rust".into(), "let value = 42;".into(), false);
+        let light = syntax_spans("rust".into(), "let value = 42;".into(), true);
+        assert!(!dark.is_empty());
+        assert_ne!(dark, light);
     }
 }

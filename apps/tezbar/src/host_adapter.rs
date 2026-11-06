@@ -10,6 +10,9 @@ pub struct GpuiHost {
 }
 impl GpuiHost {
     pub fn new(relay: Relay) -> Self {
+        Self::with_desktop_integration(relay, false)
+    }
+    pub fn with_desktop_integration(relay: Relay, allow: bool) -> Self {
         #[cfg(target_os = "macos")]
         assert!(
             objc2::MainThreadMarker::new().is_some(),
@@ -18,7 +21,7 @@ impl GpuiHost {
         let queue = relay.clone();
         let desktop = NativeDesktop::new(Arc::new(move |op| queue.send(Event::Main(op))));
         Self {
-            registry: PreviewShortcuts(desktop.clone()),
+            registry: PreviewShortcuts(desktop.clone(), allow),
             desktop,
             relay,
         }
@@ -121,7 +124,7 @@ impl Host for GpuiHost {
 /// Owns the primary tray separately from extension trays. Dropping it removes the native item.
 pub struct PrimaryTray {
     _tray: tray_icon::TrayIcon,
-    pub shortcut: Shortcut,
+    pub shortcut: Option<Shortcut>,
 }
 impl PrimaryTray {
     pub fn new(desktop: &NativeDesktop, resources: &std::path::Path) -> Result<Self, String> {
@@ -151,8 +154,14 @@ impl PrimaryTray {
             .with_tooltip("Tezbar native preview")
             .build()
             .map_err(|e| e.to_string())?;
-        let shortcut = desktop.parse("Alt+F19")?;
-        desktop.register(&shortcut)?;
+        let shortcut = desktop
+            .parse("Alt+F19")
+            .and_then(|shortcut| {
+                desktop.register(&shortcut)?;
+                Ok(shortcut)
+            })
+            .map_err(|e| log::warn!("Preview hotkey unavailable; tray retained: {e}"))
+            .ok();
         Ok(Self {
             _tray: tray,
             shortcut,
@@ -160,7 +169,7 @@ impl PrimaryTray {
     }
 }
 
-struct PreviewShortcuts(NativeDesktop);
+struct PreviewShortcuts(NativeDesktop, bool);
 fn preview_shortcut_allowed(accelerator: &str) -> bool {
     let Ok(key) = tezbar_host::desktop::parse_shortcut(accelerator) else {
         return false;
@@ -171,7 +180,7 @@ fn preview_shortcut_allowed(accelerator: &str) -> bool {
 }
 impl ShortcutRegistry for PreviewShortcuts {
     fn available(&self) -> bool {
-        true
+        self.1
     }
     fn parse(&self, raw: &str) -> Result<Shortcut, String> {
         if !preview_shortcut_allowed(raw) {
@@ -180,6 +189,9 @@ impl ShortcutRegistry for PreviewShortcuts {
         self.0.parse(raw)
     }
     fn register(&self, shortcut: &Shortcut) -> Result<(), String> {
+        if !self.1 {
+            return Err("Preview desktop integration requires --allow-desktop-integration".into());
+        }
         if !preview_shortcut_allowed(&shortcut.accelerator) {
             return Err("Production launcher shortcut excluded from preview".into());
         }

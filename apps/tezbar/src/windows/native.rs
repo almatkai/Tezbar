@@ -34,7 +34,7 @@ pub fn visible(w: &Window, show: bool) -> Result<(), String> {
             unsafe {
                 windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
                     h.hwnd.get() as _,
-                    if show { 5 } else { 0 },
+                    if show { 8 } else { 0 },
                 );
             }
             return Ok(());
@@ -118,6 +118,7 @@ pub fn passthrough(w: &Window) -> Result<(), String> {
                         | WS_EX_LAYERED as isize
                         | WS_EX_NOACTIVATE as isize,
                 );
+                SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
             }
             return Ok(());
         }
@@ -346,4 +347,70 @@ pub fn restore_foreground(_previous: Option<isize>) {
             windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(hwnd as _);
         }
     }
+}
+
+pub fn no_shadow(w: &Window) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        let window = ns_window(w)?;
+        let _: () = objc2::msg_send![window,setHasShadow:false];
+    }
+    #[cfg(windows)]
+    unsafe {
+        #[link(name = "dwmapi")]
+        unsafe extern "system" {
+            fn DwmSetWindowAttribute(
+                hwnd: *mut std::ffi::c_void,
+                attribute: u32,
+                value: *const std::ffi::c_void,
+                size: u32,
+            ) -> i32;
+        }
+        let policy: u32 = 1; // DWMNCRP_DISABLED: no native frame/shadow on this child only.
+        let result = DwmSetWindowAttribute(token(w)? as _, 2, &policy as *const _ as _, 4);
+        if result < 0 {
+            return Err(format!("DWM no-shadow failed: {result}"));
+        }
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let _ = w;
+    Ok(())
+}
+/// Physical button state ends native move loops even when AppKit consumes mouse-up.
+pub fn left_button_down() -> bool {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        let cls = objc2::runtime::AnyClass::get(c"NSEvent").unwrap();
+        let buttons: usize = objc2::msg_send![cls, pressedMouseButtons];
+        return buttons & 1 != 0;
+    }
+    #[cfg(windows)]
+    unsafe {
+        #[link(name = "user32")]
+        unsafe extern "system" {
+            fn GetAsyncKeyState(key: i32) -> i16;
+        }
+        return GetAsyncKeyState(1) < 0;
+    }
+    #[allow(unreachable_code)]
+    false
+}
+
+pub fn reduce_motion() -> bool {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        let cls = objc2::runtime::AnyClass::get(c"NSWorkspace").unwrap();
+        let workspace: *mut objc2::runtime::AnyObject = objc2::msg_send![cls, sharedWorkspace];
+        return objc2::msg_send![workspace, accessibilityDisplayShouldReduceMotion];
+    }
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::UI::WindowsAndMessaging::SystemParametersInfoW;
+        let mut enabled: i32 = 1;
+        if SystemParametersInfoW(0x1042, 0, &mut enabled as *mut _ as _, 0) != 0 {
+            return enabled == 0;
+        }
+    }
+    #[allow(unreachable_code)]
+    false
 }

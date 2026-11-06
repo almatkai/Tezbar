@@ -43,6 +43,12 @@ actions!(
         Down,
         SelectUp,
         SelectDown,
+        DocumentHome,
+        DocumentEnd,
+        SelectDocumentHome,
+        SelectDocumentEnd,
+        DeleteLineStart,
+        DeleteWordForward,
     ]
 );
 
@@ -176,10 +182,10 @@ impl TextInput {
         self.select_to(self.word_boundary(true), w, cx)
     }
     fn select_home(&mut self, _: &SelectHome, w: &mut Window, cx: &mut Context<Self>) {
-        self.select_to(0, w, cx)
+        self.select_to(self.line_boundary(false), w, cx)
     }
     fn select_end(&mut self, _: &SelectEnd, w: &mut Window, cx: &mut Context<Self>) {
-        self.select_to(self.content.len(), w, cx)
+        self.select_to(self.line_boundary(true), w, cx)
     }
     fn delete_word(&mut self, _: &DeleteWord, w: &mut Window, cx: &mut Context<Self>) {
         if self.selected_range.is_empty() {
@@ -217,21 +223,66 @@ impl TextInput {
         self.select_to(self.content.len(), window, cx)
     }
 
-    fn home(&mut self, _: &Home, window: &mut Window, cx: &mut Context<Self>) {
-        let at = self.content[..self.cursor_offset()]
-            .rfind('\n')
-            .map(|i| i + 1)
-            .unwrap_or(0);
-        self.move_to(at, window, cx);
-    }
-
-    fn end(&mut self, _: &End, window: &mut Window, cx: &mut Context<Self>) {
+    // Fields currently paint unwrapped shaped lines. These are visual line boundaries;
+    // document commands remain separate, including for multiline fields.
+    fn line_boundary(&self, end: bool) -> usize {
         let cursor = self.cursor_offset();
-        let at = self.content[cursor..]
-            .find('\n')
-            .map(|i| cursor + i)
-            .unwrap_or(self.content.len());
-        self.move_to(at, window, cx);
+        if end {
+            self.content[cursor..]
+                .find('\n')
+                .map(|i| cursor + i)
+                .unwrap_or(self.content.len())
+        } else {
+            self.content[..cursor]
+                .rfind('\n')
+                .map(|i| i + 1)
+                .unwrap_or(0)
+        }
+    }
+    fn home(&mut self, _: &Home, w: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(self.line_boundary(false), w, cx);
+    }
+    fn end(&mut self, _: &End, w: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(self.line_boundary(true), w, cx);
+    }
+    fn document_home(&mut self, _: &DocumentHome, w: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(0, w, cx);
+    }
+    fn document_end(&mut self, _: &DocumentEnd, w: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(self.content.len(), w, cx);
+    }
+    fn select_document_home(
+        &mut self,
+        _: &SelectDocumentHome,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_to(0, w, cx);
+    }
+    fn select_document_end(
+        &mut self,
+        _: &SelectDocumentEnd,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_to(self.content.len(), w, cx);
+    }
+    fn delete_line_start(&mut self, _: &DeleteLineStart, w: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_range.is_empty() {
+            self.select_to(self.line_boundary(false), w, cx);
+        }
+        self.replace_text_in_range(None, "", w, cx);
+    }
+    fn delete_word_forward(
+        &mut self,
+        _: &DeleteWordForward,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_range.is_empty() {
+            self.select_to(self.word_boundary(true), w, cx);
+        }
+        self.replace_text_in_range(None, "", w, cx);
     }
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
@@ -301,6 +352,10 @@ impl TextInput {
         cx: &mut Context<Self>,
     ) {
         if self.is_selecting {
+            if event.pressed_button != Some(MouseButton::Left) {
+                self.is_selecting = false;
+                return;
+            }
             self.select_to(self.index_for_mouse_position(event.position), window, cx);
         }
     }
@@ -473,8 +528,8 @@ impl TextInput {
         let at = line.closest_index_for_x(position.x - bounds.left() + self.scroll_x);
         if self.options.password {
             self.content[*start..]
-                .char_indices()
-                .nth(line.text[..at].chars().count())
+                .grapheme_indices(true)
+                .nth(line.text[..at].graphemes(true).count())
                 .map(|(i, _)| start + i)
                 .unwrap_or(self.content.len())
         } else {
@@ -562,7 +617,7 @@ impl EntityInputHandler for TextInput {
         let range = self.range_from_utf16(&range_utf16);
         actual_range.replace(self.range_to_utf16(&range));
         Some(if self.options.password {
-            "•".repeat(self.content[range].chars().count())
+            "•".repeat(self.content[range].graphemes(true).count())
         } else {
             self.content[range].to_string()
         })
@@ -712,7 +767,7 @@ impl EntityInputHandler for TextInput {
         let local = range.start - start;
         let end = (range.end - start).min(line.text.len());
         let index = if self.options.password {
-            self.content[*start..range.start].chars().count() * "•".len()
+            self.content[*start..range.start].graphemes(true).count() * "•".len()
         } else {
             local
         };
@@ -785,9 +840,11 @@ impl Element for TextElement {
     }
     fn write_a11y_info(&self, node: &mut accesskit::Node) {
         node.set_label(self.name.to_string());
-        if !self.password {
-            node.set_value(self.text.clone());
-        }
+        node.set_value(if self.password {
+            "•".repeat(self.text.graphemes(true).count())
+        } else {
+            self.text.clone()
+        });
     }
     fn a11y_synthetic_children(
         &mut self,
@@ -802,15 +859,15 @@ impl Element for TextElement {
         run.set_value(self.text.clone());
         run.set_character_lengths(
             self.text
-                .chars()
-                .map(|c| c.len_utf8() as u8)
+                .graphemes(true)
+                .map(|c| c.len().min(255) as u8)
                 .collect::<Vec<_>>(),
         );
         let id = b.synthetic_node_id(0u8);
         b.push_child(id, run);
         let pos = |at: usize| accesskit::TextPosition {
             node: id,
-            character_index: self.text[..at].chars().count(),
+            character_index: self.text[..at].graphemes(true).count(),
         };
         let (anchor, focus) = if self.reversed {
             (self.selection.end, self.selection.start)
@@ -863,7 +920,7 @@ impl Element for TextElement {
         };
         for (n, source) in text.split('\n').enumerate() {
             let display: SharedString = if input.options.password && !input.content.is_empty() {
-                "•".repeat(source.chars().count()).into()
+                "•".repeat(source.graphemes(true).count()).into()
             } else {
                 source.to_string().into()
             };
@@ -919,7 +976,10 @@ impl Element for TextElement {
             );
             if !input.options.multiline {
                 let caret = if input.options.password {
-                    input.content[..input.cursor_offset()].chars().count() * "•".len()
+                    input.content[..input.cursor_offset()]
+                        .graphemes(true)
+                        .count()
+                        * "•".len()
                 } else {
                     input.cursor_offset()
                 };
@@ -937,7 +997,7 @@ impl Element for TextElement {
             );
             let map = |index: usize| {
                 if input.options.password {
-                    source[..index.min(source.len())].chars().count() * "•".len()
+                    source[..index.min(source.len())].graphemes(true).count() * "•".len()
                 } else {
                     index.min(source.len())
                 }
@@ -983,6 +1043,20 @@ impl Element for TextElement {
         w: &mut Window,
         cx: &mut App,
     ) {
+        if self.input.read(cx).is_selecting {
+            let input = self.input.clone();
+            w.on_mouse_event(move |event: &MouseMoveEvent, phase, w, cx| {
+                if phase == gpui::DispatchPhase::Capture {
+                    input.update(cx, |input, cx| input.on_mouse_move(event, w, cx));
+                }
+            });
+            let input = self.input.clone();
+            w.on_mouse_event(move |event: &MouseUpEvent, phase, w, cx| {
+                if phase == gpui::DispatchPhase::Capture {
+                    input.update(cx, |input, cx| input.on_mouse_up(event, w, cx));
+                }
+            });
+        }
         let focus = self.input.read(cx).focus_handle.clone();
         w.handle_input(
             &focus,
@@ -1018,7 +1092,18 @@ impl Render for TextInput {
 
         div()
             .id("field")
-            .role(gpui::Role::Group)
+            .role(if self.options.password {
+                gpui::Role::PasswordInput
+            } else if self.options.multiline {
+                gpui::Role::MultilineTextInput
+            } else {
+                gpui::Role::TextInput
+            })
+            .aria_value(if self.options.password {
+                "•".repeat(self.content.graphemes(true).count())
+            } else {
+                self.content.to_string()
+            })
             .aria_label(self.options.name.clone())
             .aria_placeholder(self.placeholder.clone())
             .on_a11y_action(gpui::AccessibleAction::Focus, move |_, w, cx| {
@@ -1036,7 +1121,7 @@ impl Render for TextInput {
                             let offset = |i: usize| {
                                 field
                                     .content
-                                    .char_indices()
+                                    .grapheme_indices(true)
                                     .nth(i)
                                     .map(|(i, _)| i)
                                     .unwrap_or(field.content.len())
@@ -1098,6 +1183,12 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::select_home))
             .on_action(cx.listener(Self::select_end))
             .on_action(cx.listener(Self::delete_word))
+            .on_action(cx.listener(Self::document_home))
+            .on_action(cx.listener(Self::document_end))
+            .on_action(cx.listener(Self::select_document_home))
+            .on_action(cx.listener(Self::select_document_end))
+            .on_action(cx.listener(Self::delete_line_start))
+            .on_action(cx.listener(Self::delete_word_forward))
             .line_height(px(22. * t.zoom))
             .text_size(px(15. * t.zoom))
             .child(div().min_h(px(22. * t.zoom)).w_full().child(TextElement {
@@ -1137,6 +1228,27 @@ pub fn utf8_to_utf16(text: &str, offset: usize) -> usize {
 }
 pub fn bind_keys(cx: &mut App) {
     use gpui::KeyBinding;
+    #[cfg(target_os = "macos")]
+    cx.bind_keys([
+        KeyBinding::new("cmd-left", Home, Some("TextInput")),
+        KeyBinding::new("cmd-right", End, Some("TextInput")),
+        KeyBinding::new("cmd-shift-left", SelectHome, Some("TextInput")),
+        KeyBinding::new("cmd-shift-right", SelectEnd, Some("TextInput")),
+        KeyBinding::new("cmd-up", DocumentHome, Some("TextInput")),
+        KeyBinding::new("cmd-down", DocumentEnd, Some("TextInput")),
+        KeyBinding::new("cmd-shift-up", SelectDocumentHome, Some("TextInput")),
+        KeyBinding::new("cmd-shift-down", SelectDocumentEnd, Some("TextInput")),
+        KeyBinding::new("cmd-backspace", DeleteLineStart, Some("TextInput")),
+    ]);
+    cx.bind_keys([KeyBinding::new(
+        if cfg!(target_os = "macos") {
+            "alt-delete"
+        } else {
+            "ctrl-delete"
+        },
+        DeleteWordForward,
+        Some("TextInput"),
+    )]);
     cx.bind_keys([
         KeyBinding::new("up", Up, Some("TextInput")),
         KeyBinding::new("down", Down, Some("TextInput")),
@@ -1329,7 +1441,7 @@ mod tests {
                 };
                 let mut node = accesskit::Node::new(gpui::Role::PasswordInput);
                 element.write_a11y_info(&mut node);
-                assert!(node.value().is_none());
+                assert_eq!(node.value(), Some("•••••••"));
                 assert_eq!(node.label(), Some("Password"));
             })
         });
@@ -1404,5 +1516,93 @@ mod tests {
             let field = field.read(cx);
             assert_eq!(field.index_for_mouse_position(point(px(200.), px(10.))), 0);
         });
+    }
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    #[gpui::test]
+    fn selection_drag_tracks_outside_field_and_any_button_release_ends(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (field, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
+        cx.update(|w, cx| field.update(cx, |f, cx| f.set_text("one two three", w, cx)));
+        cx.run_until_parked();
+        let bounds = cx.update(|_, cx| field.read(cx).last_bounds.unwrap());
+        cx.simulate_event(MouseDownEvent {
+            button: MouseButton::Left,
+            position: point(bounds.left() + px(1.), bounds.center().y),
+            click_count: 1,
+            ..Default::default()
+        });
+        cx.run_until_parked();
+        cx.simulate_event(MouseMoveEvent {
+            position: point(bounds.right() + px(200.), bounds.center().y),
+            pressed_button: Some(MouseButton::Left),
+            ..Default::default()
+        });
+        cx.update(|_, cx| {
+            assert_eq!(
+                field.read(cx).selected_range.end,
+                field.read(cx).content.len()
+            )
+        });
+        cx.simulate_event(MouseUpEvent {
+            button: MouseButton::Right,
+            position: point(bounds.right() + px(200.), bounds.center().y),
+            ..Default::default()
+        });
+        cx.update(|_, cx| assert!(!field.read(cx).is_selecting));
+    }
+    #[gpui::test]
+    fn native_line_document_and_word_delete_keypresses(cx: &mut gpui::TestAppContext) {
+        let (field, cx) = cx.add_window_view(|_, cx| TextInput::new(cx));
+        cx.update(|w, cx| {
+            bind_keys(cx);
+            field.update(cx, |f, cx| {
+                f.options.multiline = true;
+                f.set_text("one е́\ntwo 👨‍👩‍👧 end", w, cx);
+                w.focus(&f.focus_handle, cx);
+            });
+        });
+        cx.run_until_parked();
+        #[cfg(target_os = "macos")]
+        {
+            cx.simulate_keystrokes("cmd-left");
+            cx.update(|_, cx| assert_eq!(field.read(cx).cursor_offset(), "one е́\n".len()));
+            cx.simulate_keystrokes("cmd-shift-right");
+            cx.update(|_, cx| {
+                assert_eq!(
+                    &field.read(cx).content[field.read(cx).selected_range.clone()],
+                    "two 👨‍👩‍👧 end"
+                )
+            });
+            cx.simulate_keystrokes("cmd-up");
+            cx.update(|_, cx| assert_eq!(field.read(cx).cursor_offset(), 0));
+            cx.simulate_keystrokes("cmd-shift-down");
+            cx.update(|_, cx| {
+                assert_eq!(
+                    field.read(cx).selected_range,
+                    0..field.read(cx).content.len()
+                )
+            });
+            cx.simulate_keystrokes("cmd-down cmd-backspace");
+            cx.update(|_, cx| assert_eq!(field.read(cx).content.as_ref(), "one е́\n"));
+            cx.simulate_keystrokes("cmd-up alt-delete");
+            cx.update(|_, cx| assert_eq!(field.read(cx).content.as_ref(), " е́\n"));
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            cx.simulate_keystrokes("home shift-end");
+            cx.update(|_, cx| {
+                assert_eq!(
+                    &field.read(cx).content[field.read(cx).selected_range.clone()],
+                    "two 👨‍👩‍👧 end"
+                )
+            });
+            cx.simulate_keystrokes("home ctrl-delete");
+            cx.update(|_, cx| assert_eq!(field.read(cx).content.as_ref(), "one е́\n 👨‍👩‍👧 end"));
+        }
     }
 }

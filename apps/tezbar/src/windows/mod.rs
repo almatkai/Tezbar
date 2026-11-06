@@ -14,6 +14,7 @@ pub struct Lifecycle {
     pub quitting: bool,
     generation: u64,
     hidden_at: Option<Instant>,
+    hidden_generation: u64,
 }
 impl Lifecycle {
     pub fn show(&mut self) -> Option<u64> {
@@ -32,6 +33,7 @@ impl Lifecycle {
         self.visible = false;
         self.generation = self.generation.wrapping_add(1);
         self.hidden_at = Some(now);
+        self.hidden_generation = self.generation;
         Some(self.generation)
     }
     pub fn blur_ticket(&mut self) -> u64 {
@@ -46,7 +48,7 @@ impl Lifecycle {
             && !self.panel_focused
     }
     pub fn should_trim(&self, g: u64, now: Instant) -> bool {
-        g == self.generation
+        g == self.hidden_generation
             && !self.visible
             && self
                 .hidden_at

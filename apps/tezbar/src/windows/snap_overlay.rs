@@ -9,6 +9,9 @@ impl Render for SnapOverlay {
         let t = tezbar_ui::tokens::tokens(w);
         div()
             .size_full()
+            .id("snap-overlay")
+            .role(Role::GenericContainer)
+            .a11y_synthetic_children(|b| b.parent_node().set_hidden())
             .when(self.x, |d| {
                 d.child(
                     div()

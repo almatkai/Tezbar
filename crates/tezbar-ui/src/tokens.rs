@@ -16,6 +16,10 @@ pub fn set(choice: &str) -> Result<(), String> {
 #[derive(Clone, Copy)]
 pub struct Tokens {
     pub zoom: f32,
+    pub light: bool,
+    pub settings_panel: Hsla,
+    pub settings_accent_strong: Hsla,
+    pub bar_float: Hsla,
     pub panel: Hsla,
     pub field: Hsla,
     pub popover: Hsla,
@@ -53,6 +57,10 @@ pub fn tokens(w: &Window) -> Tokens {
     if light {
         Tokens {
             zoom: f32::from(w.rem_size()) / 16.,
+            light: true,
+            settings_panel: rgb(0xffffff).into(),
+            settings_accent_strong: rgb(0x3e35a5).into(),
+            bar_float: rgba(0xf7f7f9d1).into(),
             panel: rgba(0xffffffb3).into(),
             field: rgba(0xffffffe6).into(),
             popover: rgba(0xfffffffa).into(),
@@ -75,7 +83,7 @@ pub fn tokens(w: &Window) -> Tokens {
             hairline: rgba(0x0f172a1a).into(),
             pill: rgba(0x0f172a0d).into(),
             pill_strong: rgba(0x0f172a12).into(),
-            bar: rgba(0xf7f7f9d1).into(),
+            bar: rgba(0x0f172a06).into(),
             text1: rgb(0x1b2539).into(),
             text2: rgb(0x3e4c65).into(),
             text3: rgb(0x5b6a81).into(),
@@ -85,6 +93,10 @@ pub fn tokens(w: &Window) -> Tokens {
     } else {
         Tokens {
             zoom: f32::from(w.rem_size()) / 16.,
+            light: false,
+            settings_panel: rgb(0x12141a).into(),
+            settings_accent_strong: rgb(0xa8aaff).into(),
+            bar_float: rgba(0x16171bc7).into(),
             panel: rgba(0xffffff06).into(),
             field: rgba(0x00000038).into(),
             popover: rgba(0x202126fa).into(),
@@ -107,7 +119,7 @@ pub fn tokens(w: &Window) -> Tokens {
             hairline: rgba(0xffffff11).into(),
             pill: rgba(0xffffff0f).into(),
             pill_strong: rgba(0xffffff17).into(),
-            bar: rgba(0x16171bc7).into(),
+            bar: rgba(0x00000029).into(),
             text1: rgb(0xf5f6fa).into(),
             text2: rgb(0xbcbec8).into(),
             text3: rgb(0x868a96).into(),
@@ -141,6 +153,12 @@ impl Default for Metrics {
     }
 }
 impl Metrics {
+    pub fn for_window(w: &Window, cx: &gpui::App) -> Self {
+        Self {
+            zoom: f32::from(w.rem_size()) / 16.,
+            reduced_motion: cx.reduce_motion(),
+        }
+    }
     pub fn set_zoom(&mut self, zoom: f32) {
         self.zoom = if zoom.is_finite() {
             zoom.clamp(0.75, 2.)
@@ -178,4 +196,67 @@ fn choose_font(cx: &gpui::App, mono: bool) -> gpui::SharedString {
         .copied()
         .unwrap_or(if mono { "monospace" } else { ".SystemUIFont" })
         .into()
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    fn contrast(foreground: u32, background: u32) -> f64 {
+        let luminance = |color: u32| {
+            [16, 8, 0]
+                .into_iter()
+                .zip([0.2126, 0.7152, 0.0722])
+                .map(|(shift, weight)| {
+                    let value = ((color >> shift) & 255) as f64 / 255.;
+                    weight
+                        * if value <= 0.04045 {
+                            value / 12.92
+                        } else {
+                            ((value + 0.055) / 1.055).powf(2.4)
+                        }
+                })
+                .sum::<f64>()
+        };
+        let a = luminance(foreground);
+        let b = luminance(background);
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+    #[test]
+    fn tokens_contrast_test() {
+        // Main readable text, secondary text, Settings link and primary button in both themes.
+        for (text, sheet) in [
+            (0x1b2539, 0xfafafb),
+            (0x3e4c65, 0xfafafb),
+            (0x4c44c1, 0xffffff),
+            (0xf5f6fa, 0x1c1d21),
+            (0xbcbec8, 0x1c1d21),
+            (0x8b8df7, 0x12141a),
+            (0xffffff, 0x5b5ef0),
+        ] {
+            assert!(contrast(text, sheet) >= 4.5, "{text:x} on {sheet:x}");
+        }
+    }
+    #[gpui::test]
+    fn launcher_bar_and_float_are_distinct_and_os_motion_is_consumed(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        struct View;
+        impl gpui::Render for View {
+            fn render(
+                &mut self,
+                _: &mut Window,
+                _: &mut gpui::Context<Self>,
+            ) -> impl gpui::IntoElement {
+                gpui::div()
+            }
+        }
+        let (_, cx) = cx.add_window_view(|_, _| View);
+        cx.update(|w, cx| {
+            let t = tokens(w);
+            assert_ne!(t.bar, t.bar_float);
+            assert_ne!(t.panel, t.settings_panel);
+            cx.set_reduce_motion(true);
+            assert!(Metrics::for_window(w, cx).surface_duration().is_zero());
+        });
+    }
 }

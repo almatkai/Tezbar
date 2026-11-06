@@ -15,7 +15,7 @@ impl TokenSink for Sink {
 #[derive(Default)]
 pub(crate) struct Html {
     suppressed: Vec<String>,
-    details: bool,
+    details: usize,
 }
 impl Html {
     pub fn fragment(
@@ -76,12 +76,16 @@ impl Html {
                         }),
                         "details" => {
                             if start {
-                                flush(blocks, current);
-                                self.details = true;
-                                current.kind = Kind::Details;
+                                if self.details == 0 {
+                                    flush(blocks, current);
+                                    current.kind = Kind::Details;
+                                }
+                                self.details += 1;
                             } else {
-                                flush(blocks, current);
-                                self.details = false;
+                                self.details = self.details.saturating_sub(1);
+                                if self.details == 0 {
+                                    flush(blocks, current);
+                                }
                             }
                         }
                         "summary" if !start => current.spans.push(Span {
@@ -90,7 +94,7 @@ impl Html {
                         }),
                         "p" | "div" | "li" | "blockquote" | "pre" | "h1" | "h2" | "h3" | "h4"
                         | "h5" | "h6" | "table" => {
-                            if self.details {
+                            if self.details > 0 {
                                 if !start {
                                     current.spans.push(Span {
                                         text: "\n".into(),
