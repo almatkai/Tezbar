@@ -93,6 +93,9 @@ pub enum Effect {
 pub struct Launcher {
     pub session: SearchSession<Arc<Row>>,
     pub cache: ResultCache,
+    // AI history and ordinary home can both request "". They must never share
+    // speculative rows or candidate lists; only current session rows authorize clicks.
+    ai_cache: ResultCache,
     pub error: Option<String>,
     pub visible: bool,
     pub composing: bool,
@@ -110,7 +113,12 @@ pub struct Launcher {
 impl Launcher {
     pub fn display_rows(&self) -> Vec<Arc<Row>> {
         if self.session.pending() {
-            self.cache.preview(&request_input(&self.session.query))
+            let cache = if input_mode(&self.input, self.terminal_mode).mode == Mode::Ai {
+                &self.ai_cache
+            } else {
+                &self.cache
+            };
+            cache.preview(&request_input(&self.session.query))
         } else {
             self.session.rows.clone()
         }
@@ -282,7 +290,13 @@ impl Launcher {
                             .map(Arc::new)
                             .collect();
                         if generation == self.session.generation {
-                            self.cache.accept(&self.session.query, rows.clone());
+                            let cache =
+                                if input_mode(&self.input, self.terminal_mode).mode == Mode::Ai {
+                                    &mut self.ai_cache
+                                } else {
+                                    &mut self.cache
+                                };
+                            cache.accept(&self.session.query, rows.clone());
                         }
                         self.session.complete(generation, rows, now)
                     }
@@ -335,6 +349,7 @@ impl Launcher {
                     && !row.ephemeral
                     && row.pinnable()
                 {
+                    self.session.cancel_enter();
                     self.session.activating = true;
                     out.extend(self.activation_for_row(Arc::new(row), rank));
                 }
@@ -618,6 +633,111 @@ mod tests {
 #[cfg(test)]
 mod mode_tests {
     use super::*;
+    #[test]
+    fn ai_history_cache_is_separate_from_home_and_pending_previews_have_no_click_authority() {
+        let mut launcher = Launcher::default();
+        launcher.update(Input::Show, 0);
+        launcher.update(Input::Tick, 8);
+        launcher.update(
+            Input::SearchComplete {
+                generation: launcher.session.generation,
+                result: Ok(vec![Row::command("home", "Home")]),
+            },
+            9,
+        );
+        launcher.update(Input::Edit(" ".into()), 10);
+        launcher.update(Input::Tick, 18);
+        launcher.update(
+            Input::SearchComplete {
+                generation: launcher.session.generation,
+                result: Ok(vec![Row::command("history", "History")]),
+            },
+            19,
+        );
+        assert_eq!(launcher.cache.preview("")[0].id, "command:home");
+        assert!(launcher
+            .cache
+            .preview("h")
+            .iter()
+            .all(|row| row.id != "command:history"));
+        launcher.update(Input::Hide, 20);
+        launcher.update(Input::Show, 21);
+        launcher.update(Input::Tick, 29);
+        assert!(launcher.session.pending());
+        assert_eq!(launcher.display_rows()[0].id, "command:home");
+        launcher.update(Input::Edit(" ".into()), 30);
+        launcher.update(Input::Tick, 38);
+        assert_eq!(launcher.display_rows()[0].id, "command:history");
+        assert!(launcher
+            .update(
+                Input::Click {
+                    generation: launcher.session.generation,
+                    id: "command:history".into()
+                },
+                39
+            )
+            .is_empty());
+    }
+    #[test]
+    fn explicit_saved_pin_retires_deferred_enter_before_search_reply() {
+        let mut launcher = Launcher::default();
+        launcher.update(Input::Show, 0);
+        launcher.update(Input::Edit("slow".into()), 1);
+        launcher.update(Input::Tick, 9);
+        launcher.update(Input::Enter { repeat: false }, 10);
+        let effects = launcher.update(
+            Input::ActivatePin {
+                row: Row::command("pin", "Pin"),
+                rank: 0,
+            },
+            11,
+        );
+        let pin_ticket = effects
+            .iter()
+            .find_map(|effect| match effect {
+                Effect::Execute { ticket, .. } => Some(*ticket),
+                _ => None,
+            })
+            .unwrap();
+        let effects = launcher.update(
+            Input::SearchComplete {
+                generation: launcher.session.generation,
+                result: Ok(vec![Row::command("late", "Late")]),
+            },
+            12,
+        );
+        assert!(!effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::Execute { .. })));
+        assert_eq!(
+            launcher.activation.map(|(ticket, _)| ticket),
+            Some(pin_ticket)
+        );
+        assert_eq!(launcher.input, "slow");
+    }
+    #[test]
+    fn rejected_saved_pin_preserves_deferred_enter() {
+        let mut launcher = Launcher::default();
+        launcher.update(Input::Show, 0);
+        launcher.update(Input::Edit("slow".into()), 1);
+        launcher.update(Input::Tick, 9);
+        launcher.update(Input::Enter { repeat: false }, 10);
+        let mut pin = Row::command("invalid", "Invalid");
+        pin.ephemeral = true;
+        assert!(launcher
+            .update(Input::ActivatePin { row: pin, rank: 0 }, 11)
+            .is_empty());
+        let effects = launcher.update(
+            Input::SearchComplete {
+                generation: launcher.session.generation,
+                result: Ok(vec![Row::command("late", "Late")]),
+            },
+            12,
+        );
+        assert!(effects.iter().any(
+            |effect| matches!(effect, Effect::Execute {row_id,..} if row_id == "command:late")
+        ));
+    }
     #[test]
     fn mode_switch_cancels_normal_ownership_and_respects_ai_sentinel() {
         let mut l = Launcher::default();
