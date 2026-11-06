@@ -1210,6 +1210,7 @@ impl Render for Launcher {
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, e: &MouseDownEvent, _, _| {
+                                this.suppress_pin_click = false;
                                 this.drag = Some(PinDrag {
                                     id: drag_id.clone(),
                                     start: e.position,

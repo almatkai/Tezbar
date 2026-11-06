@@ -26,6 +26,10 @@ pub enum Input {
         ticket: u64,
         result: Result<(), String>,
     },
+    /// A local route completed while the current launcher session remains open.
+    ActivationHandled {
+        ticket: u64,
+    },
     Hide,
     Show,
     Invalidate {
@@ -392,6 +396,14 @@ impl Launcher {
                     }
                 }
             }
+            Input::ActivationHandled { ticket } => {
+                if let Some((owned, generation)) = self.activation {
+                    if owned == ticket {
+                        self.activation = None;
+                        self.session.activation_finished(generation);
+                    }
+                }
+            }
             Input::ActivationComplete { ticket, result } => {
                 if let Some((owned, generation)) = self.activation {
                     if owned == ticket {
@@ -633,6 +645,42 @@ mod tests {
 #[cfg(test)]
 mod mode_tests {
     use super::*;
+    #[test]
+    fn handled_local_activation_preserves_live_query_and_rejects_stale_ticket() {
+        let mut launcher = Launcher::default();
+        launcher.update(Input::Show, 0);
+        launcher.update(Input::Edit("updates".into()), 1);
+        launcher.update(Input::Tick, 9);
+        launcher.update(
+            Input::SearchComplete {
+                generation: launcher.session.generation,
+                result: Ok(vec![Row::command("check-for-updates", "Updates")]),
+            },
+            10,
+        );
+        let first = launcher.update(Input::Enter { repeat: false }, 11);
+        let ticket = first
+            .iter()
+            .find_map(|effect| match effect {
+                Effect::Execute { ticket, .. } => Some(*ticket),
+                _ => None,
+            })
+            .unwrap();
+        launcher.update(Input::ActivationHandled { ticket: ticket + 1 }, 12);
+        assert!(launcher.session.activating);
+        assert!(launcher
+            .update(Input::ActivationHandled { ticket }, 13)
+            .is_empty());
+        assert!(launcher.visible);
+        assert_eq!(launcher.input, "updates");
+        assert!(!launcher.session.pending());
+        assert!(!launcher.session.activating);
+        assert_eq!(launcher.session.rows.len(), 1);
+        assert!(launcher
+            .update(Input::Enter { repeat: false }, 14)
+            .iter()
+            .any(|effect| matches!(effect,Effect::Execute{ticket:next,..} if *next>ticket)));
+    }
     #[test]
     fn ai_history_cache_is_separate_from_home_and_pending_previews_have_no_click_authority() {
         let mut launcher = Launcher::default();

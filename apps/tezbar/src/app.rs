@@ -798,7 +798,13 @@ impl Owner {
                 if !cx.has_global::<NavigationInbox>() {
                     cx.set_global(NavigationInbox::default());
                 }
-                cx.global_mut::<NavigationInbox>().put(intent.clone());
+                if let Err(error) = cx.global_mut::<NavigationInbox>().put(intent.clone()) {
+                    let _ = self.launcher.update(cx, |view, _, cx| {
+                        view.error = Some(error);
+                        cx.notify();
+                    });
+                    return;
+                }
                 let settings = matches!(
                     intent.surface,
                     tezbar_ui_model::router::Surface::Settings(_)
@@ -814,19 +820,18 @@ impl Owner {
                 cx.reveal_path(std::path::Path::new(&path));
             }
             Event::Update(action) => {
-                use crate::surfaces::command_bar::navigation::{
-                    Navigation, NavigationInbox, Payload,
-                };
-                if !cx.has_global::<NavigationInbox>() {
-                    cx.set_global(NavigationInbox::default());
+                use crate::surfaces::command_bar::navigation::UpdateInbox;
+                if !cx.has_global::<UpdateInbox>() {
+                    cx.set_global(UpdateInbox::default());
                 }
                 // M11 installs the production updater executor. Preview retains explicit intent and
                 // never contacts the live feed, stages an installer, or replaces an installed app.
-                cx.global_mut::<NavigationInbox>().put(Navigation {
-                    nonce: 0,
-                    surface: tezbar_ui_model::router::Surface::Settings("general".into()),
-                    payload: Payload::Update(action),
-                });
+                if let Err(error) = cx.global_mut::<UpdateInbox>().put(action) {
+                    let _ = self.launcher.update(cx, |view, _, cx| {
+                        view.error = Some(error);
+                        cx.notify();
+                    });
+                }
             }
             #[cfg(feature = "bench-control")]
             Event::Control(request, reply) => {

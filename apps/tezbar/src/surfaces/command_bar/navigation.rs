@@ -67,22 +67,68 @@ pub struct Navigation {
 }
 #[derive(Default)]
 pub struct NavigationInbox {
-    pending: Option<Navigation>,
+    pending: std::collections::VecDeque<Navigation>,
 }
 impl gpui::Global for NavigationInbox {}
 impl NavigationInbox {
-    pub fn put(&mut self, intent: Navigation) {
-        self.pending = Some(intent);
+    /// Every admitted intent remains until its matching surface consumes/acknowledges it.
+    /// A full inbox reports backpressure instead of silently replacing an older intent.
+    pub fn put(&mut self, intent: Navigation) -> Result<(), String> {
+        if self.pending.contains(&intent) {
+            return Ok(());
+        }
+        if self.pending.len() >= 16 {
+            return Err("That screen is still opening. Try again shortly.".into());
+        }
+        self.pending.push_back(intent);
+        Ok(())
     }
     pub fn pending(&self) -> Option<&Navigation> {
-        self.pending.as_ref()
+        self.pending.front()
     }
     pub fn take(&mut self, surface: &Surface) -> Option<Navigation> {
-        if self.pending.as_ref().is_some_and(|n| &n.surface == surface) {
-            self.pending.take()
-        } else {
-            None
+        let index = self
+            .pending
+            .iter()
+            .position(|intent| &intent.surface == surface)?;
+        self.pending.remove(index)
+    }
+    pub fn acknowledge(&mut self, intent: &Navigation) -> bool {
+        self.pending
+            .iter()
+            .position(|pending| pending == intent)
+            .and_then(|index| self.pending.remove(index))
+            .is_some()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UpdateIntent {
+    pub nonce: u64,
+    pub action: UpdateAction,
+}
+/// Updater work has its own typed owner; it can never be consumed as a Settings route.
+#[derive(Default)]
+pub struct UpdateInbox {
+    next_nonce: u64,
+    pending: std::collections::VecDeque<UpdateIntent>,
+}
+impl gpui::Global for UpdateInbox {}
+impl UpdateInbox {
+    pub fn put(&mut self, action: UpdateAction) -> Result<u64, String> {
+        if self.pending.len() >= 16 {
+            return Err("Update requests are still pending. Try again shortly.".into());
         }
+        let nonce = self
+            .next_nonce
+            .checked_add(1)
+            .ok_or("Update request limit reached")?;
+        self.next_nonce = nonce;
+        self.pending.push_back(UpdateIntent { nonce, action });
+        Ok(nonce)
+    }
+    pub fn take(&mut self) -> Option<UpdateIntent> {
+        self.pending.pop_front()
     }
 }
 
@@ -134,5 +180,75 @@ impl Navigation {
             surface,
             payload,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn intent(nonce: u64, surface: Surface) -> Navigation {
+        Navigation {
+            nonce,
+            surface,
+            payload: Payload::None,
+        }
+    }
+    #[test]
+    fn pending_routes_are_preserved_per_surface_and_in_order() {
+        let mut inbox = NavigationInbox::default();
+        inbox.put(intent(1, Surface::Notes)).unwrap();
+        inbox
+            .put(intent(2, Surface::Settings("ai".into())))
+            .unwrap();
+        inbox.put(intent(3, Surface::Notes)).unwrap();
+        assert_eq!(inbox.take(&Surface::Notes).unwrap().nonce, 1);
+        assert_eq!(inbox.take(&Surface::Notes).unwrap().nonce, 3);
+        assert_eq!(
+            inbox.take(&Surface::Settings("ai".into())).unwrap().nonce,
+            2
+        );
+        assert!(inbox.pending().is_none());
+    }
+    #[test]
+    fn full_route_inbox_rejects_new_work_without_dropping_admitted_routes() {
+        let mut inbox = NavigationInbox::default();
+        for nonce in 1..=16 {
+            inbox.put(intent(nonce, Surface::Notes)).unwrap();
+        }
+        assert!(inbox.put(intent(17, Surface::Notes)).is_err());
+        for nonce in 1..=16 {
+            assert_eq!(inbox.take(&Surface::Notes).unwrap().nonce, nonce);
+        }
+        let route = intent(18, Surface::Notes);
+        inbox.put(route.clone()).unwrap();
+        assert!(inbox.acknowledge(&route));
+        assert!(!inbox.acknowledge(&route));
+    }
+    #[test]
+    fn update_actions_have_a_separate_ordered_monotonic_owner() {
+        let mut navigation = NavigationInbox::default();
+        let mut updates = UpdateInbox::default();
+        let settings = Surface::Settings("general".into());
+        updates.put(UpdateAction::Download).unwrap();
+        navigation.put(intent(10, settings.clone())).unwrap();
+        updates.put(UpdateAction::Restart).unwrap();
+        assert_eq!(navigation.take(&settings).unwrap().nonce, 10);
+        assert!(navigation.take(&settings).is_none());
+        assert_eq!(
+            updates.take(),
+            Some(UpdateIntent {
+                nonce: 1,
+                action: UpdateAction::Download
+            })
+        );
+        assert_eq!(
+            updates.take(),
+            Some(UpdateIntent {
+                nonce: 2,
+                action: UpdateAction::Restart
+            })
+        );
+        assert!(updates.take().is_none());
+        assert_eq!(updates.put(UpdateAction::Check).unwrap(), 3);
     }
 }

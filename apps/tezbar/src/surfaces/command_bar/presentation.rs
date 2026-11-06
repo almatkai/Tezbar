@@ -198,6 +198,13 @@ pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
     if defs.is_empty() {
         return None;
     }
+    if !inline.is_object()
+        && !defs
+            .iter()
+            .any(|definition| definition["required"].as_bool().unwrap_or(false))
+    {
+        return None;
+    }
     let mut labels = Vec::new();
     let mut initial = Vec::new();
     let fields = defs
@@ -412,4 +419,26 @@ pub fn pinned_row(pin: &tezbar_ui_model::ui_state::Pin) -> Row {
         icon_data_url: pin.icon_data_url.clone(),
         ephemeral: false,
     }
+}
+
+/// Worker effects have already executed. This only classifies view/notice presentation.
+pub(super) fn extension_has_view(value: &Value) -> bool {
+    value["ok"] != false
+        && (value["mode"] == "view"
+            || value["root"].is_object()
+            || value["sessionId"].is_string()
+            || value["preferenceSetup"].is_object())
+}
+pub(super) fn extension_notice(value: &Value) -> Option<String> {
+    let effects: Vec<tezbar_ui_model::extensions::WireEffect> =
+        serde_json::from_value(value["effects"].clone()).unwrap_or_default();
+    let mut records = tezbar_ui_model::extensions::WorkerRecords::default();
+    records
+        .notice(&effects, value["effectSequence"].as_u64())
+        .or_else(|| {
+            value["message"]
+                .as_str()
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+        })
 }

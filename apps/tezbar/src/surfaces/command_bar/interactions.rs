@@ -18,14 +18,11 @@ impl Launcher {
             return;
         }
         self.icon_frame_pending = true;
-        let generation = self.model.session.generation;
         let entity = cx.entity().downgrade();
         w.on_next_frame(move |_, cx| {
             let _ = entity.update(cx, |this, cx| {
-                if generation != this.model.session.generation {
-                    return;
-                }
                 this.icon_frame_pending = false;
+                // A coalesced frame always reads the latest rows and viewport.
                 this.refresh_icon_viewport(cx);
             });
         });

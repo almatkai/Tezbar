@@ -471,9 +471,13 @@ impl Launcher {
         } else {
             text
         };
-        if !self.model.terminal_mode && !text.starts_with(['!', ' ', '`']) {
+        if !self.model.terminal_mode && self.form.is_none() && self.form_activation.is_none() {
             if let Some((path, command)) = text.split_once('>') {
-                if path.is_empty() || tezbar_ui_model::terminal::is_absolute_path(path.trim()) {
+                if path.is_empty()
+                    || (launcher::input_mode(path, false).mode == Mode::Path
+                        && !path.contains("  ")
+                        && tezbar_ui_model::terminal::is_absolute_path(path.trim()))
+                {
                     self.terminal_cwd = (!path.trim().is_empty()).then(|| path.trim().to_owned());
                     text = format!(">{command}");
                 }
@@ -929,8 +933,7 @@ impl Launcher {
         }));
     }
     fn navigation_complete(&mut self, ticket: u64) {
-        // Successful navigation keeps the window open for its destination. Consume the model's
-        // completion/reset but not its window-hide effect; app owns the destination lifecycle.
+        // Destination navigation owns the window; preserve the existing successful-reset contract.
         let _ = self.model.update(
             Input::ActivationComplete {
                 ticket,
@@ -941,6 +944,12 @@ impl Launcher {
     }
     fn finish_local(&mut self, a: &Activation) {
         self.navigation_complete(a.ticket);
+    }
+    fn finish_open(&mut self, a: &Activation) {
+        // Updates and a cancelled quit leave the current query and rows available.
+        let _ = self
+            .model
+            .update(Input::ActivationHandled { ticket: a.ticket }, self.now());
     }
     fn activate(&mut self, mut a: Activation, cx: &mut Context<Self>) {
         if a.generation != self.model.session.generation || !self.visible {
@@ -1033,7 +1042,6 @@ impl Launcher {
             if command_id == "activate-deep-search" {
                 self.record(&a, cx);
                 self.finish_local(&a);
-                self.model.visible = true;
                 self.dispatch(
                     Input::Edit(format!(
                         "!{}",
@@ -1085,7 +1093,12 @@ impl Launcher {
             let mut router = Router::default();
             if let Some(effects) = router.invoke(&command, &a.query, self.now()) {
                 self.record(&a, cx);
-                self.finish_local(&a);
+                if !effects
+                    .iter()
+                    .any(|effect| matches!(effect, RouteEffect::QuitConfirm))
+                {
+                    self.finish_open(&a);
+                }
                 for e in effects {
                     match e {
                         RouteEffect::Navigate(surface) => {
@@ -1097,11 +1110,10 @@ impl Launcher {
                             self.navigate(surface, p, cx);
                         }
                         RouteEffect::QuitConfirm => {
-                            let _ = self.relay.send(Event::Quit);
+                            self.confirm_quit(a.clone(), cx);
                         }
                         RouteEffect::UpdateAction => self.update_action(cx),
                         RouteEffect::ActivateDeepSearch(q) => {
-                            self.model.visible = true;
                             self.dispatch(Input::Edit(format!("!{q}")), cx);
                         }
                         RouteEffect::NewItem(item) => {
@@ -1183,11 +1195,7 @@ impl Launcher {
                                 20,
                             );
                             this.persist(cx);
-                            if value["mode"] == "view"
-                                || value["root"].is_object()
-                                || value["sessionId"].is_string()
-                                || value["preferenceSetup"].is_object()
-                            {
+                            if presentation::extension_has_view(&value) {
                                 this.finish_local(&a);
                                 this.navigate(
                                     Surface::ExtensionRuntime,
@@ -1351,6 +1359,28 @@ impl Launcher {
         self.navigation = Some(intent);
         cx.notify();
     }
+    fn confirm_quit(&mut self, activation: Activation, cx: &mut Context<Self>) {
+        let adapter = self.adapter.clone();
+        self.tasks.push(cx.spawn(async move |this, cx| {
+            let result =
+                gpui_tokio::Tokio::spawn(
+                    cx,
+                    async move { adapter.send(Request::ConfirmQuit).await },
+                )
+                .await
+                .unwrap_or_else(|error| Err(error.to_string()));
+            let _ = this.update(cx, |this, cx| {
+                if activation.generation != this.model.session.generation {
+                    return;
+                }
+                this.finish_open(&activation);
+                if let Err(error) = result {
+                    this.error = Some(error);
+                }
+                cx.notify();
+            });
+        }));
+    }
     fn request_notice(&mut self, request: Request, cx: &mut Context<Self>) {
         let adapter = self.adapter.clone();
         let generation = self.model.session.generation;
@@ -1498,11 +1528,25 @@ impl Launcher {
                             .await
                             .unwrap_or_else(|e| Err(e.to_string()));
                     let _ = this.update(cx, |this, cx| match result {
-                        Ok(result) => this.navigate(
+                        Ok(result) if presentation::extension_has_view(&result) => this.navigate(
                             Surface::ExtensionRuntime,
                             Payload::Extension { result },
                             cx,
                         ),
+                        Ok(result) if result["ok"] == false => {
+                            this.error = Some(
+                                result["message"]
+                                    .as_str()
+                                    .unwrap_or("Extension command failed")
+                                    .to_owned(),
+                            );
+                            cx.notify();
+                        }
+                        Ok(result) => {
+                            if let Some(message) = presentation::extension_notice(&result) {
+                                this.message(message, 4000, cx);
+                            }
+                        }
                         Err(e) => {
                             this.error = Some(e);
                             cx.notify();

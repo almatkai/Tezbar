@@ -1838,17 +1838,33 @@ fn saved_note_pin_preserves_note_id_and_quit_command_only_emits_explicit_intent(
         })
     });
     cx.simulate_keystrokes("enter");
-    rt.block_on(async {
-        tokio::time::timeout(Duration::from_millis(100), async {
-            loop {
-                if matches!(rx.recv().await, Some(Event::Quit)) {
-                    break;
+    settle(&rt, cx);
+    assert_eq!(
+        adapter
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(channel, _)| channel == "app:confirm-quit")
+            .count(),
+        1
+    );
+    let direct_quit = rt.block_on(async {
+        tokio::time::timeout(Duration::from_millis(5), async {
+            while let Some(event) = rx.recv().await {
+                if matches!(event, Event::Quit) {
+                    return true;
                 }
             }
+            false
         })
         .await
-        .unwrap()
+        .unwrap_or(false)
     });
+    assert!(
+        !direct_quit,
+        "The core confirmation must own the quit decision"
+    );
 }
 
 #[gpui::test]
@@ -2229,3 +2245,5 @@ fn icon_requests_follow_virtual_viewport_past_initial_cap_and_stop_while_idle(
         assert!(v.icon_queue.is_empty());
     });
 }
+
+include!("review_regressions.rs");
