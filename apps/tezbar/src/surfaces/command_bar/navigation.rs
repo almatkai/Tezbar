@@ -39,6 +39,26 @@ pub enum UpdateAction {
     Restart,
     Installer(String),
 }
+pub fn surface_title(surface: &Surface) -> &'static str {
+    match surface {
+        Surface::Command => "Commands",
+        Surface::AiChat => "AI Chat",
+        Surface::Terminal => "Terminal",
+        Surface::ExtensionRuntime => "Extension",
+        Surface::Settings(_) => "Settings",
+        Surface::Permissions => "Permissions",
+        Surface::Extensions => "Extensions",
+        Surface::SystemMonitor => "System Monitor",
+        Surface::Indexing => "Indexing",
+        Surface::Clipboard => "Clipboard History",
+        Surface::Snippets => "Snippets",
+        Surface::Notes => "Notes",
+        Surface::Vault => "Vault",
+        Surface::Emoji => "Emoji",
+        Surface::ReleaseNotes => "Release Notes",
+        Surface::Onboarding => "Welcome to Tezbar",
+    }
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Navigation {
     pub nonce: u64,

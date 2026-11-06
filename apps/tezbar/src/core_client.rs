@@ -70,6 +70,10 @@ pub enum Request {
     ExtensionSearch(Value),
     ExtensionRun(Value),
     Query(String),
+    QueryOwned {
+        query: String,
+        owner: String,
+    },
     QuickLook(Vec<String>),
     VaultCopy(String),
     Speak(String),
@@ -126,6 +130,7 @@ impl Request {
             Self::ExtensionSearch(p) => ("extension:launcher-search", vec![p]),
             Self::ExtensionRun(p) => ("extension:run-command", vec![p]),
             Self::Query(q) => ("query", vec![json!(q)]),
+            Self::QueryOwned { query, owner } => ("query", vec![json!(query), json!(owner)]),
             Self::QuickLook(paths) => ("file:quick-look", vec![json!(paths)]),
             Self::VaultCopy(id) => ("vault:copy", vec![json!(id)]),
             Self::LlmConfig => ("llm-config-get", vec![]),

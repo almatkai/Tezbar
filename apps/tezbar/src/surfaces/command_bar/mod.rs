@@ -1,12 +1,14 @@
 //! Native command bar. All I/O starts in event/effect methods; Render only constructs elements.
+mod arguments;
 mod interactions;
 mod locale;
+mod model_picker;
 pub mod navigation;
 mod presentation;
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod review_tests;
+#[cfg(test)]
+mod tests;
 mod view;
 use crate::{
     core_client::{CoreClient, Request, RequestAdapter},
@@ -37,14 +39,21 @@ use tezbar_ui_model::{
     router::{Effect as RouteEffect, Router, Surface},
     ui_state::{self, UiState},
 };
+static VIEW_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 struct Form {
     row: Row,
     args: Arguments,
     labels: Vec<presentation::Field>,
     inputs: Vec<Entity<TextInput>>,
+    dropdown: Option<(usize, usize)>,
     ticket: u64,
     generation: u64,
     _subscriptions: Vec<Subscription>,
+}
+impl Form {
+    fn inline(&self) -> bool {
+        self.inputs.len() == 1 && !self.labels[0].dropdown
+    }
 }
 #[derive(Clone)]
 struct Activation {
@@ -53,6 +62,7 @@ struct Activation {
     row: Row,
     query: String,
     rank: usize,
+    usage_recorded: bool,
 }
 #[derive(Clone, Hash)]
 enum IconSource {
@@ -79,6 +89,8 @@ pub struct Launcher {
     clock: Instant,
     executor: BackgroundExecutor,
     scroll: UniformListScrollHandle,
+    path_list: ListState,
+    path_list_len: usize,
     timer: Option<Task<()>>,
     timer_at: Option<u64>,
     tasks: Vec<Task<()>>,
@@ -87,6 +99,10 @@ pub struct Launcher {
     images: ImageCache,
     icons: HashMap<String, Arc<RenderImage>>,
     icon_queue: std::collections::VecDeque<(String, IconSource)>,
+    icon_admitted: std::collections::HashSet<String>,
+    icon_viewport: std::ops::Range<usize>,
+    icon_frame_pending: bool,
+    icon_generation: u64,
     home: Vec<Arc<Row>>,
     paths: HashMap<String, Value>,
     pub state: UiState,
@@ -104,6 +120,7 @@ pub struct Launcher {
     form_activation: Option<Activation>,
     menu: Option<(Row, usize)>,
     pin_picker: Option<(Row, usize)>,
+    popover_focus: FocusHandle,
     drag: Option<PinDrag>,
     pin_bounds: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
     pointer: Option<Point<Pixels>>,
@@ -112,9 +129,20 @@ pub struct Launcher {
     nonce: u64,
     deep_navigation: bool,
     terminal_prompt: String,
+    terminal_cwd: Option<String>,
     terminal_settings: bool,
     terminal_draft: ui_state::TerminalDefaults,
     model_config: Value,
+    model_search: Entity<TextInput>,
+    model_query: String,
+    model_provider: String,
+    model_providers: Vec<(String, String)>,
+    model_details: Vec<String>,
+    model_hidden: usize,
+    model_config_epoch: u64,
+    model_preview_epoch: u64,
+    model_config_task: Option<Task<()>>,
+    model_scroll: UniformListScrollHandle,
     model_menu: bool,
     model_choices: Vec<(String, String)>,
     model_choice: usize,
@@ -129,6 +157,10 @@ pub struct Launcher {
     answer: Entity<MarkdownView>,
     answer_text: String,
     answer_revision: u64,
+    view_owner: u64,
+    answer_serial: u64,
+    answer_owner: Option<String>,
+    answer_flush_pending: bool,
     answer_active: bool,
     answer_busy: bool,
     _events: Option<EventSubscription>,
@@ -156,6 +188,35 @@ impl Launcher {
             });
             i
         });
+        let model_search = cx.new(|cx| {
+            let mut field = TextInput::new(cx);
+            field.configure(FieldOptions {
+                name: "Search models".into(),
+                placeholder: "Search models".into(),
+                border: false,
+                ..Default::default()
+            });
+            field
+        });
+        let model_search_committed =
+            cx.subscribe_in(&model_search, w, |this, _, e: &Committed, _, cx| {
+                this.model_query = e.0.clone();
+                this.rebuild_models(cx);
+            });
+        let model_clipboard = cx.subscribe_in(
+            &model_search,
+            w,
+            |_, field, e: &ClipboardEffect, w, cx| match e {
+                ClipboardEffect::Read => {
+                    if let Some(text) = cx.read_from_clipboard().and_then(|i| i.text()) {
+                        field.update(cx, |i, cx| i.paste_text(&text, w, cx));
+                    }
+                }
+                ClipboardEffect::Write(text) => {
+                    cx.write_to_clipboard(ClipboardItem::new_string(text.clone()))
+                }
+            },
+        );
         let answer = cx.new(|_| MarkdownView::default());
         let message_document = cx.new(|_| MarkdownView::default());
         let committed = cx.subscribe_in(&input, w, |this, _, e: &Committed, _, cx| {
@@ -258,6 +319,9 @@ impl Launcher {
                 cx,
             )
         });
+        let path_list = ListState::new(0, ListAlignment::Top, px(160.));
+        path_list
+            .set_scroll_handler(cx.listener(|this, _, w, cx| this.schedule_icon_viewport(w, cx)));
         Self {
             resize: None,
             window: w.window_handle(),
@@ -272,6 +336,8 @@ impl Launcher {
             clock: cx.background_executor().now(),
             executor: cx.background_executor().clone(),
             scroll: UniformListScrollHandle::new(),
+            path_list,
+            path_list_len: 0,
             timer: None,
             timer_at: None,
             tasks: vec![],
@@ -280,6 +346,10 @@ impl Launcher {
             images: ImageCache::default(),
             icons: HashMap::new(),
             icon_queue: Default::default(),
+            icon_admitted: Default::default(),
+            icon_viewport: 0..48,
+            icon_frame_pending: false,
+            icon_generation: u64::MAX,
             home: vec![],
             paths: HashMap::new(),
             state: state.clone(),
@@ -297,6 +367,7 @@ impl Launcher {
             form_activation: None,
             menu: None,
             pin_picker: None,
+            popover_focus: cx.focus_handle(),
             drag: None,
             pin_bounds: Default::default(),
             pointer: None,
@@ -305,9 +376,20 @@ impl Launcher {
             nonce: 0,
             deep_navigation: false,
             terminal_prompt: String::new(),
+            terminal_cwd: None,
             terminal_settings: false,
             terminal_draft: state.terminal_defaults.clone(),
             model_config: json!({}),
+            model_search,
+            model_query: String::new(),
+            model_provider: "ollama".into(),
+            model_providers: vec![],
+            model_details: vec![],
+            model_hidden: 0,
+            model_config_epoch: 0,
+            model_preview_epoch: 0,
+            model_config_task: None,
+            model_scroll: UniformListScrollHandle::new(),
             model_menu: false,
             model_choices: vec![],
             model_choice: 0,
@@ -321,10 +403,16 @@ impl Launcher {
             answer,
             answer_text: String::new(),
             answer_revision: 0,
+            view_owner: VIEW_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            answer_serial: 0,
+            answer_owner: None,
+            answer_flush_pending: false,
             answer_active: false,
             answer_busy: false,
             _events: events,
             _subscriptions: vec![
+                model_search_committed,
+                model_clipboard,
                 committed,
                 composition,
                 clipboard,
@@ -347,6 +435,10 @@ impl Launcher {
             self.effect(effect, cx);
         }
         self.rows = self.model.display_rows();
+        if self.path_list_len != self.rows.len() {
+            self.path_list_len = self.rows.len();
+            self.path_list.reset(self.path_list_len);
+        }
         self.sync_input(cx);
         if self.error.is_none() {
             self.error = self.model.error.clone();
@@ -361,11 +453,16 @@ impl Launcher {
             return;
         }
         let previous_mode = launcher::input_mode(&self.model.input, self.model.terminal_mode).mode;
+        if self.answer_active || self.answer_owner.is_some() {
+            self.retire_answer(cx);
+        }
         self.answer_active = false;
+        self.answer_owner = None;
+        self.answer_flush_pending = false;
         self.deep_navigation = false;
         self.menu = None;
         self.error = None;
-        let text = if let Some(prefix) = self.prefix {
+        let mut text = if let Some(prefix) = self.prefix {
             if text.starts_with(prefix) {
                 text
             } else {
@@ -374,22 +471,23 @@ impl Launcher {
         } else {
             text
         };
+        if !self.model.terminal_mode && !text.starts_with(['!', ' ', '`']) {
+            if let Some((path, command)) = text.split_once('>') {
+                if path.is_empty() || tezbar_ui_model::terminal::is_absolute_path(path.trim()) {
+                    self.terminal_cwd = (!path.trim().is_empty()).then(|| path.trim().to_owned());
+                    text = format!(">{command}");
+                }
+            }
+        }
         if let Some(prefix) = text.chars().next().filter(|c| matches!(c, '!' | '`' | '>')) {
             self.prefix = Some(prefix);
             self.model.terminal_mode = prefix == '>';
-            let display = text[1..].to_owned();
-            if self.input.read(cx).content.as_ref() != display {
-                let field = self.input.clone();
-                let window = self.window;
-                cx.defer(move |cx| {
-                    let _ = window.update(cx, |_, w, cx| {
-                        field.update(cx, |i, cx| i.set_text(&display, w, cx))
-                    });
-                });
-            }
         }
 
         self.dispatch(Input::Edit(text), cx);
+        self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+        self.icon_viewport = 0..48;
+        self.icon_frame_pending = false;
         let mode = launcher::input_mode(&self.model.input, self.model.terminal_mode).mode;
         if mode == Mode::Terminal && previous_mode != Mode::Terminal {
             self.load_terminal(cx);
@@ -427,12 +525,18 @@ impl Launcher {
         self.pin_picker = None;
         self.drag = None;
         self.answer_active = false;
+        self.answer_owner = None;
+        self.answer_flush_pending = false;
         self.answer_busy = false;
+        self.retire_answer(cx);
         self.model.terminal_mode = false;
+        self.terminal_cwd = None;
         self.prefix = None;
         self.argument_task = None;
         self.argument_rows.clear();
         self.model_menu = false;
+        self.model_config_epoch += 1;
+        self.model_config_task = None;
         self.terminal_settings = false;
         self.navigation = None;
         self.notice_timer = None;
@@ -449,6 +553,8 @@ impl Launcher {
         self.images.release(w, cx);
         self.icons.clear();
         self.icon_queue.clear();
+        self.icon_admitted.clear();
+        self.icon_frame_pending = false;
         cx.notify();
     }
     fn edit(&mut self, text: &str, w: &mut Window, cx: &mut Context<Self>) {
@@ -458,7 +564,12 @@ impl Launcher {
         } else {
             text
         };
-        self.input.update(cx, |i, cx| i.set_text(display, w, cx));
+        self.input.update(cx, |i, cx| {
+            i.clear_silently(w, cx);
+            i.content = display.to_owned().into();
+            let end = display.encode_utf16().count();
+            i.set_selected_text_range(end..end, w, cx);
+        });
         self.query(text.into(), cx);
     }
     fn sync_input(&mut self, cx: &mut Context<Self>) {
@@ -529,12 +640,19 @@ impl Launcher {
                 rank,
             } => {
                 let row = self
-                    .model
-                    .session
-                    .rows
+                    .state
+                    .pins
                     .iter()
-                    .find(|r| r.id == row_id)
-                    .map(|r| r.as_ref().clone())
+                    .find(|pin| pin.id == row_id && pin.action == action)
+                    .map(presentation::pinned_row)
+                    .or_else(|| {
+                        self.model
+                            .session
+                            .rows
+                            .iter()
+                            .find(|row| row.id == row_id && row.action == action)
+                            .map(|row| row.as_ref().clone())
+                    })
                     .unwrap_or_else(|| {
                         let mut r = Row::command(&row_id, &row_id);
                         r.action = action;
@@ -547,6 +665,7 @@ impl Launcher {
                         row,
                         query,
                         rank: rank + 1,
+                        usage_recorded: false,
                     },
                     cx,
                 );
@@ -604,12 +723,13 @@ impl Launcher {
                 command,
                 session_id,
             } => {
+                let cwd = self.terminal_cwd.clone();
                 self.navigation_complete(ticket);
                 self.navigate(
                     Surface::Terminal,
                     Payload::Terminal {
                         command,
-                        cwd: None,
+                        cwd,
                         session: session_id,
                         defaults: self.state.terminal_defaults.clone(),
                     },
@@ -617,12 +737,21 @@ impl Launcher {
                 );
             }
             Effect::OpenNote { ticket, note_id } => {
+                let wanted = format!("note:{note_id}");
                 if let Some(row) = self
                     .model
                     .session
                     .rows
-                    .get(self.model.session.selected)
-                    .map(|r| r.as_ref().clone())
+                    .iter()
+                    .find(|row| row.id == wanted)
+                    .map(|row| row.as_ref().clone())
+                    .or_else(|| {
+                        self.state
+                            .pins
+                            .iter()
+                            .find(|pin| pin.id == wanted)
+                            .map(presentation::pinned_row)
+                    })
                 {
                     self.record(
                         &Activation {
@@ -631,6 +760,7 @@ impl Launcher {
                             row,
                             query: self.model.input.clone(),
                             rank: self.model.session.selected + 1,
+                            usage_recorded: false,
                         },
                         cx,
                     );
@@ -676,6 +806,12 @@ impl Launcher {
                     rows.retain(|r| !matches!(&r.action,Action::InvokeCommand{command_id,..} if command_id=="check-for-updates"));
                     if let Some(update)=presentation::update_row(&status,checked,&q){rows.insert(0,update);}
                     let mut refs=rows.into_iter().map(Arc::new).collect::<Vec<_>>();
+                    if !refs.iter().any(|row| row.ephemeral) {
+                        refs.retain(|row| !row.id.starts_with("deep-search:"));
+                        if let Some(recommendation)=launcher::deep_recommendation(&q,&refs) {
+                            refs.insert(0,Arc::new(recommendation));
+                        }
+                    }
                     launcher::release_notes_row(&mut refs,&q,prefs.release_notes_version.as_deref()!=Some(env!("CARGO_PKG_VERSION")),env!("CARGO_PKG_VERSION"));
                     rows=refs.into_iter().map(|r|r.as_ref().clone()).collect();
                 }
@@ -686,8 +822,11 @@ impl Launcher {
                     if let Ok((_,paths))=&result {this.paths=paths.clone();}
                 }
                 this.dispatch(Input::SearchComplete{generation,result:result.map(|(rows,_)|rows)},cx);
-                if query.is_empty()&&generation==this.model.session.generation {this.home=this.model.session.rows.clone();}
-                this.prepare_icons(cx);
+                if kind==1 {this.path_list.reset(this.rows.len());}
+                if kind==0&&query.is_empty()&&generation==this.model.session.generation {this.home=this.model.session.rows.clone();}
+                this.icons.clear();
+                this.icon_admitted.clear();
+                this.defer_icon_viewport(cx);
                 if kind==0 && this.visible && generation==this.model.session.generation {this.currency(query,generation,cx);}
 
             });
@@ -803,12 +942,17 @@ impl Launcher {
     fn finish_local(&mut self, a: &Activation) {
         self.navigation_complete(a.ticket);
     }
-    fn activate(&mut self, a: Activation, cx: &mut Context<Self>) {
+    fn activate(&mut self, mut a: Activation, cx: &mut Context<Self>) {
         if a.generation != self.model.session.generation || !self.visible {
             self.finish_local(&a);
             return;
         }
         if let Some((args, labels)) = presentation::arguments(&a.row) {
+            self.record(&a, cx);
+            a.usage_recorded = true;
+            self.argument_revision += 1;
+            self.argument_task = None;
+            self.argument_rows.clear();
             self.form_activation = Some(a.clone());
             // Entity fields need a Window for focus only. Construction and subscriptions are GPUI-owned.
             let mut subscriptions = Vec::new();
@@ -855,6 +999,7 @@ impl Launcher {
                 args,
                 labels,
                 inputs,
+                dropdown: None,
                 ticket: a.ticket,
                 generation: a.generation,
                 _subscriptions: subscriptions,
@@ -886,6 +1031,7 @@ impl Launcher {
         } = &a.row.action
         {
             if command_id == "activate-deep-search" {
+                self.record(&a, cx);
                 self.finish_local(&a);
                 self.model.visible = true;
                 self.dispatch(
@@ -955,10 +1101,24 @@ impl Launcher {
                         }
                         RouteEffect::UpdateAction => self.update_action(cx),
                         RouteEffect::ActivateDeepSearch(q) => {
-                            self.model.input = format!("!{q}");
-                            self.dispatch(Input::Invalidate { text: None }, cx);
+                            self.model.visible = true;
+                            self.dispatch(Input::Edit(format!("!{q}")), cx);
                         }
-                        _ => {}
+                        RouteEffect::NewItem(item) => {
+                            use tezbar_ui_model::router::NewItem;
+                            let surface = match item {
+                                NewItem::Chat => Surface::AiChat,
+                                NewItem::Snippet => Surface::Snippets,
+                                NewItem::Vault => Surface::Vault,
+                                NewItem::Note => Surface::Notes,
+                            };
+                            self.navigate(surface, Payload::New(item), cx);
+                        }
+                        RouteEffect::Hide => {
+                            let _ = self.relay.send(Event::Hide);
+                        }
+                        // This activation was recorded once before executing the route effects.
+                        RouteEffect::RecordUsage(_) => {}
                     }
                 }
                 return;
@@ -991,7 +1151,9 @@ impl Launcher {
             extra,
         } = &a.row.action
         {
-            self.record(&a, cx);
+            if !a.usage_recorded {
+                self.record(&a, cx);
+            }
             Request::ExtensionRun(
                 json!({"extensionId":extension_id,"commandName":command_name,"argumentValues":extra.get("argumentValues").cloned().unwrap_or(json!({}))}),
             )
@@ -1147,8 +1309,11 @@ impl Launcher {
             payload,
         };
         self.navigation = Some(intent.clone());
-        self.model.session.hide();
-        self.model.session.reset_transport();
+        self.form = None;
+        self.form_activation = None;
+        self.clear_argument_results(cx);
+        self.retire_answer(cx);
+        self.dispatch(Input::Hide, cx);
         self.timer = None;
         self.timer_at = None;
         self.sync_input(cx);
@@ -1173,6 +1338,16 @@ impl Launcher {
         cx.notify();
     }
     pub fn receive_navigation(&mut self, intent: Navigation, cx: &mut Context<Self>) {
+        if intent.surface == Surface::Command {
+            let entity = cx.entity();
+            let window = self.window;
+            cx.defer(move |cx| {
+                let _ = window.update(cx, |_, w, cx| {
+                    entity.update(cx, |this, cx| this.return_home(w, cx))
+                });
+            });
+            return;
+        }
         self.navigation = Some(intent);
         cx.notify();
     }
@@ -1245,6 +1420,13 @@ impl Launcher {
         if self.ready && self.visible {
             self.form = None;
             self.form_activation = None;
+            self.argument_revision += 1;
+            self.argument_task = None;
+            self.argument_rows.clear();
+            self.answer_active = false;
+            self.answer_busy = false;
+            self.answer_owner = None;
+            self.answer_flush_pending = false;
             self.dispatch(Input::BackendChanged, cx);
             self.dispatch(Input::Show, cx);
             let query = self.input.read(cx).content.to_string();
@@ -1283,7 +1465,7 @@ impl Launcher {
                 let ready = value["status"] == "ready" || value.as_str() == Some("ready");
                 if ready && self.visible {
                     self.ready = true;
-                    self.dispatch(Input::BackendChanged, cx);
+                    self.core_ready(cx);
                 }
             }
             CoreEvent::Other { channel, .. }
@@ -1328,28 +1510,61 @@ impl Launcher {
                     });
                 }));
             }
-            CoreEvent::Other { channel, payload } if self.answer_active => match channel.as_str() {
-                "stream-token" => {
-                    if let Some(token) = payload.as_str() {
-                        if self.answer_text.len() + token.len() <= 1024 * 1024 {
-                            self.answer_text.push_str(token);
-                            self.update_answer(false, cx);
-                        }
-                    }
-                }
-                "stream-done" => {
-                    self.answer_busy = false;
-                    self.update_answer(true, cx);
-                }
-                "stream-error" => {
-                    self.answer_busy = false;
-                    self.error = Some(payload.as_str().unwrap_or("Answer failed").into());
-                    cx.notify();
-                }
-                _ => {}
-            },
+            CoreEvent::Other { channel, payload } if self.answer_active => {
+                self.answer_event(channel, payload, cx)
+            }
             _ => {}
         }
+    }
+    fn answer_event(&mut self, channel: &str, payload: &Value, cx: &mut Context<Self>) {
+        if self.answer_owner.as_deref() != payload["owner"].as_str()
+            || payload["owner"].as_str().is_none()
+        {
+            return;
+        }
+        let value = &payload["value"];
+        match channel {
+            "stream-token" if self.answer_busy => {
+                if let Some(token) = value.as_str() {
+                    if self.answer_text.len() + token.len() <= 1024 * 1024 {
+                        self.answer_text.push_str(token);
+                        self.schedule_answer_frame(cx);
+                    }
+                }
+            }
+            "stream-done" => {
+                self.answer_busy = false;
+                self.schedule_answer_frame(cx);
+            }
+            "stream-error" => {
+                self.answer_busy = false;
+                self.error = Some(value.as_str().unwrap_or("Answer failed").into());
+                self.schedule_answer_frame(cx);
+            }
+            _ => {}
+        }
+    }
+    fn schedule_answer_frame(&mut self, cx: &mut Context<Self>) {
+        if self.answer_flush_pending {
+            return;
+        }
+        self.answer_flush_pending = true;
+        let owner = self.answer_owner.clone();
+        let entity = cx.entity();
+        let window = self.window;
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, w, _| {
+                w.on_next_frame(move |_, cx| {
+                    entity.update(cx, |this, cx| {
+                        if this.answer_active && this.answer_owner == owner {
+                            this.answer_flush_pending = false;
+                            this.update_answer(!this.answer_busy, cx);
+                        }
+                    })
+                })
+            });
+        });
+        cx.notify();
     }
     fn update_answer(&mut self, settled: bool, cx: &mut Context<Self>) {
         self.answer_revision += 1;
@@ -1380,11 +1595,10 @@ impl Launcher {
                 {
                     match result {
                         Ok((mut rows, prompt)) => {
-                            this.terminal_prompt = prompt["prompt"]
-                                .as_str()
-                                .or_else(|| prompt["cwd"].as_str())
-                                .unwrap_or_default()
-                                .into();
+                            this.terminal_prompt = presentation::terminal_prompt(
+                                &prompt,
+                                this.terminal_cwd.as_deref(),
+                            );
                             rows.sort_by_key(|r| {
                                 this.state
                                     .terminal_pinned_sessions
@@ -1405,9 +1619,28 @@ impl Launcher {
     }
     fn prepare_icons(&mut self, cx: &mut Context<Self>) {
         self.icons.clear();
-        self.icon_queue = self
-            .rows
+        let pins_visible = matches!(
+            launcher::input_mode(&self.model.input, self.model.terminal_mode).mode,
+            Mode::Basic | Mode::Deep
+        ) && self.navigation.is_none()
+            && self.form.is_none();
+        let pins = self
+            .state
+            .pins
             .iter()
+            .filter(|_| pins_visible)
+            .map(presentation::pinned_row)
+            .map(Arc::new);
+        let mut seen = std::collections::HashSet::new();
+        self.icon_queue = pins
+            .chain(
+                self.rows
+                    .iter()
+                    .skip(self.icon_viewport.start)
+                    .take(self.icon_viewport.len())
+                    .cloned(),
+            )
+            .filter(|r| seen.insert(r.id.clone()))
             .take(120)
             .filter_map(|r| {
                 let source = if let Some(url) = &r.icon_data_url {
@@ -1440,6 +1673,7 @@ impl Launcher {
                 source.map(|source| (r.id.clone(), source))
             })
             .collect();
+        self.icon_admitted = self.icon_queue.iter().map(|(id, _)| id.clone()).collect();
         self.pump_icons(cx);
     }
     fn pump_icons(&mut self, cx: &mut Context<Self>) {
@@ -1486,7 +1720,9 @@ impl Launcher {
                 let _ = window.update(cx, |_, w, cx| {
                     this.update(cx, |this, cx| {
                         this.images.complete(ticket, data, w, cx);
-                        if generation == this.model.session.generation {
+                        if generation == this.model.session.generation
+                            && this.icon_admitted.contains(&id)
+                        {
                             if let Some(image) = this.images.get(&key) {
                                 this.icons.insert(id, image);
                             }

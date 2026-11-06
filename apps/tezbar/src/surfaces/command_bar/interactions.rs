@@ -1,5 +1,97 @@
 use super::*;
 impl Launcher {
+    pub(super) fn defer_icon_viewport(&mut self, cx: &mut Context<Self>) {
+        let entity = cx.entity().downgrade();
+        let window = self.window;
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, w, cx| {
+                let _ = entity.update(cx, |this, cx| this.schedule_icon_viewport(w, cx));
+            });
+        });
+    }
+    pub(super) fn schedule_icon_viewport(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        if self.icon_frame_pending
+            || !self.visible
+            || self.navigation.is_some()
+            || self.form.is_some()
+        {
+            return;
+        }
+        self.icon_frame_pending = true;
+        let generation = self.model.session.generation;
+        let entity = cx.entity().downgrade();
+        w.on_next_frame(move |_, cx| {
+            let _ = entity.update(cx, |this, cx| {
+                if generation != this.model.session.generation {
+                    return;
+                }
+                this.icon_frame_pending = false;
+                this.refresh_icon_viewport(cx);
+            });
+        });
+    }
+    fn refresh_icon_viewport(&mut self, cx: &mut Context<Self>) {
+        if !self.visible || self.navigation.is_some() || self.form.is_some() {
+            return;
+        }
+        let mode = launcher::input_mode(&self.model.input, self.model.terminal_mode).mode;
+        let columns = if mode == Mode::Applications { 7 } else { 1 };
+        let row_height = if columns == 7 { 96. } else { 36. } * self.zoom;
+        let (top, height) = if mode == Mode::Path {
+            (
+                self.path_list.logical_scroll_top().item_ix,
+                f32::from(self.path_list.viewport_bounds().size.height),
+            )
+        } else {
+            let scroll = self.scroll.0.borrow();
+            (
+                ((-f32::from(scroll.base_handle.offset().y) / row_height)
+                    .max(0.)
+                    .floor() as usize)
+                    * columns,
+                f32::from(scroll.base_handle.bounds().size.height),
+            )
+        };
+        let count = ((height / row_height).ceil().max(1.) as usize + 2) * columns;
+        let start = top.saturating_sub(columns).min(self.rows.len());
+        let range = start..start.saturating_add(count.min(108)).min(self.rows.len());
+        if self.icon_viewport != range || self.icon_generation != self.model.session.generation {
+            self.icon_viewport = range;
+            self.icon_generation = self.model.session.generation;
+            self.prepare_icons(cx);
+            cx.notify();
+        }
+    }
+    pub(super) fn retire_answer(&mut self, cx: &mut Context<Self>) {
+        self.answer_active = false;
+        self.answer_busy = false;
+        self.answer_owner = None;
+        self.answer_flush_pending = false;
+        self.answer_text.clear();
+        self.answer_revision += 1;
+        let revision = self.answer_revision;
+        self.answer
+            .update(cx, |answer, cx| answer.set_content(revision, "", true, cx));
+    }
+    pub(super) fn clear_argument_results(&mut self, cx: &mut Context<Self>) {
+        self.argument_revision += 1;
+        self.argument_task = None;
+        self.argument_rows.clear();
+        self.model.update(Input::ArgumentValue(None), self.now());
+        cx.notify();
+    }
+    pub(super) fn remember_query(&mut self, cx: &mut Context<Self>) {
+        if let Some(query) = launcher::history_entry(&self.model.input, self.model.terminal_mode) {
+            self.state.record_launcher_query(&query);
+            self.persist(cx);
+        }
+    }
+    pub(super) fn save_terminal_settings(&mut self, cx: &mut Context<Self>) {
+        self.state.terminal_defaults = self.terminal_draft.clone();
+        self.terminal_settings = false;
+        self.persist(cx);
+        self.message("Terminal defaults saved".into(), 2500, cx);
+    }
     pub(super) fn terminal_id(&self) -> Option<String> {
         self.model
             .session
@@ -39,55 +131,47 @@ impl Launcher {
             return;
         }
         self.model_menu = true;
+        self.model_query.clear();
+        let field = self.model_search.clone();
+        let window = self.window;
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, w, cx| {
+                field.update(cx, |field, cx| field.clear_silently(w, cx))
+            });
+        });
+        self.model_provider = self.model_config["provider"]
+            .as_str()
+            .unwrap_or("ollama")
+            .into();
+        self.rebuild_models(cx);
+        self.model_config_epoch += 1;
+        self.model_preview_epoch += 1;
+        let preview_epoch = self.model_preview_epoch;
+        let epoch = self.model_config_epoch;
         let adapter = self.adapter.clone();
-        let generation = self.model.session.generation;
-        self.tasks.push(cx.spawn(async move |this, cx| {
+        self.model_config_task = Some(cx.spawn(async move |this, cx| {
             let result =
                 gpui_tokio::Tokio::spawn(cx, async move { adapter.send(Request::LlmConfig).await })
                     .await
                     .unwrap_or_else(|e| Err(e.to_string()));
             let _ = this.update(cx, |this, cx| {
-                if !this.visible || generation != this.model.session.generation {
+                if !this.visible || epoch != this.model_config_epoch {
                     return;
                 }
                 match result {
                     Ok(config) => {
-                        let defaults = tezbar_ui_model::settings::provider_catalog();
-                        let mut choices = Vec::new();
-                        let mut providers = defaults["RECOMMENDED_AI_MODEL"]
-                            .as_object()
-                            .into_iter()
-                            .flatten()
-                            .map(|(id, _)| id.clone())
-                            .collect::<Vec<_>>();
-                        for p in config["customProviders"]
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|p| p["id"].as_str())
-                        {
-                            if !providers.iter().any(|id| id == p) {
-                                providers.push(p.into());
-                            }
+                        if this.model_preview_epoch == preview_epoch {
+                            this.model_provider =
+                                config["provider"].as_str().unwrap_or("ollama").into();
                         }
-                        for provider in providers {
-                            let models =
-                                config["providerModels"][&provider].as_array().or_else(|| {
-                                    defaults["DEFAULT_PROVIDER_MODELS"][&provider].as_array()
-                                });
-                            for model in models.into_iter().flatten().take(100) {
-                                if let Some(id) = model["id"].as_str() {
-                                    choices.push((provider.clone(), id.to_owned()));
-                                }
-                            }
-                        }
-                        this.model_choices = choices;
-                        this.model_choice = 0;
                         this.model_config = config;
+                        this.rebuild_models(cx);
                     }
-                    Err(e) => this.error = Some(e),
+                    Err(e) => {
+                        this.error = Some(e);
+                        cx.notify();
+                    }
                 }
-                cx.notify();
             });
         }));
     }
@@ -95,11 +179,18 @@ impl Launcher {
         let Some((provider, model)) = self.model_choices.get(index).cloned() else {
             return;
         };
-        if self.model_saving {
+        if self.model_saving
+            || !tezbar_ui_model::settings::providers::configured(&self.model_config, &provider)
+        {
             return;
         }
         self.model_saving = true;
         self.model_menu = false;
+        let field = self.input.clone();
+        let window = self.window;
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, w, cx| field.focus_handle(cx).focus(w, cx));
+        });
         // Use the M3 write owner to merge only selected keys into a freshly read config.
         // A model picker never writes a stale cached provider/credential map.
         let adapter = self.adapter.clone();

@@ -5,6 +5,53 @@ use tezbar_ui_model::launcher::{Action, ArgumentField, Arguments, IntegerValidat
 fn string(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or_default().to_owned()
 }
+pub fn icon_glyph(category: &str) -> &'static str {
+    match category {
+        "applications" | "application" => "▦",
+        "files" | "file" | "directory" => "▤",
+        "knowledge" => "⌕",
+        "extensions" => "◇",
+        "vault" => "⌑",
+        "calculator" => "=",
+        "color-converter" => "◐",
+        _ => "⌘",
+    }
+}
+pub fn terminal_prompt(value: &Value, cwd: Option<&str>) -> String {
+    let directory = tezbar_ui_model::terminal::compact_path(
+        cwd.unwrap_or_else(|| value["dir"].as_str().unwrap_or("~")),
+    );
+    format!(
+        "{}@{} {directory} %",
+        string(value, "user"),
+        string(value, "host")
+    )
+}
+pub fn path_section(section: &str) -> Option<&'static str> {
+    match section {
+        "recommended" => Some("Recommended"),
+        "default" => Some("Default"),
+        "applications" => Some("All Applications"),
+        _ => None,
+    }
+}
+pub fn kind_label(category: &str) -> &str {
+    match category {
+        "applications" | "application" => "Application",
+        "files" | "file" => "File",
+        "directory" => "Folder",
+        "quick-notes" => "Note",
+        "extensions" => "Extension",
+        "calculator" => "Calculator",
+        "currency" => "Currency",
+        "color-converter" => "Color",
+        "commands" => "Command",
+        "knowledge" => "Knowledge",
+        "chat" => "Chat",
+        "terminal" => "Terminal",
+        _ => category,
+    }
+}
 pub fn path_rows(value: Value) -> Result<(Vec<Row>, HashMap<String, Value>), String> {
     let values = value.as_array().ok_or("Invalid path completion response")?;
     let mut metadata = HashMap::new();
@@ -128,6 +175,7 @@ pub struct Field {
     pub title: String,
     pub password: bool,
     pub placeholder: String,
+    pub dropdown: bool,
 }
 pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
     let Action::RunExtensionCommand { extra, .. } = &row.action else {
@@ -172,6 +220,7 @@ pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
                     .to_owned(),
                 password: d["type"] == "password",
                 placeholder: string(d, "placeholder"),
+                dropdown: d["type"] == "dropdown",
             });
             let v = &d["validation"];
             ArgumentField {
@@ -188,7 +237,7 @@ pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
                     .or_else(|| d["options"].as_array())
                     .into_iter()
                     .flatten()
-                    .map(|o| (string(o, "value"), string(o, "title")))
+                    .map(|o| (string(o, "title"), string(o, "value")))
                     .collect(),
             }
         })
@@ -279,4 +328,88 @@ pub fn update_row(
     };
     row.score = p::score(status, None, false);
     Some(row)
+}
+
+/// Display labels/order are ported from aiProviders.ts. Model defaults/configuration stay M3-owned.
+pub fn picker_providers(config: &Value) -> Vec<(String, String)> {
+    let mut rows = [
+        ("openai", "OpenAI"),
+        ("deepseek", "DeepSeek"),
+        ("antigravity", "Antigravity"),
+        ("openai-compatible", "OpenAI Compatible"),
+        ("tokenrouter", "TokenRouter"),
+        ("gemini", "Gemini"),
+        ("anthropic", "Anthropic"),
+        ("ollama", "Ollama"),
+        ("copilot", "GitHub Copilot"),
+        ("opencode", "OpenCode"),
+    ]
+    .into_iter()
+    .map(|(id, title)| (id.to_owned(), title.to_owned()))
+    .collect::<Vec<_>>();
+    for p in config["customProviders"].as_array().into_iter().flatten() {
+        if let Some(id) = p["id"].as_str() {
+            if !rows.iter().any(|(existing, _)| existing == id) {
+                rows.push((id.into(), p["title"].as_str().unwrap_or(id).into()));
+            }
+        }
+    }
+    rows
+}
+pub fn picker_models(config: &Value, provider: &str, query: &str) -> (Vec<Value>, usize) {
+    use tezbar_ui_model::settings::{provider_catalog, providers::normalize_models};
+    let active = config["provider"].as_str().unwrap_or("ollama");
+    let selected = config["providerSelectedModels"][active]
+        .as_str()
+        .or_else(|| config["model"].as_str());
+    let defaults = provider_catalog();
+    let raw = config["providerModels"][provider]
+        .as_array()
+        .or_else(|| defaults["DEFAULT_PROVIDER_MODELS"][provider].as_array())
+        .cloned()
+        .unwrap_or_default();
+    let models = normalize_models(&raw);
+    let visible = models
+        .iter()
+        .filter(|m| {
+            m["hiddenFromPicker"] != true || (active == provider && m["id"].as_str() == selected)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let hidden = models.len() - visible.len();
+    let q = query.trim().to_lowercase();
+    (
+        visible
+            .into_iter()
+            .filter(|m| {
+                format!(
+                    "{} {}",
+                    m["id"].as_str().unwrap_or_default(),
+                    m["capabilities"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+                .to_lowercase()
+                .contains(&q)
+            })
+            .collect(),
+        hidden,
+    )
+}
+
+pub fn pinned_row(pin: &tezbar_ui_model::ui_state::Pin) -> Row {
+    Row {
+        id: pin.id.clone(),
+        title: pin.title.clone(),
+        subtitle: pin.subtitle.clone(),
+        category: pin.category.clone(),
+        score: 0.,
+        action: pin.action.clone(),
+        icon_data_url: pin.icon_data_url.clone(),
+        ephemeral: false,
+    }
 }
