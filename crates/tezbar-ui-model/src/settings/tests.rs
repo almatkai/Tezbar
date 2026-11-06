@@ -1,4 +1,31 @@
 use super::*;
+#[test]
+fn task_overrides_merge_fresh_peers_and_retry_never_reverts_newer_task_selection() {
+    let mut q = WriteQueue::default();
+    let mut c = config();
+    let edit = |task: &str, provider: &str, model: &str| Edit::TaskSelection {
+        task: task.into(),
+        provider: provider.into(),
+        model: model.into(),
+    };
+    q.enqueue(1, vec![edit("answer", "openai", "old")]);
+    flush(&mut q, &mut c, false);
+    c["taskProviderOverrides"]["translate"] = json!("anthropic");
+    c["taskModelOverrides"] = json!({"translate":"peer"});
+    q.enqueue(2, vec![edit("answer", "ollama", "new")]);
+    flush(&mut q, &mut c, true);
+    q.retry(false);
+    while q.next_effect().is_some() {
+        panic!("A superseded failure must have been retired");
+    }
+    assert_eq!(c["taskProviderOverrides"]["translate"], "anthropic");
+    assert_eq!(c["taskModelOverrides"]["translate"], "peer");
+    assert_eq!(c["taskModelOverrides"]["answer"], "new");
+    q.enqueue(2, vec![edit("answer", "", "")]);
+    flush(&mut q, &mut c, true);
+    assert!(c["taskProviderOverrides"].get("answer").is_none());
+    assert_eq!(c["taskModelOverrides"]["translate"], "peer");
+}
 fn field(p: &str, k: &str, v: &str) -> Edit {
     Edit::Field {
         provider: p.into(),

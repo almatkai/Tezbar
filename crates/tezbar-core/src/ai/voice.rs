@@ -16,8 +16,32 @@ struct VoiceInner {
 #[derive(Default)]
 struct VoiceState {
     downloads: HashMap<String, Value>,
+    download_jobs: HashMap<String, Arc<DownloadOwner>>,
     runtimes: HashMap<String, (u64, Value)>,
     speech: Option<Cancel>,
+}
+struct DownloadOwner {
+    cancel: Cancel,
+    done: tokio::sync::watch::Sender<bool>,
+}
+impl DownloadOwner {
+    fn new() -> Self {
+        Self {
+            cancel: Cancel::new(),
+            done: tokio::sync::watch::channel(false).0,
+        }
+    }
+    async fn wait(&self) {
+        let mut done = self.done.subscribe();
+        loop {
+            if *done.borrow_and_update() {
+                return;
+            }
+            if done.changed().await.is_err() {
+                return;
+            }
+        }
+    }
 }
 fn catalog() -> Vec<Value> {
     serde_json::from_str(include_str!("voice_catalog.json")).expect("static voice catalog")
@@ -80,6 +104,9 @@ impl Voice {
         tasks.push(task);
     }
     pub async fn shutdown(&self) {
+        for job in self.inner.state.lock().unwrap().download_jobs.values() {
+            job.cancel.cancel();
+        }
         self.inner.stop.cancel();
         self.stop_speech();
         let tasks = std::mem::take(&mut *self.inner.tasks.lock().unwrap());
@@ -108,10 +135,12 @@ impl Voice {
         timeout: u64,
         cancel: &Cancel,
     ) -> Result<String, String> {
+        let path = tokio::select! {
+            _ = cancel.cancelled() => return Err("Operation cancelled".into()),
+            path = self.path() => path,
+        };
         process::output(
-            process::command(bin)
-                .args(args)
-                .env("PATH", self.path().await),
+            process::command(bin).args(args).env("PATH", path),
             Duration::from_secs(timeout),
             cancel,
         )
@@ -279,35 +308,72 @@ impl Voice {
     }
     async fn download(&self, id: &str) -> CoreResult {
         let m = model(id)?;
-        let launch = {
-            let mut state = self.inner.state.lock().unwrap();
-            if state
-                .downloads
-                .get(id)
-                .is_some_and(|s| s["status"] == "downloading")
-            {
-                false
-            } else {
-                state.downloads.insert(id.into(),json!({"status":"downloading","stage":"installing-runtime","downloadedBytes":0,"totalBytes":null,"progress":null}));
-                true
-            }
-        };
-        if launch {
-            let voice = self.clone();
-            let m = m.clone();
-            self.spawn(async move{let id=s(&m["id"]);if let Err(error)=voice.provision(&m).await{let (_,size)=voice.disk(&m).await;voice.update_download(id,json!({"status":"error","stage":"downloading-weights","downloadedBytes":size,"totalBytes":null,"progress":null,"errorMessage":error}));}});
-        }
+        self.launch_download(m.clone());
         Ok(self.view(&m, &self.selected().await?).await)
     }
-    async fn provision(&self, m: &Value) -> Result<(), String> {
+    fn launch_download(&self, m: Value) -> bool {
+        let id = s(&m["id"]);
+        let owner = {
+            let mut state = self.inner.state.lock().unwrap();
+            if self.inner.stop.is_cancelled() || state.download_jobs.contains_key(id) {
+                return false;
+            }
+            let owner = Arc::new(DownloadOwner::new());
+            state.download_jobs.insert(id.into(), owner.clone());
+            state.downloads.insert(id.into(),json!({"status":"downloading","stage":"installing-runtime","downloadedBytes":0,"totalBytes":null,"progress":null}));
+            owner
+        };
+        let voice = self.clone();
+        self.spawn(async move {
+            let id=s(&m["id"]);
+            let result=voice.provision(&m, &owner.cancel).await;
+            let (_,size)=voice.disk(&m).await;
+            let cancelled=owner.cancel.is_cancelled();
+            let failed = !cancelled && result.is_err();
+            let state = match result {
+                _ if cancelled => json!({"status":"cancelled","stage":"idle","downloadedBytes":size,"progress":null}),
+                Err(error) => json!({"status":"error","stage":"downloading-weights","downloadedBytes":size,"totalBytes":null,"progress":null,"errorMessage":error}),
+                Ok(()) => json!({"status":"downloaded","stage":"idle","downloadedBytes":size,"totalBytes":size,"progress":1}),
+            };
+            voice.update_download(id,state);
+            let mut state=voice.inner.state.lock().unwrap();
+            if !failed { state.downloads.remove(id); }
+            state.download_jobs.remove(id);
+            owner.done.send_replace(true);
+        });
+        true
+    }
+    async fn cancel_download(&self, id: &str) -> CoreResult {
+        model(id)?;
+        let owner = self
+            .inner
+            .state
+            .lock()
+            .unwrap()
+            .download_jobs
+            .get(id)
+            .cloned();
+        if let Some(owner) = owner {
+            owner.cancel.cancel();
+            owner.wait().await;
+            Ok(json!({"ok":true,"cancelled":true}))
+        } else {
+            Ok(json!({"ok":true,"cancelled":false}))
+        }
+    }
+    async fn provision(&self, m: &Value, cancel: &Cancel) -> Result<(), String> {
         let id = s(&m["id"]);
         let kind = s(&m["runtime"]);
-        if self.runtime(kind, true).await["ready"] != true {
+        let runtime = tokio::select! {
+            _ = cancel.cancelled() => return Err("Download cancelled".into()),
+            runtime = self.runtime(kind, false) => runtime,
+        };
+        if runtime["ready"] != true {
             if kind == "whisper-cpp" {
                 if !self.has("brew").await {
                     return Err("Homebrew is required to install whisper.cpp automatically. Install whisper.cpp manually: brew install whisper-cpp".into());
                 }
-                self.run("brew", &["install", "whisper-cpp"], 600, &self.inner.stop)
+                self.run("brew", &["install", "whisper-cpp"], 600, cancel)
                     .await?;
             } else {
                 if !self.has("python3").await {
@@ -325,7 +391,7 @@ impl Voice {
                         "onnxruntime",
                     ],
                     600,
-                    &self.inner.stop,
+                    cancel,
                 )
                 .await?;
             }
@@ -337,6 +403,9 @@ impl Voice {
         tokio::fs::create_dir_all(self.dir(id)).await.map_err(err)?;
         let mut baseline = self.disk(m).await.1;
         for asset in m["assets"].as_array().unwrap() {
+            if cancel.is_cancelled() {
+                return Err("Download cancelled".into());
+            }
             let destination = self.dir(id).join(s(&asset["fileName"]));
             if tokio::fs::metadata(&destination)
                 .await
@@ -351,15 +420,45 @@ impl Voice {
                     .unwrap_or_default()
                     .to_string_lossy()
             ));
-            let result=async{let response=tokio::select!{_=self.inner.stop.cancelled()=>return Err("Download cancelled".to_string()),r=self.inner.http.get(s(&asset["url"])).timeout(Duration::from_secs(1800)).send()=>r.map_err(err)?};if !response.status().is_success(){return Err(format!("Download failed ({})",response.status()))}let total=response.content_length();let mut file=tokio::fs::File::create(&partial).await.map_err(err)?;let mut stream=response.bytes_stream();let mut downloaded=0u64;loop{let next=tokio::select!{_=self.inner.stop.cancelled()=>return Err("Download cancelled".to_string()),next=stream.next()=>next};let Some(chunk)=next else{break};let chunk=chunk.map_err(err)?;file.write_all(&chunk).await.map_err(err)?;downloaded+=chunk.len()as u64;self.update_download(id,json!({"status":"downloading","stage":"downloading-weights","downloadedBytes":baseline+downloaded,"totalBytes":total,"progress":total.filter(|n|*n>0).map(|n|(downloaded as f64/n as f64).min(0.999))}));}if downloaded==0||total.is_some_and(|n|n!=downloaded){return Err("Model download was empty or incomplete".into())}file.sync_all().await.map_err(err)?;drop(file);tokio::fs::rename(&partial,&destination).await.map_err(err)?;Ok::<(),String>(())}.await;
+            let transfer = async {
+                let response = self
+                    .inner
+                    .http
+                    .get(s(&asset["url"]))
+                    .timeout(Duration::from_secs(1800))
+                    .send()
+                    .await
+                    .map_err(err)?;
+                if !response.status().is_success() {
+                    return Err(format!("Download failed ({})", response.status()));
+                }
+                let total = response.content_length();
+                let mut file = tokio::fs::File::create(&partial).await.map_err(err)?;
+                let mut stream = response.bytes_stream();
+                let mut downloaded = 0u64;
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk.map_err(err)?;
+                    file.write_all(&chunk).await.map_err(err)?;
+                    downloaded += chunk.len() as u64;
+                    self.update_download(id,json!({"status":"downloading","stage":"downloading-weights","downloadedBytes":baseline+downloaded,"totalBytes":total,"progress":total.filter(|n|*n>0).map(|n|(downloaded as f64/n as f64).min(0.999))}));
+                }
+                if downloaded == 0 || total.is_some_and(|n| n != downloaded) {
+                    return Err("Model download was empty or incomplete".into());
+                }
+                file.sync_all().await.map_err(err)?;
+                drop(file);
+                cancel.effect(|| std::fs::rename(&partial, &destination).map_err(err))
+            };
+            let result = tokio::select! {
+                _ = cancel.cancelled() => Err("Download cancelled".into()),
+                result = transfer => result,
+            };
             if result.is_err() {
                 let _ = tokio::fs::remove_file(&partial).await;
             }
             result?;
             baseline = self.disk(m).await.1;
         }
-        self.inner.state.lock().unwrap().downloads.remove(id);
-        self.runtime(kind, true).await;
         Ok(())
     }
     fn stop_speech(&self) {
@@ -409,6 +508,10 @@ impl Voice {
             ),
             "voice:model:download" => {
                 self.download(a["modelId"].as_str().ok_or("modelId is required")?)
+                    .await
+            }
+            "voice:model:cancel-download" => {
+                self.cancel_download(a["modelId"].as_str().ok_or("modelId is required")?)
                     .await
             }
             "voice:model:delete" => {
@@ -727,6 +830,122 @@ impl Voice {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn cancel_one_download_cleans_partial_and_preserves_peers_assets_and_speech() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let root = tempfile::tempdir().unwrap();
+        let ctx = CoreContext::headless(common::CorePaths {
+            data_dir: root.path().join("data"),
+            config_dir: root.path().join("config"),
+            resource_dir: root.path().join("resources"),
+            temp_dir: root.path().join("tmp"),
+            home_dir: root.path().join("home"),
+        });
+        let voice = Voice::new(ctx);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let server_started = started.clone();
+        let server_release = release.clone();
+        let server = tokio::spawn(async move {
+            let mut tasks = Vec::new();
+            for _ in 0..2 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let started = server_started.clone();
+                let release = server_release.clone();
+                tasks.push(tokio::spawn(async move {
+                    let mut request=[0;4096];let count=socket.read(&mut request).await.unwrap();
+                    if String::from_utf8_lossy(&request[..count]).contains("/slow") {
+                        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\nConnection: close\r\n\r\npart").await.unwrap();
+                        started.notify_one();release.notified().await;
+                    } else {
+                        socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\ndone").await.unwrap();
+                    }
+                }));
+            }
+            for task in tasks {
+                task.await.unwrap();
+            }
+        });
+        let mut models = catalog()
+            .into_iter()
+            .filter(|m| m["runtime"] == "whisper-cpp")
+            .take(2)
+            .collect::<Vec<_>>();
+        assert_eq!(models.len(), 2);
+        voice
+            .inner
+            .state
+            .lock()
+            .unwrap()
+            .runtimes
+            .insert("whisper-cpp".into(), (now_ms(), json!({"ready":true})));
+        models[0]["assets"] =
+            json!([{"fileName":"asset.bin","url":format!("http://{address}/slow")}]);
+        models[1]["assets"] =
+            json!([{"fileName":"asset.bin","url":format!("http://{address}/fast")}]);
+        let first = s(&models[0]["id"]).to_owned();
+        let second = s(&models[1]["id"]).to_owned();
+        std::fs::create_dir_all(voice.dir(&first)).unwrap();
+        std::fs::write(voice.dir(&first).join("preserved.bin"), b"keep").unwrap();
+        let speech = Cancel::new();
+        voice.inner.state.lock().unwrap().speech = Some(speech.clone());
+        assert!(voice.launch_download(models[0].clone()));
+        tokio::time::timeout(Duration::from_secs(3), started.notified())
+            .await
+            .unwrap();
+        assert!(!voice.launch_download(models[0].clone()));
+        assert!(voice.launch_download(models[1].clone()));
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !voice.dir(&first).join("asset.bin.part").exists() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let result = tokio::time::timeout(
+            Duration::from_secs(3),
+            voice.handle("voice:model:cancel-download", &[json!({"modelId":first})]),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(result, json!({"ok":true,"cancelled":true}));
+        assert!(!voice.dir(&first).join("asset.bin.part").exists());
+        assert!(!voice.dir(&first).join("asset.bin").exists());
+        assert_eq!(
+            std::fs::read(voice.dir(&first).join("preserved.bin")).unwrap(),
+            b"keep"
+        );
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while voice
+                .inner
+                .state
+                .lock()
+                .unwrap()
+                .download_jobs
+                .contains_key(&second)
+            {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            std::fs::read(voice.dir(&second).join("asset.bin")).unwrap(),
+            b"done"
+        );
+        assert!(!speech.is_cancelled());
+        assert!(!voice.inner.stop.is_cancelled());
+        assert_eq!(
+            voice.cancel_download(&first).await.unwrap()["cancelled"],
+            false
+        );
+        release.notify_one();
+        server.await.unwrap();
+        voice.shutdown().await;
+    }
     #[test]
     fn typed_array_json_forms_are_accepted_without_truncation() {
         assert_eq!(bytes(&json!([0, 128, 255])).unwrap(), vec![0, 128, 255]);

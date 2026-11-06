@@ -333,7 +333,10 @@ impl AiCore {
         }
         let mut clients = self.inner.extensions.clients.lock().unwrap();
         clients.retain(|key, client| {
-            if key == id || key.starts_with(&format!("{id}:retired:")) || key.starts_with(&format!("{id}:probe:")) {
+            if key == id
+                || key.starts_with(&format!("{id}:retired:"))
+                || key.starts_with(&format!("{id}:probe:"))
+            {
                 client.shutdown();
                 false
             } else {
@@ -343,9 +346,14 @@ impl AiCore {
     }
     fn release_ext_probe(&self, id: &str, client: &Arc<Client>) {
         let prefix = format!("{id}:probe:");
-        self.inner.extensions.clients.lock().unwrap().retain(|key, registered| {
-            !key.starts_with(&prefix) || !Arc::ptr_eq(registered, client)
-        });
+        self.inner
+            .extensions
+            .clients
+            .lock()
+            .unwrap()
+            .retain(|key, registered| {
+                !key.starts_with(&prefix) || !Arc::ptr_eq(registered, client)
+            });
     }
     async fn ext_client(&self, extension: &str, connection: &Value) -> Result<Arc<Client>, String> {
         self.ext_client_mode(extension, connection, false).await
@@ -356,7 +364,9 @@ impl AiCore {
         connection: &Value,
         explicit_test: bool,
     ) -> Result<Arc<Client>, String> {
-        if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
+        if self.inner.stop.is_cancelled() {
+            return Err("AI runtime is shutting down".into());
+        }
         let id = key(extension, s(&connection["id"]));
         if !explicit_test {
             if let Some((count, at, error)) =
@@ -378,7 +388,9 @@ impl AiCore {
         };
         let mut receiver = {
             let mut starts = self.inner.extensions.starting.lock().unwrap();
-            if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
+            if self.inner.stop.is_cancelled() {
+                return Err("AI runtime is shutting down".into());
+            }
             if let Some(start) = starts.get(&start_id) {
                 start.result.clone()
             } else {
@@ -547,9 +559,13 @@ impl AiCore {
         // Include uncommitted clients in every remove/disable/shutdown sweep.
         // Keep the lifecycle lock through validity checks and registration.
         let _guard = self.inner.extensions.lock.lock().unwrap();
-        if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
+        if self.inner.stop.is_cancelled() {
+            return Err("AI runtime is shutting down".into());
+        }
         self.inner.extensions.clients.lock().unwrap().insert(
-            format!("{id}:probe:{}", uuid::Uuid::new_v4()), client.clone());
+            format!("{id}:probe:{}", uuid::Uuid::new_v4()),
+            client.clone(),
+        );
         let current = self.inner.extensions.load()?;
         if !current["extensions"]
             .as_array()
@@ -594,8 +610,10 @@ impl AiCore {
         }
         let mut updated = vec![];
         let mut probes = Probes {
-            clients: Vec::new(), committed: false,
-            core: self.clone(), handed_off: false,
+            clients: Vec::new(),
+            committed: false,
+            core: self.clone(),
+            handed_off: false,
         };
         for c in ext["connections"].as_array().into_iter().flatten() {
             let client = self.ext_client_mode(id, c, explicit_test).await?;
@@ -736,7 +754,9 @@ impl AiCore {
         let core = self.clone();
         let result = self
             .ext_edit(move |data| {
-                if core.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
+                if core.inner.stop.is_cancelled() {
+                    return Err("AI runtime is shutting down".into());
+                }
                 let record = record_mut(data, &id)?;
                 record.as_object_mut().unwrap().remove("error");
                 for (cid, catalog, version, pin, resources, ttl) in updated {
@@ -789,7 +809,9 @@ impl AiCore {
             .await;
         if result.is_ok() {
             let _guard = self.inner.extensions.lock.lock().unwrap();
-            if self.inner.stop.is_cancelled() { return Err("AI runtime is shutting down".into()); }
+            if self.inner.stop.is_cancelled() {
+                return Err("AI runtime is shutting down".into());
+            }
             let current = self.inner.extensions.load()?;
             for c in ext["connections"].as_array().into_iter().flatten() {
                 let valid = current["extensions"]
@@ -1774,12 +1796,33 @@ impl AiCore {
                                 | "prompts"
                                 | "commands"
                                 | "agents"
+                                | "providers"
                                 | "connections"
                         ) {
                             r[k] = v.clone();
                         }
                     }
                     manifest::parse(&r.to_string())?;
+                    if patch.get("providers").is_some() {
+                        r["enabled"] = json!(false);
+                        for provider in r["providers"].as_array_mut().into_iter().flatten() {
+                            let pid = s(&provider["id"]).to_string();
+                            for (name, value) in
+                                provider["headers"].as_object_mut().into_iter().flatten()
+                            {
+                                if let Some(literal) = value.as_str() {
+                                    if manifest::secret_key(name, literal) {
+                                        core.inner.extensions.secrets.put(
+                                            &provider_key(&id, &pid),
+                                            name,
+                                            Some(literal),
+                                        )?;
+                                        *value = json!({"secret":name,"label":name});
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if patch.get("connections").is_some() {
                         r["enabled"] = json!(false);
                         for c in r["connections"].as_array_mut().into_iter().flatten() {

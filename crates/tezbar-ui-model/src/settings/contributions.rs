@@ -1,6 +1,8 @@
 //! AI extension administration coordinates the existing core; never starts an MCP runtime itself.
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
+mod secret_slots;
+pub use secret_slots::{SecretDescriptor, SecretSlot};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     List,
@@ -69,6 +71,7 @@ struct Pending {
 #[derive(Default)]
 pub struct Contributions {
     raw: Value,
+    raw_revision: u64,
     pub display: Value,
     pub instructions: String,
     instructions_dirty: bool,
@@ -119,6 +122,7 @@ impl Contributions {
         self.message = None;
         match p.action {
             Action::List => {
+                self.raw_revision += 1;
                 if !self.instructions_dirty {
                     self.instructions = value["globalInstructions"].as_str().unwrap_or("").into();
                 }
@@ -258,23 +262,23 @@ impl Contributions {
                 | "providers"
                 | "prompts"
                 | "commands"
-                | "profiles"
+                | "agents"
                 | "instructions"
         ) {
             return Err("Unsupported manifest field");
         }
-        let mut manifest = self.raw["extensions"]
+        let manifest = self.raw["extensions"]
             .as_array()
             .into_iter()
             .flatten()
             .find(|e| e["id"] == id)
             .cloned()
             .ok_or("Extension not found")?;
-        manifest[field] = rehydrate(&value, &manifest[field])?;
+        let value = rehydrate(&value, &manifest[field])?;
         Ok(self.request(
             format!("extension:{id}"),
             Action::Update,
-            vec![json!(id), manifest],
+            vec![json!(id), json!({field: value})],
         ))
     }
     /// All operations are explicit, including reset, OAuth, project trust and resource reads.
@@ -522,10 +526,11 @@ impl Contributions {
             .and_then(|a| a.get_mut(index))
             .ok_or("Row not found")?;
         row[field] = rehydrate(&value, &row[field])?;
+        let changed = manifest[collection].clone();
         Ok(self.request(
             format!("extension:{id}"),
             Action::Update,
-            vec![json!(id), manifest],
+            vec![json!(id), json!({collection: changed})],
         ))
     }
 }
@@ -556,8 +561,12 @@ mod repair_tests {
             e.args[1]["connections"][1]["headers"]["Authorization"]["secret"],
             "ref-h"
         );
-        assert_eq!(e.args[1]["providers"][0]["apiKey"]["secret"], "ref-p");
-        assert_eq!(e.args[1]["unknown"], json!({"future":true}));
+        assert!(e.args[1].get("providers").is_none());
+        assert!(e.args[1].get("unknown").is_none());
+        assert_eq!(
+            c.display["extensions"][0]["unknown"],
+            json!({"future":true})
+        );
         let mut providers = c.display["extensions"][0]["providers"].clone();
         providers[0]["baseURL"] = json!("new");
         let e = c.update("fixture", "providers", providers).unwrap();

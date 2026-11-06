@@ -1,5 +1,97 @@
 use super::super::tests::fixture;
 use super::*;
+#[tokio::test]
+async fn agent_and_provider_updates_validate_and_preserve_unedited_opaque_refs() {
+    let (_dir, core, _events) = fixture();
+    let record = json!({"manifestVersion":1,"id":"m7-update","name":"M7","agents":[{"id":"a","instructions":"old"}],"providers":[{"id":"custom:m7","title":"M7 provider","baseURL":"https://old.example","headers":{"Authorization":{"secret":"opaque-ref","label":"Key"}}}]});
+    core.handle("ai-extensions:add", &[record])
+        .await
+        .unwrap()
+        .unwrap();
+    core.handle(
+        "ai-extensions:set-secret",
+        &[
+            json!("m7-update"),
+            json!("opaque-ref"),
+            json!("fixture-original-key"),
+            json!({"providerId":"custom:m7"}),
+        ],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let edited = core
+        .handle(
+            "ai-extensions:update",
+            &[
+                json!("m7-update"),
+                json!({"agents":[{"id":"a","instructions":"new"}]}),
+            ],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(edited["agents"][0]["instructions"], "new");
+    assert_eq!(
+        edited["providers"][0]["headers"]["Authorization"]["secret"],
+        "opaque-ref"
+    );
+    let mut providers = edited["providers"].clone();
+    providers[0]["baseURL"] = json!("https://new.example");
+    providers[0]["headers"]["X-Api-Key"] = json!("fixture-new-key");
+    let edited = core
+        .handle(
+            "ai-extensions:update",
+            &[json!("m7-update"), json!({"providers":providers})],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(edited["providers"][0]["baseURL"], "https://new.example");
+    assert_eq!(
+        edited["providers"][0]["headers"]["Authorization"]["secret"],
+        "opaque-ref"
+    );
+    assert_eq!(edited["agents"][0]["instructions"], "new");
+    assert_eq!(
+        edited["providers"][0]["headers"]["X-Api-Key"]["secret"],
+        "X-Api-Key"
+    );
+    let secrets = core
+        .inner
+        .extensions
+        .secrets
+        .values(&provider_key("m7-update", "custom:m7"))
+        .unwrap();
+    assert_eq!(
+        secrets.get("opaque-ref").map(String::as_str),
+        Some("fixture-original-key")
+    );
+    assert_eq!(
+        secrets.get("X-Api-Key").map(String::as_str),
+        Some("fixture-new-key")
+    );
+    let durable =
+        std::fs::read_to_string(core.inner.ctx.paths.config_dir.join("ai-extensions.json"))
+            .unwrap();
+    assert!(!durable.contains("fixture-new-key") && !durable.contains("fixture-original-key"));
+    let mut bad = edited["providers"].clone();
+    bad[0]["baseURL"] = json!("file:///unsafe");
+    assert!(core
+        .handle(
+            "ai-extensions:update",
+            &[json!("m7-update"), json!({"providers":bad})]
+        )
+        .await
+        .unwrap()
+        .is_err());
+    let data = core.ext_read().await.unwrap();
+    assert_eq!(
+        data["extensions"][0]["providers"][0]["baseURL"],
+        "https://new.example"
+    );
+    core.shutdown().await;
+}
 fn program(dir: &std::path::Path) -> std::path::PathBuf {
     let source = dir.join("mcp_fixture.rs");
     std::fs::write(&source, include_str!("mcp/fixture.rs.txt")).unwrap();
@@ -2018,29 +2110,63 @@ async fn removing_an_extension_stops_retired_clients_and_their_pending_call() {
     let marker = dir.path().join("calls");
     let release = dir.path().join("release");
     core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"retire","name":"Retire","connections":[{"id":"stdio","name":"Slow","transport":"stdio","command":binary,"args":["slow"],"env":{"FIXTURE_MARKER":marker,"FIXTURE_RELEASE":release}}]})]).await.unwrap();
-    assert_eq!(core.ext_handle("ai-extensions:test", &[json!("retire")]).await.unwrap()["ok"], true);
-    core.ext_handle("ai-extensions:set-enabled", &[json!("retire"), json!(true)]).await.unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("retire")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
+    core.ext_handle("ai-extensions:set-enabled", &[json!("retire"), json!(true)])
+        .await
+        .unwrap();
     let old = core.inner.extensions.clients.lock().unwrap()[&key("retire", "stdio")].clone();
     let client = old.clone();
     let call = tokio::spawn(async move {
-        client.call("tools/call", json!({"name":"echo","arguments":{"text":"once"}}), &Cancel::new(), Duration::from_secs(20)).await
+        client
+            .call(
+                "tools/call",
+                json!({"name":"echo","arguments":{"text":"once"}}),
+                &Cancel::new(),
+                Duration::from_secs(20),
+            )
+            .await
     });
     tokio::time::timeout(Duration::from_secs(10), async {
-        while std::fs::read_to_string(&marker).unwrap_or_default().lines().count() == 0 {
+        while std::fs::read_to_string(&marker)
+            .unwrap_or_default()
+            .lines()
+            .count()
+            == 0
+        {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-    }).await.unwrap();
-    assert_eq!(core.ext_handle("ai-extensions:test", &[json!("retire")]).await.unwrap()["ok"], true);
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        core.ext_handle("ai-extensions:test", &[json!("retire")])
+            .await
+            .unwrap()["ok"],
+        true
+    );
     assert!(!old.is_closed());
-    core.ext_handle("ai-extensions:remove", &[json!("retire")]).await.unwrap();
-    assert!(core.ext_read().await.unwrap()["extensions"].as_array().unwrap().is_empty());
+    core.ext_handle("ai-extensions:remove", &[json!("retire")])
+        .await
+        .unwrap();
+    assert!(core.ext_read().await.unwrap()["extensions"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     assert!(old.is_closed());
     assert!(core.inner.extensions.clients.lock().unwrap().is_empty());
-    assert!(tokio::time::timeout(Duration::from_secs(1), call).await.unwrap().unwrap().is_err());
+    assert!(tokio::time::timeout(Duration::from_secs(1), call)
+        .await
+        .unwrap()
+        .unwrap()
+        .is_err());
     assert_eq!(std::fs::read_to_string(&marker).unwrap().lines().count(), 1);
     core.shutdown().await;
 }
-
 
 #[tokio::test]
 async fn stopping_during_a_test_catalog_cancels_the_probe_and_prevents_adoption() {
@@ -2054,30 +2180,61 @@ async fn stopping_during_a_test_catalog_cancels_the_probe_and_prevents_adoption(
                 "tools/list" => json!({"tools":[]}),
                 _ => json!({"capabilities":{"tools":{}}}),
             };
-            let mut reply = Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":result}));
-            if method == "tools/list" { reply.delay = Duration::from_secs(30); }
+            let mut reply =
+                Reply::json(json!({"jsonrpc":"2.0","id":r["body"]["id"],"result":result}));
+            if method == "tools/list" {
+                reply.delay = Duration::from_secs(30);
+            }
             reply
-        }).await;
+        })
+        .await;
         core.ext_handle("ai-extensions:add", &[json!({"manifestVersion":1,"id":"quit","name":"Quit","connections":[{"id":"web","name":"Web","transport":"http","url":http.url}]})]).await.unwrap();
         let worker = core.clone();
-        let test = tokio::spawn(async move { worker.ext_handle("ai-extensions:test", &[json!("quit")]).await });
+        let test = tokio::spawn(async move {
+            worker
+                .ext_handle("ai-extensions:test", &[json!("quit")])
+                .await
+        });
         tokio::time::timeout(Duration::from_secs(3), async {
             loop {
                 let request = http.requests.recv().await.unwrap();
-                if request["body"]["method"] == "tools/list" { break; }
+                if request["body"]["method"] == "tools/list" {
+                    break;
+                }
             }
-        }).await.unwrap();
-        assert!(core.inner.extensions.clients.lock().unwrap().keys().any(|k| k.contains(":probe:")));
+        })
+        .await
+        .unwrap();
+        assert!(core
+            .inner
+            .extensions
+            .clients
+            .lock()
+            .unwrap()
+            .keys()
+            .any(|k| k.contains(":probe:")));
         let start = std::time::Instant::now();
-        if shutdown { core.shutdown().await; }
-        else { core.ext_handle("ai-extensions:remove", &[json!("quit")]).await.unwrap(); }
+        if shutdown {
+            core.shutdown().await;
+        } else {
+            core.ext_handle("ai-extensions:remove", &[json!("quit")])
+                .await
+                .unwrap();
+        }
         assert!(start.elapsed() < Duration::from_secs(1));
-        let outcome = tokio::time::timeout(Duration::from_secs(1), test).await.unwrap().unwrap();
+        let outcome = tokio::time::timeout(Duration::from_secs(1), test)
+            .await
+            .unwrap()
+            .unwrap();
         assert!(!outcome.is_ok_and(|v| v["ok"] == true));
         assert!(core.inner.extensions.clients.lock().unwrap().is_empty());
         assert!(core.inner.extensions.starting.lock().unwrap().is_empty());
         let data = core.ext_read().await.unwrap();
-        if shutdown { assert_ne!(data["extensions"][0]["connections"][0]["tested"], true); }
-        else { assert!(data["extensions"].as_array().unwrap().is_empty()); core.shutdown().await; }
+        if shutdown {
+            assert_ne!(data["extensions"][0]["connections"][0]["tested"], true);
+        } else {
+            assert!(data["extensions"].as_array().unwrap().is_empty());
+            core.shutdown().await;
+        }
     }
 }

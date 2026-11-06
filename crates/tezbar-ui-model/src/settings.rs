@@ -29,6 +29,7 @@ pub enum Key {
     Definition(String),
     Selection(String),
     Active,
+    Task(String),
     Global(String),
     Remove(String),
 }
@@ -77,6 +78,11 @@ pub enum Edit {
         provider: String,
         model: String,
     },
+    TaskSelection {
+        task: String,
+        provider: String,
+        model: String,
+    },
     RemoveProvider(String),
     RemoveModels {
         provider: String,
@@ -97,6 +103,7 @@ impl Edit {
             | Self::Discovered { provider, .. }
             | Self::Select { provider, .. }
             | Self::Activate { provider, .. }
+            | Self::TaskSelection { provider, .. }
             | Self::RemoveModels { provider, .. } => Some(provider),
             Self::RemoveProvider(provider) => Some(provider),
             Self::Global { .. } => None,
@@ -115,6 +122,7 @@ impl Edit {
             }
             Self::Select { provider, .. } => Key::Selection(provider.clone()),
             Self::Activate { .. } => Key::Active,
+            Self::TaskSelection { task, .. } => Key::Task(task.clone()),
             Self::RemoveProvider(p) => Key::Remove(p.clone()),
             Self::Global { field, .. } => Key::Global(field.clone()),
         }
@@ -401,14 +409,36 @@ impl WriteQueue {
                     next["model"] = json!(model);
                     ensure_map(&mut next, "taskProviderOverrides");
                     ensure_map(&mut next, "taskModelOverrides");
-                    next["taskProviderOverrides"]["chat"] = json!(provider);
-                    next["taskModelOverrides"]["chat"] = json!(model);
+                    if !self.stale(&Key::Task("chat".into()), intent.revision) {
+                        next["taskProviderOverrides"]["chat"] = json!(provider);
+                        next["taskModelOverrides"]["chat"] = json!(model);
+                        keys.push(Key::Task("chat".into()));
+                    }
                     touched.extend([
                         "provider",
                         "model",
                         "taskProviderOverrides",
                         "taskModelOverrides",
                     ]);
+                }
+                Edit::TaskSelection {
+                    task,
+                    provider,
+                    model,
+                } => {
+                    ensure_map(&mut next, "taskProviderOverrides");
+                    ensure_map(&mut next, "taskModelOverrides");
+                    for (field, value) in [
+                        ("taskProviderOverrides", provider),
+                        ("taskModelOverrides", model),
+                    ] {
+                        if value.is_empty() {
+                            next[field].as_object_mut().unwrap().remove(task);
+                        } else {
+                            next[field][task] = json!(value);
+                        }
+                        touched.insert(field);
+                    }
                 }
                 Edit::RemoveProvider(p) => {
                     for name in [
@@ -438,10 +468,19 @@ impl WriteQueue {
                         next["model"] = json!(model);
                         touched.extend(["provider", "model"]);
                     }
-                    if next["taskProviderOverrides"]["chat"] == *p {
+                    let tasks = next["taskProviderOverrides"]
+                        .as_object()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|(task, provider)| (provider == p).then_some(task.clone()))
+                        .collect::<Vec<_>>();
+                    if !tasks.is_empty() {
                         ensure_map(&mut next, "taskModelOverrides");
-                        next["taskProviderOverrides"]["chat"] = json!("ollama");
-                        next["taskModelOverrides"]["chat"] = json!(model);
+                        for task in tasks {
+                            next["taskProviderOverrides"][&task] = json!("ollama");
+                            next["taskModelOverrides"][&task] = json!(model);
+                            keys.push(Key::Task(task));
+                        }
                         touched.extend(["taskProviderOverrides", "taskModelOverrides"]);
                     }
                 }

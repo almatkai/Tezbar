@@ -73,6 +73,7 @@ pub const CHANNELS: &[&str] = &[
     "voice:stt:transcribe",
     "voice:models:list",
     "voice:model:download",
+    "voice:model:cancel-download",
     "voice:model:delete",
     "voice:model:get-selected",
     "voice:model:set-selected",
@@ -898,7 +899,9 @@ impl AiCore {
                         Some(owner.clone())
                     }
                     _ => {
-                        return Err("Query owner must be a non-empty string of at most 256 bytes".into());
+                        return Err(
+                            "Query owner must be a non-empty string of at most 256 bytes".into(),
+                        );
                     }
                 };
                 let text = a.as_str().ok_or("Query must be a string")?.trim();
