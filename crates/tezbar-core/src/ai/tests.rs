@@ -370,6 +370,133 @@ fn no_runtime_marker() -> std::path::PathBuf {
         std::sync::OnceLock::new();
     FIXTURE.get_or_init(||{let dir=tempfile::tempdir().unwrap();let source=dir.path().join("marker.rs");let exe=dir.path().join("marker.exe");std::fs::write(&source,r#"fn main(){let exe=std::env::current_exe().unwrap();std::fs::write(exe.parent().unwrap().join("forbidden"),b"forbidden").unwrap();std::process::exit(91)}"#).unwrap();let result=std::process::Command::new("rustc").arg("--edition=2021").arg(&source).arg("-o").arg(&exe).output().unwrap();assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));(dir,exe)}).1.clone()
 }
+
+#[tokio::test]
+async fn native_query_owner_is_preserved_on_token_and_done_without_changing_legacy_events() {
+    let mut observed = vec![];
+    for owner in [Some("native-answer-A"), None] {
+        let (_dir, core, mut events) = fixture();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        core.patch_config(json!({"provider":"ollama","baseURL":format!("http://{}", listener.local_addr().unwrap())})).await.unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0; 8192];
+            socket.read(&mut request).await.unwrap();
+            let body = "{\"message\":{\"content\":\"fixture answer\"},\"done\":true}\n";
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        });
+        let mut args = vec![json!("What is this fixture?")];
+        if let Some(owner) = owner {
+            args.push(json!(owner));
+        }
+        let intent = core.handle("query", &args).await.unwrap().unwrap();
+        let token = tokio::time::timeout(Duration::from_secs(5), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let done = tokio::time::timeout(Duration::from_secs(5), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        server.await.unwrap();
+        core.shutdown().await;
+        observed.push((owner, intent, token, done));
+    }
+    for (owner, intent, token, done) in observed {
+        assert_eq!(intent["type"], "ai");
+        assert_eq!(token.0, "stream-token");
+        assert_eq!(done.0, "stream-done");
+        assert_eq!(
+            token.1,
+            owner.map_or_else(
+                || json!("fixture answer"),
+                |owner| json!({"owner":owner,"value":"fixture answer"})
+            )
+        );
+        assert_eq!(
+            done.1,
+            owner.map_or(Value::Null, |owner| json!({"owner":owner,"value":null}))
+        );
+    }
+}
+
+#[tokio::test]
+async fn native_query_owner_rejects_invalid_identity_before_starting_work() {
+    let (_dir, core, mut events) = fixture();
+    for owner in [
+        json!(""),
+        json!("x".repeat(257)),
+        json!(7),
+        json!({"owner":"wrong shape"}),
+    ] {
+        let error = core
+            .handle("query", &[json!("What is this fixture?"), owner])
+            .await
+            .unwrap()
+            .unwrap_err();
+        assert!(error.contains("Query owner"));
+    }
+    assert!(core.inner.state.lock().unwrap().answer.is_none());
+    assert!(events.try_recv().is_err());
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_query_owner_tags_error_and_final_completion() {
+    let (_dir, core, mut events) = fixture();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    core.patch_config(
+        json!({"provider":"ollama","baseURL":format!("http://{}", listener.local_addr().unwrap())}),
+    )
+    .await
+    .unwrap();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = [0; 8192];
+        socket.read(&mut request).await.unwrap();
+        let body = r#"{"error":"fixture rejection"}"#;
+        socket.write_all(format!("HTTP/1.1 400 Bad Request\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+    });
+    core.handle(
+        "query",
+        &[json!("What is this fixture?"), json!("native-answer-error")],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(5), events.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let done = tokio::time::timeout(Duration::from_secs(5), events.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    server.await.unwrap();
+    core.shutdown().await;
+    assert_eq!(error.0, "stream-error");
+    assert_eq!(error.1["owner"], "native-answer-error");
+    assert!(error.1["value"]
+        .as_str()
+        .unwrap()
+        .contains("fixture rejection"));
+    assert_eq!(
+        done,
+        (
+            "stream-done".into(),
+            json!({"owner":"native-answer-error","value":null})
+        )
+    );
+}
 #[test]
 fn native_source_has_only_reviewed_process_seams_and_never_stages_pi_policy() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));

@@ -892,6 +892,15 @@ impl AiCore {
                 Ok(meta)
             }
             "query" => {
+                let owner = match arg(args, 1) {
+                    Value::Null => None,
+                    Value::String(owner) if !owner.is_empty() && owner.len() <= 256 => {
+                        Some(owner.clone())
+                    }
+                    _ => {
+                        return Err("Query owner must be a non-empty string of at most 256 bytes".into());
+                    }
+                };
                 let text = a.as_str().ok_or("Query must be a string")?.trim();
                 let intent = classify(text);
                 match s(&intent["type"]) {
@@ -906,7 +915,10 @@ impl AiCore {
                         )
                         .await?;
                     }
-                    "ai" | "answer" => self.answer(text.to_string()),
+                    "ai" | "answer" => match owner {
+                        Some(owner) => self.answer_with_owner(text.to_string(), Some(owner)),
+                        None => self.answer(text.to_string()),
+                    },
                     _ => {}
                 }
                 Ok(intent)

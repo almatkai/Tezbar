@@ -16,6 +16,11 @@ pub enum Input {
         generation: u64,
         id: String,
     },
+    /// Explicit user gesture over a canonical saved pin, independent of search previews.
+    ActivatePin {
+        row: Row,
+        rank: usize,
+    },
     Move(isize),
     ActivationComplete {
         ticket: u64,
@@ -164,9 +169,12 @@ impl Launcher {
         }
     }
     fn activation_effects(&mut self) -> Vec<Effect> {
-        let Some(row) = self.session.rows.get(self.session.selected) else {
+        let Some(row) = self.session.rows.get(self.session.selected).cloned() else {
             return vec![];
         };
+        self.activation_for_row(row, self.session.selected)
+    }
+    fn activation_for_row(&mut self, row: Arc<Row>, rank: usize) -> Vec<Effect> {
         self.ticket += 1;
         self.activation = Some((self.ticket, self.session.generation));
         let mut out = if row.category == "quick-notes" {
@@ -187,7 +195,7 @@ impl Launcher {
                 row_id: row.id.clone(),
                 action: row.action.clone(),
                 query: self.session.query.clone(),
-                rank: self.session.selected,
+                rank,
             }]
         };
         if let Some(q) = history_entry(&self.input, self.terminal_mode) {
@@ -320,6 +328,17 @@ impl Launcher {
                     }
                 }
             }
+            Input::ActivatePin { row, rank } => {
+                if self.visible
+                    && !self.composing
+                    && !self.session.activating
+                    && !row.ephemeral
+                    && row.pinnable()
+                {
+                    self.session.activating = true;
+                    out.extend(self.activation_for_row(Arc::new(row), rank));
+                }
+            }
             Input::Move(delta) => {
                 if !self.composing && !self.session.pending() && !self.session.rows.is_empty() {
                     self.list_selection_active = true;
@@ -423,6 +442,116 @@ impl Launcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_pin_has_its_own_activation_authority_and_uses_normal_tickets() {
+        let mut launcher = Launcher::default();
+        launcher.update(Input::Show, 0);
+        let row = Row::command("saved", "Saved command");
+        assert!(launcher
+            .update(
+                Input::Click {
+                    generation: launcher.session.generation,
+                    id: row.id.clone()
+                },
+                1
+            )
+            .is_empty());
+        let first = launcher.update(
+            Input::ActivatePin {
+                row: row.clone(),
+                rank: 3,
+            },
+            2,
+        );
+        let Effect::Execute {
+            ticket,
+            row_id,
+            rank,
+            ..
+        } = &first[0]
+        else {
+            panic!("pin must use normal activation")
+        };
+        let first_ticket = *ticket;
+        assert_eq!(row_id, &row.id);
+        assert_eq!(*rank, 3);
+        assert!(launcher.session.rows.is_empty());
+        assert!(launcher
+            .update(
+                Input::ActivatePin {
+                    row: row.clone(),
+                    rank: 3
+                },
+                3
+            )
+            .is_empty());
+        launcher.update(
+            Input::ActivationComplete {
+                ticket: first_ticket,
+                result: Err("fixture failure".into()),
+            },
+            4,
+        );
+        let second = launcher.update(
+            Input::ActivatePin {
+                row: row.clone(),
+                rank: 3,
+            },
+            5,
+        );
+        let Effect::Execute {
+            ticket: second_ticket,
+            ..
+        } = second[0]
+        else {
+            panic!()
+        };
+        launcher.update(
+            Input::ActivationComplete {
+                ticket: first_ticket,
+                result: Ok(()),
+            },
+            6,
+        );
+        assert!(launcher.session.activating);
+        assert!(launcher.visible);
+        launcher.update(
+            Input::ActivationComplete {
+                ticket: second_ticket,
+                result: Ok(()),
+            },
+            7,
+        );
+        assert!(!launcher.visible);
+        assert!(launcher
+            .update(Input::ActivatePin { row, rank: 3 }, 8)
+            .is_empty());
+    }
+    #[test]
+    fn saved_pin_respects_composition_and_keeps_typed_note_identity() {
+        let mut launcher = Launcher::default();
+        launcher.update(Input::Show, 0);
+        let mut note = Row::command("open-notes", "Saved note");
+        note.category = "quick-notes".into();
+        note.id = "note:42".into();
+        launcher.update(Input::Composition(true), 1);
+        assert!(launcher
+            .update(
+                Input::ActivatePin {
+                    row: note.clone(),
+                    rank: 0
+                },
+                2
+            )
+            .is_empty());
+        launcher.update(Input::Composition(false), 3);
+        assert!(matches!(
+            launcher
+                .update(Input::ActivatePin { row: note, rank: 0 }, 4)
+                .first(),
+            Some(Effect::OpenNote { note_id: 42, .. })
+        ));
+    }
     #[test]
     fn ime_search_errors_and_activation_owner() {
         let mut l = Launcher::default();
