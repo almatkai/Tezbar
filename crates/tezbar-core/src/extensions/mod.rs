@@ -89,6 +89,9 @@ impl ExtensionsCore {
             hash_work: Arc::default(),
         }
     }
+    pub fn with_worker_launch(ctx: CoreContext, launch: super::extension_worker::WorkerLaunch) -> Self {
+        Self { worker:ExtensionWorker::with_launch(ctx.clone(),launch), ..Self::new(ctx) }
+    }
 
     pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {
         if channel == "core:extensions:commands" {

@@ -72,11 +72,19 @@ pub struct NativeCore {
 
 impl NativeCore {
     pub fn new(ctx: CoreContext) -> Result<Arc<Self>, String> {
+        Self::configured(ctx,None)
+    }
+    /// Construct the same routed core with a host-selected isolated worker bundle.
+    pub fn new_with_extension_worker(ctx: CoreContext, launch: extension_worker::WorkerLaunch) -> Result<Arc<Self>,String> {
+        Self::configured(ctx,Some(launch))
+    }
+    fn configured(ctx: CoreContext, launch: Option<extension_worker::WorkerLaunch>) -> Result<Arc<Self>,String> {
+        let extensions=match launch {Some(launch)=>extensions::ExtensionsCore::with_worker_launch(ctx.clone(),launch),None=>extensions::ExtensionsCore::new(ctx.clone())};
         let core = Arc::new(Self {
             ai: ai::AiCore::new(ctx.clone()),
             knowledge: knowledge::KnowledgeCore::new(ctx.clone()),
             launcher: launcher::LauncherCore::new(ctx.clone()),
-            extensions: extensions::ExtensionsCore::new(ctx.clone()),
+            extensions,
             platform: platform::PlatformCore::new(ctx.clone()),
             system: system::SystemCore::new(ctx.clone()),
             vault: vault::VaultService::new(ctx.paths.data_dir.clone(), Some(ctx.host.clone())),

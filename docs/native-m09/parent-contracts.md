@@ -1,0 +1,7 @@
+# Parent construction seams for real extension fixtures
+
+`tezbar_core::extension_worker::WorkerLaunch::new(bun: PathBuf, bundle_directory: PathBuf)` validates and canonicalizes an explicit host-selected executable file and built `extension-worker.js` directory. It does not launch anything. `NativeCore::new_with_extension_worker(ctx, launch)` constructs the same routed NativeCore with that one worker launch capability. `ExtensionsCore::with_worker_launch` and `ExtensionWorker::with_launch` expose the same explicit construction option. Default constructors and lazy production discovery remain unchanged. No UI/IPC/config/environment arbitrary-execution override was added.
+
+Fixtures must build the actual worker source and necessary packaged dependencies into their own temporary resource tree and point this constructor at it. `CorePaths.resource_dir` still supplies worker resources. The real CoreContext router and TestHost must handle host requests; a fake worker script is not evidence of SDK compatibility. No shared dist-backend overwrite or production profile is needed. A path-validation test passes at `/tmp/tezbar-m9-parent-worker-launch.log`; real Bun/core/GPUI fixture execution is still pending.
+
+The shared asset implementation and App/Launcher composition remain integration work. M9 must not open per-row HTTP clients, start another runtime or bypass canonical extension-root/image lease policy.

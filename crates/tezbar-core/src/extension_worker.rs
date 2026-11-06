@@ -62,9 +62,27 @@ impl Drop for PendingRequest {
 }
 
 #[derive(Clone)]
+pub struct WorkerLaunch {
+    bun: PathBuf,
+    directory: PathBuf,
+}
+impl WorkerLaunch {
+    /// Explicit host construction capability, not an IPC/config/environment override.
+    /// Isolated fixtures can use the real worker without replacing the shared bundle.
+    pub fn new(bun: PathBuf, directory: PathBuf) -> Result<Self,String> {
+        let bun=std::fs::canonicalize(bun).map_err(|_| "Extension worker executable is unavailable")?;
+        let directory=std::fs::canonicalize(directory).map_err(|_| "Extension worker directory is unavailable")?;
+        if !bun.is_file() || !directory.join("extension-worker.js").is_file() {
+            return Err("Extension worker requires an executable file and a built worker bundle".into());
+        }
+        Ok(Self{bun,directory})
+    }
+}
+#[derive(Clone)]
 pub struct ExtensionWorker {
     ctx: CoreContext,
     process: Arc<tokio::sync::Mutex<Option<Process>>>,
+    launch: Option<WorkerLaunch>,
 }
 
 impl ExtensionWorker {
@@ -72,7 +90,11 @@ impl ExtensionWorker {
         Self {
             ctx,
             process: Arc::new(tokio::sync::Mutex::new(None)),
+            launch: None,
         }
+    }
+    pub fn with_launch(ctx: CoreContext, launch: WorkerLaunch) -> Self {
+        Self{launch:Some(launch),..Self::new(ctx)}
     }
 
     pub async fn request(&self, channel: &str, args: Vec<Value>) -> CoreResult {
@@ -133,15 +155,14 @@ impl ExtensionWorker {
     async fn launch(&self) -> Result<Process, String> {
         self.ctx
             .emit("extension-worker-status", json!({"phase":"starting"}));
-        let data = self.ctx.paths.data_dir.clone();
-        // Runtime discovery/download happens only in this extension-only path.
-        let bun = tokio::task::spawn_blocking(move || crate::bun::locate_bun(&data))
-            .await
-            .map_err(|e| e.to_string())??;
-        let directory = if cfg!(debug_assertions) {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist-backend")
+        let (bun,directory) = if let Some(launch)=&self.launch {
+            (launch.bun.clone(),launch.directory.clone())
         } else {
-            self.ctx.paths.resource_dir.join("dist-backend")
+            let data=self.ctx.paths.data_dir.clone();
+            // Discovery remains lazy and exclusive to extension execution.
+            let bun=tokio::task::spawn_blocking(move ||crate::bun::locate_bun(&data)).await.map_err(|e|e.to_string())??;
+            let directory=if cfg!(debug_assertions) { PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist-backend") } else {self.ctx.paths.resource_dir.join("dist-backend")};
+            (bun,directory)
         };
         let entry = directory.join("extension-worker.js");
         if !entry.is_file() {
@@ -517,3 +538,21 @@ mod tests {
 #[cfg(test)]
 #[path = "extension_worker_tests.rs"]
 mod integration_tests;
+
+#[cfg(test)]
+mod launch_path_tests {
+    use super::*;
+    #[test]
+    fn explicit_worker_launch_validates_owned_paths_without_launching() {
+        let root=tempfile::tempdir().unwrap();
+        let bun=root.path().join("fixture-bun");
+        let dir=root.path().join("bundle");std::fs::create_dir(&dir).unwrap();
+        assert!(WorkerLaunch::new(bun.clone(),dir.clone()).is_err());
+        std::fs::write(&bun,b"not invoked by this test").unwrap();
+        assert!(WorkerLaunch::new(bun.clone(),dir.clone()).is_err());
+        std::fs::write(dir.join("extension-worker.js"),b"fixture bundle").unwrap();
+        let launch=WorkerLaunch::new(bun.clone(),dir.clone()).unwrap();
+        assert_eq!(launch.bun,std::fs::canonicalize(bun).unwrap());
+        assert_eq!(launch.directory,std::fs::canonicalize(dir).unwrap());
+    }
+}
