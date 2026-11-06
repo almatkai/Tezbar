@@ -136,6 +136,34 @@ pub fn load(root: &Path, session: &str, turn: &str) -> Result<Option<Vec<Message
     }
     Ok(Some(messages))
 }
+/// Read one canonical user image without inflating other blobs or shifting indices
+/// when an earlier image is unavailable. The caller verifies durable session ownership.
+pub fn load_user_image(root: &Path, session: &str, turn: &str, index: usize) -> Result<Option<Value>, String> {
+    let _guard = LOCK.lock().map_err(|_| "Native transcript store lock failed")?;
+    let dir = folder(root, session);
+    let path = dir.join(format!("{}.json", key(turn)));
+    if !path.is_file() { return Ok(None); }
+    if path.metadata().map_err(err)?.len() > 32 * 1024 * 1024 {
+        return Err("Native store: transcript exceeds limit".into());
+    }
+    let messages: Vec<Message> = serde_json::from_value(common::read_json(&path)?).map_err(err)?;
+    if messages.len() != 1 || messages[0].role != "user" { return Ok(None); }
+    let Some(Block::Image { mime, data }) = messages[0].blocks.iter().filter(|b| matches!(b,Block::Image{..})).nth(index) else { return Ok(None); };
+    let data = if let Some(hash) = data.strip_prefix("blob:") {
+        if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) { return Ok(None); }
+        let bytes = match std::fs::File::open(dir.join("blobs").join(hash)) {
+            Ok(file) => { use std::io::Read; let mut bytes=Vec::new(); file.take(super::limits::IMAGE_BYTES as u64+1).read_to_end(&mut bytes).map_err(err)?; bytes },
+            Err(error) if error.kind()==std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(err(error)),
+        };
+        if bytes.len() > super::limits::IMAGE_BYTES { return Err("Native store: image exceeds limit".into()); }
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    } else {
+        if data.len() > super::limits::IMAGE_BYTES * 4 / 3 + 4 { return Err("Native store: image exceeds limit".into()); }
+        data.clone()
+    };
+    Ok(Some(serde_json::json!({"mimeType":mime,"data":data})))
+}
 fn gc(dir: &Path) -> Result<(), String> {
     let blobs = dir.join("blobs");
     if !blobs.exists() {

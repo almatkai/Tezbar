@@ -54,6 +54,7 @@ pub const CHANNELS: &[&str] = &[
     "chat:run",
     "chat:list",
     "chat:get",
+    "chat:image",
     "chat:append",
     "chat:update-title",
     "chat:generate-meta",
@@ -841,15 +842,16 @@ impl AiCore {
                 )
                 .await
             }
-            "chat:list" | "chat:get" | "chat:append" | "chat:update-title" | "chat:delete-turn"
+            "chat:list" | "chat:get" | "chat:image" | "chat:append" | "chat:update-title" | "chat:delete-turn"
             | "chat:delete" | "chat:clear" => {
+                let requested_sessions = if channel=="chat:clear" {chat::clear_targets(args.get(1))?} else {Vec::new()};
                 let _lifecycle =
                     if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
                         Some(self.inner.session_lifecycle.lock().await)
                     } else {
                         None
                     };
-                let mut clear_sessions = Vec::new();
+                let mut clear_sessions = requested_sessions;
                 if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
                     let session = if channel == "chat:delete-turn" {
                         a["sessionId"].as_str()
@@ -1418,3 +1420,6 @@ fn parse_meta_json(raw: &str) -> Option<Value> {
 
 #[cfg(test)]
 mod review_regressions;
+
+#[cfg(test)]
+mod history_image_tests;

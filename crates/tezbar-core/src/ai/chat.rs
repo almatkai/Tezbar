@@ -328,6 +328,16 @@ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> CoreRes
     );
     let root = ctx.paths.data_dir.clone();
     let result = tokio::task::spawn_blocking(move || {
+        if channel == "chat:image" {
+            let request=arg(&args,0);
+            let session=required(request,"sessionId")?;
+            let turn=required(request,"turnId")?;
+            let index=request["index"].as_u64().filter(|i| *i<8).ok_or("Invalid image index")? as usize;
+            if !path.is_file() { return Ok(Value::Null); }
+            let db=open(&path)?;
+            let owned=db.query_row("SELECT 1 FROM chat_turns WHERE id=? AND session_id=? AND role='user' AND NOT EXISTS(SELECT 1 FROM chat_deleted_sessions WHERE id=?)",params![turn,session,session],|_|Ok(())).optional().map_err(err)?.is_some();
+            return if owned { runtime::store::load_user_image(&root,session,turn,index).map(|v| v.unwrap_or(Value::Null)) } else { Ok(Value::Null) };
+        }
         let result = operate(&path, &channel, &args)?;
         match channel.as_str() {
             "chat:delete-turn" => runtime::store::delete(
@@ -352,6 +362,16 @@ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> CoreRes
     } else {
         result
     }
+}
+pub(super) fn clear_targets(value: Option<&Value>) -> Result<Vec<String>,String> {
+    let Some(value)=value.filter(|v| !v.is_null()) else { return Ok(Vec::new()); };
+    let values=value.as_array().filter(|v|v.len()<=64).ok_or("Invalid clear conversation identities")?;
+    let mut ids=Vec::new();
+    for value in values {
+        let id=value.as_str().filter(|id|!id.is_empty()&&id.len()<=4096&&!id.chars().any(char::is_control)).ok_or("Invalid clear conversation identity")?;
+        if !ids.iter().any(|i|i==id) { ids.push(id.to_string()); }
+    }
+    Ok(ids)
 }
 pub async fn update_title_and_icon(
     ctx: &CoreContext,
