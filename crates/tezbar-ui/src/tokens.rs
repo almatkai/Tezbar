@@ -266,6 +266,11 @@ mod repair_tests {
                 check(text, sheet, format!("{name} on sheet"));
                 check(
                     text,
+                    sheet.blend(t.bar_float.into()),
+                    format!("{name} on footer"),
+                );
+                check(
+                    text,
                     t.settings_panel.into(),
                     format!("{name} on Settings panel"),
                 );

@@ -50,3 +50,34 @@ The M5 owner is still editing its assigned command-bar files. A final integrated
 run must freeze and verify hashes before and after. No new clean app build,
 desktop fixture, Windows M4 run, GUI/IME/accessibility or RAM claim is made here.
 No installed app, signing identity, production profile or release default changed.
+
+
+## Follow-up after independent b31de67 review
+
+The [second closure report](../reviews/GPUI_M4_OPUS_b31de67.md), preserved verbatim
+(SHA-256 `6f8e7888bd80437393499d8c5f14b95b2c63369ca61a08fa70e2213f3286ae13`),
+confirmed N-01, N-02, N-05, N-06 and the text-input part of N-03. Its independent
+clean archive runs passed all 39 UI and three launcher-state tests. It left two
+local Low findings, repaired by the parent:
+
+- **R-03a:** parsed blocks now retain their list/item ancestry. List groups use
+  that identity, including code and continuation paragraphs, and render nested
+  `List`/`ListItem` containers. Distinct adjacent lists keep distinct identities.
+  The fixed HTML parser shares this ancestry; formatting whitespace between its
+  items does not create stray rows. Incrementally parsed chunks allocate disjoint
+  identity namespaces from their source offsets. Footnote scrolling still uses
+  the root grouping. Four regressions cover code/paragraph/nested items,
+  adjacent lists and incremental chunks, HTML continuations, and actual GPUI
+  container construction consuming every leaf exactly once.
+- **R-04a:** semantic danger/success/warning/link text is now checked on the real
+  composited footer as well as sheet and Settings. The originating specification
+  now lists the accepted AA palette corrections directly.
+
+Verification: **43 UI tests passed**, zero failures/ignores, using the actual
+compiled test binary (`/tmp/tezbar-m4-closure-ui43.log`); the targeted Markdown
+run passed 18 (`/tmp/tezbar-m4-closure-list-final.log`), and both token tests passed
+(`/tmp/tezbar-m4-closure-footer-contrast.log`). Intermediate delimiter/import
+compile failures and the HTML test's overly strict root-row count are retained
+in the earlier list logs; they are not reported as passing runs. The corrected
+HTML test counts semantic list groups, allowing ordinary inter-list whitespace.
+Fresh targeted Opus closure and the manual/platform gates remain outstanding.

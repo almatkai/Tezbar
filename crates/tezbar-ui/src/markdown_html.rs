@@ -1,5 +1,5 @@
 //! Fixed HTML formatting subset. Tokenization never constructs a DOM or executes markup.
-use crate::markdown::{Block, Kind, Span, safe_image, safe_link};
+use crate::markdown::{Block, Kind, ListContext, Span, safe_image, safe_link};
 use html5ever::tokenizer::{
     BufferQueue, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer, TokenizerOpts,
 };
@@ -24,6 +24,7 @@ impl Html {
         blocks: &mut Vec<Block>,
         current: &mut Block,
         style: &mut Span,
+        lists: &mut ListContext,
     ) {
         let tokenizer = Tokenizer::new(Sink(RefCell::new(vec![])), TokenizerOpts::default());
         let input = BufferQueue::default();
@@ -77,14 +78,14 @@ impl Html {
                         "details" => {
                             if start {
                                 if self.details == 0 {
-                                    flush(blocks, current);
+                                    flush(blocks, current, lists);
                                     current.kind = Kind::Details;
                                 }
                                 self.details += 1;
                             } else {
                                 self.details = self.details.saturating_sub(1);
                                 if self.details == 0 {
-                                    flush(blocks, current);
+                                    flush(blocks, current, lists);
                                 }
                             }
                         }
@@ -92,6 +93,32 @@ impl Html {
                             text: "\n".into(),
                             ..Default::default()
                         }),
+                        "ul" | "ol" if self.details == 0 => {
+                            flush(blocks, current, lists);
+                            if start {
+                                lists.start(
+                                    if name == "ol" {
+                                        Some(
+                                            attr("start").and_then(|n| n.parse().ok()).unwrap_or(1),
+                                        )
+                                    } else {
+                                        None
+                                    },
+                                    true,
+                                );
+                            } else {
+                                lists.end(true);
+                            }
+                        }
+                        "li" if self.details == 0 => {
+                            flush(blocks, current, lists);
+                            if start {
+                                current.kind = Kind::List;
+                                lists.start_item(true);
+                            } else {
+                                lists.end_item(true);
+                            }
+                        }
                         "p" | "div" | "li" | "blockquote" | "pre" | "h1" | "h2" | "h3" | "h4"
                         | "h5" | "h6" | "table" => {
                             if self.details > 0 {
@@ -103,7 +130,7 @@ impl Html {
                                 }
                                 continue;
                             }
-                            flush(blocks, current);
+                            flush(blocks, current, lists);
                             if start {
                                 current.kind = match name {
                                     "li" => Kind::List,
@@ -126,18 +153,23 @@ impl Html {
                             ..Default::default()
                         }),
                         "hr" if start => {
-                            flush(blocks, current);
+                            flush(blocks, current, lists);
                             blocks.push(Block {
                                 kind: Kind::Rule,
                                 spans: vec![],
                                 images: vec![],
                                 checked: None,
+                                list_path: lists.path(),
                             });
                         }
                         _ => {}
                     }
                 }
                 Token::CharacterTokens(text) if self.suppressed.is_empty() => {
+                    // Formatting whitespace between HTML items is not a document row.
+                    if lists.between_html_items() && text.trim().is_empty() {
+                        continue;
+                    }
                     crate::markdown::append_span(
                         &mut current.spans,
                         Span {
@@ -157,8 +189,9 @@ impl Html {
         }
     }
 }
-fn flush(blocks: &mut Vec<Block>, current: &mut Block) {
+fn flush(blocks: &mut Vec<Block>, current: &mut Block, lists: &ListContext) {
     if !current.spans.is_empty() || !current.images.is_empty() {
+        current.list_path = lists.path();
         blocks.push(current.clone());
     }
     *current = Block {
@@ -166,5 +199,6 @@ fn flush(blocks: &mut Vec<Block>, current: &mut Block) {
         spans: vec![],
         images: vec![],
         checked: None,
+        list_path: vec![],
     };
 }

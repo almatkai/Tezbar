@@ -638,14 +638,20 @@ Use the prototype spec §2.2 table for the `--ln-*` launcher tokens and text ram
 | `--ln-popover` / solid | `rgba(32,33,38,0.98)` / `rgb(32,33,38)` | `rgba(255,255,255,0.98)` / `rgb(255,255,255)` |
 | `--ln-selected` | `rgba(255,255,255,0.07)` | `rgba(15,23,42,0.06)` |
 | `--ln-bar` | `rgba(0,0,0,0.16)` | `rgba(15,23,42,0.025)` |
-| `--ln-accent-strong` / hover | `#5b5ef0` / `#6a6df4` | same |
+| `--ln-accent-strong` / hover | `#5b5ef0` / `#6063e6` | same |
 | `--c-shell`, `--c-panel` | `10 11 14`, `18 20 26` | `241 244 249`, `255 255 255` |
-| `--c-success`, `--c-danger`, `--c-warning` | `52 211 153`, `248 113 113`, `251 191 36` | `5 150 105`, `220 38 38`, `217 119 6` |
+| `--c-success`, `--c-danger`, `--c-warning` | `52 211 153`, `248 113 113`, `251 191 36` | `4 120 87`, `220 38 38`, `180 83 9` |
 | `--c-accent` / strong (non-launcher accents such as links and focus inside Settings) | `139 141 247` / `168 170 255` | `76 68 193` / `62 53 165` |
 | Radii (the late `:root` override at `styles.css:2084–2090` wins the cascade) | window/sheet 18, panel 10, card 10, row 8, field 7, chip 5 | same |
 | Spacing | 4/8/12/16/20/24 | same |
 | Type | Geist when installed, else `.SystemUIFont`/Segoe UI; mono Geist Mono → SF Mono/Menlo/Consolas. Sizes in use: 15 input, 13.5/13/12.5/12/11/10.5/10. | same |
 | Motion | fade-in 90 ms ease-out-expo for surface switch; scale-in 260 ms only on Settings AI panel open. All motion disabled under reduce-motion. | same |
+
+AA correction (M4 closure): the palette above supersedes the legacy hover,
+light success and warning values. Dark launcher text-3 is `#979ba7`, superseding
+`#868a96` in the prototype table. These normal-text pairs otherwise failed §5.8;
+see [the measured correction and regression](native-m04/closure-parent-repairs.md).
+The live native token test is the authority for both themes and translucent fills.
 
 Theme preference `white | dark | system` is a Tezbar setting (migrated from
 `tezbar:theme`). `system` follows `window.appearance()` live. The setting applies to all

@@ -32,6 +32,75 @@ pub struct Block {
     pub spans: Vec<Span>,
     pub images: Vec<(String, String)>,
     pub checked: Option<bool>,
+    pub(crate) list_path: Vec<ListItem>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ListItem {
+    list: usize,
+    item: usize,
+}
+struct ListFrame {
+    id: usize,
+    next_number: Option<u64>,
+    item: Option<usize>,
+    next_item: usize,
+    html: bool,
+}
+pub(crate) struct ListContext {
+    next_id: usize,
+    stack: Vec<ListFrame>,
+}
+impl ListContext {
+    pub(crate) fn start(&mut self, number: Option<u64>, html: bool) {
+        self.stack.push(ListFrame {
+            id: self.next_id,
+            next_number: number,
+            item: None,
+            next_item: 0,
+            html,
+        });
+        self.next_id += 1;
+    }
+    pub(crate) fn end(&mut self, html: bool) {
+        if self.stack.last().is_some_and(|frame| frame.html == html) {
+            self.stack.pop();
+        }
+    }
+    pub(crate) fn start_item(&mut self, html: bool) -> String {
+        let Some(frame) = self.stack.last_mut().filter(|frame| frame.html == html) else {
+            return String::new();
+        };
+        frame.item = Some(frame.next_item);
+        frame.next_item += 1;
+        if let Some(number) = &mut frame.next_number {
+            let marker = format!("{number}. ");
+            *number = number.saturating_add(1);
+            marker
+        } else {
+            "• ".into()
+        }
+    }
+    pub(crate) fn end_item(&mut self, html: bool) {
+        if let Some(frame) = self.stack.last_mut().filter(|frame| frame.html == html) {
+            frame.item = None;
+        }
+    }
+    pub(crate) fn between_html_items(&self) -> bool {
+        self.stack
+            .last()
+            .is_some_and(|frame| frame.html && frame.item.is_none())
+    }
+    pub(crate) fn path(&self) -> Vec<ListItem> {
+        self.stack
+            .iter()
+            .filter_map(|frame| {
+                frame.item.map(|item| ListItem {
+                    list: frame.id,
+                    item,
+                })
+            })
+            .collect()
+    }
 }
 impl Block {
     pub fn text(&self) -> String {
@@ -96,13 +165,13 @@ impl Document {
             }
             if split > self.prefix_len {
                 let chunk = &source[self.prefix_len..split];
-                self.prefix.extend(parse(chunk));
+                self.prefix.extend(parse_at(chunk, self.prefix_len));
                 self.parsed_bytes += chunk.len();
                 self.prefix_len = split;
             }
             let tail = &source[self.prefix_len..];
             self.blocks = self.prefix.clone();
-            self.blocks.extend(parse(tail));
+            self.blocks.extend(parse_at(tail, self.prefix_len));
             self.parsed_bytes += tail.len();
             self.parses += 1;
             self.source = source.into();
@@ -245,18 +314,27 @@ fn closed_prefix(source: &str) -> usize {
     committed
 }
 fn parse(source: &str) -> Vec<Block> {
+    parse_at(source, 0)
+}
+fn parse_at(source: &str, offset: usize) -> Vec<Block> {
     let mut blocks = vec![];
     let mut current = Block {
         kind: Kind::Paragraph,
         spans: vec![],
         images: vec![],
         checked: None,
+        list_path: vec![],
     };
     let mut style = Span::default();
     let mut image: Option<(String, String)> = None;
-    let mut lists: Vec<Option<u64>> = vec![];
+    // Each incremental chunk has a disjoint source-byte namespace. List identities
+    // cannot collide when a cached prefix is joined to a separately parsed tail.
+    let mut lists = ListContext {
+        next_id: offset,
+        stack: vec![],
+    };
     let mut html = crate::markdown_html::Html::default();
-    let flush = |blocks: &mut Vec<Block>, current: &mut Block| {
+    let flush = |blocks: &mut Vec<Block>, current: &mut Block, lists: &ListContext| {
         if matches!(current.kind, Kind::Details) {
             current.spans.push(Span {
                 text: "\n".into(),
@@ -265,6 +343,7 @@ fn parse(source: &str) -> Vec<Block> {
             return;
         }
         if !current.spans.is_empty() || !current.images.is_empty() {
+            current.list_path = lists.path();
             blocks.push(current.clone());
         }
         *current = Block {
@@ -272,6 +351,7 @@ fn parse(source: &str) -> Vec<Block> {
             spans: vec![],
             images: vec![],
             checked: None,
+            list_path: vec![],
         };
     };
     for event in Parser::new_ext(
@@ -284,13 +364,13 @@ fn parse(source: &str) -> Vec<Block> {
         match event {
             Event::Start(tag) => match tag {
                 Tag::Heading { level, .. } => {
-                    flush(&mut blocks, &mut current);
+                    flush(&mut blocks, &mut current, &lists);
                     if !matches!(current.kind, Kind::Details) {
                         current.kind = Kind::Heading(level as u8);
                     }
                 }
                 Tag::CodeBlock(kind) => {
-                    flush(&mut blocks, &mut current);
+                    flush(&mut blocks, &mut current, &lists);
                     if !matches!(current.kind, Kind::Details) {
                         current.kind = Kind::Code(match kind {
                             CodeBlockKind::Fenced(s) => s.into_string(),
@@ -299,39 +379,34 @@ fn parse(source: &str) -> Vec<Block> {
                     }
                 }
                 Tag::List(start) => {
-                    lists.push(start);
+                    flush(&mut blocks, &mut current, &lists);
+                    lists.start(start, false);
                 }
                 Tag::Item => {
-                    flush(&mut blocks, &mut current);
+                    flush(&mut blocks, &mut current, &lists);
                     if !matches!(current.kind, Kind::Details) {
                         current.kind = Kind::List;
                     }
-                    let marker = if let Some(Some(n)) = lists.last_mut() {
-                        let marker = format!("{n}. ");
-                        *n += 1;
-                        marker
-                    } else {
-                        "• ".into()
-                    };
+                    let marker = lists.start_item(false);
                     current.spans.push(Span {
                         text: marker,
                         ..Default::default()
                     });
                 }
                 Tag::Table(_) => {
-                    flush(&mut blocks, &mut current);
+                    flush(&mut blocks, &mut current, &lists);
                     if !matches!(current.kind, Kind::Details) {
                         current.kind = Kind::Table;
                     }
                 }
                 Tag::BlockQuote(_) => {
-                    flush(&mut blocks, &mut current);
+                    flush(&mut blocks, &mut current, &lists);
                     if !matches!(current.kind, Kind::Details) {
                         current.kind = Kind::Quote;
                     }
                 }
                 Tag::FootnoteDefinition(label) => {
-                    flush(&mut blocks, &mut current);
+                    flush(&mut blocks, &mut current, &lists);
                     current.kind = Kind::Footnote(label.to_string());
                     current.spans.push(Span {
                         text: format!("[{}] ", label),
@@ -359,13 +434,16 @@ fn parse(source: &str) -> Vec<Block> {
                         }
                     }
                 }
-                TagEnd::Paragraph
-                | TagEnd::Heading(_)
-                | TagEnd::CodeBlock
-                | TagEnd::Item
-                | TagEnd::Table => flush(&mut blocks, &mut current),
+                TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::CodeBlock | TagEnd::Table => {
+                    flush(&mut blocks, &mut current, &lists)
+                }
+                TagEnd::Item => {
+                    flush(&mut blocks, &mut current, &lists);
+                    lists.end_item(false);
+                }
                 TagEnd::List(_) => {
-                    lists.pop();
+                    flush(&mut blocks, &mut current, &lists);
+                    lists.end(false);
                 }
                 TagEnd::TableCell => current.spans.push(Span {
                     text: "\t".into(),
@@ -409,22 +487,23 @@ fn parse(source: &str) -> Vec<Block> {
                 ..Default::default()
             }),
             Event::Rule => {
-                flush(&mut blocks, &mut current);
+                flush(&mut blocks, &mut current, &lists);
                 blocks.push(Block {
                     kind: Kind::Rule,
                     spans: vec![],
                     images: vec![],
                     checked: None,
+                    list_path: lists.path(),
                 });
             }
             // Raw markup is never executed, nor passed to a web engine.
             Event::Html(fragment) | Event::InlineHtml(fragment) => {
-                html.fragment(&fragment, &mut blocks, &mut current, &mut style)
+                html.fragment(&fragment, &mut blocks, &mut current, &mut style, &mut lists)
             }
             _ => {}
         }
     }
-    flush(&mut blocks, &mut current);
+    flush(&mut blocks, &mut current, &lists);
     blocks
 }
 #[derive(Clone, Debug)]
@@ -552,16 +631,25 @@ impl MarkdownView {
         }));
     }
 }
-// Root scroll rows and accessibility containers share this grouping. A list owns all
-// consecutive items; internal links must scroll to that grouped row, not a block index.
+// Root scroll rows and accessibility containers use list identity, not adjacency or
+// block kind. A code block or paragraph can be a continuation of the same list item.
 fn block_groups(blocks: &[Block]) -> Vec<Range<usize>> {
+    block_groups_at(blocks, 0..blocks.len(), 0)
+}
+fn block_groups_at(blocks: &[Block], range: Range<usize>, depth: usize) -> Vec<Range<usize>> {
     let mut groups = Vec::new();
-    let mut index = 0;
-    while index < blocks.len() {
+    let mut index = range.start;
+    while index < range.end {
         let start = index;
+        let list = blocks[start].list_path.get(depth).map(|item| item.list);
         index += 1;
-        if matches!(blocks[start].kind, Kind::List) {
-            while index < blocks.len() && matches!(blocks[index].kind, Kind::List) {
+        if let Some(list) = list {
+            while index < range.end
+                && blocks[index]
+                    .list_path
+                    .get(depth)
+                    .is_some_and(|item| item.list == list)
+            {
                 index += 1;
             }
         }
@@ -569,11 +657,52 @@ fn block_groups(blocks: &[Block]) -> Vec<Range<usize>> {
     }
     groups
 }
+fn render_block_groups(
+    blocks: &[Block],
+    rows: &mut [Option<Stateful<Div>>],
+    range: Range<usize>,
+    depth: usize,
+) -> Vec<Stateful<Div>> {
+    let mut rendered = Vec::new();
+    for group in block_groups_at(blocks, range, depth) {
+        if let Some(first) = blocks[group.start].list_path.get(depth) {
+            let mut items = Vec::new();
+            let mut start = group.start;
+            while start < group.end {
+                let item = blocks[start].list_path[depth];
+                let mut end = start + 1;
+                while end < group.end && blocks[end].list_path.get(depth) == Some(&item) {
+                    end += 1;
+                }
+                items.push(
+                    div()
+                        .id(("list-item", start))
+                        .role(Role::ListItem)
+                        .flex()
+                        .flex_col()
+                        .children(render_block_groups(blocks, rows, start..end, depth + 1)),
+                );
+                start = end;
+            }
+            rendered.push(
+                div()
+                    .id(("list", first.list))
+                    .role(Role::List)
+                    .flex()
+                    .flex_col()
+                    .children(items),
+            );
+        } else if let Some(row) = rows[group.start].take() {
+            rendered.push(row);
+        }
+    }
+    rendered
+}
 impl Render for MarkdownView {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::tokens::tokens(w);
         let focus = self.focus.get_or_insert_with(|| cx.focus_handle()).clone();
-        let mut children = vec![];
+        let mut rows = vec![];
         let mut base = 0;
         let light = t.light;
         if self.highlight_theme != Some(light) {
@@ -581,220 +710,202 @@ impl Render for MarkdownView {
             self.highlight_task = None;
             self.document.highlighted.clear();
         }
-        for group in block_groups(&self.document.blocks) {
-            let list = matches!(self.document.blocks[group.start].kind, Kind::List);
-            let mut rows = vec![];
-            for index in group.clone() {
-                let block = &self.document.blocks[index];
-                let text = block.text();
-                let block_len = text.len();
-                if matches!(block.kind, Kind::Details) {
-                    let summary = text.lines().next().unwrap_or("Details").to_owned();
-                    let expanded = self.expanded.contains(&index);
-                    rows.push(
+        for (index, block) in self.document.blocks.iter().enumerate() {
+            let text = block.text();
+            let block_len = text.len();
+            if matches!(block.kind, Kind::Details) {
+                let summary = text.lines().next().unwrap_or("Details").to_owned();
+                let expanded = self.expanded.contains(&index);
+                rows.push(
+                    div()
+                        .id(index)
+                        .child(
+                            crate::controls::button(
+                                ("summary", index),
+                                summary,
+                                crate::controls::ButtonTone::Quiet,
+                                false,
+                                t,
+                            )
+                            .aria_expanded(expanded)
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    if !this.expanded.remove(&index) {
+                                        this.expanded.insert(index);
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                        .when(expanded, |d| {
+                            d.child(text.lines().skip(1).collect::<Vec<_>>().join("\n"))
+                        }),
+                );
+                base += block_len + 1;
+                continue;
+            }
+            let role = match block.kind {
+                Kind::Heading(_) => Role::Heading,
+                Kind::Code(_) => Role::Code,
+                Kind::Table => Role::Table,
+                _ => Role::Paragraph,
+            };
+            let mut row = div()
+                .id(index)
+                .flex()
+                .flex_col()
+                .gap(px(4. * t.zoom))
+                .py(px(4. * t.zoom))
+                .text_size(px(t.zoom
+                    * match block.kind {
+                        Kind::Heading(1) => 22.,
+                        Kind::Heading(2) => 18.,
+                        Kind::Heading(_) => 15.,
+                        _ => 13.,
+                    }));
+            if let Some(checked) = block.checked {
+                row = row.child(crate::controls::checkbox(
+                    ("task", index),
+                    text.clone(),
+                    checked,
+                    t,
+                ));
+            }
+            if let Kind::Code(ref language) = block.kind {
+                let code = text.clone();
+                row = row
+                    .font_family(crate::tokens::font_family(cx, true))
+                    .bg(t.field)
+                    .p(px(8. * t.zoom))
+                    .child(
                         div()
-                            .id(index)
+                            .flex()
+                            .gap(px(8. * t.zoom))
+                            .child(div().text_color(t.text3).child(language.clone()))
                             .child(
                                 crate::controls::button(
-                                    ("summary", index),
-                                    summary,
+                                    ("copy-code", index),
+                                    "Copy",
                                     crate::controls::ButtonTone::Quiet,
                                     false,
                                     t,
                                 )
-                                .aria_expanded(expanded)
                                 .on_click(cx.listener(
-                                    move |this, _, _, cx| {
-                                        if !this.expanded.remove(&index) {
-                                            this.expanded.insert(index);
-                                        }
-                                        cx.notify();
-                                    },
+                                    move |_, _, _, cx| cx.emit(DocumentEffect::Copy(code.clone())),
                                 )),
-                            )
-                            .when(expanded, |d| {
-                                d.child(text.lines().skip(1).collect::<Vec<_>>().join("\n"))
-                            }),
+                            ),
                     );
-                    base += block_len + 1;
-                    continue;
-                }
-                let role = match block.kind {
-                    Kind::Heading(_) => Role::Heading,
-                    Kind::Code(_) => Role::Code,
-                    Kind::Table => Role::Table,
-                    _ => Role::Paragraph,
-                };
-                let mut row = div()
-                    .id(index)
-                    .flex()
-                    .flex_col()
-                    .gap(px(4. * t.zoom))
-                    .py(px(4. * t.zoom))
-                    .text_size(px(t.zoom
-                        * match block.kind {
-                            Kind::Heading(1) => 22.,
-                            Kind::Heading(2) => 18.,
-                            Kind::Heading(_) => 15.,
-                            _ => 13.,
-                        }));
-                if matches!(block.kind, Kind::List) {
-                    row = row.role(Role::ListItem);
-                }
-                if let Some(checked) = block.checked {
-                    row = row.child(crate::controls::checkbox(
-                        ("task", index),
-                        text.clone(),
-                        checked,
-                        t,
-                    ));
-                }
-                if let Kind::Code(ref language) = block.kind {
-                    let code = text.clone();
-                    row = row
-                        .font_family(crate::tokens::font_family(cx, true))
-                        .bg(t.field)
-                        .p(px(8. * t.zoom))
-                        .child(
-                            div()
-                                .flex()
-                                .gap(px(8. * t.zoom))
-                                .child(div().text_color(t.text3).child(language.clone()))
-                                .child(
-                                    crate::controls::button(
-                                        ("copy-code", index),
-                                        "Copy",
-                                        crate::controls::ButtonTone::Quiet,
-                                        false,
-                                        t,
-                                    )
-                                    .on_click(cx.listener(
-                                        move |_, _, _, cx| {
-                                            cx.emit(DocumentEffect::Copy(code.clone()))
-                                        },
-                                    )),
-                                ),
-                        );
-                }
-                let selected = self
-                    .selection
-                    .as_ref()
-                    .map(|r| {
-                        r.start.saturating_sub(base).min(block_len)
-                            ..r.end.saturating_sub(base).min(block_len)
-                    })
-                    .filter(|r| !r.is_empty());
-                let syntax = self
-                    .document
-                    .highlighted
-                    .iter()
-                    .find(|(i, _)| *i == index)
-                    .map(|(_, s)| s.as_slice())
-                    .unwrap_or(&[]);
-                let highlights = highlights(block, selected.clone(), syntax, t);
-                let styled = StyledText::new(text.clone()).with_highlights(highlights);
-                let layout = styled.layout().clone();
-                let down = layout.clone();
-                let drag = layout.clone();
-                let click = layout.clone();
-                let mut at = 0;
-                let links = block
-                    .spans
-                    .iter()
-                    .filter_map(|span| {
-                        let range = at..at + span.text.len();
-                        at = range.end;
-                        span.link
-                            .clone()
-                            .map(|link| (range, span.text.clone(), link))
-                    })
-                    .collect::<Vec<_>>();
-                let click_links = links.clone();
-                let body = div()
-                    .cursor(CursorStyle::IBeam)
-                    .child(styled)
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |this, e: &MouseDownEvent, w, cx| {
-                            let index = down.index_for_position(e.position).unwrap_or_else(|i| i);
-                            let anchor = base + index;
-                            this.anchor = Some(anchor);
-                            this.selection = Some(anchor..anchor);
-                            if let Some(focus) = &this.focus {
-                                w.focus(focus, cx);
-                            }
-                            cx.notify();
-                        }),
-                    )
-                    .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
-                        if let Some(anchor) = this.anchor {
-                            let index =
-                                base + drag.index_for_position(e.position).unwrap_or_else(|i| i);
-                            this.selection = Some(anchor.min(index)..anchor.max(index));
-                            cx.notify();
+            }
+            let selected = self
+                .selection
+                .as_ref()
+                .map(|r| {
+                    r.start.saturating_sub(base).min(block_len)
+                        ..r.end.saturating_sub(base).min(block_len)
+                })
+                .filter(|r| !r.is_empty());
+            let syntax = self
+                .document
+                .highlighted
+                .iter()
+                .find(|(i, _)| *i == index)
+                .map(|(_, s)| s.as_slice())
+                .unwrap_or(&[]);
+            let highlights = highlights(block, selected.clone(), syntax, t);
+            let styled = StyledText::new(text.clone()).with_highlights(highlights);
+            let layout = styled.layout().clone();
+            let down = layout.clone();
+            let drag = layout.clone();
+            let click = layout.clone();
+            let mut at = 0;
+            let links = block
+                .spans
+                .iter()
+                .filter_map(|span| {
+                    let range = at..at + span.text.len();
+                    at = range.end;
+                    span.link
+                        .clone()
+                        .map(|link| (range, span.text.clone(), link))
+                })
+                .collect::<Vec<_>>();
+            let click_links = links.clone();
+            let body = div()
+                .cursor(CursorStyle::IBeam)
+                .child(styled)
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, e: &MouseDownEvent, w, cx| {
+                        let index = down.index_for_position(e.position).unwrap_or_else(|i| i);
+                        let anchor = base + index;
+                        this.anchor = Some(anchor);
+                        this.selection = Some(anchor..anchor);
+                        if let Some(focus) = &this.focus {
+                            w.focus(focus, cx);
                         }
-                    }))
-                    .on_mouse_up(
-                        MouseButton::Left,
-                        cx.listener(move |this, e: &MouseUpEvent, _, cx| {
-                            this.anchor = None;
-                            if this.selection.as_ref().is_none_or(|r| r.is_empty()) {
-                                let index =
-                                    click.index_for_position(e.position).unwrap_or_else(|i| i);
-                                if let Some((_, _, url)) = click_links
-                                    .iter()
-                                    .find(|(range, _, _)| range.contains(&index))
-                                {
-                                    this.open_link(url.clone(), cx);
-                                }
-                            }
-                        }),
-                    );
-                row = row.child(RichBlock {
-                    inner: body.into_any_element(),
-                    layout,
-                    text,
-                    role,
-                    level: match block.kind {
-                        Kind::Heading(level) => Some(level as usize),
-                        _ => None,
-                    },
-                    links,
-                    selection: selected,
-                    owner: cx.entity(),
-                    code_index: matches!(block.kind, Kind::Code(_)).then_some(index),
-                    light,
-                });
-                for (i, (url, alt)) in block.images.iter().enumerate() {
-                    if self.requested_images.len() < 128
-                        && self.requested_images.insert(url.clone())
-                    {
-                        cx.emit(DocumentEffect::Image(url.clone()));
+                        cx.notify();
+                    }),
+                )
+                .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
+                    if let Some(anchor) = this.anchor {
+                        let index =
+                            base + drag.index_for_position(e.position).unwrap_or_else(|i| i);
+                        this.selection = Some(anchor.min(index)..anchor.max(index));
+                        cx.notify();
                     }
-                    row = row.child(
-                        div()
-                            .id(("image", i))
-                            .role(Role::Image)
-                            .aria_label(alt.clone())
-                            .child(alt.clone()),
-                    );
-                }
-                rows.push(row);
-                base += block_len + 1;
-            }
-            if list {
-                children.push(
-                    div()
-                        .id(("list", group.start))
-                        .role(Role::List)
-                        .flex()
-                        .flex_col()
-                        .children(rows),
+                }))
+                .on_mouse_up(
+                    MouseButton::Left,
+                    cx.listener(move |this, e: &MouseUpEvent, _, cx| {
+                        this.anchor = None;
+                        if this.selection.as_ref().is_none_or(|r| r.is_empty()) {
+                            let index = click.index_for_position(e.position).unwrap_or_else(|i| i);
+                            if let Some((_, _, url)) = click_links
+                                .iter()
+                                .find(|(range, _, _)| range.contains(&index))
+                            {
+                                this.open_link(url.clone(), cx);
+                            }
+                        }
+                    }),
                 );
-            } else {
-                children.extend(rows);
+            row = row.child(RichBlock {
+                inner: body.into_any_element(),
+                layout,
+                text,
+                role,
+                level: match block.kind {
+                    Kind::Heading(level) => Some(level as usize),
+                    _ => None,
+                },
+                links,
+                selection: selected,
+                owner: cx.entity(),
+                code_index: matches!(block.kind, Kind::Code(_)).then_some(index),
+                light,
+            });
+            for (i, (url, alt)) in block.images.iter().enumerate() {
+                if self.requested_images.len() < 128 && self.requested_images.insert(url.clone()) {
+                    cx.emit(DocumentEffect::Image(url.clone()));
+                }
+                row = row.child(
+                    div()
+                        .id(("image", i))
+                        .role(Role::Image)
+                        .aria_label(alt.clone())
+                        .child(alt.clone()),
+                );
             }
+            rows.push(row);
+            base += block_len + 1;
         }
+        let mut rows = rows.into_iter().map(Some).collect::<Vec<_>>();
+        let children = render_block_groups(
+            &self.document.blocks,
+            &mut rows,
+            0..self.document.blocks.len(),
+            0,
+        );
         div()
             .id("document")
             .role(Role::Document)
@@ -1222,6 +1333,97 @@ mod tests {
 #[cfg(test)]
 mod repair_tests {
     use super::*;
+    use ::core::prelude::v1::test;
+    #[::core::prelude::v1::test]
+    fn list_identity_keeps_code_paragraphs_and_nested_items_together() {
+        let source = "1. Install:\n\n   ```sh\n   echo ready\n   ```\n\n   Continue here.\n\n   - nested one\n   - nested two\n\n2. Next\n3. Last";
+        let blocks = parse(source);
+        assert_eq!(block_groups(&blocks), [0..blocks.len()]);
+        let first = blocks[0].list_path.clone();
+        let code = blocks
+            .iter()
+            .find(|block| matches!(block.kind, Kind::Code(_)))
+            .unwrap();
+        assert_eq!(code.list_path, first);
+        let continuation = blocks
+            .iter()
+            .find(|block| block.text().contains("Continue here"))
+            .unwrap();
+        assert_eq!(continuation.list_path, first);
+        let nested = blocks
+            .iter()
+            .filter(|block| block.text().contains("nested"))
+            .collect::<Vec<_>>();
+        assert_eq!(nested.len(), 2);
+        for block in &nested {
+            assert_eq!(block.list_path.len(), 2);
+            assert_eq!(block.list_path[0], first[0]);
+        }
+        assert_eq!(nested[0].list_path[1].list, nested[1].list_path[1].list);
+        assert_ne!(nested[0].list_path[1].item, nested[1].list_path[1].item);
+        let items = blocks
+            .iter()
+            .map(|block| block.list_path[0].item)
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(items.len(), 3);
+    }
+    #[::core::prelude::v1::test]
+    fn adjacent_distinct_lists_and_incremental_chunks_never_merge() {
+        let blocks = parse("- one\n- two\n\n* three\n* four");
+        assert_eq!(block_groups(&blocks), [0..2, 2..4]);
+        assert_ne!(blocks[0].list_path[0].list, blocks[2].list_path[0].list);
+        let mut document = Document::default();
+        document.update(1, "- one\n\n", false);
+        document.update(2, "- one\n\n* two", false);
+        assert_eq!(block_groups(&document.blocks), [0..1, 1..2]);
+        assert_ne!(
+            document.blocks[0].list_path[0].list,
+            document.blocks[1].list_path[0].list
+        );
+    }
+    #[::core::prelude::v1::test]
+    fn html_list_blocks_keep_their_item_and_ignore_inter_item_whitespace() {
+        let blocks = parse(
+            "<ol>\n<li><p>First</p><pre>code</pre><p>Continue</p><ul><li>Nested</li></ul></li>\n<li>Second</li>\n</ol>\n\n<ul><li>Separate</li></ul>",
+        );
+        let groups = block_groups(&blocks)
+            .into_iter()
+            .filter(|group| !blocks[group.start].list_path.is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(groups.len(), 2, "{blocks:?}");
+        let first = blocks[groups[0].start].list_path[0];
+        for text in ["First", "code", "Continue", "Nested"] {
+            let block = blocks
+                .iter()
+                .find(|block| block.text().contains(text))
+                .unwrap();
+            assert_eq!(block.list_path[0], first);
+        }
+        let nested = blocks
+            .iter()
+            .find(|block| block.text().contains("Nested"))
+            .unwrap();
+        assert_eq!(nested.list_path.len(), 2);
+        let second = blocks
+            .iter()
+            .find(|block| block.text().contains("Second"))
+            .unwrap();
+        assert_eq!(second.list_path[0].list, first.list);
+        assert_ne!(second.list_path[0].item, first.item);
+        assert_ne!(blocks[groups[1].start].list_path[0].list, first.list);
+    }
+    #[gpui::test]
+    fn structured_list_render_consumes_every_continuation_once(cx: &mut gpui::TestAppContext) {
+        let (_, cx) = cx.add_window_view(|_, _| MarkdownView::default());
+        cx.update(|_, _| {
+            let blocks = parse("1. First\n\n   ```rs\n   let a = 1;\n   ```\n\n   More\n\n   - Nested\n\n2. Last\n\nOutside");
+            let mut rows = (0..blocks.len()).map(|index| Some(div().id(index))).collect::<Vec<_>>();
+            let rendered = render_block_groups(&blocks, &mut rows, 0..blocks.len(), 0);
+            assert_eq!(rendered.len(), 2);
+            assert_eq!(rendered[0].a11y_role(), Some(Role::List));
+            assert!(rows.iter().all(Option::is_none));
+        });
+    }
     #[::core::prelude::v1::test]
     fn consecutive_list_items_share_a_container_and_footnote_scroll_row() {
         let blocks = parse("- first\n- second\n- third\n\nParagraph[^one]\n\n[^one]: Note");
