@@ -28,6 +28,15 @@ caller were found by exact word search across `src/renderer` (excluding tests an
 
 ## Implementation checkpoints
 
+M3 controllers: source `86e9ab7`, 337 combined tests on Rust 1.98.1 and 1.85;
+[repair and mapping evidence](native-m03/agent-settings-m03b-evidence.md).
+M4 foundation: source `ac03a37`, normal 52 UI/app tests and 23 control-feature
+app tests; [handoff and manual gates](native-m04/foundation.md). Parent verified
+all source hashes and a clean locked debug build from `9474bdb` without WebKit.
+These are implementation checkpoints. Opus closure, actual surface integration
+and the listed OS/visual gates remain open, so rows below are not promoted to
+final parity by model tests or a foundation build.
+
 M0–M1 implementation: `48fa44e`. See [verification](NATIVE_GPUI_VERIFICATION.md),
 [test retention](native-m01/test-retention.json), and [lock report](native-m01/lock-drift.json).
 Mac release and Windows debug compile gates passed. The core/Host extraction, legacy

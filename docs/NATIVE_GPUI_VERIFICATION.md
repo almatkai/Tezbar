@@ -2,8 +2,8 @@
 
 M0–M2 checkpoint: runtime implementation `80a2aa1286ac8b4517452594a4779bc33c724b6b`;
 M0–M1 checkpoint: `48fa44edee026db64b8f75276cda9bb669e7ba6b`.
-The full migration is **not complete**. M3–M11 and all native UI acceptance remain
-outstanding. No default entrypoint, installed app, production profile, signing
+The full migration is **not complete**. M3/M4 review and platform acceptance, and
+M5–M11 native surfaces/cutover remain outstanding. No default entrypoint, installed app, production profile, signing
 identity, updater feed, release guard or immutable performance report was changed.
 
 The first Opus review accepted the foundation conditionally, finding three concrete
@@ -40,6 +40,26 @@ Bun simulated-host effects and core storage-wire probes passed. The worker's
 effectSequence field is additive and generated backend files were restored.
 Fresh Opus confirmation is still required; native focus, paint and decoding remain
 view acceptance work. The M4 owner has been notified that model compilation is ready.
+
+M4 foundation is saved at `ac03a37`; its [handoff](native-m04/foundation.md) and
+[test map](native-m04/foundation-test-map.json) identify 53 unique UI/app tests
+(normal run: 22 app + 30 UI; control-feature app: 23). The parent verified all 27
+source hashes and the final logs, then built clean source `9474bdb` with locked
+Rust 1.98.1 and runtime shaders. The normal binary reports `dirty:false` and
+`bench_control:false`, SHA-256
+`2bc8820dbf22cb1fe00fb1557639478b9b156a17b41037a2bed2a4f44af27c41`.
+Its direct libraries contain no WebKit. Receipt:
+`/tmp/tezbar-native-m04-parent-clean-evidence/receipt.json`; build log:
+`/tmp/tezbar-native-m04-parent-clean-build.log`. This clean debug build does not
+replace the explicitly dirty/intermediate lifecycle fixture evidence. Fresh Opus
+review and visual, accessibility, OS IME and Windows GUI acceptance remain open.
+
+Exact-source Windows M2/M3 validation of `86e9ab7` verified all 1,800 source hashes
+but exhausted disk during compilation: no tests ran. The [Windows report](native-m03/windows-86e9ab7.md)
+retains every failure and all artifacts. A later read-only parent inventory at
+`/tmp/tezbar-native-m23-windows-86e9ab7-evidence/parent-capacity-inventory.log`
+found 8,328,249,344 bytes free and no process owned by that stage. The parent
+deleted nothing. The unchanged gates can resume once scheduled with fresh evidence.
 
 ## M0–M1 evidence
 
@@ -338,6 +358,6 @@ was used. Test/build concurrency stayed at three jobs; child ownership tests rem
   Tauri/first-party React and the compatibility facade/prototype. Bun remains only for third-party extension logic.
 
 No full-app RAM or CPU saving is claimed. The ordinary product is still Tauri, and the
-GPUI binary remains the intentionally empty M0 opt-in preview. Measure the full native
+GPUI binary is an isolated M4 foundation with launcher/Settings shells. Measure the full native
 application only after UI parity; inactive heavy features must remain lazy and caches
 bounded. No new speech/model/extension process is started by the M2 libraries.
