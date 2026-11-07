@@ -56,6 +56,8 @@ pub fn row(
         .aria_selected(selected)
         .aria_position_in_set(index + 1)
         .aria_size_of_set(total)
+        .w_full()
+        .min_w_0()
         .h(px(36. * t.zoom))
         .rounded(px(8. * t.zoom))
         .px(px(10. * t.zoom))

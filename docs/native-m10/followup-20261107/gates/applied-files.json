@@ -1,0 +1,42 @@
+[
+  {
+    "path": "docs/NATIVE_GPUI_PARITY_LEDGER.md",
+    "sha256": "b2ee95dae31e49ee7c4ada71ee8d5116e7b9bc8d33ef0d85415c00a0fe25e2da"
+  },
+  {
+    "path": "docs/NATIVE_GPUI_APP_SPEC.md",
+    "sha256": "20b66fd99439db96e9fb956d3c4545fed7dfbd3fd32a486d87ed31201b1b6991"
+  },
+  {
+    "path": "apps/tezbar/src/asset_transport_tests.rs",
+    "sha256": "f0d04229c164e1c61584ec58a4d08432396aa36979dc69d8df8570f61b9a1a22"
+  },
+  {
+    "path": "apps/tezbar/src/asset_transport.rs",
+    "sha256": "c8541f311413a6f1d6abe1356c6f92ace51888affb5a30c2d4eab9984c9e2094"
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/m810_review_regressions.rs",
+    "sha256": "df6f6e38f980280914ba007f25897e4a3e6d1d9f048d838dffafedbe075b39f0"
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/state.rs",
+    "sha256": "fe3f162f85a284f2e2da908cef9503e7c53c796e0182cbd0e259528e6822f440"
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+    "sha256": "7c3f46c3fbea0815f06a3abba59e88b7a15f444f311dbf8a8f0586da270b5ae5"
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/view.rs",
+    "sha256": "2c8256198f495de6cdae97abcd8c394e47ef35a26ae19cb223a7a7546388f8ab"
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs",
+    "sha256": "d36e9dde7efd2bc5407891a61b163f88f9edefefdbf8b6921ea3d4d3fecd1cd3"
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/command_bar/m810_review_pin.rs",
+    "sha256": "e2437ab11ec63407dfbb3817eaad383aa749bd609901108162ca7af92e19796e"
+  }
+]

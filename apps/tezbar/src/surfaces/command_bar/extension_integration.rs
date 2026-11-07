@@ -42,6 +42,24 @@ impl Launcher {
     pub(super) fn configure_extensions(&mut self, core: CoreClient) {
         self.extensions.core = Some(core);
     }
+    pub(crate) fn extension_preferences(&mut self, cx: &mut Context<Self>) {
+        let extension = self.extensions.runtime.as_ref().and_then(|view| {
+            view.read(cx)
+                .session
+                .as_ref()
+                .map(|s| s.key.extension_id.clone())
+        });
+        if let Some(extension) = extension {
+            self.navigate(
+                Surface::Settings("extensions".into()),
+                Payload::ExtensionPreferences {
+                    extension,
+                    command: None,
+                },
+                cx,
+            );
+        }
+    }
     pub(super) fn extension_mounted(&self) -> bool {
         self.visible
             && !self.onboarding_active
@@ -123,6 +141,14 @@ impl Launcher {
                             return;
                         }
                         match e {
+                            StoreEffect::Preferences(extension) => this.navigate(
+                                Surface::Settings("extensions".into()),
+                                Payload::ExtensionPreferences {
+                                    extension: extension.clone(),
+                                    command: None,
+                                },
+                                cx,
+                            ),
                             StoreEffect::Back => this.return_home(w, cx),
                             StoreEffect::Notice(text) => {
                                 this.notice = Some(text.clone());
@@ -209,6 +235,9 @@ impl Launcher {
             let _ = window.update(cx, |_, w, cx| {
                 let _ = owner.update(cx, |v, cx| {
                     if v.navigation.as_ref() != Some(&n) {
+                        if let Payload::Extension { result } = &n.payload {
+                            v.dispose_dropped_extension(result, cx);
+                        }
                         if matches!(n.surface, Surface::Extensions | Surface::ExtensionRuntime)
                             && cx.has_global::<navigation::NavigationInbox>()
                         {
@@ -221,6 +250,9 @@ impl Launcher {
                         match v.deliver_extension(&n, w, cx) {
                             Ok(()) => {}
                             Err(e) => {
+                                if let Payload::Extension { result } = &n.payload {
+                                    v.dispose_dropped_extension(result, cx);
+                                }
                                 v.return_home(w, cx);
                                 v.error = Some(e);
                             }

@@ -81,6 +81,7 @@ pub struct RuntimeView {
     action_index: usize,
     action_scroll: UniformListScrollHandle,
     dropdown_open: bool,
+    dropdown_value: Option<String>,
     dropdown_focus: FocusHandle,
     dropdown_index: usize,
     dropdown_scroll: UniformListScrollHandle,
@@ -189,6 +190,7 @@ impl RuntimeView {
             action_index: 0,
             action_scroll: UniformListScrollHandle::new(),
             dropdown_open: false,
+            dropdown_value: None,
             dropdown_focus: cx.focus_handle(),
             dropdown_index: 0,
             dropdown_scroll: UniformListScrollHandle::new(),
@@ -282,6 +284,7 @@ impl RuntimeView {
         self.visible = true;
         self.opened = Some(nonce);
         self.session = Some(next);
+        self.dropdown_value = None;
         self.polling = polling;
         self.error = None;
         let search_text = self
@@ -1037,3 +1040,6 @@ impl Focusable for RuntimeView {
 
 #[cfg(test)]
 mod review_regressions;
+
+#[cfg(test)]
+mod followup_dropdown;

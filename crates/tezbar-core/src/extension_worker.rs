@@ -49,10 +49,14 @@ struct Process {
     finished: tokio::task::JoinHandle<()>,
 }
 
+struct RunGrant {
+    extension: String,
+    preferences: bool,
+}
 struct PendingRequest {
     id: String,
     pending: Pending,
-    runs: Arc<Mutex<HashMap<String, String>>>,
+    runs: Arc<Mutex<HashMap<String, RunGrant>>>,
 }
 impl Drop for PendingRequest {
     fn drop(&mut self) {
@@ -94,7 +98,7 @@ pub struct ExtensionWorker {
     sessions: Arc<Mutex<HashMap<String, (String, String, String)>>>,
     status_signatures: Arc<Mutex<HashMap<String, Option<u64>>>>,
     status_refreshing: Arc<Mutex<HashSet<String>>>,
-    in_flight_runs: Arc<Mutex<HashMap<String, String>>>,
+    in_flight_runs: Arc<Mutex<HashMap<String, RunGrant>>>,
 }
 
 impl ExtensionWorker {
@@ -178,7 +182,13 @@ impl ExtensionWorker {
                 self.in_flight_runs
                     .lock()
                     .map_err(|_| "SDK run owner unavailable")?
-                    .insert(id.clone(), extension.into());
+                    .insert(
+                        id.clone(),
+                        RunGrant {
+                            extension: extension.into(),
+                            preferences: false,
+                        },
+                    );
             }
         }
         let _request = PendingRequest {
@@ -192,7 +202,7 @@ impl ExtensionWorker {
             Duration::from_secs(120)
         };
         let request_args = args.clone();
-        let response = tokio::time::timeout(timeout, async {
+        let mut response = tokio::time::timeout(timeout, async {
             sender
                 .send(json!({"type":"invoke", "id":id, "channel":channel, "payload":args}))
                 .await
@@ -204,6 +214,16 @@ impl ExtensionWorker {
         .await
         .map_err(|_| format!("Extension operation timed out: {channel}"))??;
         if channel == "extension:run-command" {
+            let preferences = self
+                .in_flight_runs
+                .lock()
+                .map(|runs| runs.get(&id).is_some_and(|run| run.preferences))
+                .unwrap_or(false);
+            if preferences {
+                if let Some(reply) = response.as_object_mut() {
+                    reply.insert("preferencesRequested".into(), json!(true));
+                }
+            }
             let extension = request_args[0]["extensionId"].as_str().unwrap_or("");
             let command = request_args[0]["commandName"].as_str().unwrap_or("");
             let old = self
@@ -434,8 +454,9 @@ impl ExtensionWorker {
                                         .is_some_and(|(request, extension)| {
                                             runs.lock()
                                                 .map(|runs| {
-                                                    runs.get(request)
-                                                        .is_some_and(|owner| owner == extension)
+                                                    runs.get(request).is_some_and(|owner| {
+                                                        owner.extension == extension
+                                                    })
                                                 })
                                                 .unwrap_or(false)
                                         });
@@ -460,14 +481,36 @@ impl ExtensionWorker {
                                                         .into(),
                                                 ),
                                             };
-                                            ctx.host
+                                            let accepted = ctx
+                                                .host
                                                 .extension_control(
                                                     body["sessionId"].as_str().unwrap_or("").into(),
                                                     body["source"].as_u64().unwrap_or(0),
                                                     control,
                                                 )
-                                                .await
-                                                .map(|_| json!(true))
+                                                .await;
+                                            // Retain this admitted request as a reply intent. The
+                                            // no-view run has no mounted native source yet; its
+                                            // caller applies the intent after checking visibility
+                                            // and request ownership, using the caller's extension.
+                                            if accepted.is_ok()
+                                                && kind == "preferences"
+                                                && body["source"].as_u64().unwrap_or(0) == 0
+                                            {
+                                                if let Some(request) = body["runRequest"].as_str() {
+                                                    if let Ok(mut runs) = runs.lock() {
+                                                        if let Some(run) =
+                                                            runs.get_mut(request).filter(|run| {
+                                                                Some(run.extension.as_str())
+                                                                    == body["extensionId"].as_str()
+                                                            })
+                                                        {
+                                                            run.preferences = true;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            accepted.map(|_| json!(true))
                                         }
                                         _ => Err("Unknown SDK control".into()),
                                     }
@@ -810,11 +853,19 @@ impl ExtensionWorker {
             .as_str()
             .filter(|s| !s.trim().is_empty())
             .map(str::to_owned)
-            .unwrap_or_else(|| match root["props"]["icon"].as_str() {
-                Some("gear" | "Gear") => "⚙".to_owned(),
-                _ => command.replace(['-', '_'], " "),
+            .unwrap_or_else(|| {
+                if root["props"]["icon"].is_null() {
+                    command.replace(['-', '_'], " ")
+                } else {
+                    String::new()
+                }
             });
-        let params = json!({"items":menu,"title":title,"tooltip":root["props"]["tooltip"]});
+        let tooltip = root["props"]["tooltip"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| command.replace(['-', '_'], " "));
+        let params = json!({"items":menu,"title":title,"tooltip":tooltip});
         use std::hash::{Hash, Hasher};
         let mut hash = std::collections::hash_map::DefaultHasher::new();
         params.to_string().hash(&mut hash);

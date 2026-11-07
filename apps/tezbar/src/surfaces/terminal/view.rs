@@ -147,7 +147,7 @@ impl TerminalView {
                             self.scroll_wheel.reset();
                         }
                     } else {
-                        self.state.write_bytes(b);
+                        self.state.write_scroll_bytes(b);
                     }
                     self.pump(cx);
                 }

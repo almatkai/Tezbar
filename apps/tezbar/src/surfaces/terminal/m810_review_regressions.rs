@@ -550,3 +550,73 @@ fn review_m810_r6_stale_attach_and_partial_replay_preserve_query_progress() {
         "first query was already answered, only the second is live"
     );
 }
+
+#[test]
+fn review_followup_terminal_replay_error_then_gap_resumes_with_a_new_token() {
+    let mut s = state();
+    s.listeners_ready(true, true);
+    s.activate(boot(), 1);
+    let w = s.next_work().unwrap();
+    s.complete(w, Ok(json!([summary("a", true)])));
+    let w = s.next_work().unwrap();
+    s.complete(w, Ok(attached("a", "abcdefgh")));
+    let w = s.next_work().unwrap();
+    s.complete(w, Ok(replay_value(0, b"abcd", 8)));
+    let w = s.next_work().unwrap();
+    s.complete(w, Err("Terminal history was truncated or modified".into()));
+    s.stream_data("a", "gen-a", 8, b"$ ", true);
+    let resume = loop {
+        let w = s
+            .next_work()
+            .expect("A tokenless gap must not stay loading without work");
+        if matches!(w.purpose, Purpose::Resume(_)) {
+            break w;
+        }
+        assert!(w.cleanup());
+        s.complete(w, Ok(json!(true)));
+    };
+    s.write("x".into(), true);
+    let mut fresh = attached("a", "abcdefgh$ ");
+    fresh["replay"] = json!("token-new");
+    s.complete(resume, Ok(fresh));
+    let w = s.next_work().unwrap();
+    assert!(
+        matches!(&w.request, TerminalRequest::Replay { token, position:4 } if token == "token-new")
+    );
+    s.complete(w, Ok(replay_value(4, b"efgh$ ", 10)));
+    let w = s.next_work().unwrap();
+    assert!(matches!(w.request, TerminalRequest::Input { ref bytes, .. } if bytes == b"x"));
+}
+#[gpui::test]
+fn review_followup_terminal_wheel_during_replay_preserves_the_next_key(cx: &mut TestAppContext) {
+    let (rt, f, view, cx) = terminal_view(cx, b"\x1b[?1049h$ ");
+    let gate = Arc::new(tokio::sync::Notify::new());
+    *f.replay_gate.lock().unwrap() = Some(gate.clone());
+    f.calls.lock().unwrap().clear();
+    view.update(cx, |v, cx| {
+        v.state.set_visible(false);
+        v.state.set_visible(true);
+        v.pump(cx);
+    });
+    settle(&rt, cx);
+    let (bounds, metrics) = view.read_with(cx, |v, _| v.geometry.unwrap());
+    let at = bounds.origin + point(px(3.), px(3.));
+    for _ in 0..60 {
+        cx.simulate_event(ScrollEvent {
+            position: at,
+            delta: ScrollDelta::Pixels(point(px(0.), px(metrics.height))),
+            ..Default::default()
+        });
+    }
+    cx.simulate_keystrokes("q");
+    assert!(view.read_with(cx, |v, _| {
+        !v.error().is_some_and(|e| e.contains("buffer is full"))
+    }));
+    *f.replay_gate.lock().unwrap() = None;
+    gate.notify_one();
+    settle(&rt, cx);
+    let bytes = inputs(&f.calls.lock().unwrap()).concat();
+    let mut expected = b"\x1b[A".repeat(60);
+    expected.push(b'q');
+    assert_eq!(bytes, expected);
+}

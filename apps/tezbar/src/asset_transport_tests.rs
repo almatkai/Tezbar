@@ -347,7 +347,12 @@ fn review_m810_r1_svg_rejects_simultaneous_layers_before_rasterization() {
             .collect::<String>()
     );
     assert!(decode_svg(svg.as_bytes(), 1024).is_ok());
-    let mask=br#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><defs><mask id="a"><rect width="32" height="32" fill="white"/></mask></defs><g mask="url(#a)"><rect width="32" height="32" fill="red"/></g></svg>"#;
+    let mask = concat!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">"#,
+        r#"<defs><mask id="a"><rect width="32" height="32" fill="white"/></mask></defs>"#,
+        r#"<g mask="url(#a)"><rect width="32" height="32" fill="red"/></g></svg>"#,
+    )
+    .as_bytes();
     assert!(decode_svg(mask, 128).is_ok());
 }
 #[test]
@@ -389,7 +394,11 @@ fn review_m810_r2_stylesheets_are_bounded_before_usvg_css_parser() {
             .unwrap()
             .contains("stylesheet")
     );
-    assert!(decode_svg(br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><style>.a {fill:red}</style><rect class="a" width="16" height="16"/></svg>"#,128).is_ok());
+    let ordinary = concat!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">"#,
+        r#"<style>.a {fill:red}</style><rect class="a" width="16" height="16"/></svg>"#,
+    );
+    assert!(decode_svg(ordinary.as_bytes(), 128).is_ok());
 }
 #[test]
 fn review_m810_r3_dash_expansion_is_bounded_before_stroking() {
@@ -404,6 +413,50 @@ fn review_m810_r3_dash_expansion_is_bounded_before_stroking() {
             .unwrap()
             .contains("dash")
     );
-    let normal=br#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M0 8 L32 8" stroke="red" stroke-width="2" stroke-dasharray="2 2"/></svg>"#;
+    let normal = concat!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">"#,
+        r#"<path d="M0 8 L32 8" stroke="red" stroke-width="2" stroke-dasharray="2 2"/></svg>"#,
+    )
+    .as_bytes();
     assert!(decode_svg(normal, 128).is_ok());
+}
+
+#[test]
+fn review_followup_svg_descendant_selectors_are_bounded_before_matching() {
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg"><style>x {} {{fill:red}}</style>{}<rect width="1" height="1"/>{}</svg>"#,
+        "g ".repeat(30),
+        "<g>".repeat(60),
+        "</g>".repeat(60)
+    );
+    // Preflight itself must reject this; never execute the old exponential matcher.
+    assert!(svg_preflight(svg.as_bytes()).is_err());
+}
+#[test]
+fn review_followup_svg_clip_mask_and_opacity_keep_ordinary_icon_pixels() {
+    for layers in [
+        r#"<g clip-path="url(#c)"><g mask="url(#m)"><path d="M0 0H24V24H0Z" fill="red"/></g></g>"#,
+        r#"<g clip-path="url(#c)"><g opacity=".5"><g opacity=".5"><path d="M0 0H24V24H0Z" fill="red"/></g></g></g>"#,
+        r#"<g mask="url(#m)"><g mask="url(#m)"><path d="M0 0H24V24H0Z" fill="red"/></g></g>"#,
+    ] {
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><defs><clipPath id="c"><rect width="24" height="24" rx="4"/></clipPath><mask id="m"><rect width="24" height="24" fill="white"/></mask></defs>{layers}</svg>"#
+        );
+        let image = decode_svg(svg.as_bytes(), 1024).unwrap();
+        let center = image.get_pixel(12, 12).0;
+        // The native image contract is straight BGRA, including translucent SVGs.
+        assert_eq!(center[2], 255);
+        assert_eq!(center[1], 0);
+        assert!(center[3] >= 63);
+    }
+}
+#[test]
+fn review_followup_svg_simple_css_relations_and_quoted_values_still_render() {
+    for selector in ["g > .a", "svg .a", r#"[data-name="it's a shape"]"#] {
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><style>{selector} {{fill:red}}</style><g><rect class="a" data-name="it's a shape" width="16" height="16"/></g></svg>"#
+        );
+        let pixel = decode_svg(svg.as_bytes(), 128).unwrap().get_pixel(8, 8).0;
+        assert_eq!(pixel, [0, 0, 255, 255], "{selector}");
+    }
 }

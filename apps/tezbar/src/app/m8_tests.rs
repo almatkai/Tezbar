@@ -68,6 +68,7 @@ pub(in crate::app) fn owner(
         resources: root.path().join("resources"),
         show: false,
         allow_desktop_integration: false,
+        launcher_shortcut: None,
         theme: "dark".into(),
         #[cfg(feature = "bench-control")]
         control_token: None,

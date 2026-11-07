@@ -847,8 +847,9 @@ impl Launcher {
         .child(if self.rows[index].category == "color-converter" {
             let color = tezbar_core::instant::color::parse_color(&self.model.input);
             div()
-                .size(px(20. * t.zoom))
-                .rounded(px(4. * t.zoom))
+                .size(px(22. * t.zoom))
+                .flex_shrink_0()
+                .rounded(px(6. * t.zoom))
                 .border_1()
                 .border_color(t.rim)
                 .when_some(color, |d, color| {
@@ -862,56 +863,69 @@ impl Launcher {
                 .into_any_element()
         } else if let Some(image) = image {
             img(image)
-                .size(px(if grid { 40. } else { 20. } * t.zoom))
+                .size(px(if grid { 40. } else { 22. } * t.zoom))
+                .flex_shrink_0()
                 .into_any_element()
         } else {
-            div()
-                .size(px(if grid { 40. } else { 20. } * t.zoom))
-                .text_color(if selected {
-                    rgb(0xffffff).into()
-                } else {
-                    t.text3
-                })
-                .child(presentation::icon_glyph(&self.rows[index].category))
-                .into_any_element()
+            icons::tile(&self.rows[index], if grid { 40. } else { 22. } * t.zoom).into_any_element()
         })
         .child(
             div()
-                .flex_1()
+                .flex()
+                .items_baseline()
+                .when(grid, |d| d.justify_center())
+                .when(!grid, |d| d.flex_1())
                 .min_w_0()
-                .max_w(relative(0.7))
-                .text_size(px(13. * t.zoom))
-                .text_ellipsis()
-                .child(title),
+                .w_full()
+                .gap(px(8. * t.zoom))
+                .debug_selector(move || format!("result-text-{index}"))
+                .child(
+                    div()
+                        .min_w_0()
+                        .max_w(relative(if grid { 1. } else { 0.7 }))
+                        .flex_shrink_0()
+                        .text_size(px(13. * t.zoom))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_ellipsis()
+                        .child(title),
+                )
+                .when(!grid, |d| {
+                    let subtitle = self
+                        .chat_row_status(&self.rows[index])
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| self.rows[index].subtitle.clone());
+                    d.when(!subtitle.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_ellipsis()
+                                .text_size(px(12. * t.zoom))
+                                .text_color(if selected {
+                                    rgb(0xffffff).into()
+                                } else {
+                                    t.text3
+                                })
+                                .child(subtitle),
+                        )
+                    })
+                }),
         )
         .when(!grid, |d| {
             d.child(
                 div()
-                    .min_w_0()
-                    .text_ellipsis()
-                    .text_size(px(11. * t.zoom))
-                    .text_color(if selected {
-                        rgb(0xffffff).into()
-                    } else {
-                        t.text3
-                    })
-                    .child(
-                        self.chat_row_status(&self.rows[index])
-                            .map(str::to_owned)
-                            .unwrap_or_else(|| self.rows[index].subtitle.clone()),
-                    ),
-            )
-        })
-        .when(!grid, |d| {
-            d.child(
-                div()
                     .flex_shrink_0()
+                    .px(px(6. * t.zoom))
+                    .py(px(2. * t.zoom))
+                    .rounded(px(5. * t.zoom))
+                    .bg(if selected { t.pill_strong } else { t.pill })
                     .text_size(px(10.5 * t.zoom))
                     .text_color(if selected {
                         rgb(0xffffff).into()
                     } else {
                         t.text3
                     })
+                    .debug_selector(move || format!("result-kind-{index}"))
                     .child(presentation::kind_label(&self.rows[index].category).to_owned()),
             )
         })
@@ -1239,6 +1253,8 @@ impl Render for Launcher {
         } else {
             div()
                 .id("launcher-listbox")
+                .debug_selector(|| "launcher-listbox".into())
+                .min_w_0()
                 .role(if grid { Role::Grid } else { Role::ListBox })
                 .aria_label("Search results")
                 .flex_1()
@@ -1300,10 +1316,7 @@ impl Render for Launcher {
                         .child(if let Some(image) = self.icons.get(&pin.id) {
                             img(image.clone()).size(px(22. * t.zoom)).into_any_element()
                         } else {
-                            div()
-                                .text_size(px(18. * t.zoom))
-                                .text_color(t.text3)
-                                .child(presentation::icon_glyph(&pin.category))
+                            icons::tile(&presentation::pinned_row(pin), 22. * t.zoom)
                                 .into_any_element()
                         })
                         .child(
@@ -1494,62 +1507,82 @@ impl Render for Launcher {
                     }
                 }),
             )
-            .when(!utility_active, |d| d.child(
-                controls::header(t)
-                    .child(div().id("drag-handle").w(px(8.)).h_full().on_mouse_down(
-                        MouseButton::Left,
-                        {
-                            let relay = self.relay.clone();
-                            move |_, _, _| {
-                                let _ = relay.send(Event::SnapBegin);
-                            }
-                        },
-                    ))
-                    .when(mode != Mode::Basic, |d| {
-                        d.child(
-                            div()
-                                .mr(px(8.))
-                                .text_size(px(12.))
-                                .text_color(t.text3)
-                                .child(match mode {
-                                    Mode::Deep => "Deep Search",
-                                    Mode::Ai => "AI",
-                                    Mode::Path => "Directory",
-                                    Mode::Applications => "Applications",
-                                    Mode::Terminal => "Terminal",
-                                    _ => "",
+            .when(!utility_active, |d| {
+                d.child(
+                    controls::header(t)
+                        .gap(px(10. * t.zoom))
+                        .child(
+                            icons::search_badge(&mode, t.zoom)
+                                .id("drag-handle")
+                                .on_mouse_down(MouseButton::Left, {
+                                    let relay = self.relay.clone();
+                                    move |_, _, _| {
+                                        let _ = relay.send(Event::SnapBegin);
+                                    }
                                 }),
                         )
-                    })
-                    .when_some(self.form.as_ref().filter(|form| form.inline()), |d, form| {
-                        d.child(div().max_w(relative(0.4)).text_ellipsis().text_size(px(15. * t.zoom)).child(form.row.title.clone()))
-                            .child(controls::keycap(form.labels[0].title.clone(), t))
-                    })
-                    .child(self.form.as_ref().filter(|form| form.inline()).map(|form| form.inputs[0].clone()).unwrap_or_else(|| self.input.clone()))
-                    .when(mode == Mode::Ai, |d| {
-                        d.child(
-                            controls::button(
-                                "model-picker",
-                                self.model_config["model"]
-                                    .as_str()
-                                    .unwrap_or("Choose model")
-                                    .to_owned(),
-                                controls::ButtonTone::Quiet,
-                                self.model_saving,
-                                t,
-                            ).role(Role::ComboBox).aria_expanded(self.model_menu).aria_label("Choose AI model")
-                            .on_click(cx.listener(|this, _, w, cx| {this.open_models(cx);this.model_search.focus_handle(cx).focus(w,cx);})),
+                        .when(mode == Mode::Deep, |d| {
+                            d.child(
+                                div()
+                                    .mr(px(8.))
+                                    .text_size(px(12.))
+                                    .text_color(t.text3)
+                                    .child("Deep"),
+                            )
+                        })
+                        .when_some(
+                            self.form.as_ref().filter(|form| form.inline()),
+                            |d, form| {
+                                d.child(
+                                    div()
+                                        .max_w(relative(0.4))
+                                        .text_ellipsis()
+                                        .text_size(px(15. * t.zoom))
+                                        .child(form.row.title.clone()),
+                                )
+                                .child(controls::keycap(form.labels[0].title.clone(), t))
+                            },
                         )
-                    })
-                    .when(mode == Mode::Terminal, |d| {
-                        d.child(
-                            div()
-                                .text_size(px(11.))
-                                .text_color(t.text3)
-                                .child(self.terminal_prompt.clone()),
+                        .child(
+                            self.form
+                                .as_ref()
+                                .filter(|form| form.inline())
+                                .map(|form| form.inputs[0].clone())
+                                .unwrap_or_else(|| self.input.clone()),
                         )
-                    }),
-            ))
+                        .when(mode == Mode::Ai, |d| {
+                            d.child(
+                                controls::button(
+                                    "model-picker",
+                                    self.model_config["model"]
+                                        .as_str()
+                                        .unwrap_or("Choose model")
+                                        .to_owned(),
+                                    controls::ButtonTone::Quiet,
+                                    self.model_saving,
+                                    t,
+                                )
+                                .role(Role::ComboBox)
+                                .aria_expanded(self.model_menu)
+                                .aria_label("Choose AI model")
+                                .on_click(cx.listener(
+                                    |this, _, w, cx| {
+                                        this.open_models(cx);
+                                        this.model_search.focus_handle(cx).focus(w, cx);
+                                    },
+                                )),
+                            )
+                        })
+                        .when(mode == Mode::Terminal, |d| {
+                            d.child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(t.text3)
+                                    .child(self.terminal_prompt.clone()),
+                            )
+                        }),
+                )
+            })
             .when(self.history && !utility_active, |d| {
                 d.child(
                     div()
@@ -1589,18 +1622,33 @@ impl Render for Launcher {
                         .child(self.message_document.clone()),
                 )
             })
-            .when(mode==Mode::Basic&&self.model.input.is_empty()&&self.navigation.is_none(),|d|d.child(div().px(px(16.)).py(px(4.)).text_size(px(10.5)).text_color(t.text3).child("/directory    ` applications    ! Deep Search    SPACE AI    > terminal")))
-            .child(div().flex().flex_1().min_h_0()
-                .when(!self.state.pins.is_empty() && matches!(mode, Mode::Basic | Mode::Deep)
-                    && self.form.is_none() && self.navigation.is_none() && !self.answer_active,
-                    |d| d.child(pins))
-                .child(content))
-            .when(self.model_menu,|d|d.child(self.model_popover(t,cx)))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .when(
+                        !self.state.pins.is_empty()
+                            && matches!(mode, Mode::Basic | Mode::Deep)
+                            && self.form.is_none()
+                            && self.navigation.is_none()
+                            && !self.answer_active,
+                        |d| d.child(pins),
+                    )
+                    .child(content),
+            )
+            .when(self.model_menu, |d| d.child(self.model_popover(t, cx)))
             .when_some(self.menu.clone(), |d, (row, selected)| {
                 d.child(
                     controls::popover("result-actions", "Result actions", t)
-                        .role(Role::Menu).track_focus(&self.popover_focus)
-                        .on_mouse_down_out(cx.listener(|this, _, w, cx| {this.menu=None;this.input.focus_handle(cx).focus(w,cx);cx.notify();}))
+                        .role(Role::Menu)
+                        .track_focus(&self.popover_focus)
+                        .on_mouse_down_out(cx.listener(|this, _, w, cx| {
+                            this.menu = None;
+                            this.input.focus_handle(cx).focus(w, cx);
+                            cx.notify();
+                        }))
                         .absolute()
                         .right(px(12.))
                         .bottom(px(36.))
@@ -1620,11 +1668,11 @@ impl Render for Launcher {
                                     t,
                                 )
                                 .role(Role::MenuItem)
-                                .when(selected==index,|d|d.aria_active_descendant())
+                                .when(selected == index, |d| d.aria_active_descendant())
                                 .w_full()
                                 .on_click(cx.listener(
                                     move |this, _, w, cx| {
-                                        this.input.focus_handle(cx).focus(w,cx);
+                                        this.input.focus_handle(cx).focus(w, cx);
                                         this.row_action(row.clone(), action.clone(), cx)
                                     },
                                 ))
@@ -1635,8 +1683,13 @@ impl Render for Launcher {
             .when_some(self.pin_picker.clone(), |d, (row, selected)| {
                 d.child(
                     controls::popover("pin-picker", "Choose pin slot", t)
-                        .role(Role::ListBox).track_focus(&self.popover_focus)
-                        .on_mouse_down_out(cx.listener(|this, _, w, cx| {this.pin_picker=None;this.input.focus_handle(cx).focus(w,cx);cx.notify();}))
+                        .role(Role::ListBox)
+                        .track_focus(&self.popover_focus)
+                        .on_mouse_down_out(cx.listener(|this, _, w, cx| {
+                            this.pin_picker = None;
+                            this.input.focus_handle(cx).focus(w, cx);
+                            cx.notify();
+                        }))
                         .absolute()
                         .right(px(12.))
                         .bottom(px(36.))
@@ -1661,52 +1714,76 @@ impl Render for Launcher {
                                 false,
                                 t,
                             )
-                            .role(Role::ListBoxOption).aria_selected(index==selected)
-                            .aria_position_in_set(index+1).aria_size_of_set(12)
-                            .when(index==selected,|d|d.aria_active_descendant())
+                            .role(Role::ListBoxOption)
+                            .aria_selected(index == selected)
+                            .aria_position_in_set(index + 1)
+                            .aria_size_of_set(12)
+                            .when(index == selected, |d| d.aria_active_descendant())
                             .on_click(cx.listener(
-                                move |this, _, w, cx| {this.pin_at(row.clone(), index, cx);this.input.focus_handle(cx).focus(w,cx);},
+                                move |this, _, w, cx| {
+                                    this.pin_at(row.clone(), index, cx);
+                                    this.input.focus_handle(cx).focus(w, cx);
+                                },
                             ))
                         })),
                 )
             })
-            .when(!utility_active, |d| d.child(
-                controls::footer(t)
-                    .child(
-                        div()
-                            .id("launcher-status")
-                            .role(Role::Status)
-                            .when(self.error.is_some(), |d| d.text_color(t.danger))
-                            .child(footer),
-                    )
-                    .when(self.error.is_some() && !self.ready, |d| {
-                        let relay = self.relay.clone();
-                        d.child(controls::action_button(
-                            "retry-core",
-                            "Retry",
-                            controls::ButtonTone::Quiet,
-                            false,
-                            t,
-                            move |_, _| {
-                                let _ = relay.send(Event::RetryCore);
-                            },
-                        ).debug_selector(|| "retry-core".into()))
-                    })
-                    .child(div().flex_1())
-                    .child(self.task_indicator.clone())
-                    .child(if self.form.is_some() {
-                        "Run"
-                    } else if mode == Mode::Deep && !self.deep_navigation {
-                        "Navigate"
-                    } else if mode==Mode::Ai {"Start chat"} else if mode==Mode::Terminal {"Open terminal"} else {"Open"})
-                    .child(controls::keycap("↵", t))
-                    .when(mode==Mode::Path,|d|d.child("Complete").child(controls::keycap("Tab",t)))
-                    .when(self.selected().as_ref().and_then(launcher::quick_look_path).is_some(),|d|d.child("Quick Look").child(controls::keycap("Space",t)))
-                    .child("Actions")
-                    .child(controls::keycap("⌘K", t))
-                    .child("Pin")
-                    .child(controls::keycap("⌘P", t)),
-            ))
+            .when(!utility_active, |d| {
+                d.child(
+                    controls::footer(t)
+                        .child(
+                            div()
+                                .id("launcher-status")
+                                .role(Role::Status)
+                                .when(self.error.is_some(), |d| d.text_color(t.danger))
+                                .child(footer),
+                        )
+                        .when(self.error.is_some() && !self.ready, |d| {
+                            let relay = self.relay.clone();
+                            d.child(
+                                controls::action_button(
+                                    "retry-core",
+                                    "Retry",
+                                    controls::ButtonTone::Quiet,
+                                    false,
+                                    t,
+                                    move |_, _| {
+                                        let _ = relay.send(Event::RetryCore);
+                                    },
+                                )
+                                .debug_selector(|| "retry-core".into()),
+                            )
+                        })
+                        .child(div().flex_1())
+                        .child(self.task_indicator.clone())
+                        .child(if self.form.is_some() {
+                            "Run"
+                        } else if mode == Mode::Deep && !self.deep_navigation {
+                            "Navigate"
+                        } else if mode == Mode::Ai {
+                            "Start chat"
+                        } else if mode == Mode::Terminal {
+                            "Open terminal"
+                        } else {
+                            "Open"
+                        })
+                        .child(controls::keycap("↵", t))
+                        .when(mode == Mode::Path, |d| {
+                            d.child("Complete").child(controls::keycap("Tab", t))
+                        })
+                        .when(
+                            self.selected()
+                                .as_ref()
+                                .and_then(launcher::quick_look_path)
+                                .is_some(),
+                            |d| d.child("Quick Look").child(controls::keycap("Space", t)),
+                        )
+                        .child("Actions")
+                        .child(controls::keycap("⌘K", t))
+                        .child("Pin")
+                        .child(controls::keycap("⌘P", t)),
+                )
+            })
             .child(tracker)
             .children(resize::handles(cx, |view, edge, w, _| {
                 view.resize = resize::Gesture::begin(edge, w)

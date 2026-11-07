@@ -1,0 +1,23 @@
+{
+  "binary": "/tmp/tezbar-m810-root-repair-20261107/tezbar-followup-preview",
+  "sha256": "6f942e2ad106b353fa882e283714ca3b6b73c2b1078f074c4865022f50e566e8",
+  "bytes": 220707000,
+  "version": {
+    "version": "0.3.0-beta.7",
+    "source": "8fc0f6735ea6445a4a4fc5301bf20d1fa3cca988",
+    "dirty": "true",
+    "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+    "preview": true,
+    "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+    "runtime_shaders": true,
+    "bench_control": false
+  },
+  "build_gate": "followup-final-build.json",
+  "link_check": {
+    "webkit_or_javascriptcore": false
+  },
+  "lock_only_change": "existing locked simplecss direct app dependency",
+  "all_other_lock_bytes_unchanged": true,
+  "installed_preview_updated": false,
+  "running_preview_pid": 79164
+}

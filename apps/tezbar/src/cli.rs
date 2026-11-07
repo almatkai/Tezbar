@@ -6,6 +6,8 @@ pub struct Preview {
     pub resources: PathBuf,
     pub show: bool,
     pub allow_desktop_integration: bool,
+    /// Explicit preview key; does not enable scans, clipboard observation or command hotkeys.
+    pub launcher_shortcut: Option<String>,
     pub theme: String,
     #[cfg(feature = "bench-control")]
     pub control_token: Option<String>,
@@ -39,6 +41,7 @@ impl Preview {
         let mut resources = None;
         let mut show = false;
         let mut allow_desktop_integration = false;
+        let mut launcher_shortcut = None;
         let mut theme = "system".to_string();
         #[cfg(feature = "bench-control")]
         let mut token_file = None;
@@ -53,7 +56,7 @@ impl Preview {
                             .ok_or_else(|| anyhow::anyhow!("token file required"))?,
                     ));
                 }
-                "--profile" | "--resources" | "--theme" => {
+                "--profile" | "--resources" | "--theme" | "--launcher-shortcut" => {
                     let flag = &args[i];
                     i += 1;
                     let value = args
@@ -62,6 +65,11 @@ impl Preview {
                     match flag.as_str() {
                         "--profile" => root = Some(PathBuf::from(value)),
                         "--resources" => resources = Some(PathBuf::from(value)),
+                        "--launcher-shortcut" => {
+                            let shortcut = tezbar_host::desktop::parse_shortcut(value)
+                                .map_err(anyhow::Error::msg)?;
+                            launcher_shortcut = Some(shortcut.accelerator);
+                        }
                         _ => theme = value.clone(),
                     }
                 }
@@ -82,6 +90,7 @@ impl Preview {
             theme,
         )?;
         preview.allow_desktop_integration = allow_desktop_integration;
+        preview.launcher_shortcut = launcher_shortcut;
         #[cfg(feature = "bench-control")]
         if let Some(path) = token_file {
             let path = real(&path)?;
@@ -130,6 +139,7 @@ impl Preview {
             resources,
             show,
             allow_desktop_integration: false,
+            launcher_shortcut: None,
             theme,
             #[cfg(feature = "bench-control")]
             control_token: None,
@@ -181,9 +191,42 @@ mod tests {
             "--resources".into(),
             r.path().display().to_string(),
         ];
-        assert!(!Preview::parse(&args).unwrap().allow_desktop_integration);
+        let preview = Preview::parse(&args).unwrap();
+        assert!(!preview.allow_desktop_integration);
+        assert!(preview.launcher_shortcut.is_none());
         args.push("--allow-desktop-integration".into());
         assert!(Preview::parse(&args).unwrap().allow_desktop_integration);
+    }
+    #[::core::prelude::v1::test]
+    fn launcher_hotkey_can_be_enabled_without_desktop_services() {
+        let (p, r) = fixture();
+        let args = vec![
+            "--profile".into(),
+            p.path().display().to_string(),
+            "--resources".into(),
+            r.path().display().to_string(),
+            "--launcher-shortcut".into(),
+            "Alt+Space".into(),
+        ];
+        let preview = Preview::parse(&args).unwrap();
+        assert!(!preview.allow_desktop_integration);
+        assert!(
+            preview
+                .core_paths()
+                .home_dir
+                .starts_with(p.path().canonicalize().unwrap())
+        );
+        assert_eq!(
+            tezbar_host::desktop::parse_shortcut(preview.launcher_shortcut.as_ref().unwrap())
+                .unwrap()
+                .id,
+            tezbar_host::desktop::parse_shortcut("Alt+Space")
+                .unwrap()
+                .id,
+        );
+        let mut invalid = args;
+        *invalid.last_mut().unwrap() = "not-an-accelerator".into();
+        assert!(Preview::parse(&invalid).is_err());
     }
     #[cfg(unix)]
     #[::core::prelude::v1::test]

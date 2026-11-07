@@ -1359,8 +1359,14 @@ impl RuntimeView {
         walk(&node, None, &mut choices);
         let selected = node
             .string("value")
-            .or_else(|| node.string("defaultValue"))
             .map(str::to_owned)
+            .or_else(|| {
+                self.dropdown_value
+                    .as_ref()
+                    .filter(|value| choices.iter().any(|c| &c.2 == *value))
+                    .cloned()
+            })
+            .or_else(|| node.string("defaultValue").map(str::to_owned))
             .or_else(|| choices.first().map(|c| c.2.clone()))
             .unwrap_or_default();
         Some((callback, selected, choices))
@@ -1370,6 +1376,7 @@ impl RuntimeView {
             if let Some((_, _, value)) = items.get(self.dropdown_index) {
                 let value = value.clone();
                 self.dropdown_open = false;
+                self.dropdown_value = Some(value.clone());
                 self.event(UiEvent::Dropdown { callback, value }, w, cx);
                 self.search.focus_handle(cx).focus(w, cx);
             }

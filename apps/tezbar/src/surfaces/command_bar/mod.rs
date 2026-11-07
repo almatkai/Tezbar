@@ -4,6 +4,9 @@ pub(crate) mod chat_integration;
 mod extension_integration;
 #[cfg(test)]
 mod extension_integration_tests;
+mod icons;
+#[cfg(test)]
+mod m9_followup_tests;
 mod terminal_integration;
 pub use chat_integration::ChatSource;
 pub use terminal_integration::TerminalSource;
@@ -119,6 +122,7 @@ pub struct Launcher {
     timer: Option<Task<()>>,
     timer_at: Option<u64>,
     tasks: Vec<Task<()>>,
+    extension_runs: Vec<Task<()>>,
     adapter: Arc<dyn RequestAdapter>,
     relay: Relay,
     images: ImageCache,
@@ -455,6 +459,7 @@ impl Launcher {
             timer: None,
             timer_at: None,
             tasks: vec![],
+            extension_runs: vec![],
             adapter,
             relay,
             images: ImageCache::default(),
@@ -554,6 +559,7 @@ impl Launcher {
     }
     fn dispatch(&mut self, input: Input, cx: &mut Context<Self>) {
         self.tasks.retain(|t| !t.is_ready());
+        self.extension_runs.retain(|t| !t.is_ready());
         let effects = self.model.update(input, self.now());
         for effect in effects {
             self.effect(effect, cx);
@@ -1375,6 +1381,14 @@ impl Launcher {
                 return;
             }
         }
+        let is_extension = matches!(&a.row.action, Action::RunExtensionCommand { .. });
+        self.extension_runs.retain(|task| !task.is_ready());
+        if is_extension && self.extension_runs.len() >= 16 {
+            self.finish_open(&a);
+            self.error = Some("Extension commands are still running. Try again shortly.".into());
+            cx.notify();
+            return;
+        }
         let adapter = self.adapter.clone();
         let request = if let Action::RunExtensionCommand {
             extension_id,
@@ -1396,7 +1410,7 @@ impl Launcher {
                 result_id: a.row.id.clone(),
             }
         };
-        self.tasks.push(cx.spawn(async move |this, cx| {
+        let task = cx.spawn(async move |this, cx| {
             let result = gpui_tokio::Tokio::spawn(cx, async move { adapter.send(request).await })
                 .await
                 .unwrap_or_else(|e| Err(e.to_string()));
@@ -1410,13 +1424,26 @@ impl Launcher {
                 }
                 match result {
                     Ok(value) if value["ok"] != false => {
-                        if matches!(a.row.action, Action::RunExtensionCommand { .. }) {
+                        if let Action::RunExtensionCommand { extension_id, .. } = &a.row.action {
                             launcher::record_recent(
                                 &mut this.state.recent_extension_commands,
                                 &a.row.id,
                                 20,
                             );
                             this.persist(cx);
+                            if value["preferencesRequested"] == true {
+                                this.dispose_dropped_extension(&value, cx);
+                                this.finish_local(&a);
+                                this.navigate(
+                                    Surface::Settings("extensions".into()),
+                                    Payload::ExtensionPreferences {
+                                        extension: extension_id.clone(),
+                                        command: None,
+                                    },
+                                    cx,
+                                );
+                                return;
+                            }
                             if presentation::extension_has_view(&value) {
                                 this.finish_local(&a);
                                 this.navigate(
@@ -1485,7 +1512,14 @@ impl Launcher {
                 }
                 cx.notify();
             });
-        }));
+        });
+        // The core run is detached. Keep its reply owner through hide so a late
+        // foreground view is disposed, while MenuBarExtra remains in the background.
+        if is_extension {
+            self.extension_runs.push(task);
+        } else {
+            self.tasks.push(task);
+        }
     }
     fn record(&mut self, a: &Activation, cx: &mut Context<Self>) {
         let adapter = self.adapter.clone();
@@ -1499,7 +1533,7 @@ impl Launcher {
             let _ = gpui_tokio::Tokio::spawn(cx, async move { adapter.send(req).await }).await;
         }));
     }
-    fn message(&mut self, text: String, ms: u64, cx: &mut Context<Self>) {
+    pub(crate) fn message(&mut self, text: String, ms: u64, cx: &mut Context<Self>) {
         self.card_message(text, None, ms, cx);
     }
     fn card_message(
@@ -1591,6 +1625,9 @@ impl Launcher {
                 && (intent.surface == Surface::Extensions
                     || matches!(&intent.payload, Payload::Extension{result} if tezbar_ui_model::extensions::runtime::TreeReply::from_wire(result.clone()).is_ok()));
             if !valid {
+                if let Payload::Extension { result } = &intent.payload {
+                    self.dispose_dropped_extension(result, cx);
+                }
                 if cx.has_global::<navigation::NavigationInbox>() {
                     cx.global_mut::<navigation::NavigationInbox>()
                         .acknowledge(&intent);
@@ -1808,32 +1845,66 @@ impl Launcher {
             {
                 let adapter = self.adapter.clone();
                 let request = Request::ExtensionRun(payload.clone());
-                self.tasks.push(cx.spawn(async move |this, cx| {
+                let preference_extension = payload["extensionId"].as_str().map(str::to_owned);
+                self.extension_runs.retain(|task| !task.is_ready());
+                if self.extension_runs.len() >= 16 {
+                    self.error =
+                        Some("Extension commands are still running. Try again shortly.".into());
+                    cx.notify();
+                    return;
+                }
+                let generation = self.model.session.generation;
+                self.extension_runs.push(cx.spawn(async move |this, cx| {
                     let result =
                         gpui_tokio::Tokio::spawn(cx, async move { adapter.send(request).await })
                             .await
                             .unwrap_or_else(|e| Err(e.to_string()));
-                    let _ = this.update(cx, |this, cx| match result {
-                        Ok(result) if presentation::extension_has_view(&result) => this.navigate(
-                            Surface::ExtensionRuntime,
-                            Payload::Extension { result },
-                            cx,
-                        ),
-                        Ok(result) if result["ok"] == false => {
-                            this.error =
-                                Some(presentation::extension_notice(&result).unwrap_or_else(
-                                    || "Extension command failed. Try again.".into(),
-                                ));
-                            cx.notify();
-                        }
-                        Ok(result) => {
-                            if let Some(message) = presentation::extension_notice(&result) {
-                                this.message(message, 4000, cx);
+                    let _ = this.update(cx, |this, cx| {
+                        if generation != this.model.session.generation {
+                            if let Ok(result) = &result {
+                                this.dispose_dropped_extension(result, cx);
                             }
+                            return;
                         }
-                        Err(e) => {
-                            this.error = Some(e);
-                            cx.notify();
+                        match result {
+                            Ok(result)
+                                if result["ok"] != false
+                                    && result["preferencesRequested"] == true =>
+                            {
+                                this.dispose_dropped_extension(&result, cx);
+                                if let Some(extension) = preference_extension {
+                                    this.navigate(
+                                        Surface::Settings("extensions".into()),
+                                        Payload::ExtensionPreferences {
+                                            extension,
+                                            command: None,
+                                        },
+                                        cx,
+                                    );
+                                }
+                            }
+                            Ok(result) if presentation::extension_has_view(&result) => this
+                                .navigate(
+                                    Surface::ExtensionRuntime,
+                                    Payload::Extension { result },
+                                    cx,
+                                ),
+                            Ok(result) if result["ok"] == false => {
+                                this.error =
+                                    Some(presentation::extension_notice(&result).unwrap_or_else(
+                                        || "Extension command failed. Try again.".into(),
+                                    ));
+                                cx.notify();
+                            }
+                            Ok(result) => {
+                                if let Some(message) = presentation::extension_notice(&result) {
+                                    this.message(message, 4000, cx);
+                                }
+                            }
+                            Err(e) => {
+                                this.error = Some(e);
+                                cx.notify();
+                            }
                         }
                     });
                 }));

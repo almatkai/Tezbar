@@ -487,16 +487,16 @@ fn svg_tree(bytes: &[u8], width: u32) -> Result<(resvg::usvg::Tree, u32, u32, f3
                 .ok_or("Invalid SVG layer bounds")?;
             let area = (bounds.width().ceil() as f64 + 4.).min(b.max_w)
                 * (bounds.height().ceil() as f64 + 4.).min(b.max_h);
-            // resvg allocates an RGBA layer and clip/mask scratch. Reserve three
-            // layer areas if scratch is present, retaining every ancestor charge
-            // while children render. Siblings release their charge independently.
+            // Child RGBA layers coexist with this RGBA layer, but are freed before
+            // resvg applies this group's clip/mask. Its scratch is RGBA + alpha
+            // (1.25 areas); reserve 1.5 with margin only at this group's own peak.
+            live += area;
             let scratch = if g.clip_path().is_some() || g.mask().is_some() {
-                3.
+                1.5 * area
             } else {
-                1.
+                0.
             };
-            live += area * scratch;
-            if !live.is_finite() || live > b.live_limit {
+            if !live.is_finite() || live + scratch > b.live_limit {
                 return Err("SVG exceeds simultaneous layer memory budget".into());
             }
         }
@@ -549,6 +549,7 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
     let mut geometry_bytes = 256 * 1024usize;
     let mut stylesheet_bytes = 32 * 1024usize;
     let mut stylesheet_selectors = 1024usize;
+    let mut stylesheets = Vec::new();
     fn style_budget(text: &str, bytes: &mut usize, selectors: &mut usize) -> Result<(), String> {
         *bytes = bytes
             .checked_sub(text.len())
@@ -567,6 +568,11 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
                 .filter_map(|c| c.text())
             {
                 style_budget(text, &mut stylesheet_bytes, &mut stylesheet_selectors)?;
+            }
+            if n.attribute("type").is_none_or(|t| t == "text/css") {
+                if let Some(text) = n.text() {
+                    stylesheets.push(text);
+                }
             }
         }
         for attr in n.attributes().filter(|a| a.name() == "style") {
@@ -639,12 +645,56 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
         memo.insert(n.id(), total);
         Ok(total)
     }
-    cost(
+    let elements = cost(
         doc.root_element(),
         &ids,
         &mut Default::default(),
         &mut Vec::new(),
     )?;
+    // Match the same stylesheet parser as usvg, before its selector matcher runs.
+    // Every descendant combinator can backtrack across all ancestors. Include
+    // expanded <use> work, not only source nodes, in the matching-work ceiling.
+    let depth = doc
+        .descendants()
+        .filter(|n| n.is_element())
+        .map(|n| n.ancestors().filter(|n| n.is_element()).count())
+        .max()
+        .unwrap_or(1)
+        .saturating_add(1);
+    let mut sheet = simplecss::StyleSheet::new();
+    for text in stylesheets {
+        sheet.parse_more(text);
+    }
+    let mut remaining = 1usize << 22;
+    for rule in &sheet.rules {
+        let selector = rule.selector.to_string();
+        let mut steps = 0usize;
+        let mut branches = 1usize;
+        for token in simplecss::SelectorTokenizer::from(selector.as_str()) {
+            let token = match token {
+                Ok(token) => token,
+                Err(_) => {
+                    // Display doesn't escape quotes inside attribute values. If
+                    // re-tokenizing that valid selector fails, every printed
+                    // whitespace byte is a conservative descendant upper bound.
+                    steps = selector.len();
+                    branches = selector
+                        .bytes()
+                        .filter(u8::is_ascii_whitespace)
+                        .fold(1usize, |n, _| n.saturating_mul(depth));
+                    break;
+                }
+            };
+            steps = steps.saturating_add(1);
+            if matches!(token, simplecss::SelectorToken::DescendantCombinator) {
+                branches = branches.saturating_mul(depth);
+            }
+        }
+        let work = elements.saturating_mul(steps).saturating_mul(branches);
+        remaining = remaining
+            .checked_sub(work)
+            .ok_or("SVG stylesheet exceeds matching work budget")?;
+    }
     Ok(())
 }
 

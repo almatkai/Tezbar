@@ -73,6 +73,11 @@ pub struct Configure {
     pub defaults: Defaults,
 }
 
+struct PendingInput {
+    bytes: Vec<u8>,
+    track: bool,
+    scroll: bool,
+}
 pub struct State {
     pub grid: TerminalGrid,
     pub sessions: model::Sessions,
@@ -103,7 +108,7 @@ pub struct State {
     position: u64,
     watermark: u64,
     pending_startup: BTreeMap<String, PendingStartup>,
-    pending_input: VecDeque<(Vec<u8>, bool)>,
+    pending_input: VecDeque<PendingInput>,
     pending_input_bytes: usize,
     target: u64,
     final_exit: Option<(String, u64, u32)>,
@@ -231,7 +236,13 @@ impl State {
                 && matches!(w.purpose, Purpose::Create)
                 && self.pending_startup.len() >= STARTUP_LIMIT
             {
-                self.error=Some("Terminal starts are waiting for attachment. Open or stop a pending session before creating another.".into());
+                self.error = Some(
+                    concat!(
+                        "Terminal starts are waiting for attachment. ",
+                        "Open or stop a pending session before creating another."
+                    )
+                    .into(),
+                );
                 self.running = false;
                 self.replaying = false;
                 self.discard_pending_input();
@@ -741,7 +752,7 @@ impl State {
         if self
             .work
             .iter()
-            .any(|w| matches!(w.purpose, Purpose::Replay))
+            .any(|w| matches!(w.purpose, Purpose::Replay | Purpose::Resume(_)))
         {
             return;
         }
@@ -757,6 +768,21 @@ impl State {
                 self.running = false;
                 self.discard_pending_input();
                 self.release_replay();
+            }
+        } else if let Some(id) = self.active.clone() {
+            // A previous replay error released its lease. A later durable live
+            // gap needs a fresh attachment, never a tokenless "loading" state.
+            if !self.enqueue(
+                TerminalRequest::Attach {
+                    id: id.clone(),
+                    cols: self.grid.size.cols,
+                    rows: self.grid.size.rows,
+                },
+                Purpose::Resume(id),
+            ) {
+                self.replaying = false;
+                self.running = false;
+                self.discard_pending_input();
             }
         }
     }
@@ -962,9 +988,12 @@ impl State {
         self.enqueue_input(bytes, false)
     }
     pub fn write_bytes(&mut self, bytes: Vec<u8>) {
-        self.admit_input(bytes, false);
+        self.admit_input(bytes, false, false);
     }
-    fn admit_input(&mut self, bytes: Vec<u8>, track: bool) {
+    pub fn write_scroll_bytes(&mut self, bytes: Vec<u8>) {
+        self.admit_input(bytes, false, true);
+    }
+    fn admit_input(&mut self, bytes: Vec<u8>, track: bool, scroll: bool) {
         if self.quit_preparing || self.disposed || bytes.is_empty() {
             return;
         }
@@ -973,16 +1002,34 @@ impl State {
             return;
         }
         if self.replaying || !self.pending_input.is_empty() {
-            if self.pending_input.len() >= 60
-                || self.pending_input_bytes.saturating_add(bytes.len()) > WRITE_BUDGET
-            {
+            // Keep wheel order, including direction changes, without spending
+            // one keyboard FIFO entry per trackpad event. Never merge across a
+            // keyboard/IME event, and leave byte headroom for the next key.
+            let limit = if scroll {
+                WRITE_BUDGET - 4096
+            } else {
+                WRITE_BUDGET
+            };
+            let fits = self.pending_input_bytes.saturating_add(bytes.len()) <= limit;
+            if scroll && fits {
+                if let Some(tail) = self.pending_input.back_mut().filter(|tail| tail.scroll) {
+                    self.pending_input_bytes += bytes.len();
+                    tail.bytes.extend(bytes);
+                    return;
+                }
+            }
+            if self.pending_input.len() >= 60 || !fits {
                 self.error = Some(
                     "Terminal history is loading; input buffer is full. This input was not sent."
                         .into(),
                 );
             } else {
                 self.pending_input_bytes += bytes.len();
-                self.pending_input.push_back((bytes, track));
+                self.pending_input.push_back(PendingInput {
+                    bytes,
+                    track,
+                    scroll,
+                });
             }
             return;
         }
@@ -1029,18 +1076,18 @@ impl State {
         if self.replaying || self.disposed || !self.running {
             return;
         }
-        while let Some((bytes, _)) = self.pending_input.front() {
+        while let Some(input) = self.pending_input.front() {
             let retained = self
                 .work
                 .iter()
                 .map(|w| w.request.retained_bytes())
                 .sum::<usize>();
-            if self.work.len() >= WORK_LIMIT - 5 || retained + bytes.len() > WRITE_BUDGET {
+            if self.work.len() >= WORK_LIMIT - 5 || retained + input.bytes.len() > WRITE_BUDGET {
                 break;
             }
-            let (bytes, track) = self.pending_input.pop_front().unwrap();
-            self.pending_input_bytes -= bytes.len();
-            self.enqueue_input(bytes, track);
+            let input = self.pending_input.pop_front().unwrap();
+            self.pending_input_bytes -= input.bytes.len();
+            self.enqueue_input(input.bytes, input.track);
         }
     }
     pub fn write(&mut self, data: String, track: bool) {
@@ -1051,7 +1098,7 @@ impl State {
             self.error = Some("Terminal input exceeds 1 MiB.".into());
             return;
         }
-        self.admit_input(data.into_bytes(), track);
+        self.admit_input(data.into_bytes(), track, false);
     }
     fn track_input(&mut self, data: &str) {
         let Some(id) = self.active.clone() else {

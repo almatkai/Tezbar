@@ -422,7 +422,7 @@ impl Render for StoreView {
         }
         let message = self
             .error
-            .map(str::to_owned)
+            .clone()
             .or_else(|| self.catalog.message.clone())
             .unwrap_or_else(|| {
                 format!(

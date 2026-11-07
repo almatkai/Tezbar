@@ -64,6 +64,45 @@ fn seed(v: &mut Launcher, rows: Vec<Row>) {
     v.rows = v.model.display_rows();
 }
 #[gpui::test]
+fn launcher_rows_fill_the_viewport_without_descriptions_pushing_out_accessories(
+    cx: &mut TestAppContext,
+) {
+    let _runtime = runtime(cx);
+    let (relay, _rx) = Relay::new();
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        Launcher::with_adapter(Arc::new(Fixture::default()), relay, None, w, cx)
+    });
+    cx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            let mut short = Row::command("open-notes", "Notes");
+            short.category = "native-command".into();
+            short.subtitle = "Write a note".into();
+            let mut long = Row::command("open-snippets", "A long title ".repeat(30).as_str());
+            long.subtitle = "A long description ".repeat(100);
+            seed(v, vec![short, long]);
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    let viewport = cx.update(|w, _| w.viewport_size());
+    let first = cx.debug_bounds("result-0").unwrap();
+    let second = cx.debug_bounds("result-1").unwrap();
+    assert_eq!(first.size.height, px(36.));
+    assert_eq!(second.size.height, px(36.));
+    assert_eq!(first.size.width, viewport.width - px(18.));
+    assert_eq!(second.size.width, first.size.width);
+    for (text, kind) in [
+        ("result-text-0", "result-kind-0"),
+        ("result-text-1", "result-kind-1"),
+    ] {
+        let text = cx.debug_bounds(text).unwrap();
+        let tag = cx.debug_bounds(kind).unwrap();
+        assert!(text.right() <= tag.origin.x);
+        assert!(tag.right() <= first.right());
+    }
+    assert_eq!(presentation::kind_label("native-command"), "Command");
+}
+#[gpui::test]
 fn native_enter_executes_once_and_failure_keeps_input(cx: &mut TestAppContext) {
     let _runtime = runtime(cx);
     let adapter = Arc::new(Fixture {

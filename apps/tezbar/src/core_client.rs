@@ -15,9 +15,18 @@ pub struct CoreClient(
 struct ExtensionAdmission {
     normal: Arc<tokio::sync::Semaphore>,
     installs: std::sync::atomic::AtomicUsize,
+    commands: std::sync::atomic::AtomicUsize,
     closing: std::sync::atomic::AtomicBool,
 }
 struct InstallLease(Arc<ExtensionAdmission>);
+struct CommandLease(Arc<ExtensionAdmission>);
+impl Drop for CommandLease {
+    fn drop(&mut self) {
+        self.0
+            .commands
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
 impl Drop for InstallLease {
     fn drop(&mut self) {
         self.0
@@ -281,6 +290,7 @@ impl CoreClient {
             Arc::new(ExtensionAdmission {
                 normal: Arc::new(tokio::sync::Semaphore::new(16)),
                 installs: std::sync::atomic::AtomicUsize::new(0),
+                commands: std::sync::atomic::AtomicUsize::new(0),
                 closing: std::sync::atomic::AtomicBool::new(false),
             }),
         )
@@ -571,11 +581,28 @@ impl crate::surfaces::extensions_store::request::ExtensionTransport for CoreClie
         } else {
             None
         };
+        use crate::surfaces::extensions_store::request::ExtensionRequest;
+        let command = if matches!(
+            &request,
+            ExtensionRequest::Run { .. }
+                | ExtensionRequest::Invoke { .. }
+                | ExtensionRequest::InvokeOwned { .. }
+                | ExtensionRequest::SearchText { .. }
+                | ExtensionRequest::LoadMore(_)
+        ) {
+            admission
+                .commands
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            Some(CommandLease(admission.clone()))
+        } else {
+            None
+        };
         let (channel, args) = request.wire();
         let core = self.0.clone();
         let task = handle.spawn(async move {
             let _permit = permit;
             let _install = install;
+            let _command = command;
             core.request(channel, &args).await
         });
         Box::pin(async move {
@@ -599,6 +626,15 @@ impl crate::surfaces::extensions_store::request::ExtensionTransport for CoreClie
             {
                 return Err(
                     "Extension install in progress. Wait for it to finish, then quit.".into(),
+                );
+            }
+            if admission
+                .commands
+                .load(std::sync::atomic::Ordering::Acquire)
+                != 0
+            {
+                return Err(
+                    "Extension command still running. Wait for it to finish, then quit.".into(),
                 );
             }
             let _all = admission
@@ -688,3 +724,7 @@ mod m9_admission_tests {
         core.shutdown().await;
     }
 }
+
+#[cfg(test)]
+#[path = "core_client_command_tests.rs"]
+mod command_tests;

@@ -1,0 +1,38 @@
+{
+  "command": [
+    "cargo",
+    "+1.98.1",
+    "test",
+    "--locked",
+    "--offline",
+    "-j2",
+    "-p",
+    "tezbar-native",
+    "--lib",
+    "--features",
+    "runtime-shaders",
+    "cli::tests::launcher_hotkey_can_be_enabled_without_desktop_services",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "environment": {
+    "CARGO_TARGET_DIR": "/tmp/tezbar-m9-c01-validation-Rffw07/target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "2",
+    "RUST_TEST_THREADS": "2",
+    "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+    "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+    "TZ": "Asia/Almaty",
+    "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/prepared.json",
+    "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources",
+    "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources/dist-backend/extension-worker.js"
+  },
+  "exit": 101,
+  "seconds": 34.984,
+  "stable": true,
+  "files": 3012,
+  "before_aggregate": "f85108ccfc96cd2dca0fc2b31cc69cd7e15b62ad6a8ca39259aadf7e695f077b",
+  "after_aggregate": "f85108ccfc96cd2dca0fc2b31cc69cd7e15b62ad6a8ca39259aadf7e695f077b",
+  "log_sha256": "e699a4074b3760440069e5d5fe3d3cf96db0e667196c8ec77615321bf12ddf88"
+}

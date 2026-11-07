@@ -61,6 +61,11 @@ fn review_m9_noview_sdk_controls() {
     for (cmd, r) in results {
         let r = r.expect("transport");
         assert_eq!(
+            r["preferencesRequested"] == true,
+            cmd == "probe-noview-prefs",
+            "{cmd}"
+        );
+        assert_eq!(
             r["ok"], true,
             "{cmd} must complete like Raycast no-view commands: {r}"
         );
@@ -281,6 +286,10 @@ fn review_m9_menubar_info_items() {
     );
     rt.block_on(fixture.transport.shutdown());
     let (title, icon, items) = summary.expect("status item set");
+    assert!(
+        title.is_empty(),
+        "an icon-only root must not duplicate its glyph as text"
+    );
     assert!(
         icon,
         "the native status boundary must receive pixels on Windows too; a title alone is insufficient"

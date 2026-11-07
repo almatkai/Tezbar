@@ -22,23 +22,18 @@ impl Owner {
             return;
         }
         match e {
-            ExtensionEffect::Preferences => self.settings_intent(
-                Some(crate::surfaces::command_bar::navigation::Navigation {
-                    nonce: 0,
-                    surface: tezbar_ui_model::router::Surface::Settings("extensions".into()),
-                    payload: crate::surfaces::command_bar::navigation::Payload::Settings {
-                        tab: "extensions".into(),
-                    },
-                }),
-                cx,
-            ),
+            ExtensionEffect::Preferences => {
+                let _ = self
+                    .launcher
+                    .update(cx, |view, _, cx| view.extension_preferences(cx));
+            }
             ExtensionEffect::Back => {
                 let _ = self.launcher.update(cx, |v, w, cx| v.extension_back(w, cx));
             }
             ExtensionEffect::Close => self.hide(cx),
             ExtensionEffect::Notice(message) => {
                 let _ = self.launcher.update(cx, |v, _, cx| {
-                    v.error = Some(message);
+                    v.message(message, 4000, cx);
                     cx.notify();
                 });
             }

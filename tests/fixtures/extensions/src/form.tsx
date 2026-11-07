@@ -11,7 +11,7 @@ export default function FixtureForm(props: {arguments?: {original?: string}}) {
     <Form.TextArea id="area" title="Multiline" defaultValue={'Line one\nLine two'} />
     <Form.PasswordField id="password" title="Password" />
     <Form.Checkbox id="checked" title="Checkbox" label="Enabled" defaultValue={true} />
-    <Form.DatePicker id="date" title="Date" defaultValue={new Date('2026-11-07T00:00:00Z')} />
+    <Form.DatePicker id="date" title="Date" defaultValue={new Date(2026, 10, 7)} />
     <Form.Dropdown id="dropdown" title="Dropdown"><Form.Dropdown.Section title="Countries"><Form.Dropdown.Item value="kz" title="Kazakhstan" /><Form.Dropdown.Item value="jp" title="Japan" /></Form.Dropdown.Section></Form.Dropdown>
     <Form.TagPicker id="tags" title="Tags"><Form.TagPicker.Item value="native" title="Native" /><Form.TagPicker.Item value="bun" title="Bun" /></Form.TagPicker>
     <Form.FilePicker id="files" title="Files" allowMultipleSelection />

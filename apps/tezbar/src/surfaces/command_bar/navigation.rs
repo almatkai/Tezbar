@@ -30,6 +30,10 @@ pub enum Payload {
     Settings {
         tab: String,
     },
+    ExtensionPreferences {
+        extension: String,
+        command: Option<String>,
+    },
     Update(UpdateAction),
 }
 #[derive(Clone, Debug, PartialEq)]

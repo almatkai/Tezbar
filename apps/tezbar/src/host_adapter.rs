@@ -171,18 +171,28 @@ pub struct PrimaryTray {
 }
 impl PrimaryTray {
     pub fn new(desktop: &NativeDesktop, resources: &std::path::Path) -> Result<Self, String> {
-        Self::build(desktop, resources, false)
+        Self::build(desktop, resources, false, None)
+    }
+    /// Only this explicit launch option may claim the user's launcher key in preview.
+    /// Core's general preview shortcut registry remains restricted.
+    pub(crate) fn with_shortcut(
+        desktop: &NativeDesktop,
+        resources: &std::path::Path,
+        accelerator: &str,
+    ) -> Result<Self, String> {
+        Self::build(desktop, resources, false, Some(accelerator))
     }
     pub(crate) fn production(
         desktop: &NativeDesktop,
         resources: &std::path::Path,
     ) -> Result<Self, String> {
-        Self::build(desktop, resources, true)
+        Self::build(desktop, resources, true, None)
     }
     fn build(
         desktop: &NativeDesktop,
         resources: &std::path::Path,
         production: bool,
+        requested_shortcut: Option<&str>,
     ) -> Result<Self, String> {
         let menu = muda::Menu::new();
         for (id, title) in [
@@ -221,14 +231,23 @@ impl PrimaryTray {
         let shortcut = if production {
             None
         } else {
-            desktop
-                .parse("Alt+F19")
+            let result = desktop
+                .parse(requested_shortcut.unwrap_or("Alt+F19"))
                 .and_then(|shortcut| {
                     desktop.register(&shortcut)?;
+                    log::info!(
+                        "Preview launcher hotkey registered: {}",
+                        shortcut.accelerator
+                    );
                     Ok(shortcut)
-                })
-                .map_err(|e| log::warn!("Preview hotkey unavailable; tray retained: {e}"))
-                .ok()
+                });
+            if requested_shortcut.is_some() {
+                Some(result?)
+            } else {
+                result
+                    .map_err(|e| log::warn!("Preview hotkey unavailable; tray retained: {e}"))
+                    .ok()
+            }
         };
         Ok(Self {
             _tray: tray,

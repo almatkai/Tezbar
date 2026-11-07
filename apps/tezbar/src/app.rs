@@ -107,12 +107,15 @@ impl Owner {
             let ready = gpui_tokio::Tokio::spawn(cx, async move { core.start().await }).await;
             let _ = this.update(cx, |owner, cx| {
                 let save_error = owner.save_error.clone();
+                let shortcut_error = owner.preview.launcher_shortcut.as_ref()
+                    .filter(|_| owner.tray.is_none())
+                    .map(|key| format!("Could not register {key}. Close the other launcher and restart this preview."));
                 let _ = owner.launcher.update(cx, |view, _, cx| {
                     view.ready = matches!(ready, Ok(Ok(())));
                     view.error = match ready {
                         Ok(Err(e)) => Some(e),
                         Err(e) => Some(e.to_string()),
-                        _ => save_error,
+                        _ => save_error.or(shortcut_error),
                     };
                     cx.notify();
                 });
@@ -583,7 +586,7 @@ impl Owner {
                     if let Some(client)=this.updater.clone() {this.tasks.push(cx.spawn(async move |_,cx|{let _=gpui_tokio::Tokio::spawn(cx,async move {client.control(update_integration::Command::Resume).await}).await;}));}
                     let _ = this.launcher.update(cx, |view, _, cx| view.resume_cancelled_quit(cx));
                     this.save_error = Some(format!(
-                        "Could not save changes; quit cancelled: {error}"
+                        "Quit cancelled: {error}"
                     ));
                     this.writer = windows::persistence::Writer::new(
                         this.core.0.ctx.config.clone(),
@@ -608,7 +611,7 @@ impl Owner {
                     }
                     let _ = this.launcher.update(cx, |view, _, cx| {
                         view.error = Some(format!(
-                            "Could not save changes; quit cancelled: {error}"
+                            "Quit cancelled: {error}"
                         ));
                         if view.onboarding_active {if let Some(onboarding)=&view.onboarding {onboarding.update(cx,|view,cx|{view.error=Some("Could not save changes; quit cancelled. Retry saved changes.".into());cx.notify();});}}
                         cx.notify();
@@ -1574,6 +1577,7 @@ pub fn run_production(admission: production_launch::Admission) -> anyhow::Result
         resources: plan.core.resource_dir.clone(),
         show: false,
         allow_desktop_integration: true,
+        launcher_shortcut: None,
         theme: "system".into(),
         #[cfg(feature = "bench-control")]
         control_token: None,
@@ -1801,11 +1805,12 @@ fn run_app(
                 let _ = tezbar_ui::tokens::set(choice);
             }
         }
-        let tray = preview
-            .allow_desktop_integration
+        let tray = (preview.allow_desktop_integration || preview.launcher_shortcut.is_some())
             .then(|| {
                 if production.is_some() {
                     PrimaryTray::production(&host.desktop, &preview.resources)
+                } else if let Some(shortcut) = &preview.launcher_shortcut {
+                    PrimaryTray::with_shortcut(&host.desktop, &preview.resources, shortcut)
                 } else {
                     PrimaryTray::new(&host.desktop, &preview.resources)
                 }

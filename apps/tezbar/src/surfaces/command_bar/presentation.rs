@@ -5,18 +5,6 @@ use tezbar_ui_model::launcher::{Action, ArgumentField, Arguments, IntegerValidat
 fn string(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or_default().to_owned()
 }
-pub fn icon_glyph(category: &str) -> &'static str {
-    match category {
-        "applications" | "application" => "▦",
-        "files" | "file" | "directory" => "▤",
-        "knowledge" => "⌕",
-        "extensions" => "◇",
-        "vault" => "⌑",
-        "calculator" => "=",
-        "color-converter" => "◐",
-        _ => "⌘",
-    }
-}
 pub fn terminal_prompt(value: &Value, cwd: Option<&str>) -> String {
     let directory = tezbar_ui_model::terminal::compact_path(
         cwd.unwrap_or_else(|| value["dir"].as_str().unwrap_or("~")),
@@ -45,8 +33,13 @@ pub fn kind_label(category: &str) -> &str {
         "calculator" => "Calculator",
         "currency" => "Currency",
         "color-converter" => "Color",
-        "commands" => "Command",
-        "knowledge" => "Knowledge",
+        "commands" | "native-command" | "mac-cli" => "Command",
+        "knowledge" => "Document",
+        "clipboard" => "Clipboard",
+        "snippets" => "Snippet",
+        "quick-links" => "Quicklink",
+        "vault" => "Vault",
+        "store" => "Store",
         "chat" => "Chat",
         "terminal" => "Terminal",
         _ => category,

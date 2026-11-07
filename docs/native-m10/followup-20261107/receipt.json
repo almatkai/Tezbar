@@ -1,0 +1,97 @@
+{
+  "followup-final-normal": {
+    "exit": 0,
+    "stable": true,
+    "counts": [
+      {
+        "passed": 448,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "record": "gates/followup-final-normal.json"
+  },
+  "followup-final-bench": {
+    "exit": 0,
+    "stable": true,
+    "counts": [
+      {
+        "passed": 450,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "record": "gates/followup-final-bench.json"
+  },
+  "followup-ui-final": {
+    "exit": 0,
+    "stable": true,
+    "counts": [
+      {
+        "passed": 57,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "record": "gates/followup-ui-final.json"
+  },
+  "followup-form-west-exact": {
+    "exit": 0,
+    "stable": true,
+    "counts": [
+      {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "record": "gates/followup-form-west-exact.json"
+  },
+  "followup-core-msrv": {
+    "exit": 0,
+    "stable": true,
+    "counts": [],
+    "record": "gates/followup-core-msrv.json"
+  },
+  "followup-core-msrv-tests": {
+    "exit": 0,
+    "stable": true,
+    "counts": [
+      {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "record": "gates/followup-core-msrv-tests.json"
+  },
+  "followup-final-build": {
+    "exit": 0,
+    "stable": true,
+    "counts": [],
+    "record": "gates/followup-final-build.json"
+  },
+  "followup-svg-terminal": {
+    "exit": 0,
+    "stable": true,
+    "counts": [
+      {
+        "passed": 80,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "record": "gates/followup-svg-terminal.json"
+  },
+  "limitations": [
+    "No full core, TS/model, Windows, live services or new RAM run in this follow-up.",
+    "Declared non-gear/custom SDK status icons still fall back to the shared gear: M9 F4 remains partial.",
+    "All app gates built 8fc0f67 plus the frozen working-tree patch, dirty=true; binary receipt does not claim a clean pin build.",
+    "The already running user preview was not replaced.",
+    "followup-form-west: zero matched tests, not acceptance. followup-ui and followup-ui-exact: wrong feature invocations, not acceptance. Correct exact test and UI invocation supersede them."
+  ],
+  "report_hashes": {
+    "/tmp/tezbar-gpui-m810-r1r7-opus-fec3257.md": "1ad45407a2142fda5a61d66870c0e6b02a4617bce59f0a04dc5200a1e7b0aee2",
+    "/tmp/tezbar-gpui-m9-d1-d15-opus-fec3257.md": "ab7c879e95543b14cae2662cce9264ba1ba02890def1489c808481a9d5477e6f"
+  }
+}

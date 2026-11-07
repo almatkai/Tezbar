@@ -1,0 +1,201 @@
+{
+  "source_base": "8fc0f6735ea6445a4a4fc5301bf20d1fa3cca988",
+  "dirty": true,
+  "source_hashes": {
+    "apps/tezbar/src/cli.rs": "2dc7489688179be3e3b55d43fbc9d74799799d837d7245d156760d0f14f1605a",
+    "apps/tezbar/src/host_adapter.rs": "2fc1db5592f9a52bbfd36565c5f4c229681b2810a034709ad44637233669bf66",
+    "apps/tezbar/src/app.rs": "5e358eb64acaf6849f8aed5b0de825dc783881dcc7328d0bd60b3778f212f2c5",
+    "apps/tezbar/src/app/m8_tests.rs": "60d6d2b07c123afa2d7fc55ac0ff76c9eae888699c4667396d0b9313e747db35",
+    "apps/tezbar/src/main.rs": "24f5e1100af56dd9fe5076366ec7d56a177d098e8789c85f19a2a60836826eef"
+  },
+  "gates": {
+    "preview-hotkey-red": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "cli::tests::launcher_hotkey_can_be_enabled_without_desktop_services",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/tezbar-m9-c01-validation-Rffw07/target",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TZ": "Asia/Almaty",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources/dist-backend/extension-worker.js"
+      },
+      "exit": 101,
+      "seconds": 34.984,
+      "stable": true,
+      "files": 3012,
+      "before_aggregate": "f85108ccfc96cd2dca0fc2b31cc69cd7e15b62ad6a8ca39259aadf7e695f077b",
+      "after_aggregate": "f85108ccfc96cd2dca0fc2b31cc69cd7e15b62ad6a8ca39259aadf7e695f077b",
+      "log_sha256": "e699a4074b3760440069e5d5fe3d3cf96db0e667196c8ec77615321bf12ddf88"
+    },
+    "preview-hotkey-green": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "cli::tests::",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/tezbar-m9-c01-validation-Rffw07/target",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TZ": "Asia/Almaty",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources/dist-backend/extension-worker.js"
+      },
+      "exit": 101,
+      "seconds": 22.001,
+      "stable": true,
+      "files": 3012,
+      "before_aggregate": "7f30dc994505bb40620563d3d0b1fd4a837fee5f730e9e40fef1cb6b312d8f2c",
+      "after_aggregate": "7f30dc994505bb40620563d3d0b1fd4a837fee5f730e9e40fef1cb6b312d8f2c",
+      "log_sha256": "4b3af6f93c6f513b963441d707fe4a66147d015ca63fcfc7b6e23e0430ec9280"
+    },
+    "preview-hotkey-green2": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "cli::tests::",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/tezbar-m9-c01-validation-Rffw07/target",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TZ": "Asia/Almaty",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources/dist-backend/extension-worker.js"
+      },
+      "exit": 0,
+      "seconds": 22.446,
+      "stable": true,
+      "files": 3012,
+      "before_aggregate": "5a8efbd122fc7a40af3b11f507348049566898d11cd8a2a03315f2fcc9c2f616",
+      "after_aggregate": "5a8efbd122fc7a40af3b11f507348049566898d11cd8a2a03315f2fcc9c2f616",
+      "log_sha256": "21a616b4ca992700ff5a7c517f148e0dbf88b09a74506ff832658decf3c29059"
+    },
+    "preview-hotkey-build": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--bin",
+        "tezbar",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/tezbar-m9-c01-validation-Rffw07/target",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TZ": "Asia/Almaty",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources/dist-backend/extension-worker.js"
+      },
+      "exit": 0,
+      "seconds": 14.095,
+      "stable": true,
+      "files": 3012,
+      "before_aggregate": "5a8efbd122fc7a40af3b11f507348049566898d11cd8a2a03315f2fcc9c2f616",
+      "after_aggregate": "5a8efbd122fc7a40af3b11f507348049566898d11cd8a2a03315f2fcc9c2f616",
+      "log_sha256": "2718ebcaf0ab1c23eda73a94aef84df35367053d49346c46c40336dc489a114b"
+    }
+  },
+  "default_preview_registry_regression": {
+    "test": "host_adapter::tests::preview_cannot_register_production_launcher_accelerators",
+    "result": "1 passed"
+  },
+  "preview": {
+    "pid": 79164,
+    "app": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app",
+    "profile": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/profile",
+    "resources": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app/Contents/Resources",
+    "command": [
+      "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app/Contents/MacOS/tezbar",
+      "--profile",
+      "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/profile",
+      "--resources",
+      "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app/Contents/Resources",
+      "--show",
+      "--launcher-shortcut",
+      "Alt+Space"
+    ],
+    "metadata": {
+      "version": "0.3.0-beta.7",
+      "source": "8fc0f6735ea6445a4a4fc5301bf20d1fa3cca988",
+      "dirty": "true",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true,
+      "bench_control": false
+    },
+    "binary_sha256": "33fc19b146f3481e36b62f7dce03c35303683ee08ab276fd73fe0cc5daf1180b",
+    "installed_app_changed": false,
+    "open_command": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Open Tezbar GPUI.command",
+    "visual_fix": true,
+    "stdout": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/hotkey-fix-stdout.log",
+    "launcher_shortcut_requested": "Alt+Space",
+    "desktop_services": false,
+    "beta_running": false
+  },
+  "os_registration_receipt": "[INFO] tezbar_native::host_adapter: Preview launcher hotkey registered: alt+Space",
+  "beta_running": false,
+  "physical_global_key_injection_tested": false
+}

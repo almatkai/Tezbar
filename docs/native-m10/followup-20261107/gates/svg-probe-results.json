@@ -1,0 +1,126 @@
+[
+  {
+    "name": "nested-62-1024",
+    "expected_admit": false,
+    "ok": true,
+    "exit": 0,
+    "output": "REJECT SVG exceeds simultaneous layer memory budget 1.058292ms\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/nested-62-1024.svg",
+      "1024"
+    ]
+  },
+  {
+    "name": "siblings-64",
+    "expected_admit": true,
+    "ok": true,
+    "exit": 0,
+    "output": "ADMIT 891.5\u00b5s\nRENDER 1024x1024 4.288959ms\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/siblings-64.svg",
+      "1024",
+      "render"
+    ]
+  },
+  {
+    "name": "css-60000",
+    "expected_admit": false,
+    "ok": true,
+    "exit": 0,
+    "output": "REJECT SVG stylesheet exceeds byte budget 12.98025ms\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/css-60000.svg",
+      "1024"
+    ]
+  },
+  {
+    "name": "css-inline-cumulative",
+    "expected_admit": false,
+    "ok": true,
+    "exit": 0,
+    "output": "REJECT SVG stylesheet exceeds byte budget 469.625\u00b5s\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/css-inline-cumulative.svg",
+      "1024"
+    ]
+  },
+  {
+    "name": "dash-128",
+    "expected_admit": false,
+    "ok": true,
+    "exit": 0,
+    "output": "REJECT SVG exceeds expanded dash budget 1.681083ms\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/dash-128.svg",
+      "1024"
+    ]
+  },
+  {
+    "name": "ordinary-dash",
+    "expected_admit": true,
+    "ok": true,
+    "exit": 0,
+    "output": "ADMIT 130.292\u00b5s\nRENDER 16x16 111\u00b5s\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/ordinary-dash.svg",
+      "1024",
+      "render"
+    ]
+  },
+  {
+    "name": "ordinary-clip",
+    "expected_admit": true,
+    "ok": true,
+    "exit": 0,
+    "output": "ADMIT 280.375\u00b5s\nRENDER 16x16 236.958\u00b5s\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/ordinary-clip.svg",
+      "1024",
+      "render"
+    ]
+  },
+  {
+    "name": "ordinary-css",
+    "expected_admit": true,
+    "ok": true,
+    "exit": 0,
+    "output": "ADMIT 196.833\u00b5s\nRENDER 16x16 90.25\u00b5s\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/ordinary-css.svg",
+      "1024",
+      "render"
+    ]
+  },
+  {
+    "name": "marker",
+    "expected_admit": false,
+    "ok": true,
+    "exit": 0,
+    "output": "REJECT SVG paint amplifier is unsupported 27.166\u00b5s\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/marker.svg",
+      "1024"
+    ]
+  },
+  {
+    "name": "filter-style",
+    "expected_admit": false,
+    "ok": true,
+    "exit": 0,
+    "output": "REJECT SVG filters are unsupported 171.166\u00b5s\n",
+    "command": [
+      "/tmp/tezbar-m810-root-repair-20261107/svg-probe",
+      "/tmp/tezbar-m810-root-repair-20261107/svg-cases/filter-style.svg",
+      "1024"
+    ]
+  }
+]

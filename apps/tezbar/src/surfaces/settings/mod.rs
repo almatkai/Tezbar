@@ -420,7 +420,17 @@ impl SettingsContent {
         if let Payload::Settings { tab } = &intent.payload {
             self.select_tab(Tab::parse(tab), w, cx)
         }
+        if matches!(&intent.payload, Payload::ExtensionPreferences { .. }) {
+            self.select_tab(Tab::Extensions, w, cx);
+        }
         self.activate(w, cx);
+        if let Payload::ExtensionPreferences { extension, command } = &intent.payload {
+            self.action(
+                Action::Preferences(extension.clone(), command.clone()),
+                w,
+                cx,
+            );
+        }
     }
     /// Explicit review handoff from the retained parent/M8 notice. Never starts a connection.
     pub fn review_project(

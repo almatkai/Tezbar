@@ -24,6 +24,7 @@ pub enum StoreEffect {
     Back,
     Notice(String),
     OpenRuntime(Value),
+    Preferences(String),
 }
 impl std::fmt::Debug for StoreEffect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -62,7 +63,7 @@ pub struct StoreView {
     cancel_focus: FocusHandle,
     confirm_focus: FocusHandle,
     detail: Entity<MarkdownView>,
-    error: Option<&'static str>,
+    error: Option<String>,
     artwork: artwork::Artwork,
 }
 impl StoreView {
@@ -221,7 +222,7 @@ impl StoreView {
                 }
                 "extension-worker-status" => {
                     if matches!(payload["phase"].as_str(), Some("failed" | "error")) {
-                        self.error = Some("Extension worker stopped. Retry the operation.");
+                        self.error = Some("Extension worker stopped. Retry the operation.".into());
                     }
                 }
                 _ => {}
@@ -389,7 +390,7 @@ impl StoreView {
         match self.catalog.install(&id, platform()) {
             Ok(Effect::Install(id)) => self.mutate(id, false, cx),
             _ => {
-                self.error = Some("This extension cannot be installed on this platform.");
+                self.error = Some("This extension cannot be installed on this platform.".into());
                 cx.notify();
             }
         }
@@ -452,6 +453,7 @@ impl StoreView {
             return;
         }
         let t = self.transport.clone();
+        let preference_extension = extension.clone();
         let cleanup = t.clone();
         let epoch = self.epoch;
         self.next += 1;
@@ -483,6 +485,20 @@ impl StoreView {
                     return;
                 }
                 match result {
+                    Ok(Ok(result))
+                        if result["ok"] == true && result["preferencesRequested"] == true =>
+                    {
+                        if result["mode"] == "view" && result["root"]["type"] != "MenuBarExtra" {
+                            if let Some(id) = result["sessionId"].as_str() {
+                                gpui_tokio::Tokio::spawn(
+                                    cx,
+                                    cleanup.send(ExtensionRequest::Dispose(id.into())),
+                                )
+                                .detach();
+                            }
+                        }
+                        v.emit_effect(StoreEffect::Preferences(preference_extension), cx);
+                    }
                     Ok(Ok(result)) if result["ok"] == true && result["mode"] == "view" => {
                         if tezbar_ui_model::extensions::runtime::TreeReply::from_wire(
                             result.clone(),
@@ -491,7 +507,16 @@ impl StoreView {
                         {
                             v.emit_effect(StoreEffect::OpenRuntime(result), cx);
                         } else {
-                            v.error = Some("Extension returned an invalid view.");
+                            if result["root"]["type"] != "MenuBarExtra" {
+                                if let Some(id) = result["sessionId"].as_str() {
+                                    gpui_tokio::Tokio::spawn(
+                                        cx,
+                                        cleanup.send(ExtensionRequest::Dispose(id.into())),
+                                    )
+                                    .detach();
+                                }
+                            }
+                            v.error = Some("Extension returned an invalid view.".into());
                         }
                     }
                     Ok(Ok(result)) if result["ok"] == true => v.emit_effect(
@@ -501,7 +526,17 @@ impl StoreView {
                         ),
                         cx,
                     ),
-                    _ => v.error = Some("Command failed. Try again."),
+                    Ok(Ok(result)) => {
+                        v.error = Some(
+                            super::command_bar::presentation::extension_notice(&result)
+                                .unwrap_or_else(|| "Command failed. Try again.".into())
+                                .chars()
+                                .take(2048)
+                                .collect(),
+                        )
+                    }
+                    Ok(Err(error)) => v.error = Some(error.chars().take(2048).collect()),
+                    Err(_) => v.error = Some("Command interrupted. Try again.".into()),
                 };
                 cx.notify();
             });
@@ -525,7 +560,7 @@ impl StoreView {
             let _ = this.update(cx, |v, cx| {
                 v.jobs.remove(&ticket);
                 if !matches!(result, Ok(Ok(()))) {
-                    v.error = Some("Operation failed. Retry.");
+                    v.error = Some("Operation failed. Retry.".into());
                 }
                 cx.notify();
             });
@@ -560,3 +595,6 @@ impl Focusable for StoreView {
         self.focus.clone()
     }
 }
+
+#[cfg(test)]
+mod followup_tests;

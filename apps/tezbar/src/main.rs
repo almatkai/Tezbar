@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     }
     if args == ["--help"] {
         println!(
-            "Tezbar native preview: --profile <marked OS-temp directory> --resources <matching Resources> [--show] [--allow-desktop-integration] [--theme system|light|dark]. Preview hotkey: Alt+F19."
+            "Tezbar native preview: --profile <marked OS-temp directory> --resources <matching Resources> [--show] [--launcher-shortcut <accelerator>] [--allow-desktop-integration] [--theme system|light|dark]. --launcher-shortcut enables only that key and the tray; stop the other launcher before claiming its key. Desktop integration alone uses Alt+F19."
         );
         return Ok(());
     }
