@@ -1,5 +1,34 @@
 # Native migration verification
 
+## Current checkpoint — 2026-11-07
+
+Native implementations M0–M11 are linked, including Settings, chat, extensions,
+terminal, read-only legacy-state migration and the updater/packaging path. The
+shipping default is still Tauri. This is **not full migration acceptance**.
+
+The independently verified c01 + exact teardown-test correction passed **406 normal /
+408 bench native tests**, UI 57, models 381 on both toolchains, TS 746 with seven
+existing skips, worker/MSRV and legacy Tauri compatibility checks; see the
+[verification receipt](native-m09/root-validation/20261107-c01-root-test-patch-Rffw07/report.md).
+
+Root's subsequent M8/M10 repair source is `37164d5`. It passes **420 normal / 422 bench
+native tests** (14 new regressions), native check/build, scoped format/diff and
+no-WebKit/JavaScriptCore/Tauri/Wry/Tao checks. The preserved binary is explicitly a
+**dirty debug preview built on 151df16**, with exact frozen repair hashes, rather
+than a clean production artifact. UI/model/core/TS components are unchanged and
+reuse the preceding verified component evidence; they were not rerun for this
+app-only repair. See [per-ID dispositions](native-m10/root-m810-repairs/dispositions.md)
+and [machine receipt](native-m10/root-m810-repairs/receipt.json).
+
+Fresh independent M8/M10 repair closure, M9 acceptance and M11 review remain open.
+Current Windows scoped-read/ConPTY/installer validation, physical GUI/IME/AX/GPU,
+real legacy-profile/update rehearsal, signing and full-app matched RAM also remain
+open. No native default switch, production release/install or RAM reduction is
+claimed. Earlier reports and failed experiments are preserved below as historical
+checkpoints; their old outstanding-work descriptions are not the current status.
+
+## Historical checkpoints
+
 M0–M2 checkpoint: runtime implementation `80a2aa1286ac8b4517452594a4779bc33c724b6b`;
 M0–M1 checkpoint: `48fa44edee026db64b8f75276cda9bb669e7ba6b`.
 The full migration is **not complete**. M3/M4 review and platform acceptance, and
