@@ -547,6 +547,11 @@ impl Owner {
                 Ok(Ok(())) => {},
                 other => return Err(format!("{other:?}")),
             }
+            // Quiesce extension work without destroying its view. A busy install
+            // must reject quit before chat or terminal runs are cancelled.
+            let extension_drain=this.update(cx,|owner,cx|owner.launcher.update(cx,|view,_,cx|view.drain_extensions(cx)))
+                .map_err(|e|e.to_string())?.map_err(|e|e.to_string())?;
+            gpui_tokio::Tokio::spawn(cx,extension_drain).await.map_err(|_|"Extension drain interrupted")??;
             // Every unrelated durable barrier succeeded before any Cancel/dispose.
             let final_drains = this.update(cx, |owner, cx| {
                 if owner.m7.store.pending() || !owner.m7.barrier.is_clean() || owner.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true) {
@@ -554,12 +559,11 @@ impl Owner {
                 }
                 owner.launcher.update(cx, |view, w, cx| {
                     view.dispose_chat(w, cx);
-                    (view.drain_chat(w, cx), view.drain_terminal(w, cx), view.drain_extensions(cx))
+                    (view.drain_chat(w, cx), view.drain_terminal(w, cx))
                 }).map_err(|e| e.to_string())
             }).map_err(|e| e.to_string())??;
             final_drains.0.await?;
             final_drains.1.await?;
-            gpui_tokio::Tokio::spawn(cx,final_drains.2).await.map_err(|_|"Extension drain interrupted")??;
             Ok::<(), String>(())
             };
             use std::{future::Future, task::Poll};

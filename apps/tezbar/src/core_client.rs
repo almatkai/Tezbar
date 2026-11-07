@@ -246,6 +246,17 @@ impl CoreClient {
         let owner = &self.4;
         *owner.lock().unwrap() = Some(handle);
     }
+    #[cfg(test)]
+    pub(crate) fn hold_extension_install_for_test(&self) -> impl Drop {
+        #[cfg(feature = "bench-control")]
+        let admission = &self.7;
+        #[cfg(not(feature = "bench-control"))]
+        let admission = &self.6;
+        admission
+            .installs
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        InstallLease(admission.clone())
+    }
     pub(crate) fn resume_extensions(&self) {
         #[cfg(feature = "bench-control")]
         let admission = &self.7;

@@ -1,7 +1,7 @@
 {
   "apps/tezbar/src/app.rs": {
-    "sha256": "5567394e08e67c2b4aa2e4722fe88e165cc42ab9909aca94d1b9198168e03665",
-    "bytes": 76238
+    "sha256": "7e71499fd9fa5a57f8728504f991f0d2e7b73f739dccadca4cd414c9531bc1a1",
+    "bytes": 76563
   },
   "apps/tezbar/src/app/m8.rs": {
     "sha256": "a8d01a97b189dd46459ab5f6aeafeabebaf1165a5216726e2857dba546737d6d",
@@ -12,12 +12,12 @@
     "bytes": 23509
   },
   "apps/tezbar/src/app/m9_review_tests.rs": {
-    "sha256": "00a26bc1733912c8bb5e293f71329168d6bfd68a12466558d0e7badb3c8fd132",
-    "bytes": 6919
+    "sha256": "5877de2c3d024ce384744fbf6b49ef2f374cb8dc2e431b2fea651e2ea4f1f1c8",
+    "bytes": 7994
   },
   "apps/tezbar/src/core_client.rs": {
-    "sha256": "f784159ff55e3d9cb109ab2e938110a24b98a2161a5317e71ebb00d6474705b7",
-    "bytes": 24894
+    "sha256": "1d305ea9e50ffaefee67330bce2a2ab18aeb0f5ce2eb40829d6fdea01efd804e",
+    "bytes": 25288
   },
   "apps/tezbar/src/host_adapter.rs": {
     "sha256": "75028df5b12c63db70aad75af829734c03d3cc375195a44b5888cf53b6f2c8ee",

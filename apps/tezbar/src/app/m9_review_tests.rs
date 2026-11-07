@@ -188,3 +188,37 @@ fn review_m9_discarded_foreground_reply_is_disposed_but_background_status_keeps_
         .collect::<Vec<_>>();
     assert_eq!(ids, vec!["orphan"]);
 }
+
+#[gpui::test]
+fn review_m9_busy_install_refuses_quit_before_cancelling_live_chat(cx: &mut TestAppContext) {
+    let (rt, root, f, view, cx) = mount(cx);
+    let app = owner(cx, &rt, &root, &f);
+    view.update(cx, |v, cx| {
+        v.review_m9_configure_extensions(f.core.clone());
+        v.receive_navigation(submit(1, "Keep this run alive"), cx)
+    });
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 1);
+    let _install = f.core.hold_extension_install_for_test();
+    {
+        let _enter = rt.enter();
+        app.update(&mut cx.cx, |v, cx| v.quit(cx));
+    }
+    for _ in 0..16 {
+        settle(&rt, cx);
+        if !app.read_with(&cx.cx, |v, _| v.lifecycle.quitting) {
+            break;
+        }
+    }
+    assert!(!app.read_with(&cx.cx, |v, _| v.lifecycle.quitting));
+    assert!(
+        app.read_with(&cx.cx, |v, _| v.save_error.clone())
+            .unwrap()
+            .contains("Extension install in progress")
+    );
+    assert_eq!(
+        f.count("agent:cancel"),
+        0,
+        "an unrelated busy install must leave chat running"
+    );
+}

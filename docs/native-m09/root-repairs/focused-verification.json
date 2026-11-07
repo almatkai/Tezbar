@@ -5,8 +5,8 @@
   "owned_files": 39,
   "focused_results": {
     "native_regressions": {
-      "log": "tezbar-m9-root-regressions-final-10.log",
-      "passed": 14
+      "log": "tezbar-m9-root-regressions-final-12.log",
+      "passed": 15
     },
     "real_sdk": {
       "log": "tezbar-m9-root-sdk-nine-final-10.log",
@@ -111,6 +111,10 @@
       "sha256": "050fb9c5b91ce321c5dc5d8478452f75894d3379df1873c3e56ceaea7a4101cc",
       "bytes": 4537
     },
+    "tezbar-m9-root-regressions-final-12.log": {
+      "sha256": "e6efd26c1fe47abdc6d5062c3e38c063644e538ffd4062ebdd77d44ce941dc75",
+      "bytes": 4635
+    },
     "tezbar-m9-root-regressions-final.log": {
       "sha256": "7f079b86b48c6fb900a9c4a57d54cffe9cc7b63f86830c703f44d0aa43f2e87d",
       "bytes": 4538
@@ -142,6 +146,14 @@
     "tezbar-m9-root-test-build-10.log": {
       "sha256": "844b4f641d61232560d21c4a3c14b765b23f382a7ed2c1aa095373fa01943173",
       "bytes": 7839
+    },
+    "tezbar-m9-root-test-build-11.log": {
+      "sha256": "9f1f562065e1e69431637624f75c097140d9e43b9bea045ec334c545389a307b",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-12.log": {
+      "sha256": "c3905d9aa6159bdbe6fd4c99bdde793161ee9991d13e0e0a16c59b06c51eeb36",
+      "bytes": 7347
     },
     "tezbar-m9-root-test-build-2.log": {
       "sha256": "9f5aa6fabdd4e06357a7cb5bf093ce5a6a6ca74a00844361ce7388af4902aab5",
@@ -260,5 +272,6 @@
       "pnpm",
       "typecheck"
     ]
-  }
+  },
+  "root_app_barrier_followup": "busy extension installs reject quit before any chat/terminal cancellation; actual App test passes"
 }

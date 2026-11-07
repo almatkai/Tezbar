@@ -1,0 +1,25 @@
+
+running 9 tests
+test surfaces::extension_runtime::real_sdk::sdk_detail ... ok
+test surfaces::extension_runtime::real_sdk::sdk_feedback ... ok
+test surfaces::extension_runtime::real_sdk::sdk_form ... ok
+
+thread 'surfaces::extension_runtime::real_sdk::sdk_grid' (21122004) panicked at apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs:141:13:
+assertion `left == right` failed
+  left: Some("colour-3")
+ right: Some("colour-4")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test surfaces::extension_runtime::real_sdk::sdk_grid ... FAILED
+test surfaces::extension_runtime::real_sdk::sdk_invalidation ... ok
+test surfaces::extension_runtime::real_sdk::sdk_actions ... ok
+test surfaces::extension_runtime::real_sdk::sdk_menubar ... ok
+test surfaces::extension_runtime::real_sdk::sdk_prompts ... ok
+test surfaces::extension_runtime::real_sdk::sdk_list ... ok
+
+failures:
+
+failures:
+    surfaces::extension_runtime::real_sdk::sdk_grid
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 396 filtered out; finished in 7.01s
+

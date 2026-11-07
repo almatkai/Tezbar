@@ -6,7 +6,7 @@
     "Cargo.toml": "16f30dd61d94f5f3b3258bd81af0301812d7bed2307a736a28d563546c9eb44c",
     "apps/tezbar/Cargo.toml": "5fc17889555d100dba6c5be4d0d21357902031c09b63e0fc53412301aad22484",
     "apps/tezbar/build.rs": "44c0f6fafa94f57240df9488d1beb432c553d39b96acd4a4438dd9938256426f",
-    "apps/tezbar/src/app.rs": "5567394e08e67c2b4aa2e4722fe88e165cc42ab9909aca94d1b9198168e03665",
+    "apps/tezbar/src/app.rs": "7e71499fd9fa5a57f8728504f991f0d2e7b73f739dccadca4cd414c9531bc1a1",
     "apps/tezbar/src/app/m10.rs": "b46dcfaf40c5feb555251feb793868aa44f4555bdb783acd49b14b5e9dea5e22",
     "apps/tezbar/src/app/m11.rs": "1bc908029d555d77d37229f5c9d75343d7b8954b81d19daad087e02094cff75d",
     "apps/tezbar/src/app/m7.rs": "b0002583f1f39a183e9ac4266af2236e52c6be96b2cde3c2dc54d5401e1c85ae",
@@ -14,7 +14,7 @@
     "apps/tezbar/src/app/m8.rs": "a8d01a97b189dd46459ab5f6aeafeabebaf1165a5216726e2857dba546737d6d",
     "apps/tezbar/src/app/m8_tests.rs": "2716a14588d067a0d36d898048cafd0d3dbd823821e51f38e6024b133176d200",
     "apps/tezbar/src/app/m9.rs": "34cdf4d18e68aa3a6f8e70d1762d203533a35be048f0716c7cac0a650aea2936",
-    "apps/tezbar/src/app/m9_review_tests.rs": "00a26bc1733912c8bb5e293f71329168d6bfd68a12466558d0e7badb3c8fd132",
+    "apps/tezbar/src/app/m9_review_tests.rs": "5877de2c3d024ce384744fbf6b49ef2f374cb8dc2e431b2fea651e2ea4f1f1c8",
     "apps/tezbar/src/app/production_launch.rs": "7638cc10ca45d84e629182c70137184401bdf36e4d965d3ccdd47ff7f8f9ef61",
     "apps/tezbar/src/app/update_integration.rs": "acd6e1c95d9f80c9d175ea0330baaa81228cf9bfcf3ae86d3e05d55a4421b0ab",
     "apps/tezbar/src/asset_transport.rs": "007e8ec746f391f746c1b1351a59077a7674f6d200317ee2147727b16112eefb",
@@ -22,7 +22,7 @@
     "apps/tezbar/src/bench_control.rs": "df2b7ae1cdc1bb20c509b418c8465f7d041da72e4c11f94ed99754db92d7a9cb",
     "apps/tezbar/src/chat_transport.rs": "418075b48b5b752877dc8ebcdf06fff414bf1e856f59b68cd7d40e6517b8ee22",
     "apps/tezbar/src/cli.rs": "9dda4515bcc4cba1c966a07db1167bd7d22c504bfb208efc4969542209141fe2",
-    "apps/tezbar/src/core_client.rs": "f784159ff55e3d9cb109ab2e938110a24b98a2161a5317e71ebb00d6474705b7",
+    "apps/tezbar/src/core_client.rs": "1d305ea9e50ffaefee67330bce2a2ab18aeb0f5ce2eb40829d6fdea01efd804e",
     "apps/tezbar/src/events.rs": "05a35a9bc5f754f731e9955dccc48c12f20cc13e791a471904ad83168f283431",
     "apps/tezbar/src/host_adapter.rs": "75028df5b12c63db70aad75af829734c03d3cc375195a44b5888cf53b6f2c8ee",
     "apps/tezbar/src/legacy_state/leveldb.rs": "46a6268cf3416194a9ecdf50262b11e0eede893caab293e6c033a735a94f35b8",
@@ -611,6 +611,7 @@
     "tsconfig.main.json": "ca653dee6842209019a9e581186cdad59f85ba0b645e40223f41598adb87cf31",
     "vitest.config.ts": "8fb73ff460b7d000995d11a1d5225dd5eef48c94a7d7654bb5f0160f1654fb5d"
   },
-  "aggregate_sha256": "9044ce70dd32440717de42833e0abe87c46dc9651d613dc4bd3d5a0e7cf1102b",
-  "captured": "after root focused gates; full before/after frozen gates pending"
+  "aggregate_sha256": "c44dfaa97ae5e846dd20142d5ae15e4a5d06267905c20548488b142c1c53dadd",
+  "captured": "after root focused gates; full before/after frozen gates pending",
+  "root_parent": "2baa2902d32b8d1cbe53144401218c4b806741d8"
 }

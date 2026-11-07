@@ -1,0 +1,517 @@
+Already up to date
+Done in 139ms using pnpm v11.17.0
+
+ RUN  v3.2.4 /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Mode=view, title="Index", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m03b-effects-lxCpnV/src/index.tsx
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Bundle size: 2159 chars
+[Runner] Pass 1: executing raycast.tezbar-m03b-effects-lxCpnV/index
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Pass 1 complete: 0 promises, 0 hook states, stateUpdates=false
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 1ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 1ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] renderCurrentView start raycast.tezbar-m03b-effects-lxCpnV/index; stack=1, limit=30
+[Runner] walkRuntimeNodes complete after 0ms; nodes=1, budgetUsed=1, actions=1
+[Runner] renderCurrentView complete after 0ms; root=Detail, children=0
+
+stdout | src/main/extension-runner-effects.test.ts > sequences sliding execution records without replaying system effects on rerender or polls
+[Runner] Refresh request raycast.tezbar-m03b-effects-lxCpnV/index; stateUpdates=false, inFlight=0
+
+stdout | src/main/extension-runner-effects.test.ts > no-view controls are best effort even when the native owner refuses them
+[Runner] Mode=no-view, title="Index", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m03b-effects-lxCpnV/no-view/src/index.tsx
+
+stdout | src/main/extension-runner-effects.test.ts > no-view controls are best effort even when the native owner refuses them
+[Runner] Bundle size: 1175 chars
+[Runner] Pass 1: executing raycast.no-view/index
+
+stdout | src/main/extension-runner-effects.test.ts > no-view controls are best effort even when the native owner refuses them
+[Runner] Pass 1 complete: 0 promises, 0 hook states, stateUpdates=true
+
+ ✓ src/main/extension-runner-effects.test.ts (2 tests) 52ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  09:00:05
+   Duration  625ms (transform 105ms, setup 0ms, collect 155ms, tests 52ms, environment 0ms, prepare 39ms)
+

@@ -1,0 +1,37 @@
+
+running 14 tests
+test app::m9_review_tests::review_m9_discarded_foreground_reply_is_disposed_but_background_status_keeps_owner ... ok
+OPUS-PROBE quit before=(EntityId(12v3), Some("probe-session"), Some(String("")), Some("Form")) typed=(EntityId(12v3), Some("probe-session"), Some(String("typed before quit")), Some("Form"))
+OPUS-PROBE date TZ=Some("Asia/Almaty") raw_defaults=[String("2026-11-07"), String("2026-11-07"), String("2026-11-07T23:30")] form_values={"datetime": String("2026-11-07T23:30"), "evening": String("2026-11-07"), "local": String("2026-11-07")}
+test surfaces::extension_runtime::review_regressions::review_m9_date_default_local ... ok
+OPUS-PROBE grid default columns: down from g0 selects Some("g4")
+test surfaces::extension_runtime::review_regressions::review_m9_grid_default_columns ... ok
+OPUS-PROBE quit cancelled: quitting=false save_error=Some("Could not save changes; quit cancelled: Err(\"Chat response could not be saved. Retry quit to save it again.\")") agent_cancel=1 disposes=[] after_cancel=(Some(ExtensionRuntime), Some((EntityId(12v3), Some("probe-session"), Some(String("typed before quit")), Some("Form"))))
+OPUS-PROBE setup first reply mode="view" root="Tezbar.PreferenceSetup"
+OPUS-PROBE setup after save: side_effect_copies=1 view_state=(None, Some("PreferenceSetup"))
+test surfaces::extension_runtime::review_regressions::review_m9_inline_setup_then_noview_command ... ok
+OPUS-PROBE list search caret: before=("abc", Some("r0")) after_down_left_X=("abXc", None)
+test surfaces::extension_runtime::review_regressions::review_m9_list_search_left_arrow_moves_caret ... ok
+OPUS-PROBE quit reopened=(Some(ExtensionRuntime), Some((EntityId(12v3), Some("probe-session"), Some(String("typed before quit")), Some("Form")))) invokes_before=0
+test app::m9_review_tests::review_m9_cancelled_final_quit_restores_active_extension ... ok
+OPUS-PROBE menubar-info reply_root_icon=String("Gear") status=Some(("⚙", true, [String("CPU 23%"), String("Refresh")]))
+OPUS-PROBE noview probe-noview-plain: Ok(Object {"ok": Bool(true), "mode": String("no-view"), "message": String("Probe plain"), "effects": Array [Object {"kind": String("hud"), "message": String("Probe plain")}], "effectSequence": Number(1)})
+OPUS-PROBE noview probe-noview-close: Ok(Object {"ok": Bool(true), "mode": String("no-view"), "message": String("Probe closed"), "effects": Array [Object {"kind": String("hud"), "message": String("Probe closed")}], "effectSequence": Number(1)})
+OPUS-PROBE noview probe-noview-prefs: Ok(Object {"ok": Bool(true), "mode": String("no-view"), "message": String(""), "effects": Array [], "effectSequence": Number(0)})
+OPUS-PROBE noview probe-noview-clear: Ok(Object {"ok": Bool(true), "mode": String("no-view"), "message": String("Probe cleared"), "effects": Array [Object {"kind": String("hud"), "message": String("Probe cleared")}], "effectSequence": Number(1)})
+OPUS-PROBE noview host calls: ["ExtensionControl"]
+test surfaces::extension_runtime::review_regressions::review_m9_noview_sdk_controls ... ok
+OPUS-PROBE push type_during_action=true in_flight=true observed=("Detail", Some("Pushed slow child"), "None", None) refreshes=0
+OPUS-PROBE push second action -> (None, Some("List")) last_invoke=Some(Object {"sessionId": String("ext-session-mw5vytox-ghvvs9dq"), "actionId": String("__nav_pop__"), "formValues": Null, "hostSource": Number(1)})
+test surfaces::extension_runtime::review_regressions::review_m9_search_during_slow_push ... ok
+OPUS-PROBE push type_during_action=false in_flight=true observed=("Detail", Some("Pushed slow child"), "None", None) refreshes=0
+OPUS-PROBE push second action -> (None, Some("List")) last_invoke=Some(Object {"sessionId": String("ext-session-mw5vyuj0-ewcpi6mj"), "actionId": String("__nav_pop__"), "formValues": Null, "hostSource": Number(1)})
+test surfaces::extension_runtime::review_regressions::review_m9_slow_push_control ... ok
+test surfaces::extension_runtime::tests::review_m9_action_panel_scrolls_across_sections_and_resets_on_reopen ... ok
+test surfaces::extension_runtime::tests::review_m9_dropdown_keeps_groups_current_choice_keyboard_and_escape ... ok
+test surfaces::extension_runtime::tests::review_m9_grid_sections_use_same_ranges_for_render_selection_and_leases ... ok
+test surfaces::extensions_store::tests::review_m9_store_disposes_run_reply_after_hiding ... ok
+test surfaces::extension_runtime::review_regressions::review_m9_menubar_info_items ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 391 filtered out; finished in 3.80s
+

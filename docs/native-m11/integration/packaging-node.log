@@ -1,0 +1,25 @@
+✔ native build arguments cannot request release/signing/channel or partial packaging (0.380417ms)
+✔ locked template delta removes only bootstrap and retains all installer contracts (3.004416ms)
+✔ rehearsal proposal contains no executable commands and names disposable context (0.505ms)
+✔ inventories reject traversal, collisions, missing provenance and symlink-shaped names (0.514791ms)
+✔ plist preserves production metadata and exact permission strings without LSUIElement (3.145292ms)
+✔ planning refuses installed app paths and invented identities before any I/O (0.347625ms)
+✖ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (25.250542ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 6
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 73.83125
+
+✖ failing tests:
+
+test at scripts/native/package-macos.test.mjs:25:1
+✖ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (25.250542ms)
+  Error: Assembly stage must be inside canonical OS temp
+      at assembleMacos (file:///Users/almat/Desktop/code/Tezbar%20APP/Tezbar-native-rust-agent/scripts/native/package-macos.mjs:131:101)
+      at async TestContext.<anonymous> (file:///Users/almat/Desktop/code/Tezbar%20APP/Tezbar-native-rust-agent/scripts/native/package-macos.test.mjs:41:19)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7)
