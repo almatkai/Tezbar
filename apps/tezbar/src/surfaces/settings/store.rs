@@ -20,7 +20,8 @@ struct State {
     next_operation: u64,
     operations: VecDeque<(u64, SettingsRequest)>,
     results: BTreeMap<u64, Result<Value, String>>,
-    rejected: BTreeMap<OwnerId, BTreeSet<u64>>,
+    rejected: BTreeMap<OwnerId, BTreeMap<u64, BTreeSet<String>>>,
+    latest_globals: BTreeMap<(OwnerId, String), u64>,
     waiters: BTreeMap<(OwnerId, u64), usize>,
     running: bool,
     pump_generation: u64,
@@ -66,6 +67,7 @@ impl SettingsStore {
         let mut state = self.state.lock().unwrap();
         state.queue.retire(owner);
         state.rejected.remove(&owner);
+        state.latest_globals.retain(|(id, _), _| *id != owner);
     }
     pub fn enqueue(&self, owner: OwnerId, edits: Vec<Edit>) -> u64 {
         {
@@ -74,7 +76,28 @@ impl SettingsStore {
             s.config_revision += 1;
             self.completion.notify_waiters();
             self.completion.notify_one();
-            s.queue.enqueue(owner, edits)
+            let globals = edits
+                .iter()
+                .filter_map(|edit| match edit {
+                    Edit::Global { field, .. } => Some(field.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let revision = s.queue.enqueue(owner, edits);
+            for field in globals {
+                s.latest_globals.insert((owner, field.clone()), revision);
+                // A replacement intent owns its outcome. Keep unrelated rejected
+                // fields, including those inherited from an abandoned waiter.
+                if let Some(rejections) = s.rejected.get_mut(&owner) {
+                    for (rejected_revision, fields) in rejections.iter_mut() {
+                        if *rejected_revision < revision {
+                            fields.remove(&field);
+                        }
+                    }
+                    rejections.retain(|_, fields| !fields.is_empty());
+                }
+            }
+            revision
         }
     }
     pub fn discover(&self, owner: OwnerId, edit: Edit) {
@@ -246,7 +269,7 @@ impl SettingsStore {
                             .rejected
                             .get(&owner)
                             .into_iter()
-                            .flatten()
+                            .flat_map(|rejections| rejections.keys())
                             .copied()
                             .filter(|revision| {
                                 *revision <= owner_target
@@ -514,6 +537,12 @@ impl SettingsStore {
             };
             if let Some(Effect::Save { token, patch }) = save {
                 let saved_aliases = patch.get("commandAliases").cloned();
+                let rejected_fields = patch
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|patch| patch.keys())
+                    .cloned()
+                    .collect::<BTreeSet<_>>();
                 let result = self.transport.send(SettingsRequest::Save(patch)).await;
                 let ok = success(&result);
                 if ok {
@@ -529,7 +558,27 @@ impl SettingsStore {
                     let mut state = self.state.lock().unwrap();
                     if matches!(&result, Ok(v) if v["ok"] == false) {
                         if let Some((owner, revision)) = state.queue.reject(token) {
-                            state.rejected.entry(owner).or_default().insert(revision);
+                            // A newer same-owner field edit may already be admitted while
+                            // this transport was pending. Do not attach its old failure
+                            // to the replacement, even if the old waiter was cancelled.
+                            let fields = rejected_fields
+                                .into_iter()
+                                .filter(|field| {
+                                    state
+                                        .latest_globals
+                                        .get(&(owner, field.clone()))
+                                        .copied()
+                                        .unwrap_or(0)
+                                        <= revision
+                                })
+                                .collect::<BTreeSet<_>>();
+                            if !fields.is_empty() {
+                                state
+                                    .rejected
+                                    .entry(owner)
+                                    .or_default()
+                                    .insert(revision, fields);
+                            }
                         }
                     } else {
                         state.queue.finish(token, ok);

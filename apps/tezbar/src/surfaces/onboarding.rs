@@ -961,3 +961,61 @@ mod review_regressions {
         );
     }
 }
+
+#[cfg(test)]
+mod rerecord_regressions {
+    use super::*;
+    use crate::surfaces::settings::tests::{Fixture, RerecordTransport, runtime, settle};
+    use ::core::prelude::v1::test;
+    use std::sync::{Arc, Mutex, atomic::Ordering};
+    fn press(v: &mut Onboarding, key: &'static str, w: &mut Window, cx: &mut Context<Onboarding>) {
+        v.recording = true;
+        v.key(
+            &KeyDownEvent {
+                keystroke: Keystroke::parse(key).unwrap(),
+                is_held: false,
+                prefer_character_input: false,
+            },
+            w,
+            cx,
+        )
+    }
+    // Real Onboarding key handler: re-record while the first (rejected) save is still in flight.
+    #[gpui::test]
+    fn review_nb1_onboarding_rerecord_shows_the_accepted_shortcut(cx: &mut TestAppContext) {
+        let rt = runtime(cx);
+        let fixture = Arc::new(Fixture {
+            config: Mutex::new(json!({"raymesHotkey":"Alt+Space"})),
+            ..Default::default()
+        });
+        let (release, hold) = tokio::sync::oneshot::channel();
+        let transport = Arc::new(RerecordTransport::new(fixture.clone(), Some(hold)));
+        let store = SettingsStore::new(transport.clone());
+        let (view, cx) = cx.add_window_view(|w, cx| {
+            Onboarding::new(store.clone(), &UiState::default(), false, w, cx)
+        });
+        cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+        settle(&rt, cx);
+        cx.update(|w, cx| view.update(cx, |v, cx| press(v, "ctrl-k", w, cx)));
+        settle(&rt, cx);
+        let in_flight = transport.entered.load(Ordering::SeqCst);
+        cx.update(|w, cx| view.update(cx, |v, cx| press(v, "ctrl-j", w, cx)));
+        settle(&rt, cx);
+        let _ = release.send(());
+        settle(&rt, cx);
+        let hotkey = view.read_with(cx, |v, _| v.hotkey.clone());
+        let error = view.read_with(cx, |v, _| v.error.clone());
+        let done = view.read_with(cx, |v, _| v.done.contains("shortcut"));
+        let durable = fixture.config.lock().unwrap()["raymesHotkey"].clone();
+        eprintln!(
+            "B6 onboarding rerecord: first_in_flight={in_flight} durable={durable} shown_hotkey={hotkey:?} error={error:?} shortcut_done={done}"
+        );
+        assert_eq!(durable, json!("Control+J"));
+        assert_eq!(
+            hotkey, "Control+J",
+            "onboarding shows the old shortcut although the new one saved"
+        );
+        assert!(error.is_none(), "accepted shortcut reported as unavailable");
+        assert!(done, "accepted shortcut did not finish its onboarding step");
+    }
+}

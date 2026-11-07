@@ -1970,3 +1970,134 @@ async fn review_closure_dropped_barrier_releases_its_shortcut_rejection_claim() 
     store.drain_owner(owner).await.unwrap();
     assert!(!store.owner_pending(owner));
 }
+
+// N-B1 regressions from the independent b626f28 closure review.
+pub(crate) struct RerecordTransport {
+    pub inner: Arc<Fixture>,
+    pub hold: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    pub entered: Arc<AtomicBool>,
+}
+impl RerecordTransport {
+    pub(crate) fn new(
+        inner: Arc<Fixture>,
+        hold: Option<tokio::sync::oneshot::Receiver<()>>,
+    ) -> Self {
+        Self {
+            inner,
+            hold: Mutex::new(hold),
+            entered: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+impl SettingsTransport for RerecordTransport {
+    fn durable_config(&self) -> SettingsFuture {
+        self.inner.durable_config()
+    }
+    fn send(&self, request: SettingsRequest) -> SettingsFuture {
+        if let SettingsRequest::Save(patch) = &request {
+            if patch.get("raymesHotkey") == Some(&json!("Control+K")) {
+                self.entered.store(true, Ordering::SeqCst);
+                let hold = self.hold.lock().unwrap().take();
+                return Box::pin(async move {
+                    if let Some(hold) = hold {
+                        let _ = hold.await;
+                    }
+                    Ok(json!({"ok":false,"accelerator":"Control+K","error":"in use"}))
+                });
+            }
+        }
+        self.inner.send(request)
+    }
+}
+fn shortcut_edit(v: &str) -> Vec<Edit> {
+    vec![Edit::Global {
+        field: "raymesHotkey".into(),
+        value: json!(v),
+    }]
+}
+
+// Store-level model of Onboarding re-recording: the first shortcut's GPUI task is replaced
+// (gpui_tokio aborts the tokio task, dropping its waiter) while its rejected save is in flight.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn review_nb1_rerecorded_shortcut_does_not_inherit_abandoned_rejection() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let f = fixture();
+        let (release, hold) = tokio::sync::oneshot::channel();
+        let t = Arc::new(RerecordTransport::new(f.clone(), Some(hold)));
+        let store = SettingsStore::new(t.clone());
+        let owner = store.owner();
+        store.enqueue(owner, shortcut_edit("Control+K"));
+        let first = tokio::spawn(store.drain_owner(owner));
+        while !t.entered.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        store.enqueue(owner, shortcut_edit("Control+J"));
+        let second = store.drain_owner(owner);
+        first.abort();
+        let _ = first.await;
+        let _ = release.send(());
+        let result = tokio::time::timeout(Duration::from_secs(2), second)
+            .await
+            .unwrap();
+        let saved = f.config.lock().unwrap()["raymesHotkey"].clone();
+        eprintln!(
+            "B6 dropped-waiter: second_result={result:?} durable_hotkey={saved} owner_pending={}",
+            store.owner_pending(owner)
+        );
+        assert_eq!(saved, json!("Control+J"));
+        assert_eq!(
+            result,
+            Ok(()),
+            "the accepted later shortcut was reported as the earlier rejection"
+        );
+    })
+    .await
+    .expect("probe deadline");
+}
+
+#[tokio::test]
+async fn review_nb1_replacement_supersedes_an_already_recorded_rejection() {
+    let f = fixture();
+    let store = SettingsStore::new(Arc::new(RerecordTransport::new(f.clone(), None)));
+    let owner = store.owner();
+    store.enqueue(owner, shortcut_edit("Control+K"));
+    let abandoned = store.drain_owner(owner);
+    tokio::time::timeout(Duration::from_secs(1), store.drain())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(store.owner_pending(owner));
+    store.enqueue(owner, shortcut_edit("Control+J"));
+    drop(abandoned);
+    tokio::time::timeout(Duration::from_secs(1), store.drain_owner(owner))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(f.config.lock().unwrap()["raymesHotkey"], json!("Control+J"));
+    assert!(!store.owner_pending(owner));
+}
+#[tokio::test]
+async fn review_nb1_another_owners_shortcut_cannot_consume_the_rejection() {
+    let f = fixture();
+    let store = SettingsStore::new(Arc::new(RerecordTransport::new(f, None)));
+    let first = store.owner();
+    let second = store.owner();
+    store.enqueue(first, shortcut_edit("Control+K"));
+    let abandoned = store.drain_owner(first);
+    tokio::time::timeout(Duration::from_secs(1), store.drain())
+        .await
+        .unwrap()
+        .unwrap();
+    drop(abandoned);
+    store.enqueue(second, shortcut_edit("Control+J"));
+    tokio::time::timeout(Duration::from_secs(1), store.drain_owner(second))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(1), store.drain_owner(first))
+            .await
+            .unwrap(),
+        Err(store::REJECTED_CHANGE.into())
+    );
+}
