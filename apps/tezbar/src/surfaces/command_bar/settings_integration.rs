@@ -124,7 +124,27 @@ impl Launcher {
             SettingsEffect::RememberTab(tab) => self.state.settings_tab = tab.clone(),
             SettingsEffect::Currency(code) => self.state.currency.pinned = code.clone(),
             SettingsEffect::AutoUpdate(enabled) => self.state.auto_update_enabled = *enabled,
-            SettingsEffect::RetryPersistence => {}
+            SettingsEffect::RetryPersistence => {
+                if self.m7_state_unavailable {
+                    if let Some((path, source)) = &self.migration {
+                        match crate::legacy_state::bootstrap(
+                            path,
+                            self.persist_revision
+                                .load(std::sync::atomic::Ordering::SeqCst),
+                            source,
+                        ) {
+                            Ok(state) => {
+                                self.state = state;
+                                self.state_path = Some(path.clone());
+                                self.m7_state_unavailable = false;
+                                self.state_save_error = None;
+                                self.error = None;
+                            }
+                            Err(e) => return Task::ready(Err(e)),
+                        }
+                    }
+                }
+            }
             _ => return Task::ready(Err("Unexpected UI preference".into())),
         }
         if self.m7_state_unavailable {
@@ -186,5 +206,15 @@ impl Launcher {
             payload,
         };
         self.receive_navigation(intent, cx);
+    }
+}
+
+impl Launcher {
+    pub(crate) fn updater_checked(&mut self, checked: Option<f64>, cx: &mut Context<Self>) {
+        if self.m7_state_unavailable {
+            return;
+        }
+        self.state.last_update_check = checked;
+        self.persist(cx);
     }
 }

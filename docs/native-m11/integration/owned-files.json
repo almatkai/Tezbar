@@ -1,0 +1,162 @@
+{
+  "Cargo.lock": {
+    "sha256": "5df4bda35ad5d947af65acc4c1f1e39be8a4449c5f433e68e6e7dbf17569b778",
+    "bytes": 211593
+  },
+  "apps/tezbar/Cargo.toml": {
+    "sha256": "5fc17889555d100dba6c5be4d0d21357902031c09b63e0fc53412301aad22484",
+    "bytes": 2409
+  },
+  "apps/tezbar/src/app.rs": {
+    "sha256": "e891deea51e6f010725b81bc2b4f39e4fdf3287d7a4269dac10b5bdba7731d0b",
+    "bytes": 76103
+  },
+  "apps/tezbar/src/app/m11.rs": {
+    "sha256": "1bc908029d555d77d37229f5c9d75343d7b8954b81d19daad087e02094cff75d",
+    "bytes": 9578
+  },
+  "apps/tezbar/src/app/m7.rs": {
+    "sha256": "b0002583f1f39a183e9ac4266af2236e52c6be96b2cde3c2dc54d5401e1c85ae",
+    "bytes": 22796
+  },
+  "apps/tezbar/src/app/m8_tests.rs": {
+    "sha256": "aab2b72872e3369f72d319f916d4cf27ce6f67e1b3c198dad72a4d941ab17b8b",
+    "bytes": 23491
+  },
+  "apps/tezbar/src/app/production_launch.rs": {
+    "sha256": "7638cc10ca45d84e629182c70137184401bdf36e4d965d3ccdd47ff7f8f9ef61",
+    "bytes": 15213
+  },
+  "apps/tezbar/src/app/update_integration.rs": {
+    "sha256": "acd6e1c95d9f80c9d175ea0330baaa81228cf9bfcf3ae86d3e05d55a4421b0ab",
+    "bytes": 33064
+  },
+  "apps/tezbar/src/events.rs": {
+    "sha256": "05a35a9bc5f754f731e9955dccc48c12f20cc13e791a471904ad83168f283431",
+    "bytes": 33507
+  },
+  "apps/tezbar/src/host_adapter.rs": {
+    "sha256": "08a5048a1e99c0c7af9a9e74bd4c65007c22c66e5a7ec800e2bf3a907d328012",
+    "bytes": 10541
+  },
+  "apps/tezbar/src/legacy_state/leveldb.rs": {
+    "sha256": "46a6268cf3416194a9ecdf50262b11e0eede893caab293e6c033a735a94f35b8",
+    "bytes": 19690
+  },
+  "apps/tezbar/src/legacy_state/leveldb_tests.rs": {
+    "sha256": "8355bc895925386b34494b9c2ea1a13a13a82f43f8ed777ef3a3c46a1b0e724f",
+    "bytes": 8269
+  },
+  "apps/tezbar/src/legacy_state/mod.rs": {
+    "sha256": "30b317222000b0b4a47698ff1187770295cac4040877b511c3a85a7351dfc7b6",
+    "bytes": 6758
+  },
+  "apps/tezbar/src/legacy_state/tests.rs": {
+    "sha256": "012f6c79d797d4d5a43cdacc604c2ed24e06027d68c5bb21bee834733db2169a",
+    "bytes": 11244
+  },
+  "apps/tezbar/src/legacy_state/webkit.rs": {
+    "sha256": "796f570b11b2e8540c77992ea6d8ef588aa2a2d45b06638329be2fb273020b39",
+    "bytes": 20936
+  },
+  "apps/tezbar/src/lib.rs": {
+    "sha256": "19474f5201e8db42382a2deee017bb246656ca8a156171bd160d4999bc63534d",
+    "bytes": 294
+  },
+  "apps/tezbar/src/main.rs": {
+    "sha256": "02ac922a31bff904dd506f407c85f79170f4f45bb852068fd8a2f12dde57336a",
+    "bytes": 1404
+  },
+  "apps/tezbar/src/surfaces/command_bar/mod.rs": {
+    "sha256": "eefc559a7a406057099fd82e6c976811736618c6c5164543728cdfc129347a94",
+    "bytes": 83420
+  },
+  "apps/tezbar/src/surfaces/command_bar/navigation.rs": {
+    "sha256": "77938d8f3089071a6b1bc84e5c4d9033b801b6f1c5e3a447ae8969219ff5ed1c",
+    "bytes": 10074
+  },
+  "apps/tezbar/src/surfaces/command_bar/settings_integration.rs": {
+    "sha256": "4cd49ea9240e21b7285ee39622f1dd9f9ecb6ebab11d897208e8487b526cf63e",
+    "bytes": 7891
+  },
+  "apps/tezbar/src/surfaces/command_bar/view.rs": {
+    "sha256": "c61cba9550e149b3954aa825dc80cce649be392bd1f33c09e680a8b24fe50b08",
+    "bytes": 69931
+  },
+  "crates/tezbar-host/src/paths.rs": {
+    "sha256": "944547165b7ca6646109c501a1f8d00a210225fdc5c0065adb759ec7923b3d67",
+    "bytes": 3058
+  },
+  "crates/tezbar-ui-model/src/ui_state.rs": {
+    "sha256": "da87bf998555c83654cfae026c1528fd97e0c47e018b1338e0b90bf5fe5b4144",
+    "bytes": 17870
+  },
+  "crates/tezbar-update/src/manual_releases.rs": {
+    "sha256": "efe75f10003a911c596954456cf43a6481efbd9be4363c0ffdd167f0ca852866",
+    "bytes": 8592
+  },
+  "crates/tezbar-update/src/native.rs": {
+    "sha256": "cbbe6b5caaa3ec7e34a4a615ade4b4b0979a24e71a29e8545d927d52c877c68f",
+    "bytes": 42587
+  },
+  "docs/NATIVE_GPUI_APP_SPEC.md": {
+    "sha256": "d6dd78440256b7bec0f68c1d7bebc66764a7e42d92ee1e3e72bca40d0a24bb7c",
+    "bytes": 89592
+  },
+  "package.json": {
+    "sha256": "0383f118ee7d8ad39fc599b0a0128ba8abc3b83df1465df77110f4b8c909176c",
+    "bytes": 3105
+  },
+  "packaging/macos/Info.plist.in": {
+    "sha256": "64702c76f0e8b60446718a6b7fd527c137ec0e4e29bf6013cc9ec96513924b40",
+    "bytes": 822
+  },
+  "packaging/windows/FileAssociation.nsh": {
+    "sha256": "85ce72519d5461b5777f95123176b5536de163abd9a4742f9235453c4ddf56d8",
+    "bytes": 5379
+  },
+  "packaging/windows/LICENSE-APACHE": {
+    "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "bytes": 10174
+  },
+  "packaging/windows/LICENSE-MIT": {
+    "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+    "bytes": 1090
+  },
+  "packaging/windows/installer.nsi": {
+    "sha256": "6b43fcc03cc61e8e4b203cf54111b90d3c4d3afd679835adde72cb019190f550",
+    "bytes": 28312
+  },
+  "packaging/windows/utils.nsh": {
+    "sha256": "b27b407f886cca738e44e774f15e6b556b43ce52557a7c8891ee4eca7dd8013d",
+    "bytes": 6163
+  },
+  "scripts/build-release.mjs": {
+    "sha256": "1c9af04120020f25dd439d9422f2f80930b7a6b046e068819f271692b636ff1c",
+    "bytes": 12548
+  },
+  "scripts/native/build.mjs": {
+    "sha256": "e7886f463431f628c89b1ce14073d867233b302a3555491a4206c68095c55720",
+    "bytes": 3902
+  },
+  "scripts/native/build.test.mjs": {
+    "sha256": "bf56cbb4c97195283b146973dd00c713b25e11c49d554678573e8f94fc12bd4a",
+    "bytes": 500
+  },
+  "scripts/native/nsis-template.test.mjs": {
+    "sha256": "528ce0bb0b48ca85fd45e13fb31e55ba72bab7f81a9edc843247d9ca6db9f569",
+    "bytes": 1626
+  },
+  "scripts/native/package-macos.mjs": {
+    "sha256": "597e237e1e8c08aeb7343078e12f66140da03c0cf483e9756bd8493f704f98dc",
+    "bytes": 13386
+  },
+  "scripts/native/package-macos.test.mjs": {
+    "sha256": "ca2316e9d83decb7b08fff3ebe71236200c085da53de88e2edbac23014b58eba",
+    "bytes": 4789
+  },
+  "scripts/native/windows-rehearsal-plan.mjs": {
+    "sha256": "7298d9d4e6047c7eb152db7fa98c1dddfbe11fe415f7f8089322a3d9718d1396",
+    "bytes": 2066
+  }
+}

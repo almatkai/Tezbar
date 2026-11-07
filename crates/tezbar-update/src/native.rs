@@ -97,11 +97,13 @@ pub struct Updater {
     operation: tokio::sync::Mutex<()>,
     state: Mutex<State>,
     events: Arc<dyn Fn(AppUpdateStatus) + Send + Sync>,
+    client: std::sync::OnceLock<Result<reqwest::Client, String>>,
 }
 impl Updater {
     pub fn new(config: Config, events: Arc<dyn Fn(AppUpdateStatus) + Send + Sync>) -> Self {
         Self {
             config,
+            client: std::sync::OnceLock::new(),
             operation: tokio::sync::Mutex::new(()),
             state: Mutex::new(State {
                 status: AppUpdateStatus::Idle,
@@ -109,6 +111,29 @@ impl Updater {
             }),
             events,
         }
+    }
+    fn http(&self) -> Result<&reqwest::Client, String> {
+        self.client
+            .get_or_init(|| {
+                reqwest::Client::builder()
+                    .timeout(Duration::from_secs(15))
+                    .user_agent(format!("Tezbar-App/{}", self.config.current))
+                    .build()
+                    .map_err(|e| e.to_string())
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+    /// Owner has dropped all old-generation work/artifacts before resetting.
+    pub fn reset(&self, failed: bool) {
+        self.state.lock().unwrap().pending = None;
+        self.publish(if failed {
+            AppUpdateStatus::Error {
+                message: "Update interrupted. Check again to retry.".into(),
+            }
+        } else {
+            AppUpdateStatus::Idle
+        });
     }
     pub fn status(&self) -> AppUpdateStatus {
         self.state.lock().unwrap().status.clone()
@@ -153,11 +178,7 @@ impl Updater {
         self.state.lock().unwrap().pending = None;
         let channel = self.channel()?;
         self.publish(AppUpdateStatus::Checking);
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(15))
-            .user_agent(format!("Tezbar-App/{}", self.config.current))
-            .build()
-            .map_err(|e| e.to_string())?;
+        let client = self.http()?;
         let signed = async {
             let mut error = None;
             for endpoint in channel.endpoints() {
@@ -188,7 +209,7 @@ impl Updater {
         };
         let (signed, published) = tokio::join!(
             signed,
-            crate::manual_releases::check(&self.config.current, channel)
+            crate::manual_releases::check_with_client(client, &self.config.current, channel)
         );
         Ok(self.apply_check(signed, published))
     }
@@ -252,11 +273,10 @@ impl Updater {
                 .map_err(|e| e.to_string())?;
             let mut writer =
                 tokio::fs::File::from_std(file.as_file().try_clone().map_err(|e| e.to_string())?);
-            let response = reqwest::Client::builder()
-                .timeout(Duration::from_secs(900))
-                .build()
-                .map_err(|e| e.to_string())?
+            let response = self
+                .http()?
                 .get(release.url.clone())
+                .timeout(Duration::from_secs(900))
                 .send()
                 .await
                 .map_err(|e| e.to_string())?
@@ -299,10 +319,17 @@ impl Updater {
         }
         .await;
         guard.armed = false;
-        if let Err(message) = &result {
-            self.publish(AppUpdateStatus::Error {
-                message: message.clone(),
-            });
+        match &result {
+            Err(message) => {
+                self.publish(AppUpdateStatus::Error {
+                    message: message.clone(),
+                });
+            }
+            Ok(artifact) => {
+                self.publish(AppUpdateStatus::Ready {
+                    version: artifact.version().to_string(),
+                });
+            }
         }
         result
     }
@@ -452,61 +479,103 @@ impl StagedMac {
         {
             return Err("Invalid installed bundle path".into());
         }
-        let pin: Value =
-            serde_json::from_str(include_str!("../../../src-tauri/macos-signing.json"))
-                .map_err(|e| e.to_string())?;
-        let requirement = pin["designatedRequirement"]
-            .as_str()
-            .ok_or("Pinned designated requirement missing")?;
-        for args in mac_verification_arguments(requirement) {
-            let out = std::process::Command::new("/usr/bin/codesign")
-                .args(args)
-                .arg(&self.bundle)
-                .output()
-                .map_err(|e| e.to_string())?;
-            if !out.status.success() {
-                return Err(String::from_utf8_lossy(&out.stderr).into_owned());
-            }
-        }
-        for helper in pin["nativeHelpers"]
-            .as_array()
-            .ok_or("Pinned helper list missing")?
-        {
-            let path = self
-                .bundle
-                .join("Contents/Resources")
-                .join(helper.as_str().ok_or("Invalid pinned helper")?);
-            let output = std::process::Command::new("/usr/bin/codesign")
-                .args(["--verify", "--strict"])
-                .arg(&path)
-                .output()
-                .map_err(|e| e.to_string())?;
-            if !output.status.success() {
-                return Err("Update helper signature verification failed".into());
-            }
-            let output = std::process::Command::new("/usr/bin/codesign")
-                .args(["-dv", "--verbose=4"])
-                .arg(&path)
-                .output()
-                .map_err(|e| e.to_string())?;
-            let expected = format!(
-                "TeamIdentifier={}",
-                pin["teamIdentifier"]
-                    .as_str()
-                    .ok_or("Pinned team missing")?
-            );
-            if !output.status.success()
-                || !String::from_utf8_lossy(&output.stderr)
-                    .lines()
-                    .any(|line| line == expected)
-            {
-                return Err("Update helper Team ID does not match the pin".into());
-            }
-        }
+        verify_macos_bundle_identity(&self.bundle)?;
         let result = swap_bundle(&self.bundle, installed);
         let _ = self.directory;
         result
     }
+}
+/// Shared identity verifier for admission and staged installs.
+#[cfg(unix)]
+pub fn verify_macos_bundle_identity(bundle: &Path) -> Result<(), String> {
+    let pin: Value = serde_json::from_str(include_str!("../../../src-tauri/macos-signing.json"))
+        .map_err(|e| e.to_string())?;
+    let requirement = pin["designatedRequirement"]
+        .as_str()
+        .ok_or("Pinned designated requirement missing")?;
+    for args in mac_verification_arguments(requirement) {
+        let out = std::process::Command::new("/usr/bin/codesign")
+            .args(args)
+            .arg(bundle)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+        }
+    }
+    let outer = std::process::Command::new("/usr/bin/codesign")
+        .args(["-dv", "--verbose=4"])
+        .arg(bundle)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !outer.status.success()
+        || !pinned_team(
+            &String::from_utf8_lossy(&outer.stderr),
+            pin["teamIdentifier"]
+                .as_str()
+                .ok_or("Pinned team missing")?,
+        )
+    {
+        return Err("Outer app Team ID does not match the pin".into());
+    }
+    for helper in pin["nativeHelpers"]
+        .as_array()
+        .ok_or("Pinned helper list missing")?
+    {
+        let path = bundle
+            .join("Contents/Resources")
+            .join(helper.as_str().ok_or("Invalid pinned helper")?);
+        let output = std::process::Command::new("/usr/bin/codesign")
+            .args(["--verify", "--strict"])
+            .arg(&path)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err("Update helper signature verification failed".into());
+        }
+        let output = std::process::Command::new("/usr/bin/codesign")
+            .args(["-dv", "--verbose=4"])
+            .arg(&path)
+            .output()
+            .map_err(|e| e.to_string())?;
+        let expected = format!(
+            "TeamIdentifier={}",
+            pin["teamIdentifier"]
+                .as_str()
+                .ok_or("Pinned team missing")?
+        );
+        if !output.status.success()
+            || !String::from_utf8_lossy(&output.stderr)
+                .lines()
+                .any(|line| line == expected)
+        {
+            return Err("Update helper Team ID does not match the pin".into());
+        }
+    }
+
+    let output = std::process::Command::new("/usr/bin/codesign")
+        .args(["-d", "-r-"])
+        .arg(bundle)
+        .output()
+        .map_err(|e| e.to_string())?;
+    let observed = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success()
+        || observed
+            .lines()
+            .find_map(|l| l.strip_prefix("designated => "))
+            != Some(requirement)
+    {
+        return Err("Designated requirement differs from the committed pin".into());
+    }
+    Ok(())
+}
+#[cfg(unix)]
+fn pinned_team(detail: &str, team: &str) -> bool {
+    let teams: Vec<_> = detail
+        .lines()
+        .filter_map(|l| l.strip_prefix("TeamIdentifier="))
+        .collect();
+    teams == [team] && !detail.lines().any(|l| l == "Signature=adhoc")
 }
 #[cfg(unix)]
 fn swap_bundle(staged: &Path, installed: &Path) -> Result<InstalledMac, String> {
@@ -974,5 +1043,103 @@ mod lifecycle_tests {
         );
         result.rollback().unwrap();
         assert_eq!(std::fs::read(installed.join("identity")).unwrap(), b"old");
+    }
+}
+
+#[cfg(test)]
+mod m11_tests {
+    use super::*;
+    fn updater(root: &Path) -> Updater {
+        Updater::new(
+            Config {
+                current: "0.3.0-beta.7".parse().unwrap(),
+                identifier: "com.tezbar.app".into(),
+                data_dir: root.into(),
+                cache_dir: root.into(),
+                public_key: STANDARD.encode(include_bytes!("../tests/fixtures/fixture.pub")),
+                targets: vec![],
+            },
+            Arc::new(|_| {}),
+        )
+    }
+    #[tokio::test]
+    async fn one_lazy_http_client_captured_local_download_ready_reset_and_retry() {
+        use std::io::{Read, Write};
+        let root = tempfile::tempdir().unwrap();
+        let updater = updater(root.path());
+        assert!(updater.client.get().is_none());
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let server = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream
+                            .set_read_timeout(Some(Duration::from_secs(2)))
+                            .unwrap();
+                        let mut request = [0; 4096];
+                        let n = stream.read(&mut request).unwrap();
+                        assert!(String::from_utf8_lossy(&request[..n]).starts_with("GET /fixture "));
+                        let body = include_bytes!("../tests/fixtures/fixture.tar.gz");
+                        write!(
+                            stream,
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        )
+                        .unwrap();
+                        stream.write_all(body).unwrap();
+                        break;
+                    }
+                    Err(e)
+                        if e.kind() == std::io::ErrorKind::WouldBlock
+                            && Instant::now() < deadline =>
+                    {
+                        std::thread::sleep(Duration::from_millis(5))
+                    }
+                    Err(e) => panic!("Owned local HTTP fixture failed: {e}"),
+                }
+            }
+        });
+        let release = Release {
+            version: "0.3.0-beta.8".parse().unwrap(),
+            notes: String::new(),
+            url: format!("http://{address}/fixture").parse().unwrap(),
+            signature: STANDARD.encode(include_bytes!("../tests/fixtures/fixture.tar.gz.minisig")),
+        };
+        // Private test seam selects a captured release; production URL validation is unchanged.
+        updater.apply_check(Ok(Some(release)), Ok(None));
+        let artifact = updater.download().await.unwrap();
+        server.join().unwrap();
+        assert!(matches!(updater.status(), AppUpdateStatus::Ready { .. }));
+        let first = updater.http().unwrap() as *const _;
+        assert_eq!(first, updater.http().unwrap() as *const _);
+        drop(artifact);
+        updater.reset(true);
+        assert!(matches!(updater.status(), AppUpdateStatus::Error { .. }));
+        updater.set_channel(ReleaseChannel::Alpha).await.unwrap();
+        assert_eq!(updater.status(), AppUpdateStatus::Idle);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1); // only update-channel preference
+    }
+}
+#[cfg(all(test, unix))]
+mod team_tests {
+    use super::*;
+    #[test]
+    fn exact_outer_team_rejects_ad_hoc_missing_different_and_duplicate_team_records() {
+        assert!(pinned_team(
+            "Authority=fixture\nTeamIdentifier=PIN\n",
+            "PIN"
+        ));
+        for detail in [
+            "TeamIdentifier=OTHER\n",
+            "TeamIdentifier=PIN\nSignature=adhoc\n",
+            "TeamIdentifier=PIN\nTeamIdentifier=OTHER\n",
+            "TeamIdentifier=PIN-extra\n",
+            "",
+        ] {
+            assert!(!pinned_team(detail, "PIN"));
+        }
     }
 }

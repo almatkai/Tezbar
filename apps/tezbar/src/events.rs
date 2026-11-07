@@ -73,6 +73,8 @@ pub enum Event {
     ThemeChanged(String),
     Quit,
     RetryCore,
+    RetryLegacy,
+    ConfirmFreshState,
     Bounds,
     CloseSettings,
     DialogClosed,

@@ -118,6 +118,9 @@ pub struct UpdateInbox {
 }
 impl gpui::Global for UpdateInbox {}
 impl UpdateInbox {
+    pub fn is_empty(&self) -> bool {
+        self.pending.is_empty()
+    }
     pub fn put(&mut self, action: UpdateAction) -> Result<u64, String> {
         // An identical outstanding check/download/restart already has an owner. Repeated clicks
         // do not create additional work while the production executor is being mounted.

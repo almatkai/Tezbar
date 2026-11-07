@@ -1,0 +1,21 @@
+{
+  "path": "/tmp/tezbar-m11-integration/tezbar-preview",
+  "sha256": "fd0a0aacd8e000b0bdfd12e3640dc9a9626741d28f0f843a80f8f265425403d4",
+  "bytes": 220649352,
+  "metadata": {
+    "version": "0.3.0-beta.7",
+    "source": "05133210b78f125b83ffdf2482e09e72533ff219",
+    "dirty": "true",
+    "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+    "preview": true,
+    "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+    "runtime_shaders": true,
+    "bench_control": false
+  },
+  "execution": "--version only; returns before App/production admission",
+  "gui_launched": false,
+  "production_identity_executable_launched": false,
+  "platformVerified": false,
+  "identityContinuityVerified": false,
+  "otool_sha256": "fd08bc2a7a5e9877abfcc4e14164b8657c737f062d86f228eb465c9c7a3171c2"
+}

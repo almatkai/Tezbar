@@ -1,0 +1,198 @@
+{
+  "historical_inventory_count": 25,
+  "original_cases": [
+    {
+      "file": "apps/tezbar/src/app/production_launch.rs",
+      "line": 120,
+      "case": "production_paths_and_shutdown_are_exact_without_reading_a_profile",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/app/production_launch.rs",
+      "line": 150,
+      "case": "windows_local_data_cache_logs_resources_and_config_are_byte_identical",
+      "status": "UNRUN_WINDOWS_BLOCKED"
+    },
+    {
+      "file": "apps/tezbar/src/app/update_integration.rs",
+      "line": 414,
+      "case": "preview_rejects_network_install_channel_and_retains_real_status",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/app/update_integration.rs",
+      "line": 436,
+      "case": "one_unpolled_operation_repeated_nonces_backpressure_and_cancellation_generation",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/app/update_integration.rs",
+      "line": 467,
+      "case": "installer_url_requires_exact_portable_manual_status_and_preferences_use_ui_owner",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 112,
+      "case": "current_manifest_live_tables_log_sequence_tombstones_and_immutability",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 141,
+      "case": "newer_table_beats_older_log_and_other_origin_is_never_imported",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 162,
+      "case": "checksum_torn_log_missing_live_table_and_unknown_compression_fail_closed",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 193,
+      "case": "oversized_snappy_declaration_is_rejected_before_decompression",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 209,
+      "case": "encoding_tags_utf16_latin1_invalid_and_deleted_invalid_value",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 230,
+      "case": "manifest_deleted_tables_and_unknown_tags_are_not_salvaged",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 239,
+      "case": "logical_key_encoding_variants_cannot_resurrect_a_newer_tombstone",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 13,
+      "case": "malformed_values_defaults_boolean_theme_timeouts_and_all_browser_keys",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 39,
+      "case": "pins_limit_and_order_reuse_existing_normalizer",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 51,
+      "case": "existing_native_even_defaults_unknown_fields_and_failed_write_retry_win",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 86,
+      "case": "sqlite_fixture_bytes_utf16_corruption_wal_and_read_only_immutability",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 116,
+      "case": "cache_payloads_are_rebuilt_and_partial_transport_does_not_set_marker",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 134,
+      "case": "failed_atomic_write_does_not_record_marker_and_retry_uses_same_plan",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 155,
+      "case": "every_reachable_browser_key_maps_to_the_existing_state_without_a_second_model",
+      "status": "PASS"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/webkit.rs",
+      "line": 356,
+      "case": "binary_client_origin_checks_top_and_client_no_substrings_or_extra_data",
+      "status": "PASS"
+    },
+    {
+      "file": "scripts/native/nsis-template.test.mjs",
+      "line": 6,
+      "case": "locked template delta removes only bootstrap and retains all installer contracts",
+      "status": "PASS"
+    },
+    {
+      "file": "scripts/native/nsis-template.test.mjs",
+      "line": 14,
+      "case": "rehearsal proposal contains no executable commands and names disposable context",
+      "status": "PASS"
+    },
+    {
+      "file": "scripts/native/package-macos.test.mjs",
+      "line": 7,
+      "case": "inventories reject traversal, collisions, missing provenance and symlink-shaped names",
+      "status": "PASS"
+    },
+    {
+      "file": "scripts/native/package-macos.test.mjs",
+      "line": 13,
+      "case": "plist preserves production metadata and exact permission strings without LSUIElement",
+      "status": "PASS"
+    },
+    {
+      "file": "scripts/native/package-macos.test.mjs",
+      "line": 21,
+      "case": "planning refuses installed app paths and invented identities before any I/O",
+      "status": "PASS"
+    }
+  ],
+  "note": "Historical 25 comprises 19 Mac Rust cases, one Windows-only Rust case, and five Node cases; it is not 25 executable Mac Rust fixtures.",
+  "native_suite_cases": [
+    "app::production_launch::admission_tests::production_resource_inventory_rejects_missing_hash_tamper_and_preview_provenance",
+    "app::production_launch::tests::production_paths_and_shutdown_are_exact_without_reading_a_profile",
+    "app::update_integration::admission_regressions::action_rejection_cannot_complete_the_separate_channel_nonce_domain",
+    "app::update_integration::admission_regressions::exact_queue_capacity_admits_every_intent_without_false_busy_or_loss",
+    "app::update_integration::channel_durability_tests::channel_cancel_returns_the_exact_durability_ticket_and_clears_busy_state",
+    "app::update_integration::integration_tests::checked_timestamp_is_one_effect_per_success_error_never_records_and_latest_watch_survives",
+    "app::update_integration::integration_tests::verified_artifact_decline_cancel_failure_and_stale_generation_are_finite",
+    "app::update_integration::loop_tests::real_preview_loop_owns_commands_effects_watch_and_shutdown_without_profile_or_http",
+    "app::update_integration::quit_fence_tests::quiescence_fences_completion_effects_before_save_drain_and_resume_reopens_admission",
+    "app::update_integration::tests::installer_url_requires_exact_portable_manual_status_and_preferences_use_ui_owner",
+    "app::update_integration::tests::one_unpolled_operation_repeated_nonces_backpressure_and_cancellation_generation",
+    "app::update_integration::tests::preview_rejects_network_install_channel_and_retains_real_status",
+    "legacy_state::leveldb::tests::checksum_torn_log_missing_live_table_and_unknown_compression_fail_closed",
+    "legacy_state::leveldb::tests::current_manifest_live_tables_log_sequence_tombstones_and_immutability",
+    "legacy_state::leveldb::tests::encoding_tags_utf16_latin1_invalid_and_deleted_invalid_value",
+    "legacy_state::leveldb::tests::logical_key_encoding_variants_cannot_resurrect_a_newer_tombstone",
+    "legacy_state::leveldb::tests::manifest_deleted_tables_and_unknown_tags_are_not_salvaged",
+    "legacy_state::leveldb::tests::newer_table_beats_older_log_and_other_origin_is_never_imported",
+    "legacy_state::leveldb::tests::oversized_snappy_declaration_is_rejected_before_decompression",
+    "legacy_state::tests::atomic_bootstrap_cannot_replace_a_newer_native_state_even_when_plan_was_prepared",
+    "legacy_state::tests::bootstrap_existing_defaults_win_missing_and_corrupt_preserve_retry_without_any_write",
+    "legacy_state::tests::cache_payloads_are_rebuilt_and_partial_transport_does_not_set_marker",
+    "legacy_state::tests::every_reachable_browser_key_maps_to_the_existing_state_without_a_second_model",
+    "legacy_state::tests::existing_native_even_defaults_unknown_fields_and_failed_write_retry_win",
+    "legacy_state::tests::failed_atomic_write_does_not_record_marker_and_retry_uses_same_plan",
+    "legacy_state::tests::first_launch_discovers_attested_modern_store_commits_marker_and_existing_native_wins",
+    "legacy_state::tests::malformed_values_defaults_boolean_theme_timeouts_and_all_browser_keys",
+    "legacy_state::tests::pins_limit_and_order_reuse_existing_normalizer",
+    "legacy_state::tests::real_sqlite_wal_is_recovered_only_in_private_copy_and_original_bytes_remain_identical",
+    "legacy_state::tests::sqlite_fixture_bytes_utf16_corruption_wal_and_read_only_immutability",
+    "legacy_state::webkit::origin_tests::binary_client_origin_checks_top_and_client_no_substrings_or_extra_data"
+  ],
+  "opens": {
+    "O-LS": "real-format local SQLite/WAL/origin/LevelDB fixtures pass; actual OS profile discovery unaccepted",
+    "O-NSIS": "locked template contract passes; NSIS compilation and real disposable Windows installer unrun",
+    "O-signing": "pure/static policy and ad-hoc rejection pass; two real-certificate tests intentionally skipped; real signed updater/relaunch acceptance unrun",
+    "M9": "root reported 15 actionable defects; repair patch and retesting pending",
+    "manual": "GUI/IME/AX/GPU/full matched RAM not performed",
+    "cutover": "review patch only; default Tauri retained; no removal/version/feed/release"
+  },
+  "acceptance": false
+}

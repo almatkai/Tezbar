@@ -15,7 +15,7 @@ pub struct Environment {
     pub data_override: Option<PathBuf>,
     pub config_override: Option<PathBuf>,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Profile {
     pub data: PathBuf,
     pub config: PathBuf,

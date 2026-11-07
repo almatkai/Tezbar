@@ -7,6 +7,7 @@ pub struct GpuiHost {
     pub desktop: NativeDesktop,
     pub relay: Relay,
     registry: PreviewShortcuts,
+    production: bool,
 }
 impl GpuiHost {
     #[cfg(test)]
@@ -16,6 +17,7 @@ impl GpuiHost {
         }));
         Self {
             registry: PreviewShortcuts(desktop.clone(), false),
+            production: false,
             desktop,
             relay,
         }
@@ -34,9 +36,15 @@ impl GpuiHost {
         let desktop = NativeDesktop::new(Arc::new(move |op| queue.send(Event::Main(op))));
         Self {
             registry: PreviewShortcuts(desktop.clone(), allow),
+            production: false,
             desktop,
             relay,
         }
+    }
+    pub(crate) fn production(relay: Relay) -> Self {
+        let mut host = Self::with_desktop_integration(relay, true);
+        host.production = true;
+        host
     }
     /// QR/image surfaces call this explicit effect after the user chooses Save.
     pub fn save_png(
@@ -102,13 +110,17 @@ impl Host for GpuiHost {
         })
     }
     fn shortcuts(&self) -> &dyn ShortcutRegistry {
-        &self.registry
+        if self.production {
+            &self.desktop
+        } else {
+            &self.registry
+        }
     }
     fn status_items(&self) -> &dyn StatusItems {
         &self.desktop
     }
     fn desktop_services(&self) -> bool {
-        false
+        self.production
     }
     fn capture_active_display(&self) -> HostFuture<Vec<u8>> {
         let relay = self.relay.clone();
@@ -156,6 +168,19 @@ pub struct PrimaryTray {
 }
 impl PrimaryTray {
     pub fn new(desktop: &NativeDesktop, resources: &std::path::Path) -> Result<Self, String> {
+        Self::build(desktop, resources, false)
+    }
+    pub(crate) fn production(
+        desktop: &NativeDesktop,
+        resources: &std::path::Path,
+    ) -> Result<Self, String> {
+        Self::build(desktop, resources, true)
+    }
+    fn build(
+        desktop: &NativeDesktop,
+        resources: &std::path::Path,
+        production: bool,
+    ) -> Result<Self, String> {
         let menu = muda::Menu::new();
         for (id, title) in [
             ("preview-show", "Show Tezbar"),
@@ -174,22 +199,34 @@ impl PrimaryTray {
         let (w, h) = image.dimensions();
         let icon = tray_icon::Icon::from_rgba(image.into_raw(), w, h).map_err(|e| e.to_string())?;
         let tray = tray_icon::TrayIconBuilder::new()
-            .with_id("tezbar-preview-primary")
+            .with_id(if production {
+                "tezbar-primary"
+            } else {
+                "tezbar-preview-primary"
+            })
             .with_menu(Box::new(menu))
             .with_menu_on_left_click(false)
             .with_icon(icon)
             .with_icon_as_template(true)
-            .with_tooltip("Tezbar native preview")
+            .with_tooltip(if production {
+                "Tezbar"
+            } else {
+                "Tezbar native preview"
+            })
             .build()
             .map_err(|e| e.to_string())?;
-        let shortcut = desktop
-            .parse("Alt+F19")
-            .and_then(|shortcut| {
-                desktop.register(&shortcut)?;
-                Ok(shortcut)
-            })
-            .map_err(|e| log::warn!("Preview hotkey unavailable; tray retained: {e}"))
-            .ok();
+        let shortcut = if production {
+            None
+        } else {
+            desktop
+                .parse("Alt+F19")
+                .and_then(|shortcut| {
+                    desktop.register(&shortcut)?;
+                    Ok(shortcut)
+                })
+                .map_err(|e| log::warn!("Preview hotkey unavailable; tray retained: {e}"))
+                .ok()
+        };
         Ok(Self {
             _tray: tray,
             shortcut,

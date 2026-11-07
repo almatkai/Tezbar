@@ -434,6 +434,13 @@ impl UiState {
     }
     /// Explicit adapter seam: caller chooses the path. No profile discovery or global path lookup.
     pub fn write_atomic(&self, path: &Path) -> Result<(), String> {
+        self.write_atomic_mode(path, false)
+    }
+    /// Bootstrap-only no-replace commit; the marker and state are one durable object.
+    pub fn write_atomic_if_absent(&self, path: &Path) -> Result<(), String> {
+        self.write_atomic_mode(path, true)
+    }
+    fn write_atomic_mode(&self, path: &Path, absent: bool) -> Result<(), String> {
         use std::io::Write;
         let parent = path.parent().ok_or("Missing state parent directory")?;
         let encoded = self.encode()?;
@@ -452,7 +459,12 @@ impl UiState {
             .map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         drop(file);
-        rename_with_retry(|| std::fs::rename(&cleanup.0, path), cfg!(windows))?;
+        if absent {
+            // link is atomic and fails if another writer created the destination. Never replace it.
+            std::fs::hard_link(&cleanup.0, path).map_err(|e| e.to_string())?;
+        } else {
+            rename_with_retry(|| std::fs::rename(&cleanup.0, path), cfg!(windows))?;
+        }
         #[cfg(unix)]
         std::fs::File::open(parent)
             .and_then(|f| f.sync_all())

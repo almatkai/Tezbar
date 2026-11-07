@@ -20,5 +20,11 @@ fn main() -> anyhow::Result<()> {
         );
         return Ok(());
     }
+    if args.is_empty() {
+        return tezbar_native::app::run_production(
+            tezbar_native::app::production_launch::Admission::current()
+                .map_err(anyhow::Error::msg)?,
+        );
+    }
     tezbar_native::app::run(tezbar_native::cli::Preview::parse(&args)?)
 }

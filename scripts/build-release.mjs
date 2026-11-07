@@ -1,3 +1,12 @@
+// Native opt-in is routed before Tauri config creation or signing-key discovery.
+if (process.argv.includes('--app')) {
+  const i=process.argv.indexOf('--app'), app=process.argv[i+1];
+  if(app!=='native') throw new Error('Only the explicit native opt-in uses --app');
+  const args=process.argv.slice(2); args.splice(i-2,2);
+  if(!args.includes('--local-preview')) throw new Error('Native release assembly is gated on Windows, signing, manual, Opus and cutover acceptance. Only --local-preview is admitted here.');
+  await (await import('./native/build.mjs')).nativeBuild(args);
+  process.exit(0);
+}
 import { spawnSync, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {

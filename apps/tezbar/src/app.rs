@@ -1,9 +1,12 @@
 mod m10;
+mod m11;
 mod m7;
 #[cfg(test)]
 mod m7_tests;
 mod m8;
 mod m9;
+pub mod production_launch;
+pub mod update_integration;
 gpui::actions!(
     native_app,
     [RequestQuit, OpenSettings, ZoomIn, ZoomOut, ZoomReset]
@@ -41,6 +44,13 @@ impl Drop for RuntimeOwner {
 }
 struct Owner {
     m7: m7::State,
+    updater: Option<update_integration::Client>,
+    updater_quiescing: bool,
+    updater_paused: bool,
+    production_plan: Option<production_launch::LaunchPlan>,
+    pending_update: Option<(u64, tezbar_update::native::VerifiedArtifact)>,
+    installed_executable: Option<std::path::PathBuf>,
+    layout_path: std::path::PathBuf,
     settings_close: windows::settings_close::CloseHandshake,
     visibility_generation: u64,
     previous_foreground: Option<isize>,
@@ -80,6 +90,15 @@ struct Owner {
 }
 impl Owner {
     fn start_core(&mut self, cx: &mut Context<Self>) {
+        if self
+            .launcher
+            .update(cx, |view, _, _| view.migration_pending())
+            .unwrap_or(true)
+        {
+            self.m7.fail_open();
+            self.show(cx);
+            return;
+        }
         if self.lifecycle.quitting || self.startup.as_ref().is_some_and(|task| !task.is_ready()) {
             return;
         }
@@ -289,6 +308,14 @@ impl Owner {
         intent: Option<crate::surfaces::command_bar::navigation::Navigation>,
         cx: &mut Context<Self>,
     ) {
+        if self
+            .launcher
+            .update(cx, |view, _, _| view.migration_pending())
+            .unwrap_or(true)
+        {
+            self.show(cx);
+            return;
+        }
         if matches!(
             self.m7.boot,
             m7::Boot::Waiting | m7::Boot::Reading | m7::Boot::Onboarding
@@ -424,6 +451,32 @@ impl Owner {
         }
     }
     fn quit(&mut self, cx: &mut Context<Self>) {
+        if self.lifecycle.quitting || self.updater_quiescing {
+            return;
+        }
+        if !self.updater_paused {
+            if let Some(client) = self.updater.clone() {
+                self.updater_quiescing = true;
+                self.tasks.push(cx.spawn(async move |this, cx| {
+                    let result = gpui_tokio::Tokio::spawn(cx, async move {
+                        client.control(update_integration::Command::Quiesce).await
+                    })
+                    .await;
+                    if !matches!(result, Ok(Ok(()))) {
+                        let _ = this.update(cx, |owner, cx| {
+                            owner.updater_quiescing = false;
+                            let _ = owner.launcher.update(cx, |view, _, cx| {
+                                view.error = Some(
+                                    "Could not pause updates; quit cancelled. Retry quit.".into(),
+                                );
+                                cx.notify();
+                            });
+                        });
+                    }
+                }));
+                return;
+            }
+        }
         if !self.lifecycle.begin_quit() {
             return;
         }
@@ -496,7 +549,7 @@ impl Owner {
             }
             // Every unrelated durable barrier succeeded before any Cancel/dispose.
             let final_drains = this.update(cx, |owner, cx| {
-                if owner.m7.store.pending() || !owner.m7.barrier.is_clean() {
+                if owner.m7.store.pending() || !owner.m7.barrier.is_clean() || owner.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true) {
                     return Err("Settings changed while quitting; retry quit.".to_string());
                 }
                 owner.launcher.update(cx, |view, w, cx| {
@@ -520,18 +573,21 @@ impl Owner {
             };
             let core = this.update(cx, |this, cx| {
                 let prepared = if matches!(prepared, Ok(()))
-                    && (this.m7.store.pending() || !this.m7.barrier.is_clean()) {
+                    && (this.m7.store.pending() || !this.m7.barrier.is_clean() || this.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true)) {
                     Err("Settings changed while quitting; retry quit.".to_string())
                 } else { prepared };
                 if !matches!(prepared, Ok(())) {
                     this.lifecycle.quitting = false;
+                    this.defer_update(cx);
+                    this.updater_paused=false;
+                    if let Some(client)=this.updater.clone() {this.tasks.push(cx.spawn(async move |_,cx|{let _=gpui_tokio::Tokio::spawn(cx,async move {client.control(update_integration::Command::Resume).await}).await;}));}
                     let _ = this.launcher.update(cx, |view, _, cx| view.resume_cancelled_quit(cx));
                     this.save_error = Some(format!(
                         "Could not save changes; quit cancelled: {prepared:?}"
                     ));
                     this.writer = windows::persistence::Writer::new(
                         this.core.0.ctx.config.clone(),
-                        this.preview.root.join("config/launcher-layouts-v1.json"),
+                        this.layout_path.clone(),
                     );
                     this.positions.dirty = true;
                     this.flush();
@@ -588,6 +644,10 @@ impl Owner {
                             .as_bytes(),
                     );
                 }
+                // Core has stopped. Release the retiring lease before any update relaunch.
+                this.instance.take();
+                this.finish_update();
+                if let Some(client) = &this.updater { let _ = client.send(update_integration::Command::Shutdown); }
                 this.relay.close();
                 #[cfg(feature = "bench-control")]
                 this._control.take(); // AppKit may exit without dropping GPUI entities.
@@ -1002,14 +1062,13 @@ impl Owner {
                 if !cx.has_global::<UpdateInbox>() {
                     cx.set_global(UpdateInbox::default());
                 }
-                // M11 installs the production updater executor. Preview retains explicit intent and
-                // never contacts the live feed, stages an installer, or replaces an installed app.
                 if let Err(error) = cx.global_mut::<UpdateInbox>().put(action) {
                     let _ = self.launcher.update(cx, |view, _, cx| {
                         view.error = Some(error);
                         cx.notify();
                     });
                 }
+                self.drain_updates(cx);
             }
             #[cfg(feature = "bench-control")]
             Event::Control(request, reply) => {
@@ -1088,6 +1147,28 @@ impl Owner {
             }
             Event::ChatEffect(source, effect) => self.m8_effect(source, effect, cx),
             Event::RetryCore => self.start_core(cx),
+            Event::ConfirmFreshState => {
+                if self
+                    .launcher
+                    .update(cx, |view, _, cx| view.confirm_fresh_state(cx))
+                    .unwrap_or(false)
+                {
+                    self.m7 = m7::State::new(self.m7.store.clone());
+                    self.start_core(cx);
+                    self.mount_updater_after_recovery(cx);
+                }
+            }
+            Event::RetryLegacy => {
+                if self
+                    .launcher
+                    .update(cx, |view, _, cx| view.retry_migration(cx))
+                    .unwrap_or(false)
+                {
+                    self.m7 = m7::State::new(self.m7.store.clone());
+                    self.start_core(cx);
+                    self.mount_updater_after_recovery(cx);
+                }
+            }
             Event::CloseSettings => {
                 let _ = self.surface(SurfaceOp::CloseCurrent, cx);
             }
@@ -1121,6 +1202,12 @@ impl Owner {
                         .as_ref()
                         .is_some_and(|shortcut| shortcut.id() == id)
                 }) {
+                    if self.lifecycle.visible {
+                        self.hide(cx)
+                    } else {
+                        self.restore(cx)
+                    }
+                } else if self.core.0.platform.is_launcher_shortcut(id) {
                     if self.lifecycle.visible {
                         self.hide(cx)
                     } else {
@@ -1439,6 +1526,56 @@ impl Owner {
 }
 use tezbar_core::host::Host;
 pub fn run(preview: Preview) -> anyhow::Result<()> {
+    run_app(preview, None)
+}
+/// Admission is opaque and can only be obtained by verifying the installed binary.
+pub fn run_production(admission: production_launch::Admission) -> anyhow::Result<()> {
+    let plan = admission.plan()?;
+    let preview = Preview {
+        root: plan.core.config_dir.clone(),
+        resources: plan.core.resource_dir.clone(),
+        show: false,
+        allow_desktop_integration: true,
+        theme: "system".into(),
+        #[cfg(feature = "bench-control")]
+        control_token: None,
+    };
+    run_app(preview, Some(plan))
+}
+fn run_app(
+    preview: Preview,
+    production: Option<production_launch::LaunchPlan>,
+) -> anyhow::Result<()> {
+    let identity = production
+        .as_ref()
+        .map_or("com.tezbar.preview.native", |p| p.instance_identity);
+    let core_paths = production
+        .as_ref()
+        .map_or_else(|| preview.core_paths(), |p| p.core.clone());
+    let layouts_path = production.as_ref().map_or_else(
+        || preview.root.join("config/launcher-layouts-v1.json"),
+        |p| p.layouts.clone(),
+    );
+    let log_dir = production
+        .as_ref()
+        .map_or_else(|| preview.root.join("logs"), |p| p.profile.logs.clone());
+    let instance_dir = production
+        .as_ref()
+        .map_or_else(|| preview.root.clone(), |p| p.profile.data.clone());
+    let migration = production.as_ref().and_then(|p| {
+        p.legacy_webkit_root
+            .clone()
+            .map(crate::legacy_state::Source::WebKit)
+            .or_else(|| {
+                p.legacy_webview2_root
+                    .clone()
+                    .map(crate::legacy_state::Source::WebView2)
+            })
+    });
+    let installed_executable = production
+        .as_ref()
+        .map(|_| std::env::current_exe())
+        .transpose()?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .max_blocking_threads(16)
@@ -1450,8 +1587,8 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
     let activate = relay.clone();
     let instance = match runtime
         .block_on(Instance::claim(
-            &preview.root,
-            "com.tezbar.preview.native",
+            &instance_dir,
+            identity,
             Arc::new(move || {
                 let _ = activate.send(Event::Activate);
             }),
@@ -1463,8 +1600,7 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
     };
     tezbar_ui::tokens::set(&preview.theme).map_err(anyhow::Error::msg)?;
     let log: &'static tezbar_host::logging::FileLog = Box::leak(Box::new(
-        tezbar_host::logging::FileLog::open(&preview.root.join("logs"), "tezbar")
-            .map_err(anyhow::Error::msg)?,
+        tezbar_host::logging::FileLog::open(&log_dir, "tezbar").map_err(anyhow::Error::msg)?,
     ));
     log::set_logger(log).map_err(|e| anyhow::anyhow!("Native logger: {e}"))?;
     log::set_max_level(log::LevelFilter::Info);
@@ -1559,12 +1695,13 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
         }]);
         let events = events::CoreEvents::new(relay.clone());
         cx.set_global(events.clone());
-        let host = Arc::new(GpuiHost::with_desktop_integration(
-            relay.clone(),
-            preview.allow_desktop_integration,
-        ));
-        let context = CoreContext::new(preview.core_paths(), Some(host.clone()))
-            .with_dev_mode(true)
+        let host = Arc::new(if production.is_some() {
+            GpuiHost::production(relay.clone())
+        } else {
+            GpuiHost::with_desktop_integration(relay.clone(), preview.allow_desktop_integration)
+        });
+        let context = CoreContext::new(core_paths, Some(host.clone()))
+            .with_dev_mode(production.is_none())
             .with_legacy_data_dir(None);
         let core = CoreClient::new(tezbar_core::NativeCore::new(context).expect("isolated core"));
         let settings_store = crate::surfaces::settings::SettingsStore::new(Arc::new(core.clone()));
@@ -1589,7 +1726,7 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
                     } else {
                         WindowBackgroundAppearance::Transparent
                     },
-                    app_id: Some("com.tezbar.preview.native".into()),
+                    app_id: Some(identity.into()),
                     ..Default::default()
                 },
                 move |w, cx| {
@@ -1599,10 +1736,11 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
                         false
                     });
                     cx.new(|cx| {
-                        Launcher::new_with_settings(
+                        Launcher::new_with_migration(
                             view_core,
                             view_relay,
                             launcher_settings_store,
+                            migration,
                             w,
                             cx,
                         )
@@ -1622,7 +1760,13 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
         }
         let tray = preview
             .allow_desktop_integration
-            .then(|| PrimaryTray::new(&host.desktop, &preview.resources))
+            .then(|| {
+                if production.is_some() {
+                    PrimaryTray::production(&host.desktop, &preview.resources)
+                } else {
+                    PrimaryTray::new(&host.desktop, &preview.resources)
+                }
+            })
             .transpose()
             .map_err(|e| {
                 let _ = log.write(e.as_bytes());
@@ -1630,14 +1774,12 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
             .ok()
             .flatten();
         let config = core.0.ctx.config.read().unwrap_or_default();
-        let layouts = std::fs::read_to_string(preview.root.join("config/launcher-layouts-v1.json"))
+        let layouts = std::fs::read_to_string(&layouts_path)
             .ok()
             .map(|s| tezbar_host::layout::profiles_from_json(&s))
             .unwrap_or_default();
-        let writer = windows::persistence::Writer::new(
-            core.0.ctx.config.clone(),
-            preview.root.join("config/launcher-layouts-v1.json"),
-        );
+        let writer =
+            windows::persistence::Writer::new(core.0.ctx.config.clone(), layouts_path.clone());
         #[cfg(feature = "bench-control")]
         let control = preview.control_token.as_deref().map(|token| {
             crate::bench_control::Server::start(&preview.root, token, relay.clone())
@@ -1646,6 +1788,13 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
         let show = preview.show;
         let owner = cx.new(|_| Owner {
             m7: m7::State::new(settings_store),
+            updater: None,
+            updater_quiescing: false,
+            updater_paused: false,
+            production_plan: production.clone(),
+            pending_update: None,
+            installed_executable,
+            layout_path: layouts_path,
             settings_close: Default::default(),
             visibility_generation: 0,
             previous_foreground: None,
@@ -1690,7 +1839,10 @@ pub fn run(preview: Preview) -> anyhow::Result<()> {
             }
         })
         .detach();
-        owner.update(cx, |owner, cx| owner.start_core(cx));
+        owner.update(cx, |owner, cx| {
+            owner.mount_updater(production.as_ref(), cx);
+            owner.start_core(cx);
+        });
     });
     Ok(())
 }

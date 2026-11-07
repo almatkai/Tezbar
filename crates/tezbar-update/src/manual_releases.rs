@@ -85,6 +85,14 @@ pub async fn check(
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("Cannot check published releases: {e}"))?;
+    check_with_client(&client, current, channel).await
+}
+#[cfg(feature = "native")]
+pub async fn check_with_client(
+    client: &reqwest::Client,
+    current: &Version,
+    channel: ReleaseChannel,
+) -> Result<Option<ManualRelease>, String> {
     // GitHub's latest endpoint excludes Beta/Alpha; scan published releases instead.
     let mut releases = Vec::new();
     for page in 1..=5 {

@@ -134,6 +134,8 @@ pub struct Launcher {
     pub update_status: tezbar_update::AppUpdateStatus,
     checked_update: bool,
     state_path: Option<PathBuf>,
+    migration: Option<(PathBuf, crate::legacy_state::Source)>,
+    recovery_confirm: bool,
     state_writer: Arc<tokio::sync::Mutex<()>>,
     persist_revision: Arc<std::sync::atomic::AtomicU64>,
     state_save_error: Option<String>,
@@ -210,11 +212,31 @@ impl Launcher {
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::new_with_migration(core, relay, store, None, w, cx)
+    }
+    pub(crate) fn new_with_migration(
+        core: CoreClient,
+        relay: Relay,
+        store: super::settings::SettingsStore,
+        migration: Option<crate::legacy_state::Source>,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let path = core.0.ctx.paths.config_dir.join("ui-state-v1.json");
+        let recovery = migration
+            .as_ref()
+            .and_then(|source| crate::legacy_state::bootstrap(&path, 0, source).err());
+        let admitted_path = recovery.is_none().then(|| path.clone());
         let directory = core.0.ctx.paths.home_dir.clone();
         let core = Arc::new(core);
         let mut launcher =
-            Self::with_adapter_and_settings(core.clone(), relay, Some(path), Some(store), w, cx);
+            Self::with_adapter_and_settings(core.clone(), relay, admitted_path, Some(store), w, cx);
+        if let Some(error) = recovery {
+            launcher.m7_state_unavailable = true;
+
+            launcher.error = Some(error);
+        }
+        launcher.migration = migration.map(|source| (path, source));
         launcher.configure_chat((*core).clone());
         core.bind_extension_runtime(gpui_tokio::Tokio::handle(cx));
         launcher.configure_extensions((*core).clone());
@@ -448,6 +470,8 @@ impl Launcher {
             update_status: tezbar_update::AppUpdateStatus::Idle,
             checked_update: false,
             state_path,
+            migration: None,
+            recovery_confirm: false,
             state_writer: Arc::default(),
             persist_revision: Arc::default(),
             state_save_error: None,
@@ -601,7 +625,69 @@ impl Launcher {
             self.model_menu = false;
         }
     }
+    pub(crate) fn migration_pending(&self) -> bool {
+        self.migration.is_some() && self.m7_state_unavailable
+    }
+    pub(crate) fn confirm_fresh_state(&mut self, cx: &mut Context<Self>) -> bool {
+        if !self.migration_pending() || !self.recovery_confirm {
+            return false;
+        }
+        let Some((path, _)) = &self.migration else {
+            return false;
+        };
+        if path
+            .parent()
+            .is_none_or(|parent| std::fs::create_dir_all(parent).is_err())
+        {
+            self.error = Some(
+                "Could not create the native preferences directory. Originals preserved.".into(),
+            );
+            cx.notify();
+            return false;
+        }
+        match UiState::default().write_atomic_if_absent(path) {
+            Ok(()) => self.retry_migration(cx),
+            Err(_) => {
+                self.error=Some("Could not initialize preferences. Existing native data was preserved; retry recovery.".into());
+                cx.notify();
+                false
+            }
+        }
+    }
+    pub(crate) fn retry_migration(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some((path, source)) = &self.migration else {
+            return false;
+        };
+        match crate::legacy_state::bootstrap(
+            path,
+            self.persist_revision
+                .load(std::sync::atomic::Ordering::SeqCst),
+            source,
+        ) {
+            Ok(state) => {
+                self.state = state;
+                self.state_path = Some(path.clone());
+                self.m7_state_unavailable = false;
+                self.error = None;
+                self.state_save_error = None;
+                cx.notify();
+                true
+            }
+            Err(e) => {
+                self.error = Some(e);
+                cx.notify();
+                false
+            }
+        }
+    }
     pub fn show(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        if self.migration_pending() {
+            self.visible = true;
+            cx.activate(true);
+            w.activate_window();
+            cx.notify();
+            return;
+        }
         if self.onboarding_active {
             self.show_onboarding(w, cx);
             return;
@@ -1657,6 +1743,12 @@ impl Launcher {
             self.query(query, cx);
         }
     }
+    pub(crate) fn ui_durability_pending(&self) -> bool {
+        self.persist_revision
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > self.m7_persist_done
+            || self.state_save_error.is_some()
+    }
     pub fn state_write_error(&self) -> Option<String> {
         self.state_save_error.clone()
     }
@@ -1705,12 +1797,6 @@ impl Launcher {
                     self.update_status = status;
                     self.task_indicator
                         .update(cx, |view, cx| view.set_update(&self.update_status, cx));
-                    if self.checked_update
-                        && !matches!(self.update_status, tezbar_update::AppUpdateStatus::Checking)
-                    {
-                        self.state.last_update_check = Some(epoch_ms() as f64);
-                        self.persist(cx);
-                    }
                     self.refresh_update_rows(cx);
                 }
             }

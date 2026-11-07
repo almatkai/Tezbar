@@ -166,7 +166,7 @@ them). The futures crate also differs. Causality isn't isolated, and the root ca
 | System monitor, permissions, background tasks, release notes, updater, recents and pins | 17 | §Y |
 | Tauri commands (51) and bridge API members (206) mapped to owners | 51 + 206 | §H |
 | Core → UI events | 31 | §I |
-| Renderer-owned persistent keys | 15 | §P |
+| Browser persistent keys (plus native layout row P-15) | 14 | §P |
 | First-party TS business logic moving to Rust | 32 logic groups (plus Markdown and the notes editor as `tezbar-ui` components) | §B |
 | Not reachable or pre-existing discrepancies | 16 | §X |
 | Platforms | 6 | §Q |
@@ -820,7 +820,7 @@ machine).
 
 ### 6.3 Migrating renderer-owned state (Decision)
 
-The 15 `localStorage` keys (§1.5) move into `~/.openray/ui-state-v1.json` (atomic writes,
+The 14 `localStorage` keys (§1.5) move into `~/.openray/ui-state-v1.json` (atomic writes,
 unknown keys preserved, versioned). On the first GPUI launch, `ui_state::import_legacy`:
 
 1. Uses `ui-state-v1.json` if it exists.
@@ -911,8 +911,8 @@ detection and download-URL validation in `updater.rs:119–155`, `validate_manif
 150 ms progress throttle, and `updater-temp` preparation. Install: macOS extracts into a
 sibling temp dir, verifies the signature **before** extraction, then atomically swaps the
 bundle, keeping the old one until relaunch succeeds. Windows writes the setup exe to temp and
-launches it with `/P /UPDATE /ARGS`. Then it quits. Policy: startup check at +3 s (host), plus the
-former renderer schedule (+5 s, then every 4 h) with auto-install only when
+launches it with `/P /R /UPDATE /ARGS`. Then it quits. Policy: startup check at +3 s (host), plus the
+former renderer schedule (+5 s, then every 12 h) with auto-install only when
 `autoUpdateEnabled` (moved from localStorage), both owned by `ui-model::update_policy`. No implementation detail leaks into the UI copy.
 The UI says “Downloading update…”, “Restart to update”, “Download installer”.
 

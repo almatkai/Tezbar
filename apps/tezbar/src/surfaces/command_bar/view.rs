@@ -920,6 +920,55 @@ impl Launcher {
 }
 impl Render for Launcher {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.migration_pending() {
+            return div()
+                .size_full()
+                .p_6()
+                .flex()
+                .flex_col()
+                .gap_4()
+                .child("Recover saved preferences")
+                .child(self.error.clone().unwrap_or_else(|| {
+                    "Saved preferences are unavailable. Originals have been preserved.".into()
+                }))
+                .child(
+                    div()
+                        .id("retry-legacy-preferences")
+                        .cursor_pointer()
+                        .child("Retry saved changes")
+                        .on_click(cx.listener(|this, _, _, _| {
+                            let _ = this.relay.send(Event::RetryLegacy);
+                        })),
+                )
+                .child(
+                    div()
+                        .id("fresh-legacy-recovery")
+                        .cursor_pointer()
+                        .child(if self.recovery_confirm {
+                            "Confirm: use defaults and keep the old preferences untouched"
+                        } else {
+                            "Start with defaults…"
+                        })
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if this.recovery_confirm {
+                                let _ = this.relay.send(Event::ConfirmFreshState);
+                            } else {
+                                this.recovery_confirm = true;
+                                cx.notify();
+                            }
+                        })),
+                )
+                .child(
+                    div()
+                        .id("quit-legacy-recovery")
+                        .cursor_pointer()
+                        .child("Quit Tezbar")
+                        .on_click(cx.listener(|this, _, _, _| {
+                            let _ = this.relay.send(Event::Quit);
+                        })),
+                )
+                .into_any_element();
+        }
         if self.onboarding_active {
             if let Some(onboarding) = &self.onboarding {
                 return div()

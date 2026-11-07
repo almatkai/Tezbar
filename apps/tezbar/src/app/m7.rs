@@ -28,9 +28,9 @@ pub(super) struct State {
     pub channel_loaded: bool,
     pub layout_pending: bool,
     pub queued_layout: Option<(EntityId, SettingsEffect, u64)>,
-    pub channel_lock: Arc<tokio::sync::Mutex<()>>,
     pub failed_layout: Option<SettingsEffect>,
     pub failed_channel: Option<String>,
+    pub updater_channel: Option<(EntityId, u64)>,
 }
 impl State {
     pub(super) fn schedule_layout(
@@ -72,9 +72,9 @@ impl State {
             channel_loaded: false,
             layout_pending: false,
             queued_layout: None,
-            channel_lock: Arc::default(),
             failed_layout: None,
             failed_channel: None,
+            updater_channel: None,
         }
     }
 }
@@ -230,7 +230,7 @@ impl Owner {
             });
         }
     }
-    fn m7_finish_effect(
+    pub(super) fn m7_finish_effect(
         &self,
         id: EntityId,
         key: &'static str,
@@ -270,7 +270,19 @@ impl Owner {
             }
             effect @ (SettingsEffect::RememberTab(_)
             | SettingsEffect::Currency(_)
-            | SettingsEffect::AutoUpdate(_)) => self.m7_save_ui(id, effect, cx),
+            | SettingsEffect::AutoUpdate(_)) => {
+                if let SettingsEffect::AutoUpdate(value) = &effect {
+                    if let Some(client) = &self.updater {
+                        if let Err(e) =
+                            client.send(super::update_integration::Command::AutoUpdate(*value))
+                        {
+                            self.m7_notice(id, e, true, cx);
+                            return;
+                        }
+                    }
+                }
+                self.m7_save_ui(id, effect, cx)
+            }
             SettingsEffect::RetryPersistence => {
                 self.m7_save_ui(id, SettingsEffect::RetryPersistence, cx);
                 if let Some(effect) = self.m7.failed_layout.clone() {
@@ -287,7 +299,10 @@ impl Owner {
                     cx.set_global(UpdateInbox::default());
                 }
                 match cx.global_mut::<UpdateInbox>().put(action) {
-                    Ok(_) => self.m7_notice(id, "Update requested", false, cx),
+                    Ok(_) => {
+                        self.drain_updates(cx);
+                        self.m7_notice(id, "Update requested", false, cx);
+                    }
                     Err(_) => self.m7_notice(id, "Could not request the update. Retry.", true, cx),
                 }
             }
@@ -392,37 +407,11 @@ impl Owner {
             .ok()
             .flatten()
     }
-    fn m7_load_channel(&mut self, cx: &mut Context<Self>) {
-        if self.m7.channel_loaded {
-            return;
+    fn m7_load_channel(&mut self, _cx: &mut Context<Self>) {
+        // The actor publishes the current channel; isolated previews never read preferences.
+        if self.production_plan.is_none() {
+            self.m7.channel_loaded = true;
         }
-        self.m7.channel_loaded = true;
-        let directory = self.core.0.ctx.paths.data_dir.clone();
-        self.tasks.push(cx.spawn(async move |this, cx| {
-            let result = gpui_tokio::Tokio::spawn(cx, async move {
-                tokio::task::spawn_blocking(move || {
-                    let version = env!("CARGO_PKG_VERSION")
-                        .parse()
-                        .map_err(|_| "Invalid app version".to_string())?;
-                    tezbar_update::release_channels::read_channel(
-                        &directory,
-                        tezbar_update::release_channels::NORMAL_APP_ID,
-                        &version,
-                    )
-                    .map(|channel| channel.name().to_string())
-                })
-                .await
-                .map_err(|_| "Could not read update preferences".to_string())
-                .and_then(|r| r)
-            })
-            .await;
-            let _ = this.update(cx, |owner, cx| {
-                if let Ok(Ok(channel)) = result {
-                    owner.m7.channel = channel;
-                    owner.m7_refresh_content(cx);
-                }
-            });
-        }));
     }
     fn m7_channel(&mut self, id: EntityId, channel: String, cx: &mut Context<Self>) {
         use tezbar_update::release_channels::ReleaseChannel;
@@ -435,89 +424,28 @@ impl Owner {
                 return;
             }
         };
-        let busy = self
-            .launcher
-            .update(cx, |view, _, _| {
-                matches!(
-                    view.update_status,
-                    tezbar_update::AppUpdateStatus::Downloading { .. }
-                        | tezbar_update::AppUpdateStatus::Ready { .. }
-                )
-            })
-            .unwrap_or(true);
-        if busy {
-            self.m7_notice(
-                id,
-                "Finish the current update before changing channels.",
-                true,
-                cx,
-            );
+        if let Some(client) = &self.updater {
+            if self.m7.updater_channel.is_some() {
+                self.m7_notice(id, "Update channel is still being saved", true, cx);
+                return;
+            }
+            let ticket = self.m7.barrier.begin("update-channel");
+            self.m7.failed_channel = Some(channel);
+            match client.send(super::update_integration::Command::Channel {
+                nonce: ticket,
+                channel: choice,
+            }) {
+                Ok(()) => self.m7.updater_channel = Some((id, ticket)),
+                Err(e) => self.m7_finish_effect(id, "update-channel", ticket, Err(e.into()), cx),
+            }
             return;
         }
-        self.m7.failed_channel = Some(channel.clone());
-        let ticket = self.m7.barrier.begin("update-channel");
-        let directory = self.core.0.ctx.paths.data_dir.clone();
-        let lock = self.m7.channel_lock.clone();
-        let barrier = self.m7.barrier.clone();
-        self.tasks.push(cx.spawn(async move |this, cx| {
-            let outcome = gpui_tokio::Tokio::spawn(cx, async move {
-                let _guard = lock.lock().await;
-                if !barrier.current("update-channel", ticket) {
-                    return (Ok(()), None);
-                }
-                tokio::task::spawn_blocking(move || {
-                    let result = tezbar_update::release_channels::write_channel(&directory, choice);
-                    let actual = env!("CARGO_PKG_VERSION")
-                        .parse()
-                        .ok()
-                        .and_then(|version| {
-                            tezbar_update::release_channels::read_channel(
-                                &directory,
-                                tezbar_update::release_channels::NORMAL_APP_ID,
-                                &version,
-                            )
-                            .ok()
-                        })
-                        .map(|channel| channel.name().to_string());
-                    (result, actual)
-                })
-                .await
-                .unwrap_or_else(|_| (Err("Could not save update preferences".into()), None))
-            })
-            .await
-            .unwrap_or_else(|_| (Err("Could not save update preferences".into()), None));
-            let (result, actual) = outcome;
-            let current = this
-                .update(cx, |owner, _| {
-                    owner.m7.barrier.current("update-channel", ticket)
-                })
-                .unwrap_or(false);
-            let ui = if current && result.is_ok() {
-                this.update(cx, |owner, cx| {
-                    owner.launcher.update(cx, |view, _, cx| {
-                        view.update_status = tezbar_update::AppUpdateStatus::Idle;
-                        view.reset_update_check(cx)
-                    })
-                })
-                .ok()
-                .and_then(Result::ok)
-            } else {
-                None
-            };
-            let result = if let Some(ui) = ui { ui.await } else { result };
-            let _ = this.update(cx, |owner, cx| {
-                if owner.m7.barrier.current("update-channel", ticket) {
-                    if let Some(actual) = actual {
-                        owner.m7.channel = actual;
-                    }
-                    if result.is_ok() {
-                        owner.m7.failed_channel = None;
-                    }
-                }
-                owner.m7_finish_effect(id, "update-channel", ticket, result, cx);
-                owner.m7_refresh_content(cx);
-            });
-        }));
+        self.m7_notice(
+            id,
+            "Updates are disabled in this isolated preview",
+            true,
+            cx,
+        );
     }
     fn m7_layout(&mut self, id: EntityId, effect: SettingsEffect, cx: &mut Context<Self>) {
         let Some((effect, ticket)) = self.m7.schedule_layout(id, effect) else {

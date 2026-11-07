@@ -84,6 +84,13 @@ fn owner(
             let mut lifecycle = windows::Lifecycle::default();
             lifecycle.visible = true;
             Owner {
+                updater: None,
+                updater_quiescing: false,
+                updater_paused: false,
+                production_plan: None,
+                pending_update: None,
+                installed_executable: None,
+                layout_path: root.path().join("config/launcher-layouts-v1.json"),
                 m7,
                 settings_close: Default::default(),
                 visibility_generation: 0,

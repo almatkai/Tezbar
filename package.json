@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "pnpm build:native && tauri build",
+    "native:check": "node scripts/native/build.mjs --check",
+    "native:build": "node scripts/native/build.mjs",
+    "native:preview:package": "node scripts/native/build.mjs --local-preview",
     "build:windows": "node scripts/build-windows.mjs",
     "release:build": "node scripts/build-release.mjs",
     "release:test": "node --test scripts/release-policy.test.mjs scripts/embedding-runtime-policy.test.mjs scripts/macos-signing.test.mjs",
