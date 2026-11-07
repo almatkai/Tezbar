@@ -1,6 +1,6 @@
 //! Core-to-GPUI adapter. OS objects are created on, and dispatched only to, the GUI thread.
 use crate::events::{CoreEvent, Event, Relay};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, Weak};
 use tezbar_core::host::*;
 use tezbar_host::desktop::NativeDesktop;
 pub struct GpuiHost {
@@ -8,6 +8,7 @@ pub struct GpuiHost {
     pub relay: Relay,
     registry: PreviewShortcuts,
     production: bool,
+    status_core: OnceLock<Weak<tezbar_core::NativeCore>>,
 }
 impl GpuiHost {
     #[cfg(test)]
@@ -18,6 +19,7 @@ impl GpuiHost {
         Self {
             registry: PreviewShortcuts(desktop.clone(), false),
             production: false,
+            status_core: OnceLock::new(),
             desktop,
             relay,
         }
@@ -37,6 +39,7 @@ impl GpuiHost {
         Self {
             registry: PreviewShortcuts(desktop.clone(), allow),
             production: false,
+            status_core: OnceLock::new(),
             desktop,
             relay,
         }
@@ -45,6 +48,13 @@ impl GpuiHost {
         let mut host = Self::with_desktop_integration(relay, true);
         host.production = true;
         host
+    }
+    /// Non-cyclic capability: NativeCore owns this host, never vice versa.
+    pub(crate) fn bind_status_assets(&self, core: &Arc<tezbar_core::NativeCore>) {
+        assert!(
+            self.status_core.set(Arc::downgrade(core)).is_ok(),
+            "Status assets already bound"
+        );
     }
     /// QR/image surfaces call this explicit effect after the user chooses Save.
     pub fn save_png(
@@ -74,6 +84,17 @@ impl GpuiHost {
 impl Host for GpuiHost {
     fn sdk_status_items(&self) -> bool {
         true
+    }
+    fn resolve_sdk_status_icon(
+        &self,
+        extension: String,
+        icon: serde_json::Value,
+    ) -> HostFuture<StatusIcon> {
+        crate::asset_transport::resolve_status_icon(
+            self.status_core.get().cloned().unwrap_or_default(),
+            extension,
+            icon,
+        )
     }
     fn extension_control(
         &self,
@@ -290,6 +311,44 @@ impl ShortcutRegistry for PreviewShortcuts {
 }
 #[cfg(test)]
 mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn status_icons_gpui_binding_is_weak_and_unbound_capability_is_explicit() {
+        let (relay, _receiver) = crate::events::Relay::new();
+        let host = Arc::new(GpuiHost::fixture(relay));
+        assert!(
+            host.resolve_sdk_status_icon("raycast.fixture".into(), serde_json::json!("Gear"))
+                .await
+                .is_err()
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = tezbar_core::common::CoreContext::new(
+            tezbar_core::common::CorePaths {
+                data_dir: dir.path().join("data"),
+                config_dir: dir.path().join("config"),
+                resource_dir: dir.path().join("resources"),
+                temp_dir: dir.path().join("tmp"),
+                home_dir: dir.path().join("home"),
+            },
+            Some(host.clone()),
+        );
+        let core = tezbar_core::NativeCore::new(ctx).unwrap();
+        let owners = Arc::strong_count(&core);
+        host.bind_status_assets(&core);
+        assert_eq!(
+            Arc::strong_count(&core),
+            owners,
+            "host created an ownership cycle"
+        );
+        let weak = Arc::downgrade(&core);
+        drop(core);
+        assert!(weak.upgrade().is_none());
+        assert!(
+            host.resolve_sdk_status_icon("raycast.fixture".into(), serde_json::json!("Gear"))
+                .await
+                .is_err()
+        );
+    }
     #[test]
     fn preview_cannot_register_production_launcher_accelerators() {
         assert!(!super::preview_shortcut_allowed("Alt+Space"));

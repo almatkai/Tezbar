@@ -55,12 +55,15 @@ pub trait ShortcutRegistry: Send + Sync {
     fn register(&self, shortcut: &Shortcut) -> Result<(), String>;
     fn unregister(&self, shortcut: &Shortcut) -> Result<(), String>;
 }
+/// Straight RGBA pixels at the desktop status boundary (not GPUI's BGRA).
+pub type StatusIcon = (Vec<u8>, u32, u32);
+pub type StatusIconResolver = Arc<dyn Fn(String, Value) -> HostFuture<StatusIcon> + Send + Sync>;
 #[derive(Clone, Debug)]
 pub struct StatusItem {
     pub title: String,
     pub tooltip: String,
     pub items: Vec<Value>,
-    pub icon: Option<(Vec<u8>, u32, u32)>,
+    pub icon: Option<StatusIcon>,
 }
 pub type StatusCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub trait StatusItems: Send + Sync {
@@ -138,6 +141,10 @@ pub trait Host: Send + Sync + 'static {
     fn sdk_status_items(&self) -> bool {
         false
     }
+    /// Native-only capability. Core never decodes SDK paths or creates an image service.
+    fn resolve_sdk_status_icon(&self, _extension: String, _icon: Value) -> HostFuture<StatusIcon> {
+        Box::pin(async { Err("Status icon resolver is unavailable".into()) })
+    }
     fn extension_control(
         &self,
         _session: String,
@@ -176,6 +183,8 @@ pub struct TestHost {
     pub shortcut_results: Mutex<VecDeque<Result<(), String>>>,
     pub status: Mutex<HashMap<String, StatusCallback>>,
     pub status_specs: Mutex<HashMap<String, StatusItem>>,
+    /// Explicit fake-OS fixtures may bind the production bounded asset resolver.
+    pub status_icon_resolver: Mutex<Option<StatusIconResolver>>,
 }
 impl TestHost {
     fn record(&self, call: String) -> Result<(), String> {
@@ -190,6 +199,13 @@ impl TestHost {
 impl Host for TestHost {
     fn sdk_status_items(&self) -> bool {
         true
+    }
+    fn resolve_sdk_status_icon(&self, extension: String, icon: Value) -> HostFuture<StatusIcon> {
+        if let Some(resolve) = self.status_icon_resolver.lock().unwrap().clone() {
+            resolve(extension, icon)
+        } else {
+            Box::pin(async { Err("Fixture status icon resolver is unbound".into()) })
+        }
     }
     fn extension_control(
         &self,

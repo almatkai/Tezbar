@@ -1,0 +1,43 @@
+{
+  "cargo_artifact": "/tmp/tezbar-m9-c01-validation-Rffw07/target/debug/tezbar",
+  "preserved_copy": "/tmp/tezbar-native-m911-validation-20261107-2sefx6og/tezbar-bench-dirty",
+  "sha256": "6d14eeed460625aa209fc73d6877ed3dd7decc9df398acd1fe3b47749f84e965",
+  "bytes": 222840664,
+  "mode": "0o100755",
+  "record": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///Users/almat/Desktop/code/Tezbar%20APP/Tezbar-native-rust-agent/apps/tezbar#tezbar-native@0.3.0-beta.7",
+    "manifest_path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/Cargo.toml",
+    "target": {
+      "kind": [
+        "bin"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "tezbar",
+      "src_path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/main.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": false,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 2,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [
+      "bench-control",
+      "default",
+      "runtime-shaders"
+    ],
+    "filenames": [
+      "/tmp/tezbar-m9-c01-validation-Rffw07/target/debug/tezbar"
+    ],
+    "executable": "/tmp/tezbar-m9-c01-validation-Rffw07/target/debug/tezbar",
+    "fresh": false
+  }
+}

@@ -288,12 +288,16 @@ fn review_m11_fresh_install_defaults_but_missing_upgrade_profile_still_refuses()
     let data = d.path().join("data");
     let store = d.path().join("WebKit/com.tezbar.app/WebsiteData/Default");
     let source = Source::WebKit(store.clone()).for_install(&config, &data);
-    std::fs::create_dir_all(&config).unwrap(); // this launch may now create its own directories
+    // Production snapshots FirstInstall, then creates only data/log directories
+    // before Launcher hydrates. It does not create ~/.openray in advance.
     std::fs::create_dir_all(&data).unwrap();
+    std::fs::create_dir_all(data.join("logs")).unwrap();
+    assert!(!config.exists());
     let path = config.join("ui-state.json");
     let state = bootstrap(&path, 0, &source).unwrap();
     assert!(!state.imported_legacy);
     assert!(path.is_file());
+    assert_eq!(bootstrap(&path, 1, &source).unwrap(), state);
     let upgrade = Source::WebKit(store).for_install(&config, &data);
     let untouched = config.join("upgrade.json");
     assert!(bootstrap(&untouched, 0, &upgrade).is_err());

@@ -215,6 +215,30 @@ impl Fixture {
             Ok(())
         }
         copy_dir(&seed, profile.path())?;
+        // Additive status probe overlay in this fixture's OWN profile. The
+        // pre-existing prepared worker/seed and its evidence stay byte-unchanged.
+        let package = profile.path().join("extensions/m09-native-fixtures");
+        std::fs::write(
+            package.join("src/probe-status-icons.tsx"),
+            include_str!("src/probe-status-icons.tsx"),
+        )
+        .map_err(|_| "Status probe source unavailable")?;
+        let manifest_path = package.join("package.json");
+        let mut manifest: Value = serde_json::from_slice(
+            &std::fs::read(&manifest_path).map_err(|_| "Fixture manifest unavailable")?,
+        )
+        .map_err(|_| "Fixture manifest invalid")?;
+        let commands = manifest["commands"]
+            .as_array_mut()
+            .ok_or("Fixture commands unavailable")?;
+        if !commands.iter().any(|c| c["name"] == "probe-status-icons") {
+            commands.push(json!({"name":"probe-status-icons","title":"Declared status icons","mode":"menu-bar",
+                "arguments":[{"name":"icon","type":"text","required":false,"placeholder":"Icon source"}]}));
+        }
+        std::fs::write(manifest_path, serde_json::to_vec(&manifest).unwrap())
+            .map_err(|_| "Fixture manifest write failed")?;
+        std::fs::write(package.join("assets/status.svg"), br##"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><path fill="#e02040" d="M0 0h4v4H0z"/></svg>"##)
+            .map_err(|_| "Status probe asset unavailable")?;
         let host = Arc::new(TestHost {
             allow_interaction: true,
             ..Default::default()
@@ -229,6 +253,10 @@ impl Fixture {
         let ctx = CoreContext::new(paths, Some(host.clone()));
         let launch = WorkerLaunch::new(bun, bundle)?;
         let core = NativeCore::new_with_extension_worker(ctx, launch)?;
+        let weak = Arc::downgrade(&core);
+        *host.status_icon_resolver.lock().unwrap() = Some(Arc::new(move |extension, icon| {
+            crate::asset_transport::resolve_status_icon(weak.clone(), extension, icon)
+        }));
         core.start_with_options(StartupOptions::ISOLATED_PREVIEW)
             .await?;
         Ok(Self {

@@ -3,6 +3,8 @@
 use gpui::RenderImage;
 use std::{collections::BTreeSet, future::Future, path::PathBuf, pin::Pin, sync::Arc};
 use tezbar_ui_model::extensions::images::{Effect, Source};
+mod status_icons;
+pub(crate) use status_icons::resolve_icon as resolve_status_icon;
 
 pub type AssetFuture<T> = Pin<Box<dyn Future<Output = Result<T, String>> + Send>>;
 #[derive(Clone)]
@@ -57,16 +59,7 @@ use tezbar_core::assets::{ASSET_BYTES, CHAT_SOURCE_BYTES, DEADLINE, data_uri};
 
 impl ExtensionAssets for CoreClient {
     fn scope(&self, id: String) -> AssetFuture<AssetScope> {
-        let core = self.0.clone();
-        Box::pin(async move {
-            let scope = tokio::task::spawn_blocking(move || core.extensions.asset_scope(&id))
-                .await
-                .map_err(|_| "Installed image scope is unavailable".to_string())??;
-            Ok(AssetScope {
-                extension_root: scope.root().into(),
-                allowed_legacy: scope.allowed_legacy().clone(),
-            })
-        })
+        installed_scope(self.0.clone(), id)
     }
     fn load(&self, scope: AssetScope, source: Source, effect: Effect) -> AssetFuture<AssetResult> {
         self.load_variant(scope, source, effect, 640)
@@ -92,6 +85,142 @@ impl ExtensionAssets for CoreClient {
         self.load_asset(None, source, effect, max_width)
     }
 }
+/// Registry capability shared by the UI adapter and native status resolver.
+/// Cloning NativeCore here creates no request/lifecycle/admission owners.
+fn installed_scope(core: Arc<tezbar_core::NativeCore>, id: String) -> AssetFuture<AssetScope> {
+    Box::pin(async move {
+        let scope = tokio::task::spawn_blocking(move || core.extensions.asset_scope(&id))
+            .await
+            .map_err(|_| "Installed image scope is unavailable".to_string())??;
+        Ok(AssetScope {
+            extension_root: scope.root().into(),
+            allowed_legacy: scope.allowed_legacy().clone(),
+        })
+    })
+}
+/// One authorization/transport/decode path, backed by the existing core service.
+/// Only application-icon effects need an existing shared request adapter; status
+/// assets pass None and cannot acquire that desktop capability.
+fn load_asset(
+    core: Arc<tezbar_core::NativeCore>,
+    application_icons: Option<CoreClient>,
+    scope: Option<AssetScope>,
+    source: Source,
+    effect: Effect,
+    width: u32,
+) -> AssetFuture<AssetResult> {
+    Box::pin(async move {
+        // Source/effect must agree. Effects do not confer arbitrary file authority.
+        let bytes = match (source, effect) {
+            (
+                Source::Remote(source),
+                Effect::Fetch {
+                    url,
+                    max_bytes,
+                    max_width,
+                    ..
+                },
+            ) if source == url => {
+                if max_width != width {
+                    return Err("Image variant changed".into());
+                }
+                core.assets.remote(&url, max_bytes.min(ASSET_BYTES)).await?
+            }
+            (
+                Source::Data(source),
+                Effect::DecodeData {
+                    data, max_bytes, ..
+                },
+            ) if source == data => data_uri(&data, max_bytes.min(ASSET_BYTES))?,
+            (
+                Source::File(source),
+                Effect::ReadFile {
+                    path, max_bytes, ..
+                },
+            ) if source == path => {
+                let scope = scope.ok_or("Catalog images have no file capability")?;
+                let registry = core.clone();
+                let registered = tokio::task::spawn_blocking(move || {
+                    let registered = registry
+                        .extensions
+                        .asset_scope_for_root(&scope.extension_root)?;
+                    if registered.allowed_legacy() != &scope.allowed_legacy {
+                        return Err("Installed image scope changed".into());
+                    }
+                    Ok::<_, String>(registered)
+                })
+                .await
+                .map_err(|_| "Installed image scope is unavailable".to_string())??;
+                core.assets
+                    .local(&registered, &path, max_bytes.min(ASSET_BYTES))
+                    .await?
+            }
+            (
+                Source::AppPath {
+                    extension_id: source_id,
+                    path: source,
+                },
+                Effect::ResolveAppPath {
+                    extension_id,
+                    path,
+                    max_width,
+                    ..
+                },
+            ) if source_id == extension_id
+                && source == path
+                && max_width == width
+                && scope.is_some() =>
+            {
+                let scope = scope.unwrap();
+                let registry = core.clone();
+                let registered = tokio::task::spawn_blocking(move || {
+                    registry.extensions.asset_scope(&extension_id)
+                })
+                .await
+                .map_err(|_| "Installed image scope is unavailable".to_string())??;
+                if registered.root() != scope.extension_root
+                    || registered.allowed_legacy() != &scope.allowed_legacy
+                {
+                    return Err("Installed image scope changed".into());
+                }
+                let client = application_icons
+                    .as_ref()
+                    .ok_or("Application icon capability is unavailable")?;
+                let value = RequestAdapter::send(
+                    client,
+                    Request::AssetIcon {
+                        kind: "application".into(),
+                        path: path.to_string_lossy().into_owned(),
+                    },
+                )
+                .await?;
+                data_uri(
+                    value.as_str().ok_or("Application icon is unavailable")?,
+                    ASSET_BYTES,
+                )?
+            }
+            _ => return Err("Image request capability does not match its source".into()),
+        };
+        decode_admitted(&core, bytes, width).await
+    })
+}
+async fn decode_admitted(
+    core: &tezbar_core::NativeCore,
+    bytes: Vec<u8>,
+    width: u32,
+) -> Result<AssetResult, String> {
+    tokio::time::timeout(DEADLINE, async {
+        let permit = core.assets.decode_permit().await?;
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            decode_asset(&bytes, width)
+        })
+        .await
+        .map_err(|_| "Image decoding failed".to_string())?
+    })
+    .await
+    .map_err(|_| "Image decoding timed out".to_string())?
+}
 impl CoreClient {
     fn load_asset(
         &self,
@@ -100,117 +229,14 @@ impl CoreClient {
         effect: Effect,
         width: u32,
     ) -> AssetFuture<AssetResult> {
-        let client = self.clone();
-        Box::pin(async move {
-            // Source/effect must agree. Effects do not confer arbitrary file authority.
-            let bytes = match (source, effect) {
-                (
-                    Source::Remote(source),
-                    Effect::Fetch {
-                        url,
-                        max_bytes,
-                        max_width,
-                        ..
-                    },
-                ) if source == url => {
-                    if max_width != width {
-                        return Err("Image variant changed".into());
-                    }
-                    client
-                        .0
-                        .assets
-                        .remote(&url, max_bytes.min(ASSET_BYTES))
-                        .await?
-                }
-                (
-                    Source::Data(source),
-                    Effect::DecodeData {
-                        data, max_bytes, ..
-                    },
-                ) if source == data => data_uri(&data, max_bytes.min(ASSET_BYTES))?,
-                (
-                    Source::File(source),
-                    Effect::ReadFile {
-                        path, max_bytes, ..
-                    },
-                ) if source == path => {
-                    let scope = scope.ok_or("Catalog images have no file capability")?;
-                    let core = client.0.clone();
-                    let registered = tokio::task::spawn_blocking(move || {
-                        let registered = core
-                            .extensions
-                            .asset_scope_for_root(&scope.extension_root)?;
-                        if registered.allowed_legacy() != &scope.allowed_legacy {
-                            return Err("Installed image scope changed".into());
-                        }
-                        Ok::<_, String>(registered)
-                    })
-                    .await
-                    .map_err(|_| "Installed image scope is unavailable".to_string())??;
-                    client
-                        .0
-                        .assets
-                        .local(&registered, &path, max_bytes.min(ASSET_BYTES))
-                        .await?
-                }
-                (
-                    Source::AppPath {
-                        extension_id: source_id,
-                        path: source,
-                    },
-                    Effect::ResolveAppPath {
-                        extension_id,
-                        path,
-                        max_width,
-                        ..
-                    },
-                ) if source_id == extension_id
-                    && source == path
-                    && max_width == width
-                    && scope.is_some() =>
-                {
-                    let scope = scope.unwrap();
-                    let core = client.0.clone();
-                    let registered = tokio::task::spawn_blocking(move || {
-                        core.extensions.asset_scope(&extension_id)
-                    })
-                    .await
-                    .map_err(|_| "Installed image scope is unavailable".to_string())??;
-                    if registered.root() != scope.extension_root
-                        || registered.allowed_legacy() != &scope.allowed_legacy
-                    {
-                        return Err("Installed image scope changed".into());
-                    }
-                    let value = RequestAdapter::send(
-                        &client,
-                        Request::AssetIcon {
-                            kind: "application".into(),
-                            path: path.to_string_lossy().into_owned(),
-                        },
-                    )
-                    .await?;
-                    data_uri(
-                        value.as_str().ok_or("Application icon is unavailable")?,
-                        ASSET_BYTES,
-                    )?
-                }
-                _ => return Err("Image request capability does not match its source".into()),
-            };
-            client.decode_asset(bytes, width).await
-        })
-    }
-    async fn decode_asset(&self, bytes: Vec<u8>, width: u32) -> Result<AssetResult, String> {
-        tokio::time::timeout(DEADLINE, async {
-            let permit = self.0.assets.decode_permit().await?;
-            tokio::task::spawn_blocking(move || {
-                let _permit = permit;
-                decode_asset(&bytes, width)
-            })
-            .await
-            .map_err(|_| "Image decoding failed".to_string())?
-        })
-        .await
-        .map_err(|_| "Image decoding timed out".to_string())?
+        load_asset(
+            self.0.clone(),
+            Some(self.clone()),
+            scope,
+            source,
+            effect,
+            width,
+        )
     }
     /// Chat Markdown has remote/data authority, never an arbitrary extension/file scope.
     pub(crate) fn document_image(&self, source: String) -> AssetFuture<Vec<u8>> {

@@ -1,0 +1,27 @@
+{
+  "base_approved_aggregate": "dc3220ad914ffc33c52c6273d36cc9d82b0ee0f16d0494d73a9e3dae164de40d",
+  "validated_aggregate": "afcafe604cce6011cbad4927db75dc7ee3b19a1b9d3721cb8361855192b454cf",
+  "changes": {
+    "crates/tezbar-core/src/extension_worker.rs": {
+      "approved": {
+        "kind": "file",
+        "sha256": "8867dddbce7512a7f2c03ffdc100fab434578514406915907a76e5bd74719e33"
+      },
+      "validated": {
+        "kind": "file",
+        "sha256": "03d8bfc52f29a253ba7afb5ce21509ed3716b59b01f55e3855b293ebc384b184"
+      }
+    },
+    "apps/tezbar/src/asset_transport/status_icons.rs": {
+      "approved": {
+        "kind": "file",
+        "sha256": "e7eea6db00ba79f7431e19987e2390127cd0d84c90875dbad90624b2d9e4c8d2"
+      },
+      "validated": {
+        "kind": "file",
+        "sha256": "df1f4a051f58d7e4b38e7e67a4c10da653e289a45dd6b27f8f367a01c6022c15"
+      }
+    }
+  },
+  "all_other_3119_approved_files_unchanged": true
+}

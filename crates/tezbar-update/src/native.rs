@@ -581,13 +581,29 @@ fn pinned_team(detail: &str, team: &str) -> bool {
 /// The probe owns and removes only a newly created private directory.
 #[cfg(unix)]
 pub fn preflight_macos_install(installed: &Path) -> Result<(), String> {
-    if installed.file_name().and_then(|v| v.to_str()) != Some("Tezbar.app") || !installed.is_dir() {
+    use std::os::unix::{ffi::OsStrExt, fs::MetadataExt};
+    const REFUSAL: &str = "Tezbar cannot update in this folder. Move it to a writable Applications folder, then retry. The verified download has been kept.";
+    let meta = std::fs::symlink_metadata(installed).map_err(|_| REFUSAL)?;
+    if installed.file_name().and_then(|v| v.to_str()) != Some("Tezbar.app") || !meta.is_dir() {
         return Err("The installed Tezbar bundle is unavailable".into());
     }
-    tempfile::Builder::new().prefix(".tezbar-install-check-")
-        .tempdir_in(installed.parent().ok_or("Missing installation directory")?)
+    let directory = installed.parent().ok_or("Missing installation directory")?;
+    let parent = std::fs::metadata(directory).map_err(|_| REFUSAL)?;
+    let bundle_path =
+        std::ffi::CString::new(installed.as_os_str().as_bytes()).map_err(|_| REFUSAL)?;
+    // access() includes the current user's ACLs; mode bits alone miss MDM and
+    // cross-user installations. A sticky parent also requires bundle ownership.
+    let writable = unsafe { libc::access(bundle_path.as_ptr(), libc::W_OK) == 0 };
+    if !writable
+        || parent.mode() & u32::from(libc::S_ISVTX) != 0 && meta.uid() != unsafe { libc::geteuid() }
+    {
+        return Err(REFUSAL.into());
+    }
+    tempfile::Builder::new()
+        .prefix(".tezbar-install-check-")
+        .tempdir_in(directory)
         .and_then(|probe| probe.close())
-        .map_err(|_| "Tezbar cannot update in this folder. Move it to a writable Applications folder, then retry. The verified download has been kept.".into())
+        .map_err(|_| REFUSAL.into())
 }
 #[cfg(unix)]
 fn swap_bundle(staged: &Path, installed: &Path) -> Result<InstalledMac, String> {
@@ -1111,6 +1127,30 @@ mod lifecycle_tests {
         assert!(line.contains(&0xd800));
         assert!(nsis_parameters_wide(&[vec![0]]).is_err());
         assert!(nsis_parameters_wide(&[vec![1; 32768]]).is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn review_m11_recheck_unwritable_bundle_is_refused_before_quit() {
+        use std::os::unix::{ffi::OsStrExt, fs::PermissionsExt};
+        let d = tempfile::tempdir().unwrap();
+        let installed = d.path().join("Tezbar.app");
+        std::fs::create_dir(&installed).unwrap();
+        std::fs::write(installed.join("identity"), b"old").unwrap();
+        std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let path = std::ffi::CString::new(installed.as_os_str().as_bytes()).unwrap();
+        let allowed_by_os = unsafe { libc::access(path.as_ptr(), libc::W_OK) == 0 };
+        let refused = preflight_macos_install(&installed);
+        // Restore before assertions so even a failing regression cleans its own fixture.
+        std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(refused.is_ok(), allowed_by_os);
+        if !allowed_by_os {
+            assert!(refused
+                .unwrap_err()
+                .contains("verified download has been kept"));
+        }
+        preflight_macos_install(&installed).unwrap();
+        assert_eq!(std::fs::read(installed.join("identity")).unwrap(), b"old");
+        assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
     }
     #[cfg(unix)]
     #[test]

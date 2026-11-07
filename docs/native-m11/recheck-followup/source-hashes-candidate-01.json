@@ -1,0 +1,124 @@
+{
+  "state": "M11_SOURCE_STABLE_CANDIDATE_NOT_INTEGRATED",
+  "timestamp_utc": "2026-11-07T16:03:45.034591+00:00",
+  "base_head": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+  "branch": "feat/native-gpui-app",
+  "tree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "compiled": {
+    "apps/tezbar/src/app.rs": {
+      "sha256": "c8e43c0cd2c02db58b0255320e82981014285ea49cc534a342f032e46edb1b09",
+      "bytes": 80541
+    },
+    "apps/tezbar/src/app/m11.rs": {
+      "sha256": "f5a511c23dd418df581583e64551ff404f961e2bd70db4aa47cf3279028cb74e",
+      "bytes": 10682
+    },
+    "apps/tezbar/src/app/m7.rs": {
+      "sha256": "e21a539e3fd60484efd814dfce79749dfa7ad15fa5ff88283e2042dddf774fb5",
+      "bytes": 23647
+    },
+    "apps/tezbar/src/app/production_launch.rs": {
+      "sha256": "961f5342e4a9891289b717ac1307ce3a4b1590e364dcf069ef8affc8657cafac",
+      "bytes": 10162
+    },
+    "apps/tezbar/src/app/production_launch/build_metadata.rs": {
+      "sha256": "47fb19fc1a9f52d128824850591cc1412592123d33731bd64d465646216c25be",
+      "bytes": 5016
+    },
+    "apps/tezbar/src/app/production_launch/bundle_validation.rs": {
+      "sha256": "9e7eb0e25e3027880b521a381edf29aa9c9acce81a8ee6d67dd1f687fb08d88e",
+      "bytes": 11835
+    },
+    "apps/tezbar/src/app/quit_budget.rs": {
+      "sha256": "6486f709c4390c025cefbb26d6a9abda387836e44487f783df41c5cb80f6a25d",
+      "bytes": 1474
+    }
+  },
+  "compiled_aggregate_sha256": "c2d9acc6dd798bfa91c9017e49de33065bd6dd77b8343934dd9f6a3acab8698d",
+  "aggregate_algorithm": "SHA256(json.dumps(compiled, sort_keys=True).encode()) with Python default JSON separators",
+  "tooling": {
+    "scripts/native/build.mjs": {
+      "sha256": "443d931b59dca92b80bd78928da503d33befef996ec2b297ca076cd6a19798f1",
+      "bytes": 6321
+    },
+    "scripts/native/build-metadata.mjs": {
+      "sha256": "f1045ea6568fe51f2ad1c4d9c1944fd6aa2de6d5831d9f5f3f9f2d4a7f6ab0d8",
+      "bytes": 2516
+    },
+    "scripts/native/cargo-artifact.mjs": {
+      "sha256": "f44efb468bec864ac487467544c2a54c5bb817a74766569fabbcaa5bc076837c",
+      "bytes": 2298
+    },
+    "scripts/native/package-macos.mjs": {
+      "sha256": "8f4125895b0b30b74ffdadfcf7e0acc4e3701a4e8b98c1ea4720035f7a8d4788",
+      "bytes": 14096
+    },
+    "scripts/native/build.test.mjs": {
+      "sha256": "4922d6c7907d889ce493afd4dd6a37950288293b5fa8a4745427036be19cd5dd",
+      "bytes": 1009
+    },
+    "scripts/native/package-macos.test.mjs": {
+      "sha256": "6c2f253924ccb6e48658a0896efec6681b5a132f6a979f3b4b16fead2335186a",
+      "bytes": 5474
+    },
+    "scripts/native/cargo-artifact.test.mjs": {
+      "sha256": "dd7cecd31d8702f9eaedec2ce9fec83878035a767db67e165a9a200807fd5a45",
+      "bytes": 3553
+    },
+    "scripts/native/admission-fixture.test.mjs": {
+      "sha256": "b468a17351bcccd9d6338e671ae106faae5fec49aa3bdd228019815fd2597930",
+      "bytes": 4031
+    },
+    "scripts/native/theme-fixture.test.mjs": {
+      "sha256": "d2d262fd772dacac637c6fa1482a33cabb995adae219408ab9a15a349aca9943",
+      "bytes": 2713
+    },
+    "scripts/native/cutover.test.py": {
+      "sha256": "8c99d11633d9a9c54ba3270c305cc42e0e2a4f553ac60339776980fe940425f7",
+      "bytes": 1410
+    },
+    "docs/native-m11/integration/prepare-cutover.py": {
+      "sha256": "c005498dd3ca578bbf491dfe9d137356560f81e5d9c8607f9ede04253eca4158",
+      "bytes": 8709
+    },
+    "scripts/native/README.md": {
+      "sha256": "045ebe0e71607ec6922bd0475b9ad4b21da912426bcf1026e1d4f37aa9deaed5",
+      "bytes": 2190
+    }
+  },
+  "preserved": {
+    "apps/tezbar/build.rs": {
+      "sha256": "82f08466e92b30d8d88cc09f44848e507a3c0fd0c558412d03b048aa562c4557",
+      "bytes": 4514
+    },
+    "crates/tezbar-update/src/native.rs": {
+      "sha256": "aca30fe812da0249d0e363b41283dcc849866df140a83982707a85788b3379fb",
+      "bytes": 49248
+    },
+    "apps/tezbar/src/legacy_state/mod.rs": {
+      "sha256": "b82223153866f5f85931a7eab3484c378371029baa4899ea14ca5eccd0727622",
+      "bytes": 8898
+    },
+    "apps/tezbar/src/legacy_state/tests.rs": {
+      "sha256": "8c450d3d695799c22810fcfbe70eb84960c8121c8ccaf3ecf41cba71bba07947",
+      "bytes": 12339
+    },
+    "scripts/native/provenance.test.mjs": {
+      "sha256": "a33ed5edb16e44c6dc7652f09d1ace94722a1f81020fa8c9fcba91c672e86a78",
+      "bytes": 5017
+    },
+    "docs/native-m11/integration/final-cutover-review.patch": {
+      "sha256": "159dc2fb402b008214e8241f869f69eb24a006d4413c099ceb0aeea4088c94a2",
+      "bytes": 5552856
+    },
+    "docs/native-m11/integration/final-cutover-inventory.json": {
+      "sha256": "6e96fedf7efaac2ab53ff3c851b45174ea35f451c604675bde4351899101d233",
+      "bytes": 85959
+    }
+  },
+  "coownership": {
+    "apps/tezbar/src/app.rs": "M11 quit/theme/modules/tests only; Pi host.bind_status_assets(&core.0) retained verbatim",
+    "apps/tezbar/src/app/m11.rs": "parent R4 diagnostic retained; add staged admission before swap",
+    "scripts/native/build.mjs": "parent sourceSnapshot exact Git root / no-optional-locks protections retained; R8 Cargo JSON selection"
+  }
+}

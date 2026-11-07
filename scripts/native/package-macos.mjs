@@ -6,7 +6,8 @@ import path from 'node:path'
 import { assertRelease, APP_IDS, PRODUCT_NAMES } from '../lib/release-policy.mjs'
 import { assertEmbeddingRuntimeDistribution } from '../lib/embedding-runtime-policy.mjs'
 
-export const GPUI_REV = 'c84af5b99cbc366d675064e52b23664a015b6e35'
+import { captureBuildMetadata, GPUI_REV } from './build-metadata.mjs'
+export { GPUI_REV }
 export const RESOURCE_ROOTS = Object.freeze([
   ['dist-backend/extension-worker.js', 'dist-backend/extension-worker.js'],
   ['dist-backend/vec0', 'dist-backend/vec0'],
@@ -93,7 +94,7 @@ export function planMacos(input) {
   const { version, channel, localPreview, stage, osTemp, executable, files, policy, catalog, payload, sourceCommit, allowUnsigned = false } = input
   assertRelease(channel, version)
   if (!path.isAbsolute(stage) || !path.isAbsolute(osTemp) || !inside(osTemp, stage)) throw new Error('Use a fresh OS-temp assembly directory')
-  if (!/^[a-f0-9]{40}$/.test(sourceCommit) || input.gpuiRev !== GPUI_REV || input.rustVersion !== '1.98.1' || input.benchControl !== false) throw new Error('Unreviewed native build provenance')
+  if (!/^[a-f0-9]{40}$/.test(sourceCommit) || input.gpuiRev !== GPUI_REV || input.rustVersion !== '1.98.1' || input.benchControl !== false || typeof input.runtimeShaders !== 'boolean') throw new Error('Unreviewed native build provenance')
   if (policy.identifier !== 'com.tezbar.app' || !policy.teamIdentifier || !policy.designatedRequirement?.includes('certificate') || !Array.isArray(policy.nativeHelpers) || policy.nativeHelpers.length !== 4) throw new Error('Missing original signing policy')
   if (allowUnsigned && (localPreview || channel === 'stable')) throw new Error('Invalid release exception')
   const identifier = localPreview ? 'com.tezbar.preview.native' : APP_IDS[channel]
@@ -111,7 +112,7 @@ export function planMacos(input) {
   return {
     schema: 1, kind: 'native-assembly-plan', executable: 'tezbar', product: PRODUCT_NAMES[channel], identifier, version, channel, sourceCommit,
     bundle: path.join(stage, 'Tezbar.app'), installedTarget: null,
-    inventorySha256, files: ordered, binary: executable, sourceDirty: input.sourceDirty !== false, gpuiRev: GPUI_REV, rustVersion: input.rustVersion,
+    inventorySha256, files: ordered, binary: executable, sourceDirty: input.sourceDirty !== false, runtimeShaders: input.runtimeShaders, gpuiRev: GPUI_REV, rustVersion: input.rustVersion,
     workerPolicy: 'Bun compatibility is lazy and core-owned; no first-party JS runtime',
     modelPolicy: 'Pinned runtime ZIP only; user model caches never copied',
     signing: localPreview ? { mode:'ad-hoc', explicitLocalPreview:true, publishable:false } : { mode:'existing-release-pipeline', policy, allowUnsigned, required:['sign native resources', 'verify every Mach-O Team ID', 'seal outer app', 'verify deep strict and exact pinned designated requirement', 'minisign archive in release pipeline'] },
@@ -158,7 +159,13 @@ export async function assembleMacos(plan, { template, permissions, osTemp }) {
   if (/LSUIElement|{{/.test(infoPlist) || !infoPlist.includes(`<string>${plan.identifier}</string>`) || !infoPlist.includes('<string>tezbar</string>')) throw new Error('Unreviewed Info.plist')
   await writeFile(path.join(contents,'Info.plist'),infoPlist,{flag:'wx',mode:0o644})
   copied.push({path:'Info.plist',bytes:Buffer.byteLength(infoPlist),sha256:sha(infoPlist)})
-  const provenance={sourceCommit:plan.sourceCommit,dirty:plan.sourceDirty,gpuiRev:plan.gpuiRev,rustVersion:plan.rustVersion,files:plan.files.map(({source,...pin})=>pin)}
+  // The sealed manifest binds the exact static record in the copied executable.
+  // A whole-file digest here would be circular: codesign's executable signature
+  // seals this resource manifest. Pinned codesign independently authenticates all
+  // executable bytes; this digest binds its embedded build identity to resources.
+  const {metadata,sha256:binaryMetadataSha256}=await captureBuildMetadata(path.join(contents,'MacOS/tezbar'))
+  if(metadata.version!==plan.version || metadata.sourceCommit!==plan.sourceCommit || metadata.dirty!==plan.sourceDirty || metadata.benchControl || metadata.runtimeShaders!==plan.runtimeShaders || metadata.gpuiRev!==plan.gpuiRev || metadata.rustVersion!==plan.rustVersion) throw Error('Copied executable metadata differs from assembly plan')
+  const provenance={...metadata,binaryMetadataSha256,files:plan.files.map(({source,...pin})=>pin)}
   await writeFile(path.join(resources,'.tezbar-native-source'),plan.sourceCommit+'\n',{flag:'wx',mode:0o644})
   await writeFile(path.join(resources,'.tezbar-native-production.json'),JSON.stringify(provenance,null,2)+'\n',{flag:'wx',mode:0o644})
   return { ...plan.receipt, sourceDirty:plan.sourceDirty, state:'ASSEMBLED_UNSEALED', publishable:false, bundle:plan.bundle, files:copied }

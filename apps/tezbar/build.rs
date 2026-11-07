@@ -1,5 +1,9 @@
 use std::process::Command;
 fn main() {
+    let workspace = std::fs::canonicalize(
+        std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../.."),
+    )
+    .expect("Native workspace directory");
     println!("cargo:rerun-if-env-changed=TEZBAR_RELEASE_NOTES_PATH");
     let notes_path = std::env::var_os("TEZBAR_RELEASE_NOTES_PATH")
         .map(std::path::PathBuf::from)
@@ -51,12 +55,26 @@ fn main() {
     }
     let git = |args: &[&str]| {
         Command::new("git")
+            .arg("--no-optional-locks")
             .args(args)
+            .current_dir(&workspace)
             .output()
             .ok()
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
     };
+    // An ignored archive nested in another repository must not inherit that
+    // repository's clean status or HEAD as an attestation of its own contents.
+    let own_repository = git(&["rev-parse", "--show-toplevel"])
+        .and_then(|root| std::fs::canonicalize(root).ok())
+        .is_some_and(|root| root == workspace)
+        && git(&["ls-files", "--error-unmatch", "--", "apps/tezbar/build.rs"]).is_some();
+    let tracked_notes = std::fs::canonicalize(&notes_path).ok().is_some_and(|path| {
+        path.strip_prefix(&workspace)
+            .ok()
+            .and_then(|relative| relative.to_str())
+            .is_some_and(|relative| git(&["ls-files", "--error-unmatch", "--", relative]).is_some())
+    });
     let observed_sha = git(&["rev-parse", "HEAD"]);
     let sha = std::env::var("TEZBAR_NATIVE_SOURCE_SHA")
         .ok()
@@ -77,9 +95,11 @@ fn main() {
     println!("cargo:rustc-env=TEZBAR_NATIVE_GIT_SHA={sha}");
     println!(
         "cargo:rustc-env=TEZBAR_NATIVE_DIRTY={}",
-        git(&["status", "--porcelain"])
-            .map(|v| !v.is_empty())
-            .unwrap_or(true)
+        !own_repository
+            || !tracked_notes
+            || git(&["status", "--porcelain"])
+                .map(|v| !v.is_empty())
+                .unwrap_or(true)
             || observed_sha.as_deref() != Some(sha.as_str())
     );
 }

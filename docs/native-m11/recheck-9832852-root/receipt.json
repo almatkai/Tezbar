@@ -1,0 +1,24 @@
+{
+  "base": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+  "working_tree_dirty": true,
+  "report_sha256": "f30b9cce1fbe2cc0374ba024639cd0019778c8b859cd76752820195e258b6cb2",
+  "uid": 501,
+  "R0": "implementation and corrected production-order regression; full native gate pending peer freeze",
+  "R1": "old function fails the exact new test, corrected function passes; updater 43 passed/1 existing ignored on both 1.85.0 and 1.98.1",
+  "R2": "real build script gives false:2 in ignored nested repository before fix; true:2 after, plus dependency/archive/external-release-note controls pass",
+  "R4": "production logger now retains the actual installer/rollback error; source-only verification",
+  "not_acceptance": [
+    "zero-match updater-permission-red: 0 tests, caught by wrapper assertion, not a red or green acceptance",
+    "updater-185-green: compiler error for macOS S_ISVTX u16; corrected with u32::from and both final toolchains rerun",
+    "No whole native compile while Pi edits status-icon interfaces",
+    "Scoped updater input hashes are updater crate + root manifests/signing fixture, not whole-worktree freeze"
+  ],
+  "pending": [
+    "R3 staged admission validation",
+    "R5 quit budget reservation",
+    "R6 cutover build-pipeline/roundtrip gates",
+    "R7 cold-start native appearance",
+    "R8 Cargo executable selection",
+    "M6 cold-start timing, L5/L9/L10, Windows/signing/manual/RAM remain open"
+  ]
+}

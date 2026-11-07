@@ -7,6 +7,15 @@ use std::{
 use tezbar_core::common::CorePaths;
 use tezbar_host::paths::{self, Environment, Platform, Profile};
 
+mod build_metadata;
+mod bundle_validation;
+
+/// Also consumed by --version: a live static-record reference independent of
+/// production admission's dirty/bench refusal and linker reachability decisions.
+pub fn current_build_metadata() -> serde_json::Value {
+    serde_json::to_value(build_metadata::current()).expect("compile-time native metadata")
+}
+
 pub const IDENTITY: &str = "com.tezbar.app";
 pub const SHUTDOWN_LIMIT: Duration = Duration::from_secs(8);
 #[derive(Clone)]
@@ -180,12 +189,8 @@ pub struct Admission {
 }
 impl Admission {
     pub fn current() -> Result<Self, String> {
-        if env!("TEZBAR_NATIVE_DIRTY") != "false" {
-            return Err("Production requires a clean source build".into());
-        }
-        if cfg!(feature = "bench-control") {
-            return Err("Production cannot enable bench control".into());
-        }
+        let running = build_metadata::current();
+        running.production(env!("CARGO_PKG_VERSION"))?;
         let executable = std::env::current_exe().map_err(|e| e.to_string())?;
         #[cfg(target_os = "macos")]
         {
@@ -199,24 +204,7 @@ impl Admission {
             {
                 return Err("Production requires the established signed bundle".into());
             }
-            tezbar_update::native::verify_macos_bundle_identity(bundle)?;
-            verify_resources(&contents.join("Resources"))?;
-            for (key, expected) in [
-                ("CFBundleIdentifier", IDENTITY),
-                ("CFBundleExecutable", "tezbar"),
-                ("CFBundleShortVersionString", env!("CARGO_PKG_VERSION")),
-            ] {
-                let output = std::process::Command::new("/usr/libexec/PlistBuddy")
-                    .args(["-c", &format!("Print :{key}")])
-                    .arg(contents.join("Info.plist"))
-                    .output()
-                    .map_err(|e| e.to_string())?;
-                if !output.status.success()
-                    || String::from_utf8_lossy(&output.stdout).trim() != expected
-                {
-                    return Err("Bundle metadata mismatch".into());
-                }
-            }
+            verify_bundle(bundle, env!("CARGO_PKG_VERSION"), Some(&running))?;
             Ok(Self { executable })
         }
         #[cfg(not(target_os = "macos"))]
@@ -252,122 +240,29 @@ impl Admission {
         .map_err(anyhow::Error::msg)
     }
 }
-fn verify_resources(root: &Path) -> Result<(), String> {
-    use sha2::{Digest, Sha256};
-    use std::io::Read;
-    let manifest = root.join(".tezbar-native-production.json");
-    let meta =
-        std::fs::symlink_metadata(&manifest).map_err(|_| "Native resource provenance missing")?;
-    if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > 16 * 1024 * 1024 {
-        return Err("Invalid resource provenance".into());
-    }
-    let value: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(manifest).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-    if value["sourceCommit"] != env!("TEZBAR_NATIVE_GIT_SHA")
-        || value["gpuiRev"] != "c84af5b99cbc366d675064e52b23664a015b6e35"
-        || value["rustVersion"] != "1.98.1"
-        || value["dirty"] != false
-    {
-        return Err("Native resource provenance mismatch".into());
-    }
-    let files = value["files"]
-        .as_array()
-        .filter(|f| !f.is_empty() && f.len() <= 100000)
-        .ok_or("Missing resource inventory")?;
-    for key in [
-        "dist-backend/extension-worker.js",
-        "dist-backend/vec0",
-        "dist-backend/libsqlite3.dylib",
-        "trayIconTemplate@2x.png",
-        "icon.icns",
-        "embedding-runtime/embedding-runtime.zip",
-        "licenses/raycast-extensions-MIT.txt",
-        "native/axhelper/axhelper",
-        "native/screenocr/screenocr-helper",
-        "native/color-picker/color-picker-helper",
-        "native/image-colors/image-colors-helper",
-    ] {
-        if !files.iter().any(|f| f["destination"] == key) {
-            return Err("Required native resource missing".into());
-        }
-    }
-    let mut names = std::collections::BTreeSet::new();
-    for pin in files {
-        let name = pin["destination"].as_str().ok_or("Invalid resource path")?;
-        if !names.insert(name.to_lowercase())
-            || name.contains(['\\', '\0'])
-            || !Path::new(name)
-                .components()
-                .all(|c| matches!(c, std::path::Component::Normal(_)))
-        {
-            return Err("Unsafe resource path".into());
-        }
-        let mut path = root.to_path_buf();
-        for component in Path::new(name).components() {
-            path.push(component);
-            if std::fs::symlink_metadata(&path)
-                .map_err(|e| e.to_string())?
-                .file_type()
-                .is_symlink()
-            {
-                return Err("Resource symlink rejected".into());
-            }
-        }
-        let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-        if file.metadata().map_err(|e| e.to_string())?.len()
-            != pin["bytes"].as_u64().ok_or("Missing resource size")?
-        {
-            return Err("Resource size mismatch".into());
-        }
-        let mut hash = Sha256::new();
-        let mut buffer = [0u8; 65536];
-        loop {
-            let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
-            if n == 0 {
-                break;
-            }
-            hash.update(&buffer[..n]);
-        }
-        if format!("{:x}", hash.finalize())
-            != pin["sha256"].as_str().ok_or("Missing resource hash")?
-        {
-            return Err("Resource hash mismatch".into());
-        }
-    }
-    Ok(())
+
+/// Staged updates use the NEW release version and the staged binary's own static
+/// record. No staged executable is launched; the old process's SHA is irrelevant.
+#[cfg(target_os = "macos")]
+pub(super) fn verify_staged(bundle: &Path, version: &str) -> Result<(), String> {
+    verify_bundle(bundle, version, None)
 }
-#[cfg(test)]
-mod admission_tests {
-    use super::*;
-    use sha2::{Digest, Sha256};
-    #[test]
-    fn production_resource_inventory_rejects_missing_hash_tamper_and_preview_provenance() {
-        let d = tempfile::tempdir().unwrap();
-        assert!(verify_resources(d.path()).is_err());
-        let names = [
-            "dist-backend/extension-worker.js",
-            "dist-backend/vec0",
-            "dist-backend/libsqlite3.dylib",
-            "trayIconTemplate@2x.png",
-            "icon.icns",
-            "embedding-runtime/embedding-runtime.zip",
-            "licenses/raycast-extensions-MIT.txt",
-            "native/axhelper/axhelper",
-            "native/screenocr/screenocr-helper",
-            "native/color-picker/color-picker-helper",
-            "native/image-colors/image-colors-helper",
-        ];
-        let files:Vec<_>=names.iter().map(|n| {let path=d.path().join(n);std::fs::create_dir_all(path.parent().unwrap()).unwrap();std::fs::write(path,b"fixture").unwrap();serde_json::json!({"destination":n,"bytes":7,"sha256":format!("{:x}",Sha256::digest(b"fixture"))})}).collect();
-        let mut manifest = serde_json::json!({"sourceCommit":env!("TEZBAR_NATIVE_GIT_SHA"),"gpuiRev":"c84af5b99cbc366d675064e52b23664a015b6e35","rustVersion":"1.98.1","dirty":false,"files":files});
-        let path = d.path().join(".tezbar-native-production.json");
-        std::fs::write(&path, manifest.to_string()).unwrap();
-        assert!(verify_resources(d.path()).is_ok());
-        std::fs::write(d.path().join(names[0]), b"tampered").unwrap();
-        assert!(verify_resources(d.path()).is_err());
-        std::fs::write(d.path().join(names[0]), b"fixture").unwrap();
-        manifest["dirty"] = serde_json::json!(true);
-        std::fs::write(path, manifest.to_string()).unwrap();
-        assert!(verify_resources(d.path()).is_err());
-    }
+#[cfg(target_os = "macos")]
+fn verify_bundle(
+    bundle: &Path,
+    version: &str,
+    running: Option<&build_metadata::BuildMetadata>,
+) -> Result<(), String> {
+    tezbar_update::native::verify_macos_bundle_identity(bundle)?;
+    bundle_validation::verify_payload(bundle, version, running, |path, key| {
+        let output = std::process::Command::new("/usr/libexec/PlistBuddy")
+            .args(["-c", &format!("Print :{key}")])
+            .arg(path)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err("Bundle metadata unavailable".into());
+        }
+        String::from_utf8(output.stdout).map_err(|e| e.to_string())
+    })
 }

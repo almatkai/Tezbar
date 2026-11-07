@@ -1,0 +1,35 @@
+{
+  "state": "NOT_APPLIED_NOT_RELEASE_READY",
+  "old_held_patch": {
+    "path": "docs/native-m11/integration/final-cutover-review.patch",
+    "sha256": "159dc2fb402b008214e8241f869f69eb24a006d4413c099ceb0aeea4088c94a2",
+    "bytes": 5552856
+  },
+  "old_held_inventory": {
+    "path": "docs/native-m11/integration/final-cutover-inventory.json",
+    "sha256": "6e96fedf7efaac2ab53ff3c851b45174ea35f451c604675bde4351899101d233",
+    "bytes": 85959
+  },
+  "successor_patch": {
+    "path": "docs/native-m11/recheck-followup/cutover-successor/final-cutover-review.patch",
+    "sha256": "63376fbb847ab6a39b7c91d05602ff529cd08da23c5ffeff34d3d7eb50b3625b",
+    "bytes": 5552910
+  },
+  "successor_inventory": {
+    "path": "docs/native-m11/recheck-followup/cutover-successor/final-cutover-inventory.json",
+    "sha256": "b37090f4db2a3577aeaaf0097346de45cceb7dcd54bdf724f9e59a74da025f35",
+    "bytes": 87101
+  },
+  "roundtrip": {
+    "state": "PASSED_PRIVATE_BYTE_ROUNDTRIP",
+    "files": 481,
+    "patch_sha256": "63376fbb847ab6a39b7c91d05602ff529cd08da23c5ffeff34d3d7eb50b3625b"
+  },
+  "relocations_equal": true,
+  "relocation_count": 282,
+  "binary_copy_pins_equal": true,
+  "binary_copy_count": 52,
+  "binary_source_hashes_verified": true,
+  "no_product_apply": true,
+  "no_new_checkout_or_worktree": true
+}

@@ -5,7 +5,7 @@ use crate::surfaces::{
     onboarding,
     settings::{EffectBarrier, SettingsContent, SettingsEffect, SettingsStore},
 };
-use tezbar_ui_model::{router::Surface, ui_state::Theme};
+use tezbar_ui_model::router::Surface;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Boot {
     Waiting,
@@ -271,18 +271,7 @@ impl Owner {
         match effect {
             SettingsEffect::Close => {} // The Settings shell owns this handshake exactly once.
             SettingsEffect::Theme(theme) => {
-                let choice = match theme {
-                    Theme::White => "white",
-                    Theme::Dark => "dark",
-                    Theme::System => "system",
-                };
-                let _ = tezbar_ui::tokens::set(choice);
-                cx.set_window_appearance(match theme {
-                    Theme::White => Some(WindowAppearance::Light),
-                    Theme::Dark => Some(WindowAppearance::Dark),
-                    Theme::System => None,
-                });
-                cx.refresh_windows();
+                apply_theme(theme, cx);
                 self.m7_save_ui(id, SettingsEffect::Theme(theme), cx)
             }
             effect @ (SettingsEffect::RememberTab(_)

@@ -6,6 +6,7 @@ mod m7_tests;
 mod m8;
 mod m9;
 pub mod production_launch;
+mod quit_budget;
 pub mod update_integration;
 gpui::actions!(
     native_app,
@@ -33,6 +34,19 @@ use tezbar_host::{
     placement::{self, MonitorGeometry, PersistedWindowPosition},
     single_instance::{Claim, Instance},
 };
+/// All theme entry points update palette and native window appearance together.
+fn apply_theme(theme: tezbar_ui_model::ui_state::Theme, cx: &mut App) {
+    use tezbar_ui_model::ui_state::Theme;
+    let (tokens, appearance) = match theme {
+        Theme::White => ("white", Some(WindowAppearance::Light)),
+        Theme::Dark => ("dark", Some(WindowAppearance::Dark)),
+        Theme::System => ("system", None),
+    };
+    let _ = tezbar_ui::tokens::set(tokens);
+    cx.set_window_appearance(appearance);
+    cx.refresh_windows();
+}
+
 struct RuntimeOwner(Option<tokio::runtime::Runtime>);
 impl Global for RuntimeOwner {}
 impl Drop for RuntimeOwner {
@@ -510,7 +524,7 @@ impl Owner {
             #[cfg(feature = "bench-control")]
             gate.wait().await;
             let quit_started = std::time::Instant::now();
-            let timer = cx.background_executor().timer(Duration::from_secs(8));
+            let timer = cx.background_executor().timer(quit_budget::LIMIT);
             let committed = std::cell::Cell::new(false);
             let prepared = {
             let prepare = async {
@@ -561,11 +575,12 @@ impl Owner {
                 if owner.m7.store.pending() || !owner.m7.barrier.is_clean() || owner.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true) {
                     return Err("Settings changed while quitting; retry quit.".to_string());
                 }
-                committed.set(true);
-                owner.launcher.update(cx, |view, w, cx| {
-                    view.dispose_chat(w, cx);
-                    (view.drain_chat(w, cx), view.drain_terminal(w, cx))
-                }).map_err(|e| e.to_string())
+                quit_budget::commit(quit_started.elapsed(), &committed, || {
+                    owner.launcher.update(cx, |view, w, cx| {
+                        view.dispose_chat(w, cx);
+                        (view.drain_chat(w, cx), view.drain_terminal(w, cx))
+                    }).map_err(|e| e.to_string())
+                })?
             }).map_err(|e| e.to_string())??;
             final_drains.0.await?;
             final_drains.1.await?;
@@ -643,7 +658,7 @@ impl Owner {
             let Ok(Some(core)) = core else {
                 return;
             };
-            let result = gpui_tokio::Tokio::spawn(cx, async move { core.shutdown_with_budget(Duration::from_secs(8).saturating_sub(quit_started.elapsed())).await }).await;
+            let result = gpui_tokio::Tokio::spawn(cx, async move { core.shutdown_with_budget(quit_budget::LIMIT.saturating_sub(quit_started.elapsed())).await }).await;
             let _ = this.update(cx, |this, cx| {
                 if !matches!(result, Ok(Ok(()))) {
                     let _ = this.log.write(
@@ -1164,18 +1179,7 @@ impl Owner {
                         .launcher
                         .update(cx, |view, _, _| view.state.theme.clone())
                     {
-                        use tezbar_ui_model::ui_state::Theme;
-                        let _ = tezbar_ui::tokens::set(match theme {
-                            Theme::White => "white",
-                            Theme::Dark => "dark",
-                            Theme::System => "system",
-                        });
-                        cx.set_window_appearance(match theme {
-                            Theme::White => Some(WindowAppearance::Light),
-                            Theme::Dark => Some(WindowAppearance::Dark),
-                            Theme::System => None,
-                        });
-                        cx.refresh_windows();
+                        apply_theme(theme, cx);
                     }
                     self.m7 = m7::State::new(self.m7.store.clone());
                     self.start_core(cx);
@@ -1192,18 +1196,7 @@ impl Owner {
                         .launcher
                         .update(cx, |view, _, _| view.state.theme.clone())
                     {
-                        use tezbar_ui_model::ui_state::Theme;
-                        let _ = tezbar_ui::tokens::set(match theme {
-                            Theme::White => "white",
-                            Theme::Dark => "dark",
-                            Theme::System => "system",
-                        });
-                        cx.set_window_appearance(match theme {
-                            Theme::White => Some(WindowAppearance::Light),
-                            Theme::Dark => Some(WindowAppearance::Dark),
-                            Theme::System => None,
-                        });
-                        cx.refresh_windows();
+                        apply_theme(theme, cx);
                     }
                     self.m7 = m7::State::new(self.m7.store.clone());
                     self.start_core(cx);
@@ -1645,7 +1638,6 @@ fn run_app(
         Claim::Activated => return Ok(()),
         Claim::Owner(instance) => instance,
     };
-    tezbar_ui::tokens::set(&preview.theme).map_err(anyhow::Error::msg)?;
     let log: &'static tezbar_host::logging::FileLog = Box::leak(Box::new(
         tezbar_host::logging::FileLog::open(&log_dir, "tezbar").map_err(anyhow::Error::msg)?,
     ));
@@ -1660,11 +1652,11 @@ fn run_app(
         gpui_tokio::init_from_handle(cx, handle);
         cx.set_reduce_motion(native::reduce_motion());
         cx.set_global(RuntimeOwner(Some(runtime)));
-        cx.set_window_appearance(match preview.theme.as_str() {
-            "light" | "white" => Some(WindowAppearance::Light),
-            "dark" => Some(WindowAppearance::Dark),
-            _ => None,
-        });
+        apply_theme(match preview.theme.as_str() {
+            "light" | "white" => tezbar_ui_model::ui_state::Theme::White,
+            "dark" => tezbar_ui_model::ui_state::Theme::Dark,
+            _ => tezbar_ui_model::ui_state::Theme::System,
+        }, cx);
         cx.set_activation_policy(ActivationPolicy::Regular);
         cx.set_quit_mode(QuitMode::Explicit);
         tezbar_ui::text_input::bind_keys(cx);
@@ -1751,6 +1743,7 @@ fn run_app(
             .with_dev_mode(production.is_none())
             .with_legacy_data_dir(None);
         let core = CoreClient::new(tezbar_core::NativeCore::new(context).expect("isolated core"));
+        host.bind_status_assets(&core.0);
         let settings_store = crate::surfaces::settings::SettingsStore::new(Arc::new(core.clone()));
         let launcher_settings_store = settings_store.clone();
         let view_core = core.clone();
@@ -1797,12 +1790,7 @@ fn run_app(
             .expect("launcher window");
         if preview.theme == "system" {
             if let Ok(theme) = launcher.update(cx, |view, _, _| view.state.theme) {
-                let choice = match theme {
-                    tezbar_ui_model::ui_state::Theme::White => "white",
-                    tezbar_ui_model::ui_state::Theme::Dark => "dark",
-                    tezbar_ui_model::ui_state::Theme::System => "system",
-                };
-                let _ = tezbar_ui::tokens::set(choice);
+                apply_theme(theme, cx);
             }
         }
         let tray = (preview.allow_desktop_integration || preview.launcher_shortcut.is_some())
@@ -1937,6 +1925,17 @@ where
 #[cfg(test)]
 mod m11_deadline_tests {
     use super::*;
+    #[tokio::test]
+    async fn slow_preflight_returns_refused_without_destructive_callback() {
+        let committed = std::cell::Cell::new(false);
+        let destroyed = std::cell::Cell::new(false);
+        let prepare = async {
+            quit_budget::commit(Duration::from_millis(7900), &committed, || destroyed.set(true))
+        };
+        assert!(matches!(quit_preparation(prepare, std::future::pending::<()>(), &committed).await, QuitPreparation::Refused(_)));
+        assert!(!committed.get());
+        assert!(!destroyed.get());
+    }
     #[tokio::test]
     async fn review_m11_timeout_after_commit_cannot_resume_cancelled_runs() {
         let committed = std::cell::Cell::new(false);

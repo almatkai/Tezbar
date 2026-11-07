@@ -1,0 +1,12 @@
+{
+  "apps/tezbar/src/app.rs": "81aae9a80cfbb44fbf563130a5c9f98c6c41548d590699072b6d06623d8450de",
+  "apps/tezbar/src/app/m11.rs": "d50e3e3d33a8a4c78cafc9af6596744d600ed90282e90749b6f29786063b5759",
+  "scripts/native/build.mjs": "3c4336a55e231798b0f674f1e44711c98a99212db7df695ca0130f25822864e3",
+  "apps/tezbar/build.rs": "82f08466e92b30d8d88cc09f44848e507a3c0fd0c558412d03b048aa562c4557",
+  "crates/tezbar-update/src/native.rs": "aca30fe812da0249d0e363b41283dcc849866df140a83982707a85788b3379fb",
+  "apps/tezbar/src/legacy_state/mod.rs": "b82223153866f5f85931a7eab3484c378371029baa4899ea14ca5eccd0727622",
+  "apps/tezbar/src/legacy_state/tests.rs": "8c450d3d695799c22810fcfbe70eb84960c8121c8ccaf3ecf41cba71bba07947",
+  "scripts/native/provenance.test.mjs": "a33ed5edb16e44c6dc7652f09d1ace94722a1f81020fa8c9fcba91c672e86a78",
+  "docs/native-m11/integration/final-cutover-review.patch": "159dc2fb402b008214e8241f869f69eb24a006d4413c099ceb0aeea4088c94a2",
+  "docs/native-m11/integration/final-cutover-inventory.json": "6e96fedf7efaac2ab53ff3c851b45174ea35f451c604675bde4351899101d233"
+}

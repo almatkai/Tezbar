@@ -1,0 +1,59 @@
+   Compiling tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core)
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/native_tests.rs:617:9
+    |
+617 |     let mut http = server(vec![
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: methods `gemma_has` and `gemma_counts` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1322:12
+     |
+236  | impl Store {
+     | ---------- methods in this implementation
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+
+warning: `tezbar-core` (lib test) generated 5 warnings (run `cargo fix --lib -p tezbar-core --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 27.50s
+     Running unittests src/lib.rs (/tmp/tezbar-m9-c01-validation-Rffw07/target-msrv/debug/deps/tezbar_core-03b9794f25d11bef)
+
+running 4 tests
+test extension_worker::status_icon_tests::sdk_status_icon_refusal_is_honest_and_unchanged_declaration_is_coalesced ... ok
+test extension_worker::status_icon_tests::sdk_status_icon_same_session_a_b_a_rejects_first_late_a ... ok
+test extension_worker::status_icon_tests::sdk_status_icon_pending_empty_root_and_disposal_do_not_resurrect ... ok
+test extension_worker::status_icon_tests::sdk_status_icon_title_only_and_declared_pixels_cross_actual_test_host_policy ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 607 filtered out; finished in 0.01s
+

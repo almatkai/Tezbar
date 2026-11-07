@@ -1,0 +1,15 @@
+✔ native build arguments cannot request signing/channel/version or partial packaging (0.491167ms)
+✔ assembly refuses source changes (0.092709ms)
+✔ inventories reject traversal, collisions, missing provenance and symlink-shaped names (0.611833ms)
+✔ plist preserves production metadata and exact permission strings without LSUIElement (2.758292ms)
+✔ planning refuses installed app paths and invented identities before any I/O (0.283208ms)
+✔ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (72.908292ms)
+✔ stored themes update tokens and native appearance together; cold start retains preview override guard (753.70275ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 793.940167

@@ -216,6 +216,11 @@ pub fn bootstrap(
         && report.diagnostics == [(None, Diagnostic::Missing)]
     {
         let state = UiState::default();
+        std::fs::create_dir_all(
+            path.parent()
+                .ok_or("Native preferences need a parent directory")?,
+        )
+        .map_err(|_| "Could not create the native preferences directory")?;
         state.write_atomic_if_absent(path)?;
         return Ok(state);
     }

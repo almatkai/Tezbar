@@ -1,0 +1,87 @@
+{
+  "R3": {
+    "status": "IMPLEMENTED_ISOLATED_VALIDATORS_PASS_INTEGRATED_UNRUN",
+    "code": [
+      "apps/tezbar/src/app/production_launch.rs",
+      "apps/tezbar/src/app/production_launch/build_metadata.rs",
+      "apps/tezbar/src/app/production_launch/bundle_validation.rs",
+      "apps/tezbar/src/app/m11.rs",
+      "scripts/native/build-metadata.mjs",
+      "scripts/native/package-macos.mjs",
+      "apps/tezbar/src/main.rs"
+    ],
+    "executed": [
+      "PRE-PARENT-CORRECTION private toy Rust payload tests, 5 total with quit helpers: historical candidate-01 source identity only; current compiled-Metal admission fixture is UNRUN",
+      "optimized toy compilation: actual static record survives linking, dirty and bench feature changes are truthful; no product executable executed",
+      "Node unsealed private assembly binds copied executable metadata and refuses mismatched plan",
+      "POST-CORRECTION Node private assembly accepts matching runtimeShaders=false and rejects mismatched true plan; latest no-Cargo logs"
+    ],
+    "unrun": [
+      "real pinned-certificate staged install wrapper and old-to-native/native-to-native update rehearsal",
+      "shared tezbar-native test binary and check/build",
+      "compiled_metal_production_is_valid_and_manifest_must_match_actual_shader_mode Rust regression (new source after parent correction)",
+      "captureBuildMetadata on ACTUAL final dirty native executable, plus clean/bench variants where authorized; synthetic and toy proof does not satisfy this gate",
+      "public current_build_metadata / --version live linkage in actual native binary; existing --version field names/types must remain unchanged"
+    ]
+  },
+  "R5": {
+    "status": "IMPLEMENTED_ISOLATED_HELPER_PASS_NATIVE_ASYNC_FIXTURE_UNRUN",
+    "code": [
+      "apps/tezbar/src/app.rs",
+      "apps/tezbar/src/app/quit_budget.rs"
+    ],
+    "executed": [
+      "two actual quit_budget Rust tests in private toy crate: 7.9s/8s refusal without callback, exact 5s/5.001s reserve boundary"
+    ],
+    "unrun": [
+      "app::m11_deadline_tests::slow_preflight_returns_refused_without_destructive_callback",
+      "existing Refused/ForcedAfterCommit async tests in GPUI-linked native crate"
+    ]
+  },
+  "R6": {
+    "status": "NEW_REVIEW_ONLY_SUCCESSOR_NOT_APPLIED_NOT_RELEASE_READY",
+    "code": [
+      "docs/native-m11/integration/prepare-cutover.py",
+      "scripts/native/cutover.test.py"
+    ],
+    "executed": [
+      "LF-only Unicode/CRLF/no-final-newline private byte fixture",
+      "private scratch git apply --check and apply; every changed text byte equals generated output",
+      "282 original relocation authorities and all 52 separately pinned binary copies match previous inventory"
+    ],
+    "unrun": [
+      "post-apply typecheck/test",
+      "native signed release builder/feed pipeline implementation and reviewed dry run",
+      "all public/installer/signing/manual acceptance"
+    ]
+  },
+  "R7": {
+    "status": "IMPLEMENTED_RECORDING_ADAPTER_PASS_GPUI_NATIVE_APPEARANCE_UNRUN",
+    "code": [
+      "apps/tezbar/src/app.rs",
+      "apps/tezbar/src/app/m7.rs"
+    ],
+    "executed": [
+      "actual apply_theme source compiled against private recording adapters: White/Dark/System set matching tokens and appearance plus refresh; System clears appearance override",
+      "cold-start saved-theme call stays under existing preview.theme == system guard"
+    ],
+    "unrun": [
+      "GPUI/AppKit native appearance/Settings/recovery GUI rehearsal"
+    ]
+  },
+  "R8": {
+    "status": "IMPLEMENTED_REAL_TOY_CARGO_JSON_PASS_PRODUCT_BUILD_UNRUN",
+    "code": [
+      "scripts/native/build.mjs",
+      "scripts/native/cargo-artifact.mjs"
+    ],
+    "executed": [
+      "real private toy Cargo build/check with configured build.target triple and custom CARGO_TARGET_DIR, stale non-triple executable present and ignored",
+      "manifest/bin/library/test filtering; missing/ambiguous output refusal; rendered compile-error diagnostics captured",
+      "argument validation and unchanged source digest refusal"
+    ],
+    "unrun": [
+      "product native check/build/assembly and all signing"
+    ]
+  }
+}

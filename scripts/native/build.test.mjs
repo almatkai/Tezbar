@@ -7,10 +7,8 @@ test('native build arguments cannot request signing/channel/version or partial p
  assert.throws(()=>parseNative(['--local-preview']), /requires/)
 })
 
-import {binaryPath,assertSameSource} from './build.mjs'
-test('assembly uses Cargo target/profile and refuses source changes',()=>{
- assert.equal(binaryPath('/fixture/custom-target',{release:true},'darwin'),'/fixture/custom-target/release/tezbar')
- assert.equal(binaryPath('/fixture/custom-target',{release:false},'win32'),'/fixture/custom-target/debug/tezbar.exe')
+import {assertSameSource} from './build.mjs'
+test('assembly refuses source changes',()=>{
  const before={sourceCommit:'a'.repeat(40),sourceDirty:true,sourceDigest:'one'}
  assertSameSource(before,{...before})
  assert.throws(()=>assertSameSource(before,{...before,sourceDigest:'two'}),/changed during build/)

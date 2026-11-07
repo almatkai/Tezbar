@@ -843,6 +843,95 @@ mod shape_tests {
 #[cfg(test)]
 mod status_port_tests {
     use super::*;
+    #[test]
+    fn sdk_status_fallback_policy_is_portable_visible_and_distinguishes_refusal() {
+        for kind in [
+            SdkStatusIconFallback::Absent,
+            SdkStatusIconFallback::Unavailable,
+        ] {
+            assert!(
+                sdk_status_icon_fallback(false, kind).is_none(),
+                "macOS uses title/tooltip, not duplicate glyphs"
+            );
+            let (pixels, w, h) = sdk_status_icon_fallback(true, kind).unwrap();
+            assert_eq!((w, h), (16, 16));
+            assert_eq!(pixels.len(), 16 * 16 * 4);
+            assert!(pixels.chunks_exact(4).any(|p| p[3] == 255));
+            assert!(pixels.chunks_exact(4).any(|p| p[3] == 0));
+        }
+        let absent = sdk_status_icon_fallback(true, SdkStatusIconFallback::Absent).unwrap();
+        let refused = sdk_status_icon_fallback(true, SdkStatusIconFallback::Unavailable).unwrap();
+        assert_ne!(absent, refused);
+        assert_eq!(absent.0[(6 * 16 + 7) * 4 + 3], 0);
+        assert_eq!(refused.0[(6 * 16 + 7) * 4 + 3], 255);
+    }
+    #[test]
+    fn sdk_status_bitmap_never_decodes_wire_paths_and_native_v2_retains_bounded_relative_icons() {
+        let dir = tempfile::tempdir().unwrap();
+        let desktop = Arc::new(crate::host::TestHost {
+            allow_interaction: true,
+            ..Default::default()
+        });
+        let ctx = CoreContext::new(
+            crate::common::CorePaths {
+                data_dir: dir.path().into(),
+                config_dir: dir.path().into(),
+                resource_dir: dir.path().into(),
+                temp_dir: dir.path().into(),
+                home_dir: dir.path().into(),
+            },
+            Some(desktop.clone()),
+        );
+        let params = json!({"items":[],"icon":"/unowned/does-not-exist.png"});
+        let pixels = (vec![12, 34, 56, 255], 1, 1);
+        set_sdk_status_item(&ctx, "sdk", &params, Arc::new(|_| {}), Some(pixels.clone())).unwrap();
+        assert_eq!(
+            desktop.status_specs.lock().unwrap()["sdk"].icon,
+            Some(pixels)
+        );
+        assert!(set_sdk_status_item(
+            &ctx,
+            "sdk",
+            &params,
+            Arc::new(|_| {}),
+            Some((vec![], 129, 1))
+        )
+        .is_err());
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([12, 34, 56, 255]))
+            .save(dir.path().join("icon.png"))
+            .unwrap();
+        set_status_item(
+            &ctx,
+            "v2",
+            dir.path(),
+            &json!({"items":[],"icon":"icon.png"}),
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+        assert_eq!(
+            desktop.status_specs.lock().unwrap()["v2"].icon,
+            Some((vec![12, 34, 56, 255], 1, 1))
+        );
+        image::RgbaImage::from_pixel(513, 1, image::Rgba([0, 0, 0, 255]))
+            .save(dir.path().join("large.png"))
+            .unwrap();
+        assert!(set_status_item(
+            &ctx,
+            "v2",
+            dir.path(),
+            &json!({"items":[],"icon":"large.png"}),
+            Arc::new(|_| {})
+        )
+        .is_err());
+        assert!(set_status_item(
+            &ctx,
+            "v2",
+            dir.path(),
+            &json!({"items":[],"icon":"../outside.png"}),
+            Arc::new(|_| {})
+        )
+        .is_err());
+    }
     #[tokio::test]
     async fn scoped_status_item_limits_update_callbacks_and_cleanup_cross_host_port() {
         let dir = tempfile::tempdir().unwrap();
@@ -922,32 +1011,72 @@ pub(crate) fn set_status_item(
     params: &Value,
     callback: crate::host::StatusCallback,
 ) -> Result<(), String> {
-    set_status_item_impl(ctx, scoped, package, params, callback, false)
+    set_status_item_impl(ctx, scoped, Some(package), params, callback, None)
 }
-/// SDK menu roots always need a portable icon: Windows does not display a tray
-/// title. This built-in glyph has no file, network or SDK-path authority.
+#[derive(Clone, Copy)]
+pub(crate) enum SdkStatusIconFallback {
+    Absent,
+    Unavailable,
+}
+/// Windows does not display tray titles. A neutral circle marks an extension
+/// with no declared icon; the same circle plus an exclamation marks a refused
+/// declaration. These reuse the existing Circle/exclamation symbol semantics,
+/// not a fabricated replacement for the declared icon. Fixed 1 KiB RGBA only:
+/// no file, font, network, decoder or independent admission service.
+/// The explicit platform argument lets portable tests exercise both policies.
+pub(crate) fn sdk_status_icon_fallback(
+    windows: bool,
+    kind: SdkStatusIconFallback,
+) -> Option<crate::host::StatusIcon> {
+    if !windows {
+        return None;
+    }
+    let mut pixels = vec![0; 16 * 16 * 4];
+    for y in 0..16 {
+        for x in 0..16 {
+            let dx = x as f32 - 7.5;
+            let dy = y as f32 - 7.5;
+            let r2 = dx * dx + dy * dy;
+            let ring = (5.5 * 5.5..=7.5 * 7.5).contains(&r2);
+            let warning = matches!(kind, SdkStatusIconFallback::Unavailable)
+                && (7..=8).contains(&x)
+                && ((4..=8).contains(&y) || y == 11);
+            if ring || warning {
+                let i = (y * 16 + x) * 4;
+                pixels[i..i + 4].copy_from_slice(&[128, 128, 128, 255]);
+            }
+        }
+    }
+    Some((pixels, 16, 16))
+}
+/// SDK bitmaps arrive from the native host's bounded, canonical asset capability.
+/// SDK wire paths never enter the legacy native-V2 relative-path decoder.
 pub(crate) fn set_sdk_status_item(
     ctx: &CoreContext,
     scoped: &str,
     params: &Value,
     callback: crate::host::StatusCallback,
+    icon: Option<crate::host::StatusIcon>,
 ) -> Result<(), String> {
-    set_status_item_impl(
-        ctx,
-        scoped,
-        std::path::Path::new(""),
-        params,
-        callback,
-        true,
-    )
+    if let Some((pixels, w, h)) = &icon {
+        if *w == 0
+            || *h == 0
+            || *w > 128
+            || *h > 128
+            || pixels.len() != *w as usize * *h as usize * 4
+        {
+            return Err("Invalid SDK status bitmap".into());
+        }
+    }
+    set_status_item_impl(ctx, scoped, None, params, callback, icon)
 }
 fn set_status_item_impl(
     ctx: &CoreContext,
     scoped: &str,
-    package: &std::path::Path,
+    package: Option<&std::path::Path>,
     params: &Value,
     callback: crate::host::StatusCallback,
-    builtin: bool,
+    mut icon: Option<crate::host::StatusIcon>,
 ) -> Result<(), String> {
     let items = params["items"].as_array().ok_or("Tray items required")?;
     if items.len() > 128 {
@@ -987,29 +1116,33 @@ fn set_status_item_impl(
         Ok(())
     }
     validate(items, 0, &mut 0, &mut HashSet::new())?;
-    let mut icon = builtin.then(|| {
-        let mut rgba = vec![0; 16 * 16 * 4];
-        // Neutral grey has visible contrast on both light and dark system bars.
-        for y in 0..16 {
-            for x in 0..16 {
-                let dx = x as f32 - 7.5;
-                let dy = y as f32 - 7.5;
-                let r = (dx * dx + dy * dy).sqrt();
-                if r >= 3. && (r <= 5.8 || (r <= 7.3 && (8. * dy.atan2(dx)).cos() > 0.25)) {
-                    let i = (y * 16 + x) * 4;
-                    rgba[i..i + 4].copy_from_slice(&[128, 128, 128, 255]);
-                }
-            }
+    if let (Some(package), Some(path)) = (package, params["icon"].as_str()) {
+        use std::io::Read;
+        let root = std::fs::canonicalize(package).map_err(|e| e.to_string())?;
+        let path = std::fs::canonicalize(root.join(process_install::relative(path)?))
+            .map_err(|e| e.to_string())?;
+        if !path.starts_with(&root) {
+            return Err("Tray image is outside package".into());
         }
-        (rgba, 16, 16)
-    });
-    if let Some(path) = params["icon"].as_str() {
-        let path = package.join(process_install::relative(path)?);
-        let image = image::open(path).map_err(|e| e.to_string())?.into_rgba8();
-        let (w, h) = image.dimensions();
-        if w > 512 || h > 512 {
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|e| e.to_string())?
+            .take(crate::assets::ASSET_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        if bytes.len() > crate::assets::ASSET_BYTES {
             return Err("Tray image too large".into());
         }
+        let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+            .with_guessed_format()
+            .map_err(|e| e.to_string())?;
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(512);
+        limits.max_image_height = Some(512);
+        limits.max_alloc = Some(2 * 1024 * 1024);
+        reader.limits(limits);
+        let image = reader.decode().map_err(|e| e.to_string())?.into_rgba8();
+        let (w, h) = image.dimensions();
         icon = Some((image.into_raw(), w, h));
     }
     ctx.host.status_items().set(

@@ -14,9 +14,10 @@ fn main() -> anyhow::Result<()> {
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
     if args == ["--version"] {
+        let build = tezbar_native::app::production_launch::current_build_metadata();
         println!(
             "{}",
-            serde_json::json!({"version":env!("CARGO_PKG_VERSION"),"source":env!("TEZBAR_NATIVE_GIT_SHA"),"dirty":env!("TEZBAR_NATIVE_DIRTY"),"rustc_commit":env!("TEZBAR_NATIVE_RUSTC"),"preview":true,"gpui_rev":"c84af5b99cbc366d675064e52b23664a015b6e35","runtime_shaders":cfg!(feature="runtime-shaders"),"bench_control":cfg!(feature="bench-control")})
+            serde_json::json!({"version":build["version"],"source":build["sourceCommit"],"dirty":build["dirty"].as_bool().expect("embedded dirty flag").to_string(),"rustc_commit":env!("TEZBAR_NATIVE_RUSTC"),"preview":true,"gpui_rev":build["gpuiRev"],"runtime_shaders":build["runtimeShaders"],"bench_control":build["benchControl"]})
         );
         return Ok(());
     }

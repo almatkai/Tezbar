@@ -1,0 +1,16 @@
+{
+  "command": [
+    "node",
+    "--test",
+    "scripts/native/provenance.test.mjs"
+  ],
+  "cwd": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "exit": 0,
+  "seconds": 7.4679035,
+  "stable": true,
+  "files": 3193,
+  "before_aggregate": "d966d10d97c952333a0271594ac11740545a21a7deec6e396cc8c2f04fecb8c3",
+  "after_aggregate": "d966d10d97c952333a0271594ac11740545a21a7deec6e396cc8c2f04fecb8c3",
+  "log_sha256": "6832c6f69e2a0bb36b808d3fd0264cae473319d3a4c8877336cf5f9c44feaaf8",
+  "git_scope": "init/add/commit only disposable mkdtemp test repositories; no selected-worktree Git mutation"
+}

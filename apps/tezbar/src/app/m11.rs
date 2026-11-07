@@ -212,11 +212,13 @@ impl Owner {
             .as_ref()
             .ok_or("Installed executable unavailable".to_string())
             .and_then(|exe| install(artifact, exe));
-        if result.is_err() {
+        if let Err(error) = result {
             if let Some(client) = &self.updater {
                 let _ = client.send(Command::InstallFailed { generation });
             }
-            let _=self.log.write(b"Update install/relaunch failed; previous bundle preserved or rollback attempted.\n");
+            let _ = self
+                .log
+                .write(format!("Update install/relaunch failed: {error}\n").as_bytes());
             if let Some(executable) = &self.installed_executable {
                 let _ = std::process::Command::new(executable)
                     .args(std::env::args_os().skip(1))
@@ -237,7 +239,9 @@ fn install(
             .and_then(|p| p.parent())
             .ok_or("Invalid bundle")?;
         let parent = bundle.parent().ok_or("Invalid bundle parent")?;
+        let version = artifact.version().to_string();
         let staged = artifact.stage_macos(parent)?;
+        production_launch::verify_staged(&staged.bundle, &version)?;
         let installed = staged.install_over(bundle)?;
         let args: Vec<_> = std::env::args_os().skip(1).collect();
         if std::process::Command::new(executable)

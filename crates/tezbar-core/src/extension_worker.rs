@@ -1,10 +1,10 @@
 //! Demand-launched JavaScript compatibility process. Never dispatch core IPC here.
 use super::common::{CoreContext, CoreResult};
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -96,8 +96,11 @@ pub struct ExtensionWorker {
     process: Arc<tokio::sync::Mutex<Option<Process>>>,
     launch: Option<WorkerLaunch>,
     sessions: Arc<Mutex<HashMap<String, (String, String, String)>>>,
-    status_signatures: Arc<Mutex<HashMap<String, Option<u64>>>>,
-    status_refreshing: Arc<Mutex<HashSet<String>>>,
+    status_signatures: Arc<Mutex<HashMap<String, Option<(u64, u64)>>>>,
+    status_revision: Arc<AtomicU64>,
+    // One refresh owner per session; true coalesces invalidations received while
+    // that owner's bounded icon resolution is awaiting admission or decoding.
+    status_refreshing: Arc<Mutex<HashMap<String, bool>>>,
     in_flight_runs: Arc<Mutex<HashMap<String, RunGrant>>>,
 }
 
@@ -109,6 +112,7 @@ impl ExtensionWorker {
             launch: None,
             sessions: Default::default(),
             status_signatures: Default::default(),
+            status_revision: Default::default(),
             status_refreshing: Default::default(),
             in_flight_runs: Default::default(),
         }
@@ -275,7 +279,7 @@ impl ExtensionWorker {
         if channel == "extension:dispose-session" {
             self.remove_sdk_session(request_args[0]["sessionId"].as_str().unwrap_or(""));
         }
-        self.sync_sdk_status(&response)?;
+        self.sync_sdk_status(&response).await?;
         Ok(response)
     }
 
@@ -558,40 +562,82 @@ impl ExtensionWorker {
                                     .as_str()
                                     .unwrap_or("")
                                     .to_string();
-                                if host_requests.len() < 128
-                                    && status_signatures
-                                        .lock()
-                                        .map(|s| s.contains_key(&id))
-                                        .unwrap_or(false)
+                                let tracked = status_signatures
+                                    .lock()
+                                    .map(|mut s| {
+                                        if let Some(signature) = s.get_mut(&id) {
+                                            // Invalidate any bitmap currently awaiting the host,
+                                            // even if another refresh already owns this session.
+                                            *signature = None;
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                    .unwrap_or(false);
+                                let start = tracked
                                     && status_refreshing
                                         .lock()
-                                        .map(|mut s| s.insert(id.clone()))
-                                        .unwrap_or(false)
-                                {
+                                        .map(|mut s| {
+                                            if let Some(dirty) = s.get_mut(&id) {
+                                                *dirty = true;
+                                                false
+                                            } else if host_requests.len() < 128 {
+                                                s.insert(id.clone(), false);
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        })
+                                        .unwrap_or(false);
+                                if start {
                                     let ctx = ctx.clone();
                                     let pending = status_refreshing.clone();
                                     host_requests.spawn(async move {
                                         struct Release {
-                                            pending: Arc<Mutex<HashSet<String>>>,
-                                            id: String,
+                                            pending: Arc<Mutex<HashMap<String, bool>>>,
+                                            id: Option<String>,
                                         }
                                         impl Drop for Release {
                                             fn drop(&mut self) {
-                                                if let Ok(mut pending) = self.pending.lock() {
-                                                    pending.remove(&self.id);
+                                                if let (Some(id), Ok(mut pending)) =
+                                                    (&self.id, self.pending.lock())
+                                                {
+                                                    pending.remove(id);
                                                 }
                                             }
                                         }
-                                        let _lease = Release {
+                                        let mut lease = Release {
                                             pending,
-                                            id: id.clone(),
+                                            id: Some(id.clone()),
                                         };
-                                        let _ = ctx
-                                            .request(
-                                                "core:extension-status-refresh",
-                                                vec![json!({"sessionId":id})],
-                                            )
-                                            .await;
+                                        loop {
+                                            let _ = ctx
+                                                .request(
+                                                    "core:extension-status-refresh",
+                                                    vec![json!({"sessionId":id})],
+                                                )
+                                                .await;
+                                            let again = lease
+                                                .pending
+                                                .lock()
+                                                .map(|mut pending| {
+                                                    if pending.get(&id) == Some(&true) {
+                                                        pending.insert(id.clone(), false);
+                                                        true
+                                                    } else {
+                                                        pending.remove(&id);
+                                                        false
+                                                    }
+                                                })
+                                                .unwrap_or(false);
+                                            if !again {
+                                                // Do not remove a new owner admitted after
+                                                // the previous map entry was released.
+                                                lease.id = None;
+                                                break;
+                                            }
+                                        }
                                     });
                                 }
                             }
@@ -753,141 +799,211 @@ impl ExtensionWorker {
             }
         }
     }
-    fn sync_sdk_status(&self, reply: &Value) -> Result<(), String> {
-        if !self.ctx.host.sdk_status_items() {
-            return Ok(());
-        }
-        let Some(id) = reply["sessionId"].as_str() else {
-            return Ok(());
-        };
-        let Some((extension, command, scope)) = self
-            .sessions
-            .lock()
-            .map_err(|_| "SDK resources unavailable")?
-            .get(id)
-            .cloned()
-        else {
-            return Ok(());
-        };
-        if reply["root"]["type"] != "MenuBarExtra" {
-            // Retain background ownership while the extension temporarily returns
-            // no status item. Later worker invalidations must still refresh it.
-            if let Some(signature) = self
-                .status_signatures
+    fn sync_sdk_status<'a>(
+        &'a self,
+        reply: &'a Value,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
+        // Erase this future at the recursive request -> status callback boundary,
+        // so Tokio can establish Send without an opaque-future trait cycle.
+        Box::pin(async move {
+            if !self.ctx.host.sdk_status_items() {
+                return Ok(());
+            }
+            let Some(id) = reply["sessionId"].as_str() else {
+                return Ok(());
+            };
+            let Some((extension, command, scope)) = self
+                .sessions
                 .lock()
-                .map_err(|_| "Status owner unavailable")?
-                .get_mut(id)
-            {
-                *signature = None;
-            }
-            let _ = self.ctx.host.status_items().remove(&scope);
-            return Ok(());
-        }
-        let root = &reply["root"];
-        fn items(node: &Value, out: &mut Vec<Value>, counter: &mut usize) {
-            *counter += 1;
-            let group = format!("group-{}", counter);
-            match node["type"].as_str() {
-                Some("MenuBarExtra.Item") => {
-                    if let Some(action) = node["props"]["actionIds"][0].as_str() {
-                        out.push(json!({"id":action,"title":node["props"]["title"],"enabled":node["props"]["isEnabled"].as_bool().unwrap_or(true),"checked":node["props"]["isSelected"]}));
-                    } else if let Some(title) = node["props"]["title"].as_str() {
-                        out.push(json!({"id":group,"title":title,"enabled":false}));
-                    }
-                }
-                Some("MenuBarExtra.Submenu") => {
-                    let mut nested = Vec::new();
-                    if let Some(children) = node["children"].as_array() {
-                        for child in children {
-                            items(child, &mut nested, counter);
-                        }
-                    }
-                    out.push(json!({"id":group,"kind":"submenu","title":node["props"]["title"],"items":nested}));
-                    return;
-                }
-                Some("MenuBarExtra.Section") => {
-                    if let Some(title) = node["props"]["title"].as_str() {
-                        out.push(
-                            json!({"id":group,"kind":"section","title":title,"enabled":false}),
-                        );
-                    }
-                }
-                Some("MenuBarExtra.Separator") => {
-                    out.push(json!({"id":group,"kind":"separator","title":""}));
-                    return;
-                }
-                _ => {}
-            }
-            if let Some(children) = node["children"].as_array() {
-                for child in children {
-                    items(child, out, counter);
-                }
-            }
-        }
-        let mut menu = Vec::new();
-        items(root, &mut menu, &mut 0);
-        let this = self.clone();
-        let session = id.to_string();
-        let runtime = tokio::runtime::Handle::current();
-        let callback = Arc::new(move |action: String| {
-            let this = this.clone();
-            let session = session.clone();
-            runtime.spawn(async move {
-                // Reject callbacks after dispose/disable/EOF, including queued OS clicks.
-                if !this
+                .map_err(|_| "SDK resources unavailable")?
+                .get(id)
+                .cloned()
+            else {
+                return Ok(());
+            };
+            if reply["root"]["type"] != "MenuBarExtra" {
+                // Retain background ownership while the extension temporarily returns
+                // no status item. Later worker invalidations must still refresh it.
+                let sessions = self
                     .sessions
                     .lock()
-                    .map(|s| s.contains_key(&session))
-                    .unwrap_or(false)
+                    .map_err(|_| "SDK resources unavailable")?;
+                if sessions.get(id) != Some(&(extension, command, scope.clone())) {
+                    return Ok(());
+                }
+                if let Some(signature) = self
+                    .status_signatures
+                    .lock()
+                    .map_err(|_| "Status owner unavailable")?
+                    .get_mut(id)
                 {
-                    return;
+                    *signature = None;
                 }
-                let _ = Box::pin(this.request(
-                    "core:extension-status-action",
-                    vec![json!({"sessionId":session,"actionId":action})],
-                ))
-                .await;
-            });
-        });
-        let title = root["props"]["title"]
-            .as_str()
-            .filter(|s| !s.trim().is_empty())
-            .map(str::to_owned)
-            .unwrap_or_else(|| {
-                if root["props"]["icon"].is_null() {
-                    command.replace(['-', '_'], " ")
-                } else {
-                    String::new()
+                let _ = self.ctx.host.status_items().remove(&scope);
+                return Ok(());
+            }
+            let root = &reply["root"];
+            fn items(node: &Value, out: &mut Vec<Value>, counter: &mut usize) {
+                *counter += 1;
+                let group = format!("group-{}", counter);
+                match node["type"].as_str() {
+                    Some("MenuBarExtra.Item") => {
+                        if let Some(action) = node["props"]["actionIds"][0].as_str() {
+                            out.push(json!({"id":action,"title":node["props"]["title"],"enabled":node["props"]["isEnabled"].as_bool().unwrap_or(true),"checked":node["props"]["isSelected"]}));
+                        } else if let Some(title) = node["props"]["title"].as_str() {
+                            out.push(json!({"id":group,"title":title,"enabled":false}));
+                        }
+                    }
+                    Some("MenuBarExtra.Submenu") => {
+                        let mut nested = Vec::new();
+                        if let Some(children) = node["children"].as_array() {
+                            for child in children {
+                                items(child, &mut nested, counter);
+                            }
+                        }
+                        out.push(json!({"id":group,"kind":"submenu","title":node["props"]["title"],"items":nested}));
+                        return;
+                    }
+                    Some("MenuBarExtra.Section") => {
+                        if let Some(title) = node["props"]["title"].as_str() {
+                            out.push(
+                                json!({"id":group,"kind":"section","title":title,"enabled":false}),
+                            );
+                        }
+                    }
+                    Some("MenuBarExtra.Separator") => {
+                        out.push(json!({"id":group,"kind":"separator","title":""}));
+                        return;
+                    }
+                    _ => {}
                 }
+                if let Some(children) = node["children"].as_array() {
+                    for child in children {
+                        items(child, out, counter);
+                    }
+                }
+            }
+            let mut menu = Vec::new();
+            items(root, &mut menu, &mut 0);
+            let this = self.clone();
+            let session = id.to_string();
+            let runtime = tokio::runtime::Handle::current();
+            let callback = Arc::new(move |action: String| {
+                let this = this.clone();
+                let session = session.clone();
+                runtime.spawn(async move {
+                    // Reject callbacks after dispose/disable/EOF, including queued OS clicks.
+                    if !this
+                        .sessions
+                        .lock()
+                        .map(|s| s.contains_key(&session))
+                        .unwrap_or(false)
+                    {
+                        return;
+                    }
+                    let _ = Box::pin(this.request(
+                        "core:extension-status-action",
+                        vec![json!({"sessionId":session,"actionId":action})],
+                    ))
+                    .await;
+                });
             });
-        let tooltip = root["props"]["tooltip"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned)
-            .unwrap_or_else(|| command.replace(['-', '_'], " "));
-        let params = json!({"items":menu,"title":title,"tooltip":tooltip});
-        use std::hash::{Hash, Hasher};
-        let mut hash = std::collections::hash_map::DefaultHasher::new();
-        params.to_string().hash(&mut hash);
-        let signature = hash.finish();
-        if self
-            .status_signatures
-            .lock()
-            .map_err(|_| "Status owner unavailable")?
-            .get(id)
-            == Some(&Some(signature))
-        {
-            return Ok(());
-        }
-        // No SDK-provided icon paths are admitted into tray decode. Runtime images
-        // retain canonical registry authority through the shared asset service.
-        let _ = extension;
-        crate::extensions::process_host::set_sdk_status_item(&self.ctx, &scope, &params, callback)?;
-        self.status_signatures
-            .lock()
-            .map_err(|_| "Status owner unavailable")?
-            .insert(id.into(), Some(signature));
-        Ok(())
+            let title = root["props"]["title"]
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+                .map(str::to_owned)
+                .unwrap_or_else(|| {
+                    if root["props"]["icon"].is_null() {
+                        command.replace(['-', '_'], " ")
+                    } else {
+                        String::new()
+                    }
+                });
+            let tooltip = root["props"]["tooltip"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .unwrap_or_else(|| command.replace(['-', '_'], " "));
+            let mut params =
+                json!({"items":menu,"title":title,"tooltip":tooltip,"icon":root["props"]["icon"]});
+            use std::hash::{Hash, Hasher};
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            params.to_string().hash(&mut hash);
+            let signature = hash.finish();
+            let revision = {
+                let sessions = self
+                    .sessions
+                    .lock()
+                    .map_err(|_| "SDK resources unavailable")?;
+                if sessions.get(id) != Some(&(extension.clone(), command.clone(), scope.clone())) {
+                    return Ok(());
+                }
+                let mut signatures = self
+                    .status_signatures
+                    .lock()
+                    .map_err(|_| "Status owner unavailable")?;
+                if signatures.get(id).and_then(|s| *s).map(|s| s.0) == Some(signature) {
+                    return Ok(());
+                }
+                let revision = self
+                    .status_revision
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |r| r.checked_add(1))
+                    .map_err(|_| "Status revision exhausted")?;
+                signatures.insert(id.into(), Some((signature, revision)));
+                revision
+            };
+            use crate::extensions::process_host::{
+                sdk_status_icon_fallback, SdkStatusIconFallback,
+            };
+            let windows = cfg!(target_os = "windows");
+            let icon = if root["props"]["icon"].is_null() {
+                if windows {
+                    params["tooltip"] = json!(format!("{tooltip} (no icon declared)"));
+                }
+                sdk_status_icon_fallback(windows, SdkStatusIconFallback::Absent)
+            } else {
+                match self
+                    .ctx
+                    .host
+                    .resolve_sdk_status_icon(extension.clone(), root["props"]["icon"].clone())
+                    .await
+                {
+                    Ok(icon) => Some(icon),
+                    Err(error) => {
+                        // An unsupported/refused source is not a gear. Keep honest
+                        // text on macOS and a visible warning marker on Windows.
+                        log::warn!("SDK status icon unavailable: {error}");
+                        if title.is_empty() {
+                            params["title"] = json!(command.replace(['-', '_'], " "));
+                        }
+                        params["tooltip"] = json!(format!("{tooltip} (icon unavailable)"));
+                        sdk_status_icon_fallback(windows, SdkStatusIconFallback::Unavailable)
+                    }
+                }
+            };
+            // Serialize final publication with disposal and newer revisions. In
+            // particular A -> B -> A must not admit the first A's late completion.
+            let sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| "SDK resources unavailable")?;
+            let mut signatures = self
+                .status_signatures
+                .lock()
+                .map_err(|_| "Status owner unavailable")?;
+            if sessions.get(id) != Some(&(extension, command, scope.clone()))
+                || signatures.get(id) != Some(&Some((signature, revision)))
+            {
+                return Ok(());
+            }
+            if let Err(error) = crate::extensions::process_host::set_sdk_status_item(
+                &self.ctx, &scope, &params, callback, icon,
+            ) {
+                signatures.insert(id.into(), None);
+                return Err(error);
+            }
+            Ok(())
+        })
     }
     pub async fn shutdown(&self) {
         if let Ok(mut signatures) = self.status_signatures.lock() {
@@ -1011,6 +1127,10 @@ mod tests {
 #[cfg(test)]
 #[path = "extension_worker_tests.rs"]
 mod integration_tests;
+
+#[cfg(test)]
+#[path = "extension_worker_status_icon_tests.rs"]
+mod status_icon_tests;
 
 #[cfg(test)]
 mod launch_path_tests {

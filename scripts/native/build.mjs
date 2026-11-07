@@ -5,6 +5,8 @@ import { resolve, dirname, join, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
+import { runCargo } from './cargo-artifact.mjs'
+import { captureBuildMetadata } from './build-metadata.mjs'
 import { inventoryResources, planMacos, assembleMacos, GPUI_REV } from './package-macos.mjs'
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..')
 export function parseNative(args) {
@@ -21,11 +23,10 @@ export function parseNative(args) {
   if(options.localPreview && (!options.resources || !options.output || options.check)) throw Error('Preview assembly requires --resources and --output, and cannot use --check')
   return options
 }
-export function binaryPath(target, options, platform=process.platform) {
-  return join(target, options.release ? 'release' : 'debug', platform==='win32' ? 'tezbar.exe' : 'tezbar')
-}
 export function sourceSnapshot(directory=root) {
-  const git=args=>{const r=spawnSync('git',args,{cwd:directory,encoding:'utf8'});if(r.status!==0) throw Error('Cannot attest native source: Git unavailable');return r.stdout}
+  const git=args=>{const r=spawnSync('git',['--no-optional-locks',...args],{cwd:directory,encoding:'utf8'});if(r.status!==0) throw Error('Cannot attest native source: Git unavailable');return r.stdout}
+  if(realpathSync(git(['rev-parse','--show-toplevel']).trim())!==realpathSync(directory)) throw Error('Cannot attest native source: workspace root differs from Git root')
+  git(['ls-files','--error-unmatch','--','apps/tezbar/build.rs'])
   const sourceCommit=git(['rev-parse','HEAD']).trim()
   if(!/^[0-9a-f]{40}$/.test(sourceCommit)) throw Error('Invalid native source commit')
   const sourceDirty=Boolean(git(['status','--porcelain','--untracked-files=all']).trim())
@@ -53,28 +54,23 @@ export async function nativeBuild(args) {
     if(!parent.startsWith(temp+'/') || existsSync(options.output)) throw Error('Use a fresh child of OS temp for local preview output')
   }
   const before=sourceSnapshot()
-  const command=['+1.98.1',options.check?'check':'build','--locked','--offline','-j2','-p','tezbar-native','--features','runtime-shaders']
+  const command=['+1.98.1',options.check?'check':'build','--locked','--offline','-j2','-p','tezbar-native','--features','runtime-shaders','--message-format=json']
   if(options.release) command.push('--release')
-  const result=spawnSync('cargo',command,{cwd:root,stdio:'inherit'})
-  if(result.status!==0) throw result.error??Error(`Native Cargo exit ${result.status}`)
+  const executable=await runCargo('cargo',command,{cwd:root,manifest:join(root,'apps/tezbar/Cargo.toml'),check:options.check})
   assertSameSource(before,sourceSnapshot())
   if(!options.resources) return
   const {sourceCommit,sourceDirty}=before
-  const metadata=spawnSync('cargo',['+1.98.1','metadata','--locked','--offline','--format-version','1','--no-deps'],{cwd:root,encoding:'utf8'})
-  if(metadata.status!==0) throw Error('Cannot locate Cargo target directory')
-  const executable=binaryPath(JSON.parse(metadata.stdout).target_directory,options)
-  const observedVersion=spawnSync(executable,['--version'],{cwd:root,encoding:'utf8'})
-  if(observedVersion.status!==0) throw Error('Cannot attest built native executable')
-  const embedded=JSON.parse(observedVersion.stdout)
-  if(embedded.source!==sourceCommit || String(embedded.dirty)!==String(sourceDirty) || embedded.bench_control || embedded.gpui_rev!==GPUI_REV) throw Error('Built native executable provenance does not match source')
+  const {metadata:embedded}=await captureBuildMetadata(executable)
+  if(embedded.sourceCommit!==sourceCommit || embedded.dirty!==sourceDirty || embedded.benchControl || !embedded.runtimeShaders || embedded.gpuiRev!==GPUI_REV || embedded.rustVersion!=='1.98.1') throw Error('Built native executable provenance does not match source')
   const files=await inventoryResources(options.resources)
   const [binary]=await inventoryResources(dirname(executable),[[basename(executable),'tezbar']])
   const policy=JSON.parse(readFileSync(join(root,'src-tauri/macos-signing.json')))
   const catalog=JSON.parse(readFileSync(join(root,'src-tauri/runtime/embedding-macos-arm64.json')))
   const version=JSON.parse(readFileSync(join(root,'package.json'))).version
+  if(embedded.version!==version) throw Error('Built native version differs from package version')
   // Existing version only. Channel is derived for policy validation, never promoted or published.
   const channel=version.includes('-beta.')?'beta':version.includes('-alpha.')?'alpha':'stable'
-  const plan=planMacos({version,channel,localPreview:true,stage:options.output,osTemp:realpathSync(tmpdir()),executable:binary,files,policy,catalog,payload:{bytes:catalog.archiveBytes,sha256:catalog.archiveSha256},sourceCommit,sourceDirty,gpuiRev:GPUI_REV,rustVersion:'1.98.1',benchControl:false})
+  const plan=planMacos({version,channel,localPreview:true,stage:options.output,osTemp:realpathSync(tmpdir()),executable:binary,files,policy,catalog,payload:{bytes:catalog.archiveBytes,sha256:catalog.archiveSha256},sourceCommit,sourceDirty,gpuiRev:GPUI_REV,rustVersion:'1.98.1',benchControl:false,runtimeShaders:embedded.runtimeShaders})
   assertSameSource(before,sourceSnapshot())
   const receipt=await assembleMacos(plan,{template:readFileSync(join(root,'packaging/macos/Info.plist.in'),'utf8'),permissions:readFileSync(join(root,'crates/tezbar-core/src/system/macos-permissions.plist'),'utf8'),osTemp:realpathSync(tmpdir())})
   const signed=spawnSync('/usr/bin/codesign',['--force','--sign','-',plan.bundle],{stdio:'inherit'})

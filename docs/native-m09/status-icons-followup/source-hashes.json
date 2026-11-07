@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "state": "EXECUTED_SUBSET_PRIVATE_GIT_FIXTURE_PERMISSION_HELD",
+  "base_pin": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "owned_source_files": {
+    "crates/tezbar-core/src/host.rs": "86b006ecebf783422d600b82df94258432f8a8e644d122f10b20bd186f21f803",
+    "crates/tezbar-core/src/extension_worker.rs": "03d8bfc52f29a253ba7afb5ce21509ed3716b59b01f55e3855b293ebc384b184",
+    "crates/tezbar-core/src/extension_worker_status_icon_tests.rs": "93b7f0b14d3599754b471d2557e050abc9d93f3800c917d31092133cfb9093bb",
+    "crates/tezbar-core/src/extensions/process_host.rs": "7c56c5dbfeb6195284bae2211358b46e5f6a1cbcad956bc53ee66b5564047032",
+    "apps/tezbar/src/host_adapter.rs": "66971db55e61ce56fc81c6d5f974869b7c4b5212603e333f372a55c2b434556f",
+    "apps/tezbar/src/asset_transport.rs": "9dc1f6b8cf6683bd502223d0d745eaaf2ce58ccacdbc7f1d384d81c237d6c025",
+    "apps/tezbar/src/asset_transport/status_icons.rs": "df1f4a051f58d7e4b38e7e67a4c10da653e289a45dd6b27f8f367a01c6022c15",
+    "apps/tezbar/src/asset_transport/status_icons_tests.rs": "83aa4345639e66a8c2e7feb3089a76cae491fefb09e4189ff9de60e944d080af",
+    "tests/fixtures/extensions/native_harness.rs": "e97982ce08ebb3867d47dd510aac5f7cad79d79d9aea11fe49b6966391288810",
+    "tests/fixtures/extensions/src/probe-status-icons.tsx": "fd9781a20e2045fc97983d7c881260d96e1496422295793412e798a180ec6ead"
+  },
+  "owned_source_aggregate_sha256": "88f64c2c1a5406532759f4b7497b43d72e259f85a8823a06379d3255f4f63067",
+  "aggregate_algorithm": "SHA-256 of Python json.dumps(owned_source_files, sort_keys=True).encode()",
+  "shared_app_binding": {
+    "path": "apps/tezbar/src/app.rs",
+    "owned_text": "        host.bind_status_assets(&core.0);\n",
+    "owned_text_sha256": "f6c7c93ee44922c15e416a63fac24ef896416feadb1170863adb1330d61063a2",
+    "occurrences": 1,
+    "whole_file_observed_sha256": "c8e43c0cd2c02db58b0255320e82981014285ea49cc534a342f032e46edb1b09",
+    "whole_file_hash_is_not_an_ownership_or_stability_claim": true
+  },
+  "approved_initial_owned_aggregate": "e6974d9e84629100861c06d06fa4f1395430a2a08a9da14a9c065d9cddb29f80",
+  "validated_whole_tree_aggregate_before_postgate_docs": "afcafe604cce6011cbad4927db75dc7ee3b19a1b9d3721cb8361855192b454cf",
+  "m11_compiled_aggregate_unchanged": "4c0cd6d4aead5d86de824f735c7013f34f2d421e9d3ef4fb493325cbf387f938",
+  "compiled_input_manifest": "docs/native-m11/recheck-followup/validation/20261107-m911/compiled-inputs.json",
+  "full_validated_manifest": "docs/native-m11/recheck-followup/validation/20261107-m911/validated-tree.json",
+  "unrun_checkpoint": "checkpoints/unrun-01/source-hashes.json",
+  "postgate_documentation_not_part_of_compiled_gate_input": true
+}

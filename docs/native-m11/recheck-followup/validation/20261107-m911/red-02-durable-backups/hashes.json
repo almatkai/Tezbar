@@ -1,0 +1,10 @@
+{
+  "crates/tezbar-core/src/extension_worker.rs": {
+    "implementation": "8867dddbce7512a7f2c03ffdc100fab434578514406915907a76e5bd74719e33",
+    "baseline_pin": "a76dad693d217de7e94a8db286e6890787f5e585baa6510acc52dd388817cbdc"
+  },
+  "crates/tezbar-core/src/extensions/process_host.rs": {
+    "implementation": "7c56c5dbfeb6195284bae2211358b46e5f6a1cbcad956bc53ee66b5564047032",
+    "baseline_pin": "6eb2c729f0a702439611dbe733d374e5f8a6a4f03a5a635776f9482bf1700c1f"
+  }
+}
