@@ -123,6 +123,9 @@ pub struct ChatView {
     activations: std::collections::VecDeque<(Boot, String)>,
     owners: BTreeSet<String>,
     disposed: bool,
+    quit_preparing: bool,
+    decode_jobs: BTreeSet<u64>,
+    decode_slots: Arc<tokio::sync::Semaphore>,
     thumbnail_attempts: BTreeSet<String>,
     init_generation: u64,
     read_generation: u64,
@@ -309,6 +312,9 @@ impl ChatView {
             activations: Default::default(),
             owners: BTreeSet::new(),
             disposed: false,
+            quit_preparing: false,
+            decode_jobs: BTreeSet::new(),
+            decode_slots: Arc::new(tokio::sync::Semaphore::new(4)),
             thumbnail_attempts: BTreeSet::new(),
             init_generation: 0,
             read_generation: 0,
@@ -371,9 +377,41 @@ impl ChatView {
         self.footer.as_ref().map(|v| v.entity_id())
     }
     fn emit(&mut self, e: ChatEffect, cx: &mut Context<Self>) {
-        if self.effects.len() < 64 {
-            self.effects.push((self.mount, e.clone()));
+        if matches!(e, ChatEffect::Background(_)) {
+            self.effects
+                .retain(|(_, e)| !matches!(e, ChatEffect::Background(_)));
         }
+        if self.effects.len() >= 64 {
+            // Complete refused tickets synchronously. Never emit an unqueued effect.
+            match e {
+                ChatEffect::ChooseImages { ticket } | ChatEffect::ClipboardImage { ticket } => {
+                    self.attachment_tickets.remove(&ticket);
+                    self.error = Some("Native action queue is busy. Retry.".into());
+                }
+                ChatEffect::DocumentImage { ticket, .. } => {
+                    let view = cx.entity().downgrade();
+                    let window = self.window;
+                    cx.defer(move |cx| {
+                        let _ = window.update(cx, |_, w, cx| {
+                            let _ = view.update(cx, |v, cx| {
+                                v.document_image_result(
+                                    ticket,
+                                    Err("Image queue is busy. Retry image previews.".into()),
+                                    w,
+                                    cx,
+                                )
+                            });
+                        });
+                    });
+                }
+                _ => {
+                    self.error = Some("Native action queue is busy. Retry.".into());
+                }
+            }
+            cx.notify();
+            return;
+        }
+        self.effects.push((self.mount, e.clone()));
         cx.emit(e);
         cx.notify();
     }
@@ -384,8 +422,8 @@ impl ChatView {
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
-        if self.disposed {
-            return Err("Chat has been disposed".into());
+        if self.disposed || self.quit_preparing {
+            return Err("Chat is preparing to quit".into());
         }
         if let Some((previous, _)) = self.activations.iter().find(|(_, n)| n == &nonce) {
             return if previous == &boot {
@@ -416,6 +454,7 @@ impl ChatView {
         self.documents.clear();
         self.document_images.clear();
         self.thumbnail_attempts.clear();
+        self.cancel_decode_waiters();
         self.images.release(w, cx);
         self.prune();
         self.init_generation += 1;
@@ -468,6 +507,14 @@ impl ChatView {
         cx.notify();
         Ok(())
     }
+    pub(crate) fn set_preview_admission(&mut self, slots: Arc<tokio::sync::Semaphore>) {
+        self.decode_slots = slots;
+    }
+    fn cancel_decode_waiters(&mut self) {
+        for job in std::mem::take(&mut self.decode_jobs) {
+            self.jobs.remove(&job);
+        }
+    }
     pub fn set_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
         if self.disposed || self.controller.visible == visible {
             return;
@@ -481,6 +528,7 @@ impl ChatView {
             self.documents.clear();
             self.document_images.clear();
             self.thumbnail_attempts.clear();
+            self.cancel_decode_waiters();
             self.images.release_all_windows(cx);
             self.frame = None;
             self.prompt = None;
@@ -546,7 +594,7 @@ impl ChatView {
             .unwrap_or_default()
     }
     pub(crate) fn action(&mut self, a: Action, w: &mut Window, cx: &mut Context<Self>) {
-        if self.disposed {
+        if self.disposed || self.quit_preparing {
             return;
         }
         if self.clear_inflight
@@ -630,6 +678,7 @@ impl ChatView {
                 Action::RetryImages => {
                     self.thumbnail_attempts.clear();
                     self.document_images.clear();
+                    self.cancel_decode_waiters();
                     self.images.release(w, cx);
                     for document in self.documents.values() {
                         document.view.update(cx, |v, cx| v.reset_images(cx));
@@ -914,7 +963,7 @@ impl ChatView {
         Ok(true)
     }
     pub(crate) fn retry_quit_persistence(&mut self, w: &mut Window, cx: &mut Context<Self>) {
-        if !self.disposed || !self.mutation_jobs.is_empty() {
+        if !self.mutation_jobs.is_empty() {
             return;
         }
         let mut effects = Vec::new();
@@ -922,6 +971,18 @@ impl ChatView {
             effects.extend(self.controller.retry_persistence(&id));
         }
         self.execute(effects, w, cx);
+        cx.notify();
+    }
+    pub(crate) fn prepare_quit(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        self.quit_preparing = true;
+        self.retry_quit_persistence(w, cx);
+    }
+    pub(crate) fn revive_after_quit(&mut self, cx: &mut Context<Self>) {
+        self.quit_preparing = false;
+        if self.disposed {
+            self.disposed = false;
+            self.owner = self.store.owner();
+        }
         cx.notify();
     }
     pub fn dispose(&mut self, w: &mut Window, cx: &mut Context<Self>) {
@@ -939,9 +1000,9 @@ impl ChatView {
         self.document_images.clear();
         let e = self.controller.unmount();
         self.execute(e, w, cx);
+        self.cancel_decode_waiters();
         self.images.release(w, cx);
         self.documents.clear();
-        self.clock = None;
         self.frame = None;
         self.store.retire(self.owner);
     }

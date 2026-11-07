@@ -1,0 +1,52 @@
+{
+  "protected_inputs_compared": 28,
+  "protected_delta_is_exact_parent_nb1_exception": [
+    "apps/tezbar/src/surfaces/onboarding.rs",
+    "apps/tezbar/src/surfaces/settings/store.rs",
+    "apps/tezbar/src/surfaces/settings/tests.rs"
+  ],
+  "root_m7_app_fixtures_tail_equal_HEAD": true,
+  "m7_failed_start_present_ready_hunk_retained": true,
+  "existing_lock_versions_checksums_unchanged": true,
+  "new_locked_nodes": [
+    [
+      "alacritty_terminal",
+      "0.26.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "cursor-icon",
+      "1.2.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "home",
+      "0.5.12",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "miow",
+      "0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "rustix-openpty",
+      "0.2.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "signal-hook",
+      "0.4.6",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "vte",
+      "0.15.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ]
+  ],
+  "typescript_changes": false,
+  "staged_files": [],
+  "head": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+  "branch": "feat/native-gpui-app"
+}

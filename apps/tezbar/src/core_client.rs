@@ -39,6 +39,7 @@ impl ShutdownOwner {
 pub type SearchRow = tezbar_ui_model::launcher::Row;
 #[derive(Clone, Debug)]
 pub enum Request {
+    Terminal(crate::surfaces::terminal::TerminalRequest),
     Chat(crate::surfaces::ai_chat::ChatRequest),
     Settings(crate::surfaces::settings::SettingsRequest),
     Utility(crate::surfaces::utilities::UtilityRequest),
@@ -96,6 +97,7 @@ impl Request {
     pub fn wire(self) -> (&'static str, Vec<Value>) {
         let context = |action, query, rank, id: Option<String>| json!({"action":action,"context":{"query":query,"rank":rank,"resultId":id}});
         match self {
+            Self::Terminal(request) => request.wire(),
             Self::Chat(request) => request.wire(),
             Self::Utility(request) => request.wire(),
             Self::Settings(request) => request.wire(),
@@ -218,7 +220,13 @@ impl CoreClient {
                     .await;
                 result.and_then(|value| restored.map(|_| value))
             } else {
-                core.request(channel, &args).await
+                if channel.starts_with("core:terminal:") {
+                    // Finite TerminalRequest is the only caller; generic NativeCore::request
+                    // continues rejecting every core:* renderer/extension route.
+                    core.ctx.request(channel, args).await
+                } else {
+                    core.request(channel, &args).await
+                }
             }
         })
         .await
@@ -257,6 +265,13 @@ impl CoreClient {
         self.3.hold();
     }
     pub async fn shutdown(&self) -> Result<(), String> {
+        self.shutdown_with_budget(std::time::Duration::from_secs(8))
+            .await
+    }
+    pub(crate) async fn shutdown_with_budget(
+        &self,
+        budget: std::time::Duration,
+    ) -> Result<(), String> {
         let mut owner = self.1.lock().await;
         if owner.complete {
             return Ok(());
@@ -277,7 +292,7 @@ impl CoreClient {
                 log::info!("Native core shutdown completed");
             }));
         }
-        owner.wait(std::time::Duration::from_secs(8)).await
+        owner.wait(budget).await
     }
 }
 #[derive(Default, Debug)]
@@ -396,5 +411,15 @@ mod request_owner_tests {
         done_rx.await.unwrap();
         tokio::task::yield_now().await;
         assert_eq!(admissions.available_permits(), 1);
+    }
+}
+
+impl crate::surfaces::terminal::TerminalTransport for CoreClient {
+    fn send(
+        &self,
+        request: crate::surfaces::terminal::TerminalRequest,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send>> {
+        let client = self.clone();
+        Box::pin(async move { client.request(Request::Terminal(request)).await })
     }
 }

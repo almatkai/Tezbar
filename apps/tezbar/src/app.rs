@@ -1,5 +1,6 @@
 mod m7;
 mod m8;
+mod m10;
 #[cfg(test)]
 mod m7_tests;
 gpui::actions!(
@@ -451,6 +452,10 @@ impl Owner {
         self.tasks.push(cx.spawn(async move |this, cx| {
             #[cfg(feature = "bench-control")]
             gate.wait().await;
+            let quit_started = std::time::Instant::now();
+            let timer = cx.background_executor().timer(Duration::from_secs(8));
+            let prepared = {
+            let prepare = async {
             for write in launcher_writes {
                 write.await;
             }
@@ -464,7 +469,7 @@ impl Owner {
                 .and_then(|v| v.map_err(|e| e.to_string()))
                 .and_then(|error| error.map_or(Ok(()), Err));
             let chat_result = chat_drain.await;
-            let prepared = gpui_tokio::Tokio::spawn(cx, async move {
+            let preliminary = gpui_tokio::Tokio::spawn(cx, async move {
                 launcher_error?;
                 chat_result?;
                 shared_settings.drain_with(m7_barrier).await?;
@@ -484,13 +489,41 @@ impl Owner {
                 }
             })
             .await;
+            match preliminary {
+                Ok(Ok(())) => {},
+                other => return Err(format!("{other:?}")),
+            }
+            // Every unrelated durable barrier succeeded before any Cancel/dispose.
+            let final_drains = this.update(cx, |owner, cx| {
+                if owner.m7.store.pending() || !owner.m7.barrier.is_clean() {
+                    return Err("Settings changed while quitting; retry quit.".to_string());
+                }
+                owner.launcher.update(cx, |view, w, cx| {
+                    view.dispose_chat(w, cx);
+                    (view.drain_chat(w, cx), view.drain_terminal(w, cx))
+                }).map_err(|e| e.to_string())
+            }).map_err(|e| e.to_string())??;
+            final_drains.0.await?;
+            final_drains.1.await?;
+            Ok::<(), String>(())
+            };
+            use std::{future::Future, task::Poll};
+            let mut prepare = std::pin::pin!(prepare);
+            let mut timer = std::pin::pin!(timer);
+            std::future::poll_fn(|cx| {
+                if let Poll::Ready(r) = prepare.as_mut().poll(cx) { return Poll::Ready(r); }
+                if timer.as_mut().poll(cx).is_ready() { return Poll::Ready(Err("Quit save/drain exceeded eight seconds".into())); }
+                Poll::Pending
+            }).await
+            };
             let core = this.update(cx, |this, cx| {
-                let prepared = if matches!(prepared, Ok(Ok(())))
+                let prepared = if matches!(prepared, Ok(()))
                     && (this.m7.store.pending() || !this.m7.barrier.is_clean()) {
-                    Ok(Err("Settings changed while quitting; retry quit.".to_string()))
+                    Err("Settings changed while quitting; retry quit.".to_string())
                 } else { prepared };
-                if !matches!(prepared, Ok(Ok(()))) {
+                if !matches!(prepared, Ok(())) {
                     this.lifecycle.quitting = false;
+                    let _ = this.launcher.update(cx, |view, _, cx| view.resume_cancelled_quit(cx));
                     this.save_error = Some(format!(
                         "Could not save changes; quit cancelled: {prepared:?}"
                     ));
@@ -545,7 +578,7 @@ impl Owner {
             let Ok(Some(core)) = core else {
                 return;
             };
-            let result = gpui_tokio::Tokio::spawn(cx, async move { core.shutdown().await }).await;
+            let result = gpui_tokio::Tokio::spawn(cx, async move { core.shutdown_with_budget(Duration::from_secs(8).saturating_sub(quit_started.elapsed())).await }).await;
             let _ = this.update(cx, |this, cx| {
                 if !matches!(result, Ok(Ok(()))) {
                     let _ = this.log.write(
@@ -1028,6 +1061,7 @@ impl Owner {
             Event::Settings => self.settings(cx),
             Event::SettingsFocused => self.hide(cx),
             Event::ThemeChanged(theme) => {
+                let _=self.launcher.update(cx,|v,w,cx|v.terminal_theme(tezbar_ui::tokens::tokens(w).light,cx));
                 if let Some(settings) = self.settings {
                     let _ = settings.update(cx, |view, _, cx| {
                         view.theme = theme;
@@ -1036,12 +1070,16 @@ impl Owner {
                 }
             }
             Event::Quit => self.quit(cx),
+            Event::TerminalEffect(source,effect)=>self.m10_effect(source,effect,cx),
+            Event::TerminalRows(rows)=>{if self.panel_visible {self.panel(rows,cx);}},
+            Event::TerminalPanelAction(id)=>{let _=self.launcher.update(cx,|v,w,cx|v.terminal_panel_action(id,w,cx));},
             Event::ChatEffect(source, effect) => self.m8_effect(source, effect, cx),
             Event::RetryCore => self.start_core(cx),
             Event::CloseSettings => {
                 let _ = self.surface(SurfaceOp::CloseCurrent, cx);
             }
             Event::Bounds => {
+                let _=self.launcher.update(cx,|v,_,cx|v.terminal_layout(cx));
                 self.snapshot(cx);
                 self.viewport_event(cx);
                 self.follow_panel(cx);

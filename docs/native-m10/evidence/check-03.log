@@ -1,0 +1,397 @@
+warning: variable does not need to be mutable
+  --> crates/tezbar-core/src/assets.rs:97:21
+   |
+97 |                 let mut response = self
+   |                     ----^^^^^^^^
+   |                     |
+   |                     help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `validate_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:16:8
+   |
+16 | pub fn validate_images(
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+
+warning: function `save` is never used
+  --> crates/tezbar-core/src/ai/runtime/store.rs:52:8
+   |
+52 | pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
+   |        ^^^^
+
+warning: methods `gemma_pending`, `gemma_save`, `gemma_clear`, `gemma_has`, `gemma_counts`, and `vector_backfill` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1219:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1219 |     pub fn gemma_pending(&self, roots: &[String], limit: usize) -> Result<Vec<Value>, String> {
+     |            ^^^^^^^^^^^^^
+...
+1246 |     pub fn gemma_save(&mut self, chunks: &[Value], vectors: &[Vec<f64>]) -> Result<usize, String> {
+     |            ^^^^^^^^^^
+...
+1301 |     pub fn gemma_clear(&self) -> Result<(), String> {
+     |            ^^^^^^^^^^^
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+...
+1354 |     pub fn vector_backfill(&self) -> Result<bool, String> {
+     |            ^^^^^^^^^^^^^^^
+
+warning: constant `REVISION` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:32:7
+   |
+32 | const REVISION: &str = runtime_models::Q8.revision;
+   |       ^^^^^^^^
+
+warning: constant `MODEL_FILE` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:33:7
+   |
+33 | const MODEL_FILE: &str = runtime_models::Q8.file;
+   |       ^^^^^^^^^^
+
+warning: constant `MODEL_SHA` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:34:7
+   |
+34 | const MODEL_SHA: &str = runtime_models::Q8.sha256;
+   |       ^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/tezbar-core/src/knowledge/runtime.rs:217:12
+    |
+216 | impl Runtime {
+    | ------------ associated function in this implementation
+217 |     pub fn new(ctx: CoreContext) -> Self {
+    |            ^^^
+
+warning: function `output` is never used
+  --> crates/tezbar-core/src/launcher/providers.rs:17:14
+   |
+17 | pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+   |              ^^^^^^
+
+warning: `tezbar-core` (lib) generated 12 warnings (run `cargo fix --lib -p tezbar-core` to apply 3 suggestions)
+   Compiling tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+warning: unused import: `TerminalEffect`
+ --> apps/tezbar/src/surfaces/command_bar/terminal_integration.rs:3:80
+  |
+3 | use crate::surfaces::terminal::{TerminalView,TerminalRequest,TerminalTransport,TerminalEffect};
+  |                                                                                ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+  --> apps/tezbar/src/windows/terminal_sessions.rs:52:20
+   |
+52 | ...      .child(tezbar_ui::controls::button("terminal-new","New session",tezbar_ui::controls::ButtonTone::Quiet,t).on_click(move|_,_...
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^                                                                     - argument #4 of type `bool` is missing
+   |
+note: function defined here
+  --> crates/tezbar-ui/src/controls.rs:11:8
+   |
+11 | pub fn button(
+   |        ^^^^^^
+help: provide the argument
+   |
+52 -             .child(tezbar_ui::controls::button("terminal-new","New session",tezbar_ui::controls::ButtonTone::Quiet,t).on_click(move|_,_,_|{let _=relay.send(crate::events::Event::TerminalPanelAction(None));}))
+52 +             .child(tezbar_ui::controls::button("terminal-new", "New session", tezbar_ui::controls::ButtonTone::Quiet, /* bool */, t).on_click(move|_,_,_|{let _=relay.send(crate::events::Event::TerminalPanelAction(None));}))
+   |
+
+error[E0599]: no method named `role` found for struct `gpui::Div` in the current scope
+   --> apps/tezbar/src/surfaces/terminal/view.rs:318:22
+    |
+317 | /                 div()
+318 | |                     .role(Role::Status)
+    | |                     -^^^^ method not found in `gpui::Div`
+    | |_____________________|
+    |
+
+error[E0599]: no method named `hide_panel` found for mutable reference `&mut app::Owner` in the current scope
+   --> apps/tezbar/src/app/m10.rs:12:45
+    |
+ 12 | ...   if self.panel_visible {self.hide_panel(cx);} else {let rows=self.launcher.update(cx,|v,_,cx|v.terminal_panel_rows(cx)).unwrap...
+    |                                   ^^^^^^^^^^
+    |
+help: there is a method `panel` with a similar name, but with different arguments
+   --> apps/tezbar/src/app.rs:704:5
+    |
+704 |     fn panel(&mut self, rows: Vec<(String, String)>, cx: &mut Context<Self>) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+   --> apps/tezbar/src/surfaces/terminal/view.rs:26:20
+    |
+ 26 |         self.focus.focus(w);
+    |                    ^^^^^--- argument #2 of type `&mut gpui::App` is missing
+    |
+note: method defined here
+   --> /Users/almat/.cargo/git/checkouts/zed-a70e2ad075855582/c84af5b/crates/gpui/src/window.rs:610:12
+    |
+610 |     pub fn focus(&self, window: &mut Window, cx: &mut App) {
+    |            ^^^^^
+help: provide the argument
+    |
+ 26 |         self.focus.focus(w, /* &mut gpui::App */);
+    |                           ++++++++++++++++++++++
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+   --> apps/tezbar/src/surfaces/terminal/mod.rs:131:24
+    |
+131 |             self.focus.focus(w);
+    |                        ^^^^^--- argument #2 of type `&mut gpui::App` is missing
+    |
+note: method defined here
+   --> /Users/almat/.cargo/git/checkouts/zed-a70e2ad075855582/c84af5b/crates/gpui/src/window.rs:610:12
+    |
+610 |     pub fn focus(&self, window: &mut Window, cx: &mut App) {
+    |            ^^^^^
+help: provide the argument
+    |
+131 |             self.focus.focus(w, /* &mut gpui::App */);
+    |                               ++++++++++++++++++++++
+
+error[E0599]: no method named `data` found for struct `state::State` in the current scope
+  --> apps/tezbar/src/surfaces/terminal/tests.rs:74:7
+   |
+74 |     s.data("a", data);
+   |       ^^^^ method not found in `state::State`
+   |
+  ::: apps/tezbar/src/surfaces/terminal/state.rs:75:1
+   |
+75 | pub struct State {
+   | ---------------- method `data` not found for this struct
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following traits define an item `data`, perhaps you need to implement one of them:
+           candidate #1: `object::read::elf::section::SectionHeader`
+           candidate #2: `object::read::elf::segment::ProgramHeader`
+           candidate #3: `object::read::macho::fat::FatArch`
+           candidate #4: `object::read::macho::section::Section`
+           candidate #5: `object::read::macho::segment::Segment`
+           candidate #6: `object::read::traits::ObjectSection`
+           candidate #7: `object::read::traits::ObjectSegment`
+           candidate #8: `object::read::xcoff::section::SectionHeader`
+           candidate #9: `slotmap::Key`
+           candidate #10: `tiff::encoder::tiff_value::TiffValue`
+
+error[E0599]: no method named `data` found for struct `state::State` in the current scope
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:259:7
+    |
+259 |     s.data("a", "first\n");
+    |       ^^^^ method not found in `state::State`
+    |
+   ::: apps/tezbar/src/surfaces/terminal/state.rs:75:1
+    |
+ 75 | pub struct State {
+    | ---------------- method `data` not found for this struct
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following traits define an item `data`, perhaps you need to implement one of them:
+            candidate #1: `object::read::elf::section::SectionHeader`
+            candidate #2: `object::read::elf::segment::ProgramHeader`
+            candidate #3: `object::read::macho::fat::FatArch`
+            candidate #4: `object::read::macho::section::Section`
+            candidate #5: `object::read::macho::segment::Segment`
+            candidate #6: `object::read::traits::ObjectSection`
+            candidate #7: `object::read::traits::ObjectSegment`
+            candidate #8: `object::read::xcoff::section::SectionHeader`
+            candidate #9: `slotmap::Key`
+            candidate #10: `tiff::encoder::tiff_value::TiffValue`
+
+error[E0599]: no method named `exit` found for struct `state::State` in the current scope
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:260:7
+    |
+260 |     s.exit("a", 7);
+    |       ^^^^
+    |
+   ::: apps/tezbar/src/surfaces/terminal/state.rs:75:1
+    |
+ 75 | pub struct State {
+    | ---------------- method `exit` not found for this struct
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following trait defines an item `exit`, perhaps you need to implement it:
+            candidate #1: `tracing_core::subscriber::Subscriber`
+help: there is a method `emit` with a similar name, but with different arguments
+   --> apps/tezbar/src/surfaces/terminal/state.rs:781:5
+    |
+781 |     pub fn emit(&mut self, e: TerminalEffect) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `data` found for struct `state::State` in the current scope
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:266:7
+    |
+266 |     s.data("a", "late");
+    |       ^^^^ method not found in `state::State`
+    |
+   ::: apps/tezbar/src/surfaces/terminal/state.rs:75:1
+    |
+ 75 | pub struct State {
+    | ---------------- method `data` not found for this struct
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following traits define an item `data`, perhaps you need to implement one of them:
+            candidate #1: `object::read::elf::section::SectionHeader`
+            candidate #2: `object::read::elf::segment::ProgramHeader`
+            candidate #3: `object::read::macho::fat::FatArch`
+            candidate #4: `object::read::macho::section::Section`
+            candidate #5: `object::read::macho::segment::Segment`
+            candidate #6: `object::read::traits::ObjectSection`
+            candidate #7: `object::read::traits::ObjectSegment`
+            candidate #8: `object::read::xcoff::section::SectionHeader`
+            candidate #9: `slotmap::Key`
+            candidate #10: `tiff::encoder::tiff_value::TiffValue`
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:305:49
+    |
+305 |     assert!(matches!(s.effects.pop_front(),Some(TerminalEffect::Pins(p)) if p==vec!["a"]));
+    |                      ---------------------      ^^^^^^^^^^^^^^^^^^^^^^^ expected `(u64, TerminalEffect)`, found `TerminalEffect`
+    |                      |
+    |                      this expression has type `std::option::Option<(u64, state::TerminalEffect)>`
+    |
+    = note: expected tuple `(u64, state::TerminalEffect)`
+                found enum `state::TerminalEffect`
+
+error[E0599]: no method named `data` found for struct `state::State` in the current scope
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:324:7
+    |
+324 |     s.data("a", &"x".repeat(512 * 1024 + 1));
+    |       ^^^^ method not found in `state::State`
+    |
+   ::: apps/tezbar/src/surfaces/terminal/state.rs:75:1
+    |
+ 75 | pub struct State {
+    | ---------------- method `data` not found for this struct
+    |
+    = help: items from traits can only be used if the trait is implemented and in scope
+    = note: the following traits define an item `data`, perhaps you need to implement one of them:
+            candidate #1: `object::read::elf::section::SectionHeader`
+            candidate #2: `object::read::elf::segment::ProgramHeader`
+            candidate #3: `object::read::macho::fat::FatArch`
+            candidate #4: `object::read::macho::section::Section`
+            candidate #5: `object::read::macho::segment::Segment`
+            candidate #6: `object::read::traits::ObjectSection`
+            candidate #7: `object::read::traits::ObjectSegment`
+            candidate #8: `object::read::xcoff::section::SectionHeader`
+            candidate #9: `slotmap::Key`
+            candidate #10: `tiff::encoder::tiff_value::TiffValue`
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:403:14
+    |
+402 |         s.effects.pop_front(),
+    |         --------------------- this expression has type `std::option::Option<(u64, state::TerminalEffect)>`
+403 |         Some(TerminalEffect::Zoom(input::Zoom::Out))
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `(u64, TerminalEffect)`, found `TerminalEffect`
+    |
+    = note: expected tuple `(u64, state::TerminalEffect)`
+                found enum `state::TerminalEffect`
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:411:9
+    |
+411 |         Some(TerminalEffect::Back { sentinel: ">" })
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Option<(u64, TerminalEffect)>`, found `Option<TerminalEffect>`
+    |
+    = note: expected enum `std::option::Option<(u64, state::TerminalEffect)>`
+               found enum `std::option::Option<state::TerminalEffect>`
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:420:9
+    |
+420 |         Some("\x1b[<0;10;5M")
+    |         ^^^^^^^^^^^^^^^^^^^^^ expected `Option<&[u8]>`, found `Option<&str>`
+    |
+    = note: expected enum `std::option::Option<&[u8]>`
+               found enum `std::option::Option<&str>`
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:424:9
+    |
+424 |         Some("\x1b[<0;10;5m")
+    |         ^^^^^^^^^^^^^^^^^^^^^ expected `Option<&[u8]>`, found `Option<&str>`
+    |
+    = note: expected enum `std::option::Option<&[u8]>`
+               found enum `std::option::Option<&str>`
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:429:9
+    |
+429 |         Some("\x1b[<32;1;1M")
+    |         ^^^^^^^^^^^^^^^^^^^^^ expected `Option<&[u8]>`, found `Option<&str>`
+    |
+    = note: expected enum `std::option::Option<&[u8]>`
+               found enum `std::option::Option<&str>`
+
+error[E0624]: method `act` is private
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:672:15
+    |
+672 |             v.act(input::KeyResult::Copy, w, cx);
+    |               ^^^ private method
+    |
+   ::: apps/tezbar/src/surfaces/terminal/view.rs:10:5
+    |
+ 10 |     fn act(&mut self, key: KeyResult, w: &mut Window, cx: &mut Context<Self>) {
+    |     ------------------------------------------------------------------------- private method defined here
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:674:42
+    |
+674 |             assert!(matches!(&effects[0],TerminalEffect::Copy(text) if text=="fixt"));
+    |                              ----------- ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `(u64, TerminalEffect)`, found `TerminalEffect`
+    |                              |
+    |                              this expression has type `&(u64, state::TerminalEffect)`
+    |
+    = note: expected tuple `(u64, state::TerminalEffect)`
+                found enum `state::TerminalEffect`
+
+error[E0308]: mismatched types
+   --> apps/tezbar/src/surfaces/terminal/tests.rs:677:45
+    |
+677 |             assert!(matches!(&v.drain()[0], TerminalEffect::OpenUrl(_)));
+    |                              -------------  ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `(u64, TerminalEffect)`, found `TerminalEffect`
+    |                              |
+    |                              this expression has type `&(u64, state::TerminalEffect)`
+    |
+    = note: expected tuple `(u64, state::TerminalEffect)`
+                found enum `state::TerminalEffect`
+
+Some errors have detailed explanations: E0061, E0599.
+For more information about an error, try `rustc --explain E0061`.
+warning: `tezbar-native` (lib) generated 1 warning
+error: could not compile `tezbar-native` (lib) due to 5 previous errors; 1 warning emitted
+warning: build failed, waiting for other jobs to finish...
+Some errors have detailed explanations: E0061, E0308, E0599, E0624.
+warning: `tezbar-native` (lib test) generated 1 warning (1 duplicate)
+error: could not compile `tezbar-native` (lib test) due to 19 previous errors; 1 warning emitted

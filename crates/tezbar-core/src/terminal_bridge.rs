@@ -24,6 +24,23 @@ pub const CHANNELS: &[&str] = &[
 ];
 
 pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> HandlerResult {
+    if matches!(channel, "core:terminal:stream-attach" | "core:terminal:stream-detach" | "core:terminal:replay-read" | "core:terminal:replay-release" | "core:terminal:input") {
+        let ctx=ctx.clone(); let channel=channel.to_owned(); let raw=args.first().cloned().unwrap_or(Value::Null);
+        if channel == "core:terminal:stream-attach" {native_terminal_replay_reaper(&ctx.terminal);}
+        return Some(tokio::task::spawn_blocking(move || {
+            if !ctx.runs_desktop_services() { return Err("Native terminal requires the desktop application".into()); }
+            let state=&*ctx.terminal;
+            let text=|key: &str| raw[key].as_str().ok_or_else(|| format!("Terminal {key} is required"));
+            match channel.as_str() {
+                "core:terminal:stream-attach" => native_terminal_stream_attach(ctx.clone(),state,serde_json::from_value(raw.clone()).map_err(|e| e.to_string())?),
+                "core:terminal:replay-read" => native_terminal_stream_read(state,text("replay")?,raw["position"].as_u64().ok_or("Replay position required")?,raw["limit"].as_u64().ok_or("Replay limit required")?.try_into().map_err(|_| "Replay limit too large")?),
+                "core:terminal:replay-release" => Ok(json!(native_terminal_stream_release(state,text("replay")?))),
+                "core:terminal:stream-detach" => Ok(json!(native_terminal_stream_detach(ctx.clone(),state,text("sessionId")?.into(),text("generation")?)?)),
+                "core:terminal:input" => Ok(json!(native_terminal_binary_input(state,text("sessionId")?,text("generation")?,text("bytes")?)?)),
+                _ => unreachable!(),
+            }
+        }).await.map_err(|e| e.to_string()).and_then(|r|r));
+    }
     let channel = match channel {
         "core:terminal:create" => "terminal:create",
         "core:terminal:attach" => "terminal:attach",

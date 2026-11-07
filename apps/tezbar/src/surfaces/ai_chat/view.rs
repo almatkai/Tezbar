@@ -423,6 +423,13 @@ impl ChatView {
             })
             .into_any_element()
     }
+    /// Core ai/ext formats and scrubs tool JSON before emitting `command`.
+    /// Keep this exact body at the rendered data seam, including indentation.
+    pub(crate) fn approval_body(&self) -> Option<String> {
+        self.active()
+            .and_then(|c| c.approval.as_ref())
+            .map(|a| a.command.clone())
+    }
     pub(super) fn approval(&self, t: Tokens, cx: &mut Context<Self>) -> Stateful<Div> {
         let Some(approval) = self.active().and_then(|c| c.approval.clone()) else {
             return div().id("no-tool-approval");
@@ -447,7 +454,7 @@ impl ChatView {
                     .max_h(px(130.))
                     .overflow_y_scroll()
                     .text_color(t.text2)
-                    .child(approval.command),
+                    .child(self.approval_body().unwrap_or_default()),
             )
             .child(
                 div()
@@ -1023,7 +1030,7 @@ impl Render for ChatView {
                 &self.config,
                 self.model_filter.read(cx).content.as_ref(),
             );
-            let count = options.len().min(256);
+            let count = options.len();
             root = root.child(
                 div()
                     .id("chat-models")

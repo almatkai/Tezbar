@@ -531,9 +531,11 @@ impl ChatView {
         self.next_job += 1;
         let job = self.next_job;
         let window = self.window;
+        self.decode_jobs.insert(job);
+        let slots = self.decode_slots.clone();
         let task = cx.spawn(async move |this, cx| {
             let decoded = gpui_tokio::Tokio::spawn(cx, async move {
-                tokio::task::spawn_blocking(move || {
+                decode_blocking(slots, move || {
                     let bytes = match bytes {
                         ImageBytes::Raw(b) => b.ok(),
                         ImageBytes::Encoded(v) => {
@@ -552,6 +554,7 @@ impl ChatView {
             let _ = cx.update_window(window, |_, w, cx| {
                 let _ = this.update(cx, |v, cx| {
                     v.jobs.remove(&job);
+                    v.decode_jobs.remove(&job);
                     let current = v.document_images.remove(&id);
                     let valid = current.as_ref().is_some_and(|p| {
                         p.mount == v.mount
@@ -600,4 +603,97 @@ impl ChatView {
 enum ImageBytes {
     Raw(Result<Vec<u8>, String>),
     Encoded(Value),
+}
+
+/// The permit belongs to actual blocking work, independently of cache epochs.
+async fn decode_blocking<T: Send + 'static>(
+    slots: Arc<tokio::sync::Semaphore>,
+    decode: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, tokio::task::JoinError> {
+    let permit = slots
+        .acquire_owned()
+        .await
+        .expect("decode owner remains open");
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        decode()
+    })
+    .await
+}
+
+#[cfg(test)]
+mod decode_repair_tests {
+    use super::*;
+    #[tokio::test]
+    async fn actual_blocking_decodes_hold_four_slots_across_three_release_cycles() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let slots = Arc::new(tokio::sync::Semaphore::new(4));
+        let count = Arc::new(AtomicUsize::new(0));
+        let gate = Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+        let mut cache = tezbar_ui::image_cache::OwnershipCache::<u8>::default();
+        let mut jobs = Vec::new();
+        for cycle in 0..4 {
+            for n in 0..4 {
+                let ticket = cache.request(&format!("{cycle}-{n}")).unwrap();
+                let slots = slots.clone();
+                let count = count.clone();
+                let gate = gate.clone();
+                jobs.push((
+                    ticket,
+                    tokio::spawn(async move {
+                        decode_blocking(slots, move || {
+                            count.fetch_add(1, Ordering::SeqCst);
+                            let (lock, wake) = &*gate;
+                            let mut released = lock.lock().unwrap();
+                            while !*released {
+                                released = wake.wait(released).unwrap();
+                            }
+                            1
+                        })
+                        .await
+                        .unwrap()
+                    }),
+                ));
+            }
+            if cycle == 0 {
+                tokio::time::timeout(Duration::from_secs(1), async {
+                    while count.load(Ordering::SeqCst) < 4 {
+                        tokio::task::yield_now().await;
+                    }
+                })
+                .await
+                .unwrap();
+            }
+            cache.release(|_| {});
+        }
+        tokio::task::yield_now().await;
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            4,
+            "a fifth blocking job started before actual completion"
+        );
+        // Abort async awaiters for actual running work; permit must stay in closure.
+        for (_, job) in &jobs[..4] {
+            job.abort();
+        }
+        assert_eq!(slots.available_permits(), 0);
+        *gate.0.lock().unwrap() = true;
+        gate.1.notify_all();
+        let mut uploaded = 0;
+        for (ticket, job) in jobs {
+            if let Ok(value) = job.await {
+                if cache.finish(ticket, Some((value, 1)), |_| {}) {
+                    uploaded += 1;
+                }
+            }
+        }
+        assert_eq!(uploaded, 0, "late epoch results reached texture seam");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while slots.available_permits() < 4 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
 }

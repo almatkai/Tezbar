@@ -453,6 +453,145 @@ fn actual_launcher_input_actions_focus_and_ime_do_not_fall_through_search(cx: &m
     assert_eq!(f.count("agent:run"), 1);
 }
 
+
+fn repair_failed_quit_continue(cx: &mut TestAppContext, failure: &str) {
+    let (rt, root, f, view, cx) = mount(cx);
+    let app = owner(cx, &rt, &root, &f);
+    view.update(cx, |v, cx| {
+        v.receive_navigation(submit(1, "Old session"), cx)
+    });
+    settle(&rt, cx);
+    let old = f.run();
+    publish(
+        cx,
+        serde_json::json!({"type":"message","runId":old["runId"],"delta":"Retain this answer"}),
+    );
+    publish(
+        cx,
+        serde_json::json!({"type":"approval","runId":old["runId"],"approvalId":"old-approval","title":"Allow Fixture?","command":"{}","canRemember":false}),
+    );
+    let _enter = rt.enter();
+    app.update(&mut cx.cx, |o, _| {
+        if failure == "append" {
+            f.fail_append.store(true, Ordering::SeqCst);
+        } else if failure == "settings" {
+            let id = o.m7.barrier.begin("repair");
+            o.m7.barrier.finish("repair", id, false);
+        } else {
+            let p = root.path().join("layout-is-directory");
+            std::fs::create_dir(&p).unwrap();
+            o.writer = windows::persistence::Writer::new(o.core.0.ctx.config.clone(), p);
+            o.positions.dirty = true;
+        }
+    });
+    {
+        let _enter = rt.enter();
+        app.update(&mut cx.cx, |o, cx| o.quit(cx));
+    }
+    for _ in 0..8 {
+        settle(&rt, cx);
+        if !app.read_with(&cx.cx, |o, _| o.lifecycle.quitting) {
+            break;
+        }
+    }
+    assert!(!app.read_with(&cx.cx, |o, _| o.lifecycle.quitting));
+    assert!(app.read_with(&cx.cx, |o, _| o.save_error.is_some()));
+    assert_eq!(f.count("agent:cancel"), usize::from(failure == "append"));
+    let chat = view.read_with(cx, |v, _| v.chat_entity().unwrap());
+    let retained = chat.entity_id();
+    view.update(cx, |v, cx| {
+        v.visible = true;
+        v.receive_navigation(
+            Navigation {
+                nonce: 5,
+                surface: Surface::AiChat,
+                payload: Payload::Ai {
+                    prompt: None,
+                    cwd: None,
+                    resume: Some(old["sessionId"].as_str().unwrap().into()),
+                    capture: false,
+                },
+            },
+            cx,
+        );
+    });
+    settle(&rt, cx);
+    if failure != "append" {
+        chat_action(
+            &view,
+            ChatAction::Decide(tezbar_ui_model::chat::Decision::Once),
+            cx,
+        );
+        settle(&rt, cx);
+        assert_eq!(
+            f.count("agent:approve"),
+            1,
+            "pending approval lost by unrelated save failure"
+        );
+    }
+    f.fail_append.store(false, Ordering::SeqCst);
+    app.update(&mut cx.cx, |o, _| {
+        let id = o.m7.barrier.begin("repair");
+        o.m7.barrier.finish("repair", id, true);
+    });
+    view.update(cx, |v, cx| {
+        v.receive_navigation(submit(6, "New send after failed quit"), cx)
+    });
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 2);
+    assert!(view.read_with(cx, |v, _| v.visible));
+    let new = f.run();
+    let body = serde_json::to_string_pretty(
+        &serde_json::json!({"path":"fixture","options":{"dryRun":true}}),
+    )
+    .unwrap();
+    publish(
+        cx,
+        serde_json::json!({"type":"approval","runId":new["runId"],"approvalId":"new-approval","title":"Allow Fixture to use write?","command":body,"canRemember":false}),
+    );
+    settle(&rt, cx);
+    assert_eq!(
+        chat.read_with(cx, |v, _| v.approval_body()),
+        Some(body.clone())
+    );
+    assert!(body.contains("\n  ")); // indented JSON at rendered seam
+    chat_action(
+        &view,
+        ChatAction::Decide(tezbar_ui_model::chat::Decision::Once),
+        cx,
+    );
+    settle(&rt, cx);
+    assert_eq!(
+        f.count("agent:approve"),
+        if failure == "append" { 1 } else { 2 }
+    );
+    {
+        let _enter = rt.enter();
+        app.update(&mut cx.cx, |o, cx| o.quit(cx));
+    }
+    settle(&rt, cx);
+    assert!(app.read_with(&cx.cx, |o, _| o.save_error.is_none()));
+    assert_eq!(chat.entity_id(), retained);
+    let calls = f.calls.lock().unwrap();
+    let mut cancelled = std::collections::BTreeSet::new();
+    for (_, args) in calls.iter().filter(|(c, _)| *c == "agent:cancel") {
+        assert!(cancelled.insert(args[0].to_string()), "duplicate Cancel");
+    }
+    assert_eq!(cancelled.len(), 2);
+}
+#[gpui::test]
+fn repair_actual_app_append_failure_then_resume_send_approve_quit(cx: &mut TestAppContext) {
+    repair_failed_quit_continue(cx, "append");
+}
+#[gpui::test]
+fn repair_actual_app_settings_failure_preserves_live_approval(cx: &mut TestAppContext) {
+    repair_failed_quit_continue(cx, "settings");
+}
+#[gpui::test]
+fn repair_actual_app_layout_failure_preserves_live_approval(cx: &mut TestAppContext) {
+    repair_failed_quit_continue(cx, "layout");
+}
+
 // M7 regressions use the actual Owner and Settings window, with the same isolated transport.
 #[gpui::test]
 fn review_m7_queued_zoom_is_applied_before_settings_refresh(cx: &mut TestAppContext) {

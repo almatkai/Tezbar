@@ -1,0 +1,2 @@
+argv: ["git", "diff", "--check"]
+source: 32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9

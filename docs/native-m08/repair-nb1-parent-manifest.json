@@ -1,0 +1,18 @@
+{
+  "base": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+  "status": "parent-authored, formatted, NOT applied or compiled",
+  "before": {
+    "apps/tezbar/src/surfaces/settings/store.rs": "fd4f40a3391559c0f63a67130d01c2cc77b1e0f449f06d69992c14aa3d394c00",
+    "apps/tezbar/src/surfaces/settings/tests.rs": "50c449e63bef6f6cec61a5e3597e12180462a1afdef6998767f16effeef04992",
+    "apps/tezbar/src/surfaces/onboarding.rs": "53f6858de9ee02141d4a207768db4dd8842609123cbb4a11d033e18cf624cba9"
+  },
+  "after": {
+    "apps/tezbar/src/surfaces/settings/store.rs": "f1359b7e04c9358de74a05839bdd0708f1288ee93326f6b7536e8b0bd9254873",
+    "apps/tezbar/src/surfaces/settings/tests.rs": "dc0fdaf2d3bc539ac6e8ded567adf9507af9462353a8888ea24ac71610f5c68d",
+    "apps/tezbar/src/surfaces/onboarding.rs": "f3abf4d89fb98591502afc1146c1c374161c185e5d5b541986292120d865161f"
+  },
+  "patches": {
+    "tests.patch": "b931c511fc414e0fd8b39831cb4cb857d2a123ad662f890ec5f552451401f540",
+    "fix.patch": "1436dd56df5e3cc282373b2663b842ef6ab046197f396daa1ce419bd979ebc06"
+  }
+}

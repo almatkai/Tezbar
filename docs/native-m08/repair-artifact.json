@@ -1,0 +1,22 @@
+{
+  "binary": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/tezbar",
+  "bytes": 206257880,
+  "sha256": "17aeb727fd060dcd31b34e1c8bff98c5614201a3b2c1103b333815a551195e0e",
+  "version": {
+    "version": "0.3.0-beta.7",
+    "source": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+    "dirty": "true",
+    "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+    "preview": true,
+    "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+    "runtime_shaders": true,
+    "bench_control": false
+  },
+  "source_freeze": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+  "source_inputs": 359,
+  "dirty": true,
+  "gui_launched": false,
+  "only_binary_execution": "--version (returns before app construction)",
+  "normal_tree_has_tauri_wry_tao": false,
+  "otool_has_webkit": false
+}

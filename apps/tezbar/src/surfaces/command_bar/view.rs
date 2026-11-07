@@ -155,6 +155,7 @@ impl Launcher {
     pub(super) fn return_home(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.acknowledge_navigation(cx);
         self.hide_chat(cx);
+        self.hide_terminal(w,cx);
         self.hide_utilities(w, cx);
         self.prefix = None;
         self.model_menu = false;
@@ -922,6 +923,7 @@ impl Render for Launcher {
                     .into_any_element();
             }
         }
+        if self.terminal_mounted() { return div().size_full().child(self.terminal.view.clone().unwrap()).into_any_element(); }
         if self.chat_mounted() {
             return div().size_full().child(self.chat.view.clone().unwrap()).into_any_element();
         }

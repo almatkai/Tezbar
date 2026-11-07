@@ -4,3 +4,5 @@ pub mod ai_chat;
 pub mod onboarding;
 pub mod settings;
 pub mod utilities;
+
+pub mod terminal;

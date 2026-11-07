@@ -1,6 +1,8 @@
 //! Native command bar. All I/O starts in event/effect methods; Render only constructs elements.
 mod arguments;
 pub(crate) mod chat_integration;
+mod terminal_integration;
+pub use terminal_integration::TerminalSource;
 pub use chat_integration::ChatSource;
 mod interactions;
 pub(crate) mod locale;
@@ -85,6 +87,7 @@ struct PinDrag {
     target: Option<usize>,
 }
 pub struct Launcher {
+    terminal: terminal_integration::TerminalIntegration,
     chat: chat_integration::ChatIntegration,
     pub(crate) settings_store: Option<super::settings::SettingsStore>,
     settings_owner: u64,
@@ -396,6 +399,7 @@ impl Launcher {
             .set_scroll_handler(cx.listener(|this, _, w, cx| this.schedule_icon_viewport(w, cx)));
         Self {
             settings_store: store,
+            terminal: Default::default(),
             chat: chat_integration::ChatIntegration::default(),
             settings_owner,
             onboarding: None,
@@ -597,7 +601,7 @@ impl Launcher {
         }
         let was_visible = self.visible;
         self.visible = true;
-        let chat_active = self.show_chat(cx);
+        let chat_active = self.show_chat(cx) || self.show_terminal(w,cx);
         self.visible = was_visible;
         let utility_active = chat_active || self.show_utilities(w, cx);
         if !self.visible {
@@ -622,6 +626,7 @@ impl Launcher {
     pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.hide_onboarding(cx);
         self.hide_chat(cx);
+        self.hide_terminal(w,cx);
         self.acknowledge_navigation(cx);
         self.hide_utilities(w, cx);
         self.visible = false;
@@ -1439,6 +1444,7 @@ impl Launcher {
             return;
         }
         self.hide_chat(cx);
+        self.defer_hide_terminal(cx);
         self.navigation = Some(intent.clone());
         self.sync_task_indicator(cx);
         self.form = None;
@@ -1496,6 +1502,7 @@ impl Launcher {
             return;
         }
         self.navigation = Some(intent.clone());
+        self.route_terminal_navigation(intent.clone(),cx);
         self.route_chat_navigation(intent, cx);
         self.sync_task_indicator(cx);
         cx.notify();

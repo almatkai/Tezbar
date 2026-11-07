@@ -175,3 +175,22 @@ fn malformed_raster_svg_and_zero_variant_never_upload() {
     }
     assert!(decode_asset(&encoded(ImageFormat::Png, 1, 1), 0).is_err());
 }
+
+#[test]
+fn repair_svg_reference_expansion_is_bounded_before_usvg_and_icons_render() {
+    let mut s = String::from(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://www.w3.org/1999/xlink" width="20" height="20"><defs><g id="n0"><path d="M0 0h1v1z"/></g>"##,
+    );
+    for n in 1..20 {
+        s.push_str(&format!(
+            r##"<g id="n{n}"><use x:href="#n{}"/><use href="#n{}"/></g>"##,
+            n - 1,
+            n - 1
+        ));
+    }
+    s.push_str(r##"</defs><!-- <use fake comment --> <use href="#n19"/></svg>"##);
+    let start = std::time::Instant::now();
+    assert!(super::decode_chat_preview(s.as_bytes()).is_none());
+    assert!(start.elapsed() < std::time::Duration::from_millis(50));
+    assert!(super::decode_chat_preview(br##"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><defs><path id="a" d="M0 0h8v8z"/></defs><use href="#a" fill="red"/></svg>"##).is_some());
+}

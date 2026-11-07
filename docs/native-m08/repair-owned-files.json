@@ -1,0 +1,342 @@
+{
+  "head": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+  "dirty": true,
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "5a1f01e44cb5ff32badc4ec7c428760355e30f9f2ea7cb5e3eef764eb571e6a7",
+      "bytes": 211374,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "5a1f01e44cb5ff32badc4ec7c428760355e30f9f2ea7cb5e3eef764eb571e6a7"
+    },
+    {
+      "path": "apps/tezbar/Cargo.toml",
+      "sha256": "2cd4f673626209268569cb32944fadc552c826900f8e56e266d4108c77485488",
+      "bytes": 2278,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "2cd4f673626209268569cb32944fadc552c826900f8e56e266d4108c77485488"
+    },
+    {
+      "path": "apps/tezbar/src/app.rs",
+      "sha256": "938419b8e8d530c9acdaa586789396251ece8e77d8c5b592dcd84d3d31b82a3e",
+      "bytes": 69686,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "5e47b49db9edd4c1a291b381d70d9798c9f20601f514253f6fb6bba1cc0ed973"
+    },
+    {
+      "path": "apps/tezbar/src/app/m10.rs",
+      "sha256": "173005b6406c1d5f9d83126edbfa48f8479cbc1bf33f67fb8525b3a49b7a4dfd",
+      "bytes": 3134,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "173005b6406c1d5f9d83126edbfa48f8479cbc1bf33f67fb8525b3a49b7a4dfd"
+    },
+    {
+      "path": "apps/tezbar/src/app/m8.rs",
+      "sha256": "5f2a2bcb99c903d7d052a4182103b973fb008153f6110c8935c6a044bfc6aa6f",
+      "bytes": 5628,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "5f66bdf584aa3137d2b920503aa266cd0b4c085cd4fc80ccdda4061902265dc0"
+    },
+    {
+      "path": "apps/tezbar/src/app/m8_tests.rs",
+      "sha256": "8cf603feb084a28c777e14a677f34b80e15a3e6f040860e1ddc5cf1e2ea9f1bc",
+      "bytes": 23176,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "b7dddd29a700ba06a9fad2be7869669ba4f88e4552d60fcf6e4b49f76550eabe"
+    },
+    {
+      "path": "apps/tezbar/src/asset_transport.rs",
+      "sha256": "006538c9cad9fd8f155db5a0c7a0378adc7b6367d20c28513b8b661243dcc87b",
+      "bytes": 19318,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "27fb31caf02843d13c92d160e55defdfecc64f4d84b244f6829eb38e27c3ac1f"
+    },
+    {
+      "path": "apps/tezbar/src/asset_transport_tests.rs",
+      "sha256": "153693cdbbd27850bb4d68bebc091f6ef94f1dfc88eae7062661335f704715a8",
+      "bytes": 7260,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "2190909275b6e4c500dfc4ad6abaa4a4709c7b3cc2fdf8a9ebca2874d93d8ae1"
+    },
+    {
+      "path": "apps/tezbar/src/core_client.rs",
+      "sha256": "465fc8bd2c07795744efcaaa46853db3cec970c58d51b28fd1d43284f600a6f2",
+      "bytes": 15237,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "bd92811ef2d174867d159ce12aa8f3564ffc140e94dbc229ab081432e07f1c11"
+    },
+    {
+      "path": "apps/tezbar/src/events.rs",
+      "sha256": "8cda7ddc1b231d410eb1d0db51954cd0c08955c6b2efd2f7938c5f2d4db909bb",
+      "bytes": 30229,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "8cda7ddc1b231d410eb1d0db51954cd0c08955c6b2efd2f7938c5f2d4db909bb"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/ai_chat/mod.rs",
+      "sha256": "c58bd042a1b8d987248ea2e8e861d0a31eb35144f3ecd4000285bddda5c03f9f",
+      "bytes": 36387,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "ec4f342e17fdba1826f98b1d71a7e96785ad97a68096a0d1471f53312455a96d"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/ai_chat/references.rs",
+      "sha256": "8cd48f8f45518d5fa81e4ec5c4d73fe4c7abf5aaf330d85beb1e8abb75568161",
+      "bytes": 24365,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "4adaa49ca2795ab109b1f9552ab0927def4a0b25cacce2db8f212e3bc9d28769"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/ai_chat/runtime.rs",
+      "sha256": "658ed34abd563e2900eefe00fa0e769adf6545434ac62b8d980ac4fc6503c82c",
+      "bytes": 45715,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "c723bd1015d4a5988a2bb165a53c40d34764c3022ce4f6eb5a05639d1a688e31"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/ai_chat/tests.rs",
+      "sha256": "0e7ea2fea85320aa42970a6436fff48292566682968cc40c307f2e54f8d6ba6b",
+      "bytes": 47140,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "7cb2d316324af43269cbdba5176edbd3412d2440ba4ad360455d191cb4e619ef"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/ai_chat/view.rs",
+      "sha256": "4110c4796ec22087679e02224a15e048b12af102ee9d90dfcef55572c58658cc",
+      "bytes": 42910,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "ae00515843c8a9f31218948d76465ad99e045f90bf0dfcb989320604937f5678"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/chat_integration.rs",
+      "sha256": "72f7b7aa3f4395ffbf192dd38bae6f3ab2656e7320bfa1dbfff60270e6c53644",
+      "bytes": 17380,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "b4bbdcf2c6da9df8863ec49e0fa4d51c93c6c3136d52278d2092537a3b108008"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/mod.rs",
+      "sha256": "829796a147a7b22c618e77a365605e206f3b0ff20969b52726edc061b49b79de",
+      "bytes": 79146,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "829796a147a7b22c618e77a365605e206f3b0ff20969b52726edc061b49b79de"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/task_indicator.rs",
+      "sha256": "1224284a57d07914c9576d1f00cd3547899816ce656e65fdd2f17bc2a37381ca",
+      "bytes": 15048,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "1224284a57d07914c9576d1f00cd3547899816ce656e65fdd2f17bc2a37381ca"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration.rs",
+      "sha256": "5a53d587233ee1f92cfc19fd45cb36d8eba70fc2525eeda41425b739bce15bad",
+      "bytes": 10393,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "266cbded9eb5fef29461123f80866cda70b490dc12e79b70ff9fd559292d25a5"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs",
+      "sha256": "d281430de41a9288555a2556f5fe789c137ea46cbf537a4602c517d6c2c3b7b7",
+      "bytes": 6722,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "b171360389c7b0566e13acbcc339d7e6a98272dbeba66b8d0a7246feb71c14d6"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/view.rs",
+      "sha256": "d8ed8a96bf61a17eec4bb6fcf2b69d7c688bf9a9c4972f9ed2653d0390844a86",
+      "bytes": 67098,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "d8ed8a96bf61a17eec4bb6fcf2b69d7c688bf9a9c4972f9ed2653d0390844a86"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/mod.rs",
+      "sha256": "71bddd9847865289c1810b4a33dd59a919bd63308e2b7a85a2771e325d16a844",
+      "bytes": 210,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "71bddd9847865289c1810b4a33dd59a919bd63308e2b7a85a2771e325d16a844"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/onboarding.rs",
+      "sha256": "f3abf4d89fb98591502afc1146c1c374161c185e5d5b541986292120d865161f",
+      "bytes": 39597,
+      "owner": "parent N-B1 exact patch",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "53f6858de9ee02141d4a207768db4dd8842609123cbb4a11d033e18cf624cba9"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/store.rs",
+      "sha256": "f1359b7e04c9358de74a05839bdd0708f1288ee93326f6b7536e8b0bd9254873",
+      "bytes": 25346,
+      "owner": "parent N-B1 exact patch",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "fd4f40a3391559c0f63a67130d01c2cc77b1e0f449f06d69992c14aa3d394c00"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/tests.rs",
+      "sha256": "dc0fdaf2d3bc539ac6e8ded567adf9507af9462353a8888ea24ac71610f5c68d",
+      "bytes": 72914,
+      "owner": "parent N-B1 exact patch",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "50c449e63bef6f6cec61a5e3597e12180462a1afdef6998767f16effeef04992"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/ime.rs",
+      "sha256": "02a238ecfc07bef89e76b7acec2f9fd65665919bd055d1b87f918e01d268989d",
+      "bytes": 6352,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "02a238ecfc07bef89e76b7acec2f9fd65665919bd055d1b87f918e01d268989d"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/input.rs",
+      "sha256": "3b9d4280f55399135a1fcb37a271964e9ca73bcd506db50647692386f42bcff5",
+      "bytes": 7220,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "3b9d4280f55399135a1fcb37a271964e9ca73bcd506db50647692386f42bcff5"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/mod.rs",
+      "sha256": "dad29c52221fc1e4961d867d185c1bac352ea8f938f47a65d4f91dbf2115a0f0",
+      "bytes": 14924,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "491d1c45688f081fca6286dc1b14455a85f2d5bf90e83f86c3cbc6aadc080ceb"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/request.rs",
+      "sha256": "fb7294e8c348803265ada03c0a5158bf22bfc98c1c0638bff0f532abf6a52f01",
+      "bytes": 6071,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "fb7294e8c348803265ada03c0a5158bf22bfc98c1c0638bff0f532abf6a52f01"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/state.rs",
+      "sha256": "5a60193bcc9bba08de065b8aaa373dbf93af31c555e2080bc91e699e9bafc309",
+      "bytes": 32880,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "541b3ebd60abfac497ff7a0430436479f92b7fc40ce60600b7a8440b6b79c2ce"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+      "sha256": "121857052ba69d7074674ac8b4b10e3d670918ab2510b42f6607c9f2a30d65c4",
+      "bytes": 30431,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "0f9866b99e0e82d0f814ba9f057793a27ce5cebdcaa087d2d3ea94b031615782"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/view.rs",
+      "sha256": "8d843ffbd04840252314e6b570eaed589a082ac1040163fada05d07b23c27a7d",
+      "bytes": 17328,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "8d843ffbd04840252314e6b570eaed589a082ac1040163fada05d07b23c27a7d"
+    },
+    {
+      "path": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "sha256": "579d383e4c879e6e28ebd29f3beba9e44a8dcc156964db614044faf3f6e5b35d",
+      "bytes": 4894,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "e0107c4852d77e7c0ea3857eae5ede084986b72da492a846ad091959f7396d5e"
+    },
+    {
+      "path": "crates/tezbar-core/Cargo.toml",
+      "sha256": "0982a0598b8cd4fc4198fec4691f855054e2a0d698919f8852336dd8d78caee5",
+      "bytes": 2098,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "0982a0598b8cd4fc4198fec4691f855054e2a0d698919f8852336dd8d78caee5"
+    },
+    {
+      "path": "crates/tezbar-core/src/assets.rs",
+      "sha256": "6bcdc1f697aae8248a1c5b1ff9a63c5304f714274bfe7951573b3b3b6f3136ef",
+      "bytes": 22837,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "50afe712e065624c71b06d4c6b70a112d75f34bc718c7cff3042b03a9a73b6f9"
+    },
+    {
+      "path": "crates/tezbar-core/src/assets_windows.rs",
+      "sha256": "c0220985b76131bf3c080fd6d5a30d00f2eefef2c6623a213e0dd366e189a028",
+      "bytes": 10713,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": null
+    },
+    {
+      "path": "crates/tezbar-core/src/terminal/pty.rs",
+      "sha256": "27018b732a7ea08b93dee2ab3622e57f9721a98dabc32a95497952f80ffb30c1",
+      "bytes": 54429,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "27018b732a7ea08b93dee2ab3622e57f9721a98dabc32a95497952f80ffb30c1"
+    },
+    {
+      "path": "crates/tezbar-core/src/terminal/stream.rs",
+      "sha256": "00a2fac863c86ca87ff857b046f2247f350b80d8e6fe41119b780063e9ce4071",
+      "bytes": 9804,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "00a2fac863c86ca87ff857b046f2247f350b80d8e6fe41119b780063e9ce4071"
+    },
+    {
+      "path": "crates/tezbar-core/src/terminal_bridge.rs",
+      "sha256": "e02063f583716604e88d047e3e54fcf692a62b881f9a90b76100d154c3f9734b",
+      "bytes": 7995,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "e02063f583716604e88d047e3e54fcf692a62b881f9a90b76100d154c3f9734b"
+    },
+    {
+      "path": "crates/tezbar-ui/Cargo.toml",
+      "sha256": "5e27c6824c033dd3cf87914535958957a353460fda055b529754168c7a6bd69f",
+      "bytes": 1031,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "5e27c6824c033dd3cf87914535958957a353460fda055b529754168c7a6bd69f"
+    },
+    {
+      "path": "crates/tezbar-ui/src/lib.rs",
+      "sha256": "28da53d7c5fce2b84ed05138c725e4041d55276e9e28d1d831d202bec2e6e9f9",
+      "bytes": 245,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": false,
+      "initial_sha256": "28da53d7c5fce2b84ed05138c725e4041d55276e9e28d1d831d202bec2e6e9f9"
+    },
+    {
+      "path": "crates/tezbar-ui/src/terminal_grid.rs",
+      "sha256": "2599e321fbd7230d3263bee674c7131440ed0c1bf9d12386fbf1964a4d1628c0",
+      "bytes": 35025,
+      "owner": "M8/M10 shared implementation",
+      "changed_since_this_task_started": true,
+      "initial_sha256": "bfbc083d8f16b43efba522f8d1914f7b5d07e7df92306bee8c04baacea9cdebb"
+    }
+  ]
+}

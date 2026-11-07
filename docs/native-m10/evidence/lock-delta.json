@@ -1,0 +1,40 @@
+{
+  "changed_or_removed": [],
+  "new": [
+    [
+      "alacritty_terminal",
+      "0.26.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "cursor-icon",
+      "1.2.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "home",
+      "0.5.12",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "miow",
+      "0.6.1",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "rustix-openpty",
+      "0.2.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "signal-hook",
+      "0.4.6",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ],
+    [
+      "vte",
+      "0.15.0",
+      "registry+https://github.com/rust-lang/crates.io-index"
+    ]
+  ]
+}

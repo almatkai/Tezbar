@@ -109,7 +109,7 @@ impl Owner {
     /// state and layouts, and before CoreClient::shutdown. It never stops the core.
     pub(super) fn m8_prepare_quit(&mut self, cx: &mut Context<Self>) -> Task<Result<(), String>> {
         self.launcher
-            .update(cx, |view, w, cx| view.drain_chat(w, cx))
+            .update(cx, |view, w, cx| view.prepare_chat_quit(w, cx))
             .unwrap_or_else(|_| Task::ready(Err("Chat window closed during save".into())))
     }
 }

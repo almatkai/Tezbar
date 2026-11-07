@@ -1,3 +1,5 @@
+#[path = "stream.rs"]
+mod stream;
 use crate::common::CoreContext;
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
@@ -18,6 +20,8 @@ const INPUT_QUEUE_LIMIT_BYTES: usize = 1024 * 1024;
 
 pub struct NativeTerminalState {
     sessions: Mutex<HashMap<String, NativeTerminalSession>>,
+    replay: Mutex<stream::ReplayRegistry>,
+    replay_reaper: Mutex<Option<tokio::task::JoinHandle<()>>>,
     creating: Mutex<()>,
     next_id: AtomicU64,
     waiters: Mutex<Vec<std::thread::JoinHandle<()>>>,
@@ -29,6 +33,8 @@ impl Default for NativeTerminalState {
     fn default() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            replay: Mutex::default(),
+            replay_reaper: Mutex::default(),
             creating: Mutex::new(()),
             next_id: AtomicU64::new(1),
             waiters: Mutex::new(Vec::new()),
@@ -59,6 +65,10 @@ pub fn shutdown_all(state: &NativeTerminalState) {
             let _ = stop_session(session);
         }
     }
+    if let Some(task) = state.replay_reaper.lock().unwrap().take() {
+        task.abort();
+    }
+    state.replay.lock().unwrap().clear();
     let waiters = std::mem::take(&mut *state.waiters.lock().unwrap());
     for waiter in waiters {
         let _ = waiter.join();
@@ -77,6 +87,7 @@ struct NativeTerminalSession {
     cwd: String,
     pid: Option<u32>,
     exited: std::sync::Arc<AtomicBool>,
+    stream: stream::SharedStream,
     history_path: PathBuf,
     legacy_history_path: Option<PathBuf>,
     output_chunks: VecDeque<String>,
@@ -217,6 +228,7 @@ pub struct TerminalCreateRequest {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalCreateResult {
+    generation: String,
     session_id: String,
     shell: String,
     cwd: String,
@@ -544,6 +556,15 @@ pub fn native_terminal_create_impl(
     state: &NativeTerminalState,
     request: TerminalCreateRequest,
 ) -> Result<TerminalCreateResult, String> {
+    native_terminal_create_inner(app, state, request, None)
+}
+
+fn native_terminal_create_inner(
+    app: CoreContext,
+    state: &NativeTerminalState,
+    request: TerminalCreateRequest,
+    fixture: Option<CommandBuilder>,
+) -> Result<TerminalCreateResult, String> {
     let ctx = app.clone();
     if request
         .initial_command
@@ -592,6 +613,7 @@ pub fn native_terminal_create_impl(
             .unwrap_or(true);
     let mut history_options = OpenOptions::new();
     history_options
+        .read(true)
         .create(true)
         .write(true)
         .append(restore_session_id.is_some())
@@ -609,6 +631,12 @@ pub fn native_terminal_create_impl(
             .map_err(|error| format!("failed to seed terminal history: {error}"))?;
     }
 
+    let output_stream = std::sync::Arc::new(Mutex::new(stream::Stream::new(
+        history_file,
+        history_path.clone(),
+    )?));
+    let exit_stream = output_stream.clone();
+    let generation = output_stream.lock().unwrap().generation.clone();
     let cwd = working_directory(request.cwd.as_deref());
     let shell = login_shell();
     let pair = native_pty_system()
@@ -631,6 +659,7 @@ pub fn native_terminal_create_impl(
     command.env("COLORTERM", "truecolor");
     command.env("TERM_PROGRAM", "Tezbar");
 
+    let command = fixture.unwrap_or(command);
     let mut child = pair
         .slave
         .spawn_command(command)
@@ -681,6 +710,7 @@ pub fn native_terminal_create_impl(
     sessions.insert(
         session_id.clone(),
         NativeTerminalSession {
+            stream: output_stream.clone(),
             master: pair.master,
             writer,
             metadata_gate: metadata_gate.clone(),
@@ -708,7 +738,7 @@ pub fn native_terminal_create_impl(
     let output_session_id = session_id.clone();
     let output_thread = std::thread::spawn(move || {
         let mut decoder = TerminalUtf8Decoder::default();
-        let mut history_file = history_file;
+
         let mut buffer = [0_u8; 16 * 1024];
         let mut first_chunk = true;
         #[cfg(unix)]
@@ -769,9 +799,10 @@ pub fn native_terminal_create_impl(
                     // Keep the complete stream on disk. The in-memory replay
                     // buffer remains bounded, but saved sessions can always
                     // recover their full terminal history after an app restart.
-                    let _ = history_file
-                        .write_all(&buffer[..count])
-                        .and_then(|_| history_file.flush());
+                    let mut native = output_stream.lock().unwrap().append(&buffer[..count]);
+                    native["sessionId"] = json!(output_session_id);
+                    // Neither the stream ordering lock nor the session map is held at publication.
+                    let _ = output_app.emit("core:terminal:data", native);
                     if let Some(session) = output_state
                         .sessions
                         .lock()
@@ -836,6 +867,11 @@ pub fn native_terminal_create_impl(
         }
         state.sessions.lock().unwrap().remove(&exit_session_id);
         state.stopped.notify_all();
+        let (generation, position) = {
+            let s = exit_stream.lock().unwrap();
+            (s.generation.clone(), s.position)
+        };
+        let _ = exit_app.emit("core:terminal:exit-event", json!({"sessionId":exit_session_id,"generation":generation,"position":position,"exitCode":exit_code}));
         let _ = exit_app.emit(
             "terminal:exit",
             serde_json::to_value(TerminalExitEvent {
@@ -850,6 +886,7 @@ pub fn native_terminal_create_impl(
     waiters.retain(|waiter| !waiter.is_finished());
     waiters.push(waiter);
     Ok(TerminalCreateResult {
+        generation,
         session_id,
         shell,
         cwd: cwd.to_string_lossy().into_owned(),
@@ -973,6 +1010,22 @@ pub fn native_terminal_detach_impl(
     state: &NativeTerminalState,
     session_id: String,
 ) -> Result<bool, String> {
+    native_terminal_detach_inner(app, state, session_id, None)
+}
+pub fn native_terminal_stream_detach(
+    app: CoreContext,
+    state: &NativeTerminalState,
+    session_id: String,
+    generation: &str,
+) -> Result<bool, String> {
+    native_terminal_detach_inner(app, state, session_id, Some(generation))
+}
+fn native_terminal_detach_inner(
+    app: CoreContext,
+    state: &NativeTerminalState,
+    session_id: String,
+    generation: Option<&str>,
+) -> Result<bool, String> {
     let gate = {
         let sessions = state.sessions.lock().unwrap();
         let Some(session) = sessions.get(&session_id) else {
@@ -989,6 +1042,17 @@ pub fn native_terminal_detach_impl(
         .is_some_and(|session| std::sync::Arc::ptr_eq(&gate, &session.metadata_gate))
     {
         return Ok(false);
+    }
+    if let Some(generation) = generation {
+        if !state
+            .sessions
+            .lock()
+            .unwrap()
+            .get(&session_id)
+            .is_some_and(|s| s.stream.lock().unwrap().generation == generation)
+        {
+            return Ok(false);
+        }
     }
     let Some((cwd, changed)) = refreshed_cwd(&state, &session_id) else {
         return Ok(false);
@@ -1056,6 +1120,13 @@ pub fn native_terminal_kill_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn test_stream() -> stream::SharedStream {
+        let f = tempfile::NamedTempFile::new().unwrap();
+        let p = f.path().to_owned();
+        std::sync::Arc::new(Mutex::new(
+            stream::Stream::new(f.reopen().unwrap(), p).unwrap(),
+        ))
+    }
 
     #[cfg(unix)]
     #[test]
@@ -1070,6 +1141,7 @@ mod tests {
         let mut child = pair.slave.spawn_command(command).unwrap();
         drop(pair.slave);
         let mut session = NativeTerminalSession {
+            stream: test_stream(),
             master: pair.master,
             writer: TerminalInput::start(writer),
             metadata_gate: std::sync::Arc::new(Mutex::new(())),
@@ -1123,6 +1195,7 @@ mod tests {
         state.sessions.lock().unwrap().insert(
             "blocked".into(),
             NativeTerminalSession {
+                stream: test_stream(),
                 master: pair.master,
                 writer: TerminalInput::start(writer),
                 metadata_gate: std::sync::Arc::new(Mutex::new(())),
@@ -1286,4 +1359,207 @@ mod tests {
         assert!(output.contains("__FIRST__"), "output was: {output:?}");
         assert!(output.contains("__CWD__:/tmp"), "output was: {output:?}");
     }
+}
+
+/// First-party bounded attachment, using the same PTY and metadata owner as legacy attach.
+pub fn native_terminal_stream_attach(
+    app: CoreContext,
+    state: &NativeTerminalState,
+    request: TerminalAttachRequest,
+) -> Result<Value, String> {
+    let (gate, stream, shell) = {
+        let sessions = state.sessions.lock().unwrap();
+        let Some(s) = sessions.get(&request.session_id) else {
+            return Ok(Value::Null);
+        };
+        s.master
+            .resize(pty_size(request.cols, request.rows))
+            .map_err(|e| e.to_string())?;
+        (s.metadata_gate.clone(), s.stream.clone(), s.shell.clone())
+    };
+    let _metadata = gate.lock().unwrap();
+    if !state
+        .sessions
+        .lock()
+        .unwrap()
+        .get(&request.session_id)
+        .is_some_and(|s| std::sync::Arc::ptr_eq(&s.stream, &stream))
+    {
+        return Ok(Value::Null);
+    }
+    let summary = metadata(
+        &app,
+        "terminal:native-attach",
+        json!({"sessionId":request.session_id}),
+    )?;
+    let mut value = state.replay.lock().unwrap().open(stream)?;
+    value["sessionId"] = json!(request.session_id);
+    value["shell"] = json!(shell);
+    value["summary"] = summary;
+    Ok(value)
+}
+pub fn native_terminal_stream_read(
+    state: &NativeTerminalState,
+    token: &str,
+    position: u64,
+    limit: usize,
+) -> Result<Value, String> {
+    state.replay.lock().unwrap().read(token, position, limit)
+}
+pub fn native_terminal_stream_release(state: &NativeTerminalState, token: &str) -> bool {
+    state.replay.lock().unwrap().release(token)
+}
+pub fn native_terminal_binary_input(
+    state: &NativeTerminalState,
+    id: &str,
+    generation: &str,
+    encoded: &str,
+) -> Result<bool, String> {
+    let bytes = stream::decode_input(encoded)?;
+    let sessions = state.sessions.lock().unwrap();
+    let Some(s) = sessions.get(id) else {
+        return Ok(false);
+    };
+    if s.exited.load(Ordering::Acquire) || s.stream.lock().unwrap().generation != generation {
+        return Ok(false);
+    }
+    Ok(s.writer.send(bytes))
+}
+
+pub fn native_terminal_expire_replays(state: &NativeTerminalState) {
+    state.replay.lock().unwrap().expire();
+}
+
+#[cfg(all(test, unix))]
+mod m10_tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    #[test]
+    fn m10_same_owner_private_pty_binary_input_replay_and_shutdown() {
+        let d = tempfile::tempdir().unwrap();
+        let events = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let sink = events.clone();
+        let ctx = CoreContext::headless(crate::common::CorePaths {
+            data_dir: d.path().join("data"),
+            config_dir: d.path().join("profile"),
+            resource_dir: d.path().into(),
+            temp_dir: d.path().into(),
+            home_dir: d.path().into(),
+        })
+        .with_event_sink(std::sync::Arc::new(move |c, p| {
+            sink.lock().unwrap().push((c.to_owned(), p));
+        }));
+        let state = ctx.terminal.clone();
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.args(["-c", "printf 'M10_READY\n'; exec /bin/cat"]);
+        command.cwd(d.path());
+        let request = serde_json::from_value(json!({"cwd":d.path(),"cols":80,"rows":24})).unwrap();
+        let created =
+            native_terminal_create_inner(ctx.clone(), &state, request, Some(command)).unwrap();
+        struct Cleanup(std::sync::Arc<NativeTerminalState>);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                shutdown_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(state.clone());
+        let id = created.session_id;
+        let pid = state.sessions.lock().unwrap()[&id].pid.unwrap();
+        let attached = native_terminal_stream_attach(
+            ctx.clone(),
+            &state,
+            TerminalAttachRequest {
+                session_id: id.clone(),
+                cols: 80,
+                rows: 24,
+            },
+        )
+        .unwrap();
+        let generation = attached["generation"].as_str().unwrap();
+        assert!(
+            !native_terminal_binary_input(&state, &id, "stale", &STANDARD.encode(b"WRONG"))
+                .unwrap()
+        );
+        assert!(native_terminal_binary_input(
+            &state,
+            &id,
+            generation,
+            &STANDARD.encode(b"M10_INPUT\n")
+        )
+        .unwrap());
+        let token = attached["replay"].as_str().unwrap();
+        let mut at = 0;
+        let mut bytes = Vec::new();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while !String::from_utf8_lossy(&bytes).contains("M10_INPUT") {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "PTY output deadline: {:?}",
+                bytes
+            );
+            let v = native_terminal_stream_read(&state, token, at, 65536).unwrap();
+            bytes.extend(STANDARD.decode(v["bytes"].as_str().unwrap()).unwrap());
+            at = v["end"].as_u64().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(String::from_utf8_lossy(&bytes).contains("M10_READY"));
+        assert!(native_terminal_stream_release(&state, token));
+        native_terminal_kill_impl(&state, id.clone()).unwrap();
+        assert!(state.wait_stopped(&id));
+        assert_eq!(
+            unsafe { libc::kill(pid as i32, 0) },
+            -1,
+            "fixture PID survived"
+        );
+        assert!(state.sessions.lock().unwrap().is_empty());
+        let events = events.lock().unwrap();
+        let mut end = 0;
+        for (channel, v) in events
+            .iter()
+            .filter(|(c, _)| c == "core:terminal:data" || c == "core:terminal:exit-event")
+        {
+            if channel == "core:terminal:data" {
+                assert_eq!(v["start"], end);
+                end = v["end"].as_u64().unwrap();
+            } else {
+                assert_eq!(v["position"], end);
+            }
+        }
+        assert!(events.iter().any(|(c, _)| c == "core:terminal:exit-event"));
+    }
+    #[test]
+    fn m10_whole_paste_refused_without_prefix_and_inflight_counted() {
+        let input = TerminalInput {
+            queue: Mutex::default(),
+            ready: Condvar::new(),
+        };
+        assert!(input.send(vec![1; INPUT_QUEUE_LIMIT_BYTES - 8]));
+        let before = input.queue.lock().unwrap().chunks.clone();
+        assert!(!input.send(b"\x1b[200~PASTE\x1b[201~".to_vec()));
+        assert_eq!(input.queue.lock().unwrap().chunks, before);
+        // Moving bytes to a writer must keep their admission charge until write_all settles.
+        input.queue.lock().unwrap().chunks.pop_front();
+        assert!(!input.send(vec![2; 9]));
+    }
+}
+
+pub fn native_terminal_replay_reaper(state: &std::sync::Arc<NativeTerminalState>) {
+    let mut task = state.replay_reaper.lock().unwrap();
+    if task.as_ref().is_some_and(|t| !t.is_finished()) {
+        return;
+    }
+    let weak = std::sync::Arc::downgrade(state);
+    *task = Some(tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            let Some(state) = weak.upgrade() else {
+                break;
+            };
+            let mut r = state.replay.lock().unwrap();
+            r.expire();
+            if r.is_empty() {
+                break;
+            }
+        }
+    }));
 }

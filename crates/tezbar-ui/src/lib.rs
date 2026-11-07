@@ -7,3 +7,5 @@ pub mod rich_text;
 pub mod text_input;
 pub mod tokens;
 pub mod virtual_list;
+
+pub mod terminal_grid;

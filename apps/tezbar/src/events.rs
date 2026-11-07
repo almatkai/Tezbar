@@ -30,6 +30,9 @@ impl CoreEvent {
     }
 }
 pub enum Event {
+    TerminalEffect(crate::surfaces::command_bar::TerminalSource,crate::surfaces::terminal::TerminalEffect),
+    TerminalRows(Vec<(String,String)>),
+    TerminalPanelAction(Option<String>),
     ChatEffect(crate::surfaces::command_bar::ChatSource, crate::surfaces::ai_chat::ChatEffect),
     SettingsEffect(gpui::EntityId, crate::surfaces::settings::SettingsEffect),
     OnboardingFinished(gpui::EntityId),

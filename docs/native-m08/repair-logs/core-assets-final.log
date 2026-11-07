@@ -1,0 +1,69 @@
+argv: ["cargo", "+1.98.1", "test", "-p", "tezbar-core", "--lib", "--locked", "--offline", "-j2", "assets", "--", "--test-threads=2"]
+source: 84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea
+   Compiling tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core)
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:105:21
+    |
+105 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/native_tests.rs:617:9
+    |
+617 |     let mut http = server(vec![
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `gemma_has` and `gemma_counts` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1322:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+
+warning: `tezbar-core` (lib test) generated 5 warnings (run `cargo fix --lib -p tezbar-core --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 26.61s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_core-c00d984f6229fa74)
+
+running 12 tests
+test ai::voice::tests::catalog_has_real_runtime_assets ... ok
+test assets::race_tests::removed_or_symlink_replaced_after_authorization_is_denied_at_open ... ok
+test assets::race_tests::root_ancestor_swap_after_authorization_cannot_redirect_scoped_open ... ok
+test assets::repair_tests::chosen_and_scoped_fifo_rejected_before_read ... ok
+test assets::repair_tests::chosen_waits_fairly_for_shared_slot_and_cancelled_job_keeps_permit ... ok
+test assets::tests::client_is_lazy_and_url_redirect_policy_is_strict ... ok
+test assets::tests::dropping_body_wait_drops_stream_and_releases_slot ... ok
+test ai::voice::tests::cancel_one_download_cleans_partial_and_preserves_peers_assets_and_speech ... ok
+test assets::tests::status_encoding_and_stream_are_bounded_without_network ... ok
+test assets::tests::strict_data_mime_and_full_byte_bound ... ok
+test assets::tests::symlink_escape_requires_exact_registry_grant ... ok
+test assets::tests::file_bound_and_cancelled_admission_release ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 590 filtered out; finished in 0.04s
+

@@ -1247,3 +1247,68 @@ fn exact_eight_mib_attachment_matches_canonical_input_size() {
     let over = base64::engine::general_purpose::STANDARD.encode(vec![0; bytes.len() + 1]);
     assert!(references::image_bytes(&over).is_err());
 }
+
+#[gpui::test]
+fn repair_prepared_append_is_durable_work_and_attachment_queue_refusals_settle(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "repair");
+    settle(&rt, cx);
+    let gate = f.hold("chat:append");
+    edit(&v, cx, "preparing durable turn");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    cx.update(|w, cx| v.update(cx, |v, cx| v.prepare_quit(w, cx)));
+    assert_eq!(v.read_with(cx, |v, _| v.quit_settlement()), Ok(false));
+    gate.send(()).unwrap();
+    settle(&rt, cx);
+    cx.update(|w, cx| v.update(cx, |v, cx| v.dispose(w, cx)));
+    settle(&rt, cx);
+    assert_eq!(v.read_with(cx, |v, _| v.quit_settlement()), Ok(true));
+    assert_eq!(
+        f.0.lock().unwrap().sessions["repair"]["turns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|t| t["role"] == "user")
+            .count(),
+        1
+    );
+    v.update(cx, |v, cx| v.revive_after_quit(cx));
+    new_chat(&v, cx, "attachments");
+    settle(&rt, cx);
+    // Exercise the actual 64-effect refusal, beyond the independent four-ticket cap.
+    v.update(cx, |v, cx| {
+        v.effects.clear();
+        for _ in 0..64 {
+            v.emit(ChatEffect::Settings, cx);
+        }
+    });
+    action(&v, cx, Action::ChooseImages);
+    action(&v, cx, Action::ClipboardImage);
+    assert!(v.read_with(cx, |v, _| v.attachment_tickets.is_empty()));
+    v.update(cx, |v, cx| {
+        v.effects.clear();
+        for _ in 0..80 {
+            v.emit(ChatEffect::Background(Vec::new()), cx);
+        }
+        assert_eq!(v.effects.len(), 1, "background status must coalesce");
+    });
+    for _ in 0..80 {
+        action(&v, cx, Action::ChooseImages);
+    }
+    let effects = v.update(cx, |v, _| v.take_effects());
+    for effect in effects {
+        if let ChatEffect::ChooseImages { ticket } = effect {
+            cx.update(|w, cx| {
+                v.update(cx, |v, cx| {
+                    v.attachments_result(ticket, Err("fixture refusal".into()), w, cx)
+                })
+            });
+        }
+    }
+    assert!(v.read_with(cx, |v, _| v.attachment_tickets.is_empty()));
+}

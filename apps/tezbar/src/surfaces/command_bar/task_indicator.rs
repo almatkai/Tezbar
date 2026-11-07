@@ -264,7 +264,7 @@ impl Launcher {
         let visible = self.ready
             && self.visible
             && !self.onboarding_active
-            && self.navigation.as_ref().is_none_or(|_| self.chat_mounted());
+            && self.navigation.as_ref().is_none_or(|_| self.chat_mounted() || self.terminal_mounted());
         self.task_indicator
             .update(cx, |indicator, cx| indicator.set_visible(visible, cx));
     }

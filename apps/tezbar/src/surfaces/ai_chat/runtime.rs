@@ -147,6 +147,7 @@ impl ChatView {
         self.document_images.clear();
         self.thumbnail_attempts.clear();
         self.documents.clear();
+        self.cancel_decode_waiters();
         self.images.release(w, cx);
         self.pending_capture = None;
         self.attachment_tickets.clear();
@@ -201,7 +202,9 @@ impl ChatView {
         let job = self.next_job;
         if matches!(
             &completion,
-            Completion::Quiet
+            Completion::Prepared { .. }
+                | Completion::PreparationConfig { .. }
+                | Completion::Quiet
                 | Completion::Start { .. }
                 | Completion::Persist { .. }
                 | Completion::Delete { .. }
@@ -881,6 +884,7 @@ impl ChatView {
                     self.runs.clear();
                     self.diagnostics.clear();
                     self.documents.clear();
+                    self.cancel_decode_waiters();
                     self.images.release(w, cx);
                 } else {
                     self.error = Some(

@@ -1,5 +1,6 @@
 //! Native asset capabilities. No UI types, runtime creation, cache, or eager HTTP client.
-//! Dropping a read/fetch future drops its response/file and releases its admission slot.
+//! Network cancellation drops the response. Blocking reads retain their slot until
+//! actual completion, even if an async waiter times out or is cancelled.
 use base64::{engine::general_purpose::STANDARD, Engine};
 use std::{
     collections::BTreeSet,
@@ -7,7 +8,6 @@ use std::{
     sync::{Arc, OnceLock},
     time::Duration,
 };
-use tokio::io::AsyncReadExt;
 
 pub const ASSET_BYTES: usize = 2 * 1024 * 1024;
 pub const CHAT_SOURCE_BYTES: usize = 8 * 1024 * 1024;
@@ -30,15 +30,19 @@ impl AssetScope {
     pub fn allowed_legacy(&self) -> &BTreeSet<PathBuf> {
         &self.legacy
     }
-    async fn authorize(&self, file: &Path) -> Result<PathBuf, String> {
-        let root = tokio::fs::canonicalize(&self.root)
-            .await
-            .map_err(|_| FAILURE)?;
+    fn authorize(&self, file: &Path) -> Result<PathBuf, String> {
+        let root = std::fs::canonicalize(&self.root).map_err(|_| FAILURE)?;
         // An issued root cannot be replaced by a symlink after admission.
         if root != self.root {
             return Err(FAILURE.into());
         }
-        let canonical = tokio::fs::canonicalize(file).await.map_err(|_| FAILURE)?;
+        #[cfg(windows)]
+        let spelling = windows::canonical_spelling(file)?;
+        let canonical = std::fs::canonicalize(file).map_err(|_| FAILURE)?;
+        #[cfg(windows)]
+        if spelling != canonical {
+            return Err(FAILURE.into());
+        }
         if canonical.starts_with(&root) || (self.legacy.contains(file) && canonical == file) {
             Ok(canonical)
         } else {
@@ -61,13 +65,17 @@ impl Default for AssetService {
     }
 }
 impl AssetService {
+    /// Retained native chat uses these SAME four slots, independently of cache epochs.
+    pub fn preview_admission(&self) -> Arc<tokio::sync::Semaphore> {
+        self.slots.clone()
+    }
     /// Also bounds off-thread decodes. Keep the permit inside the blocking job so a
     /// cancelled waiter cannot admit an unbounded number of still-running decodes.
     pub async fn decode_permit(&self) -> Result<tokio::sync::OwnedSemaphorePermit, String> {
-        self.slots
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| "Image service is busy".into())
+        tokio::time::timeout(DEADLINE, self.slots.clone().acquire_owned())
+            .await
+            .map_err(|_| "Image admission timed out".to_string())?
+            .map_err(|_| "Image service closed".into())
     }
     fn client(&self) -> Result<&reqwest::Client, String> {
         self.client
@@ -91,8 +99,8 @@ impl AssetService {
     pub async fn remote(&self, raw: &str, limit: usize) -> Result<Vec<u8>, String> {
         check_limit(limit)?;
         let mut url = https(raw)?;
-        let _permit = self.decode_permit().await?;
         tokio::time::timeout(DEADLINE, async {
+            let _permit = self.decode_permit().await?;
             for redirects in 0..=4 {
                 let mut response = self
                     .client()?
@@ -136,13 +144,25 @@ impl AssetService {
         limit: usize,
     ) -> Result<Vec<u8>, String> {
         check_limit(limit)?;
-        let permit = self.decode_permit().await?;
+        let scope = scope.clone();
+        let file = file.to_owned();
+        self.blocking(move || {
+            let canonical = scope.authorize(&file)?;
+            read_scoped(&scope, &canonical, limit)
+        })
+        .await
+    }
+    /// Admission, canonicalization, open and read share one deadline. The owned
+    /// slot stays in the actual job even when its async waiter is cancelled.
+    async fn blocking<T: Send + 'static>(
+        &self,
+        work: impl FnOnce() -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
         tokio::time::timeout(DEADLINE, async {
-            let canonical = scope.authorize(file).await?;
-            let scope = scope.clone();
+            let permit = self.decode_permit().await?;
             tokio::task::spawn_blocking(move || {
                 let _permit = permit;
-                read_scoped(&scope, &canonical, limit)
+                work()
             })
             .await
             .map_err(|_| FAILURE.to_string())?
@@ -152,10 +172,8 @@ impl AssetService {
     }
     /// Host file-dialog results only. Never exposed through extension serialized props.
     pub async fn chosen_image(&self, path: &Path) -> Result<Vec<u8>, String> {
-        let _permit = self.decode_permit().await?;
-        tokio::time::timeout(DEADLINE, read(path, CHAT_SOURCE_BYTES))
-            .await
-            .map_err(|_| "Image read timed out".to_string())?
+        let path = path.to_owned();
+        self.blocking(move || read(&path, CHAT_SOURCE_BYTES)).await
     }
 }
 // Descriptor traversal prevents a concurrent extension symlink swap from widening scope.
@@ -231,21 +249,11 @@ fn read_scoped(scope: &AssetScope, canonical: &Path, limit: usize) -> Result<Vec
         }
         dir
     };
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    let (file, _ancestors) = windows::open_locked(canonical)?;
+    #[cfg(not(any(unix, windows)))]
     let file = {
-        // Reject reparse/symlink paths at each read. Windows device acceptance is separate.
-        let mut current = root;
-        for part in relative.components() {
-            current.push(part);
-            if std::fs::symlink_metadata(&current)
-                .map_err(|_| FAILURE)?
-                .file_type()
-                .is_symlink()
-            {
-                return Err(FAILURE.into());
-            }
-        }
-        std::fs::File::open(current).map_err(|_| FAILURE)?
+        return Err(FAILURE.into());
     };
     let metadata = file.metadata().map_err(|_| FAILURE)?;
     if !metadata.is_file() || metadata.len() > limit as u64 {
@@ -300,23 +308,39 @@ fn check_limit(limit: usize) -> Result<(), String> {
         Ok(())
     }
 }
-async fn read(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
-    let path = tokio::fs::canonicalize(path).await.map_err(|_| FAILURE)?;
-    let file = tokio::fs::File::open(path).await.map_err(|_| FAILURE)?;
-    let metadata = file.metadata().await.map_err(|_| FAILURE)?;
+fn read(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let path = std::fs::canonicalize(path).map_err(|_| FAILURE)?;
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+            .open(path)
+            .map_err(|_| FAILURE)?
+    };
+    #[cfg(windows)]
+    let (file, _ancestors) = windows::open_locked(&path)?;
+    #[cfg(not(any(unix, windows)))]
+    let file = std::fs::File::open(path).map_err(|_| FAILURE)?;
+    let metadata = file.metadata().map_err(|_| FAILURE)?;
     if !metadata.is_file() || metadata.len() > limit as u64 {
-        return Err("Image exceeds source limit".into());
+        return Err(FAILURE.into());
     }
     let mut bytes = Vec::new();
     file.take(limit as u64 + 1)
         .read_to_end(&mut bytes)
-        .await
         .map_err(|_| FAILURE)?;
     if bytes.len() > limit {
-        return Err("Image exceeds source limit".into());
+        return Err(FAILURE.into());
     }
     Ok(bytes)
 }
+#[cfg(windows)]
+#[path = "assets_windows.rs"]
+mod windows;
+
 fn https(raw: &str) -> Result<reqwest::Url, String> {
     let url = reqwest::Url::parse(raw).map_err(|_| FAILURE)?;
     if url.scheme() != "https"
@@ -449,7 +473,11 @@ mod tests {
         for permit in permits {
             owned.push(permit.await.unwrap());
         }
-        assert!(service.decode_permit().await.is_err());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), service.decode_permit())
+                .await
+                .is_err()
+        );
         drop(owned);
         assert!(service.decode_permit().await.is_ok());
     }
@@ -515,5 +543,69 @@ mod race_tests {
             std::os::unix::fs::symlink(outside.path(), &dir).unwrap();
             assert!(read_scoped(&scope, &dir.join("secret"), 8).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod repair_tests {
+    use super::*;
+    #[tokio::test]
+    async fn chosen_waits_fairly_for_shared_slot_and_cancelled_job_keeps_permit() {
+        let service = Arc::new(AssetService::default());
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("image");
+        std::fs::write(&p, [1, 2]).unwrap();
+        let mut held = Vec::new();
+        for _ in 0..4 {
+            held.push(service.decode_permit().await.unwrap());
+        }
+        let s = service.clone();
+        let chosen = tokio::spawn(async move { s.chosen_image(&p).await });
+        tokio::task::yield_now().await;
+        assert!(!chosen.is_finished());
+        drop(held.pop());
+        assert_eq!(chosen.await.unwrap().unwrap(), [1, 2]);
+        drop(held);
+        let (started_tx, started) = tokio::sync::oneshot::channel();
+        let (release, gate) = std::sync::mpsc::channel();
+        let s = service.clone();
+        let job = tokio::spawn(async move {
+            s.blocking(move || {
+                let _ = started_tx.send(());
+                gate.recv().unwrap();
+                Ok(())
+            })
+            .await
+        });
+        started.await.unwrap();
+        job.abort();
+        let _ = job.await;
+        assert_eq!(service.slots.available_permits(), 3);
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while service.slots.available_permits() != 4 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn chosen_and_scoped_fifo_rejected_before_read() {
+        use std::os::unix::ffi::OsStrExt;
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("pipe");
+        let name = std::ffi::CString::new(p.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        let service = AssetService::default();
+        let scope = AssetScope::registered(d.path().canonicalize().unwrap(), BTreeSet::new());
+        tokio::time::timeout(Duration::from_secs(1), async {
+            assert!(service.chosen_image(&p).await.is_err());
+            assert!(service.local(&scope, &p, 8).await.is_err());
+        })
+        .await
+        .unwrap();
+        assert_eq!(service.slots.available_permits(), 4);
     }
 }

@@ -200,15 +200,17 @@ impl CoreClient {
         })
     }
     async fn decode_asset(&self, bytes: Vec<u8>, width: u32) -> Result<AssetResult, String> {
-        let permit = self.0.assets.decode_permit().await?;
-        let task = tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            decode_asset(&bytes, width)
-        });
-        tokio::time::timeout(DEADLINE, task)
+        tokio::time::timeout(DEADLINE, async {
+            let permit = self.0.assets.decode_permit().await?;
+            tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                decode_asset(&bytes, width)
+            })
             .await
-            .map_err(|_| "Image decoding timed out".to_string())?
             .map_err(|_| "Image decoding failed".to_string())?
+        })
+        .await
+        .map_err(|_| "Image decoding timed out".to_string())?
     }
     /// Chat Markdown has remote/data authority, never an arbitrary extension/file scope.
     pub(crate) fn document_image(&self, source: String) -> AssetFuture<Vec<u8>> {
@@ -345,6 +347,7 @@ fn decode_svg(bytes: &[u8], width: u32) -> Result<image::RgbaImage, String> {
     if bytes.iter().filter(|b| **b == b'<').count() > 8192 {
         return Err("SVG exceeds node budget".into());
     }
+    svg_preflight(bytes)?;
     let options = resvg::usvg::Options {
         image_href_resolver: resvg::usvg::ImageHrefResolver {
             resolve_data: Box::new(|_, _, _| None),
@@ -353,6 +356,26 @@ fn decode_svg(bytes: &[u8], width: u32) -> Result<image::RgbaImage, String> {
         ..Default::default()
     };
     let tree = resvg::usvg::Tree::from_data(bytes, &options).map_err(|_| "Invalid SVG image")?;
+    fn budget(g: &resvg::usvg::Group, left: &mut usize, depth: usize) -> Result<(), String> {
+        if depth > 64 {
+            return Err("SVG exceeds render depth".into());
+        }
+        for node in g.children() {
+            *left = left.checked_sub(1).ok_or("SVG exceeds render budget")?;
+            if let resvg::usvg::Node::Group(g) = node {
+                budget(g, left, depth + 1)?;
+            }
+            let mut result = Ok(());
+            node.subroots(|g| {
+                if result.is_ok() {
+                    result = budget(g, left, depth + 1);
+                }
+            });
+            result?;
+        }
+        Ok(())
+    }
+    budget(tree.root(), &mut 8192, 0)?;
     let size = tree.size();
     let max = width as f32;
     let scale = (max / size.width()).min(max / size.height()).min(1.);
@@ -377,6 +400,72 @@ fn decode_svg(bytes: &[u8], width: u32) -> Result<image::RgbaImage, String> {
     }
     let rgba = image::RgbaImage::from_raw(w, h, pixels).ok_or("Invalid SVG pixels")?;
     Ok(rgba)
+}
+
+// usvg re-exports this already-locked XML parser. Count expanded reference work
+// BEFORE usvg expands <use>, then count the actual render tree before rasterization.
+// Namespace prefixes/comments cannot disguise amplifiers from the XML parser.
+fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
+    use resvg::usvg::roxmltree::{Document, Node, NodeId};
+    let text = std::str::from_utf8(bytes).map_err(|_| "Invalid SVG XML")?;
+    let doc = Document::parse(text).map_err(|_| "Invalid SVG XML")?;
+    let mut ids = std::collections::HashMap::new();
+    for n in doc.descendants().filter(|n| n.is_element()) {
+        if let Some(id) = n.attribute("id") {
+            if ids.insert(id, n).is_some() {
+                return Err("Duplicate SVG id".into());
+            }
+        }
+        // Patterns/filters recursively amplify raster work beyond node count.
+        // Fail closed for this preview subset; gradients and ordinary icons work.
+        if matches!(n.tag_name().name(), "filter" | "pattern") {
+            return Err("SVG paint amplifier is unsupported".into());
+        }
+    }
+    fn cost<'a>(
+        n: Node<'a, 'a>,
+        ids: &std::collections::HashMap<&'a str, Node<'a, 'a>>,
+        memo: &mut std::collections::HashMap<NodeId, usize>,
+        path: &mut Vec<NodeId>,
+    ) -> Result<usize, String> {
+        if let Some(v) = memo.get(&n.id()) {
+            return Ok(*v);
+        }
+        if path.len() >= 64 || path.contains(&n.id()) {
+            return Err("SVG reference cycle/depth".into());
+        }
+        path.push(n.id());
+        let mut total = 1usize;
+        for c in n.children().filter(|n| n.is_element()) {
+            total = total.saturating_add(cost(c, ids, memo, path)?);
+            if total > 8192 {
+                return Err("SVG exceeds expansion budget".into());
+            }
+        }
+        if n.tag_name().name() == "use" {
+            for a in n.attributes().filter(|a| a.name() == "href") {
+                let id = a
+                    .value()
+                    .strip_prefix('#')
+                    .ok_or("External SVG reference denied")?;
+                let target = ids.get(id).ok_or("Missing SVG reference")?;
+                total = total.saturating_add(cost(*target, ids, memo, path)?);
+            }
+        }
+        if total > 8192 {
+            return Err("SVG exceeds expansion budget".into());
+        }
+        path.pop();
+        memo.insert(n.id(), total);
+        Ok(total)
+    }
+    cost(
+        doc.root_element(),
+        &ids,
+        &mut Default::default(),
+        &mut Vec::new(),
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]

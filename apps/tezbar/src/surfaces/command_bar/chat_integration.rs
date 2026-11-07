@@ -197,6 +197,11 @@ impl Launcher {
                 }
             }
         }));
+        if let Some(core) = &self.chat.assets {
+            view.update(cx, |v, _| {
+                v.set_preview_admission(core.0.assets.preview_admission())
+            });
+        }
         self.chat.view = Some(view.clone());
         Ok(view)
     }
@@ -320,15 +325,44 @@ impl Launcher {
             view.update(cx, |v, cx| v.dispose(w, cx));
         }
     }
+    pub(crate) fn resume_cancelled_quit(&mut self, cx: &mut Context<Self>) {
+        self.chat.disposed = false;
+        if let Some(view) = &self.chat.view {
+            view.update(cx, |v, cx| v.revive_after_quit(cx));
+        }
+        if let Some(view) = &self.terminal.view {
+            view.update(cx, |v, cx| v.revive_after_quit(cx));
+        }
+        self.sync_task_indicator(cx);
+    }
+    pub(crate) fn prepare_lifecycle_quit(&mut self, cx: &mut Context<Self>) {
+        if let Some(view) = &self.terminal.view {
+            view.update(cx, |v, _| v.prepare_quit());
+        }
+    }
+    /// Final teardown API retained for existing callers/tests. App preliminary
+    /// preparation uses `prepare_chat_quit` and never disposes a live owner.
     pub(crate) fn drain_chat(
         &mut self,
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<(), String>> {
         self.dispose_chat(w, cx);
+        self.settle_chat(w, cx)
+    }
+    pub(crate) fn prepare_chat_quit(
+        &mut self,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<(), String>> {
+        self.prepare_lifecycle_quit(cx);
+        self.settle_chat(w, cx)
+    }
+    fn settle_chat(&mut self, w: &mut Window, cx: &mut Context<Self>) -> Task<Result<(), String>> {
         let Some(view) = self.chat.view.clone() else {
             return Task::ready(Ok(()));
         };
+        view.update(cx, |v, cx| v.prepare_quit(w, cx));
         // A failed quit retains this exact entity. Retry only its failed persistence;
         // disposal and Cancel effects are never replayed.
         view.update(cx, |v, cx| v.retry_quit_persistence(w, cx));

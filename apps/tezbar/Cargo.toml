@@ -16,6 +16,7 @@ runtime-shaders = ["gpui_platform/runtime_shaders"]
 bench-control = []
 
 [dependencies]
+alacritty_terminal = { version = "=0.26.0", default-features = false }
 tezbar-core = { path = "../../crates/tezbar-core" }
 tezbar-host = { path = "../../crates/tezbar-host" }
 tezbar-update = { path = "../../crates/tezbar-update" }

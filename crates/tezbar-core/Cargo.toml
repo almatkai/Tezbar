@@ -61,6 +61,7 @@ objc2-local-authentication = { version = "0.3", default-features = false, featur
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
+  "Win32_Storage_FileSystem",
   "Win32_Security",
   "Win32_System_JobObjects",
   "Win32_System_Threading",
