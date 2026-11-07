@@ -1,0 +1,81 @@
+{
+  "base": "db4d0df6d0d2313bec8c82429b32dd9ef607a401",
+  "patch_sha256": "9a5e55541bb55db73ac56b22359b3270758eedac582a144121ed9cc8a795a9bd",
+  "files": [
+    {
+      "path": "apps/tezbar/src/app/m10.rs",
+      "before_sha256": "173005b6406c1d5f9d83126edbfa48f8479cbc1bf33f67fb8525b3a49b7a4dfd",
+      "after_sha256": "69526ebade12170caa1629c7c118e9e309cbc2809270c1dc525207e61c42796c"
+    },
+    {
+      "path": "apps/tezbar/src/app.rs",
+      "before_sha256": "d9385c9589e80ae3b264ed88c0f2476ca6cea3cf81e321ff662b9a734318dd0a",
+      "after_sha256": "d62aac7d00eb7c94ec0a0a23b67d3df357df2c9c4ded23dcb1431121a97a09d8"
+    },
+    {
+      "path": "apps/tezbar/src/events.rs",
+      "before_sha256": "8cda7ddc1b231d410eb1d0db51954cd0c08955c6b2efd2f7938c5f2d4db909bb",
+      "after_sha256": "8e620fcfaa163e0cf957b49f1799be3ca4eab3b369451deec06228f4b718d92e"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/mod.rs",
+      "before_sha256": "829796a147a7b22c618e77a365605e206f3b0ff20969b52726edc061b49b79de",
+      "after_sha256": "1a583e7db01d8935732c3be38342ab1bfafd33837f5164117b871f6c1e870b35"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration.rs",
+      "before_sha256": "5a53d587233ee1f92cfc19fd45cb36d8eba70fc2525eeda41425b739bce15bad",
+      "after_sha256": "860efe59db9ab44510fc5ed75f06c44f707b3a111a9603400a56f4d7424f7150"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs",
+      "before_sha256": "d281430de41a9288555a2556f5fe789c137ea46cbf537a4602c517d6c2c3b7b7",
+      "after_sha256": "4b227345b92230bbe060960b25c3c58e754002d6ed1f80efc16ee78fd78d3434"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/input.rs",
+      "before_sha256": "3b9d4280f55399135a1fcb37a271964e9ca73bcd506db50647692386f42bcff5",
+      "after_sha256": "e9f855c63b16494535c578e3f3a36d3ab1259cca4eb0e0c6d078cd1eadf24e93"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/mod.rs",
+      "before_sha256": "dad29c52221fc1e4961d867d185c1bac352ea8f938f47a65d4f91dbf2115a0f0",
+      "after_sha256": "44d69ce34ca075175b92eda98192b6465edb46bfcb02d2f142ee0fa327def92b"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/request.rs",
+      "before_sha256": "fb7294e8c348803265ada03c0a5158bf22bfc98c1c0638bff0f532abf6a52f01",
+      "after_sha256": "35d77c8aea617b2bdf59f233686a8d2234020a608c870eeeb3855f7e11d93848"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/state.rs",
+      "before_sha256": "5a60193bcc9bba08de065b8aaa373dbf93af31c555e2080bc91e699e9bafc309",
+      "after_sha256": "176c6be5ca72ebb8dfca89424a437f47e570b188418fb2833fe1a9cb6c80d7d2"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+      "before_sha256": "121857052ba69d7074674ac8b4b10e3d670918ab2510b42f6607c9f2a30d65c4",
+      "after_sha256": "4c18feed5b8cf9bc0340fa9246241d4d0190925f7c5d50f75609dccccaffa592"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/view.rs",
+      "before_sha256": "8d843ffbd04840252314e6b570eaed589a082ac1040163fada05d07b23c27a7d",
+      "after_sha256": "80eebcaaa1b114aaf723fa1d1b899f59ba5e891824416c76686fa2eabd60a984"
+    },
+    {
+      "path": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "before_sha256": "579d383e4c879e6e28ebd29f3beba9e44a8dcc156964db614044faf3f6e5b35d",
+      "after_sha256": "7b9f2a5c840335f47d7ddc0e067302a776ca1037d28695d81ada0d2a9fabfaf2"
+    },
+    {
+      "path": "crates/tezbar-core/src/terminal/stream.rs",
+      "before_sha256": "00a2fac863c86ca87ff857b046f2247f350b80d8e6fe41119b780063e9ce4071",
+      "after_sha256": "be2faaf8952d8fbaa2d866dfc3031be3a717364baa76f147973b056287e4a1d5"
+    },
+    {
+      "path": "crates/tezbar-ui/src/terminal_grid.rs",
+      "before_sha256": "2599e321fbd7230d3263bee674c7131440ed0c1bf9d12386fbf1964a4d1628c0",
+      "after_sha256": "b0090cc1fce63b81325a013d3230afe46f0e114b46c04ec42a2466686f9650ae"
+    }
+  ]
+}

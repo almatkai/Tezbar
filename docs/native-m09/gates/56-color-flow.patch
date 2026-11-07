@@ -1,0 +1,127 @@
+--- a/apps/tezbar/src/surfaces/extension_runtime/color_wheel.rs
++++ b/apps/tezbar/src/surfaces/extension_runtime/color_wheel.rs
+@@ -1,6 +1,22 @@
+ //! Native HSV wheel. Painting is pure; pointer/key input sends the schema callback.
+ use super::*;
+ use std::{cell::Cell, rc::Rc};
++use tezbar_core::instant::color::{Rgba, Source, ColorFormatRow, build_color_format_rows};
++
++pub(super) fn legacy(n: &Node) -> bool {
++    let markdown=n.string("markdown").unwrap_or("").trim();
++    markdown.strip_prefix("![").and_then(|m|m.split_once("](")).is_some_and(|(alt,target)|alt.to_lowercase().contains("color wheel") && target.ends_with(')') && !target.contains('\n'))
++}
++fn initial(n: &Node) -> [f64;4] {
++    let raw=n.props.get("initialColor");
++    let byte=|key|raw.and_then(|r|r.get(key)).and_then(Value::as_f64).filter(|v|v.is_finite()).map(|v|if v<=1. {v*255.} else {v}).map(|v|v.clamp(0.,255.).round());
++    let (r,g,b)=match (byte("red"),byte("green"),byte("blue")){(Some(r),Some(g),Some(b))=>(r/255.,g/255.,b/255.),_=>(1.,44./255.,72./255.)};
++    let alpha=raw.and_then(|r|r.get("alpha")).and_then(Value::as_f64).filter(|v|v.is_finite()).map(|v|if v>1. {v/255.} else {v}).unwrap_or(1.).clamp(0.,1.);
++    let max=r.max(g).max(b);let min=r.min(g).min(b);let delta=max-min;
++    let hue=if delta==0. {0.} else if max==r {60.*((g-b)/delta).rem_euclid(6.)} else if max==g {60.*((b-r)/delta+2.)} else {60.*((r-g)/delta+4.)};
++    [hue,if max==0. {0.} else {delta/max*100.},max*100.,alpha]
++}
++
+ fn hsv(h: f32, s: f32, v: f32, a: f32) -> Hsla {
+     let c = v * s;
+     let h = h / 60.;
+@@ -131,11 +147,12 @@
+             )
+             .into_any_element()
+     }
+-    fn wheel_values(&self) -> [f64; 4] {
++    pub(super) fn wheel_values(&self) -> [f64; 4] {
+         let Some(s) = &self.session else {
+             return [0., 100., 100., 1.];
+         };
+         s.form.wheel.unwrap_or_else(|| {
++            if legacy(&s.root) {return initial(&s.root)}
+             ["hue", "saturation", "value", "alpha"].map(|key| {
+                 s.root
+                     .props
+@@ -153,13 +170,23 @@
+         let x = f32::from(p.x - center.x);
+         let y = f32::from(p.y - center.y);
+         let radius = f32::from(bounds.size.width.min(bounds.size.height)) / 2.;
+-        if radius <= 0. {
++        if radius <= 0. || x.hypot(y)>radius {
+             return;
+         }
+         let mut values = self.wheel_values();
+         values[0] = ((x.atan2(-y).to_degrees() + 360.) % 360.) as f64;
+         values[1] = ((x * x + y * y).sqrt() / radius * 100.).min(100.) as f64;
+         self.wheel_update(values, w, cx);
++    }
++    pub(super) fn color_formats(&self) -> Vec<ColorFormatRow> {
++        let [h,s,v,a]=self.wheel_values();
++        let c=v/100.*s/100.;let x=c*(1.-((h/60.)%2.-1.).abs());let m=v/100.-c;
++        let (r,g,b)=match (h/60.) as u32 {0=>(c,x,0.),1=>(x,c,0.),2=>(0.,c,x),3=>(0.,x,c),4=>(x,0.,c),_=>(c,0.,x)};
++        build_color_format_rows(&Rgba{r:((r+m)*255.).round(),g:((g+m)*255.).round(),b:((b+m)*255.).round(),a:a.clamp(0.,1.),source:Source::Rgb})
++    }
++    pub(super) fn copy_color_format(&mut self, key: &str, cx: &mut Context<Self>) {
++        if !self.visible || self.disposed || !self.session.as_ref().is_some_and(|s|legacy(&s.root)) {return}
++        if let Some(row)=self.color_formats().into_iter().find(|r|r.key==key) {self.quiet(ExtensionRequest::Copy(row.value),cx);}
+     }
+     pub(super) fn wheel_update(
+         &mut self,
+--- a/apps/tezbar/src/surfaces/extension_runtime/view.rs
++++ b/apps/tezbar/src/surfaces/extension_runtime/view.rs
+@@ -504,6 +504,14 @@
+         d.into_any_element()
+     }
+     fn detail(&self, n: &Node, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
++        if color_wheel::legacy(n) {
++            let mut formats=div().flex().flex_col().gap(px(8.)).flex_1().min_w_0().child("Color Formats");
++            for row in self.color_formats() {
++                let owner=cx.entity().downgrade();let key=row.key;
++                formats=formats.child(div().flex().flex_col().child(controls::action_button(format!("color-format-{key}"),row.title,ButtonTone::Quiet,false,t,move |_,cx| {let _=owner.update(cx,|v,cx|v.copy_color_format(key,cx));})).child(div().font_family("monospace").child(row.value)));
++            }
++            return div().flex().gap(px(16.)).p(px(16.)).child(self.wheel(cx)).child(formats).into_any_element();
++        }
+         let mut body = div().flex().flex_col().gap(px(12.)).flex_1().min_w_0();
+         if let Some(doc) = self.documents.get(&document_id(n)) {
+             body = body.child(doc.view.clone());
+@@ -736,8 +744,18 @@
+                 d = d.child(self.field(n, id, t, cx));
+             }
+         }
+-        if n.props.contains_key("nativeColorWheel") {
+-            d = d.child(self.wheel(cx));
++        if let Some(wheel)=n.props.get("nativeColorWheel") {
++            d=d.child(self.wheel(cx));
++            if let Some(formats)=wheel["formats"].as_array() {
++                for (i,row) in formats.iter().take(16).enumerate() {
++                    if let (Some(title),Some(value),Some(action))=(row["title"].as_str(),row["value"].as_str(),row["actionId"].as_str()) {
++                        d=d.child(div().flex().flex_col().gap(px(4.)).child(self.button(format!("wheel-format-{i}"),title.into(),UiEvent::Action(action.into()),t,cx)).child(div().font_family("monospace").child(value.to_owned())));
++                    }
++                }
++            }
++            if let Some(action)=wheel["saveActionId"].as_str() {
++                return d.child(self.button("save-wheel-color".into(),"Save Color".into(),UiEvent::Action(action.into()),t,cx)).into_any_element();
++            }
+         }
+         d.child(self.button(
+             "submit-form".into(),
+--- a/apps/tezbar/src/surfaces/extension_runtime/tests.rs
++++ b/apps/tezbar/src/surfaces/extension_runtime/tests.rs
+@@ -293,3 +293,22 @@
+         })
+     });
+ }
++
++#[gpui::test]
++fn color_detail_formats_use_canonical_rust_rows_and_full_owned_copy(cx: &mut TestAppContext) {
++    let rt=runtime(cx);let fake=Arc::new(Fake::default());
++    let (view,cx)=cx.add_window_view(|w,cx|RuntimeView::new(fake.clone(),Arc::new(NoAssets),w,cx));
++    cx.update(|w,cx|view.update(cx,|v,cx|{
++        v.activate(reply(json!({"type":"Detail","props":{"markdown":"![Color wheel](pixel.png)","initialColor":{"red":0,"green":1,"blue":0,"alpha":0.5}}})),1,w,cx).unwrap();
++        assert_eq!(v.color_formats().len(),9);
++        assert_eq!(v.color_formats()[0].value,"#00FF00");
++        assert_eq!(v.color_formats()[5].value,"rgba(0, 255, 0, 0.5)");
++        v.copy_color_format("rgba",cx);
++        v.wheel_update([240.,100.,100.,0.5],w,cx);
++        assert_eq!(v.color_formats()[0].value,"#0000FF");
++    }));
++    settle(&rt,cx);
++    assert!(fake.calls.lock().unwrap().iter().any(|(channel,args)|*channel=="clipboard:write" && args[0]=="rgba(0, 255, 0, 0.5)"));
++    cx.update(|w,cx|view.update(cx,|v,cx|{v.set_visible(false,w,cx);v.copy_color_format("hex",cx);}));
++    assert_eq!(fake.calls.lock().unwrap().iter().filter(|(c,_)|*c=="clipboard:write").count(),1);
++}

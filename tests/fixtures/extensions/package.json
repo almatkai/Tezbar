@@ -1,0 +1,23 @@
+{
+  "name": "m09-native-fixtures",
+  "title": "Native SDK Fixtures",
+  "description": "Isolated real SDK/reconciler fixtures; never install into a shipping profile",
+  "author": "tezbar-fixture",
+  "platforms": ["macOS", "Windows", "Linux"],
+  "commands": [
+    {"name":"list","title":"Fixture List","mode":"view"},
+    {"name":"grid","title":"Fixture Grid","mode":"view"},
+    {"name":"detail","title":"Fixture Detail","mode":"view"},
+    {"name":"form","title":"Fixture Form","mode":"view","preferences":[
+      {"name":"name","title":"Name","type":"textfield","required":true},
+      {"name":"password","title":"Password","type":"password","required":true},
+      {"name":"enabled","title":"Enabled","type":"checkbox","default":true},
+      {"name":"region","title":"Region","type":"dropdown","default":"kz","data":[{"title":"Kazakhstan","value":"kz"},{"title":"Japan","value":"jp"}]}
+    ]},
+    {"name":"actions","title":"Fixture Actions","mode":"view"},
+    {"name":"prompts","title":"Fixture Prompts","mode":"view"},
+    {"name":"feedback","title":"Fixture Feedback","mode":"view"},
+    {"name":"menubar","title":"Fixture MenuBarExtra","mode":"view"},
+    {"name":"invalidation","title":"Fixture Invalidation","mode":"view"}
+  ]
+}

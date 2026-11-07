@@ -1,0 +1,22 @@
+{
+  "previous_freeze": "docs/native-m09/final-source-freeze-04.json",
+  "final_freeze": "docs/native-m09/final-source-freeze-05.json",
+  "changed_files": [
+    "apps/tezbar/src/surfaces/extension_runtime/color_wheel.rs",
+    "apps/tezbar/src/surfaces/extension_runtime/tests.rs",
+    "apps/tezbar/src/surfaces/extension_runtime/view.rs"
+  ],
+  "unchanged_components": [
+    "crates/tezbar-ui",
+    "crates/tezbar-ui-model",
+    "crates/tezbar-core",
+    "src/main",
+    "src/shared",
+    "tests/fixtures/extensions",
+    "Cargo.toml",
+    "Cargo.lock",
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "reuse_reason": "Only three native RuntimeView files changed to display color format rows; full native/bench and normal check/build rerun at freeze05. The unchanged UI/model/core/TS/worker component gates remain recorded at freeze04."
+}

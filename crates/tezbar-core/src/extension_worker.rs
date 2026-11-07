@@ -1,7 +1,7 @@
 //! Demand-launched JavaScript compatibility process. Never dispatch core IPC here.
 use super::common::{CoreContext, CoreResult};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -69,13 +69,17 @@ pub struct WorkerLaunch {
 impl WorkerLaunch {
     /// Explicit host construction capability, not an IPC/config/environment override.
     /// Isolated fixtures can use the real worker without replacing the shared bundle.
-    pub fn new(bun: PathBuf, directory: PathBuf) -> Result<Self,String> {
-        let bun=std::fs::canonicalize(bun).map_err(|_| "Extension worker executable is unavailable")?;
-        let directory=std::fs::canonicalize(directory).map_err(|_| "Extension worker directory is unavailable")?;
+    pub fn new(bun: PathBuf, directory: PathBuf) -> Result<Self, String> {
+        let bun =
+            std::fs::canonicalize(bun).map_err(|_| "Extension worker executable is unavailable")?;
+        let directory = std::fs::canonicalize(directory)
+            .map_err(|_| "Extension worker directory is unavailable")?;
         if !bun.is_file() || !directory.join("extension-worker.js").is_file() {
-            return Err("Extension worker requires an executable file and a built worker bundle".into());
+            return Err(
+                "Extension worker requires an executable file and a built worker bundle".into(),
+            );
         }
-        Ok(Self{bun,directory})
+        Ok(Self { bun, directory })
     }
 }
 #[derive(Clone)]
@@ -83,6 +87,9 @@ pub struct ExtensionWorker {
     ctx: CoreContext,
     process: Arc<tokio::sync::Mutex<Option<Process>>>,
     launch: Option<WorkerLaunch>,
+    sessions: Arc<Mutex<HashMap<String, (String, String, String)>>>,
+    status_signatures: Arc<Mutex<HashMap<String, u64>>>,
+    status_refreshing: Arc<Mutex<HashSet<String>>>,
 }
 
 impl ExtensionWorker {
@@ -91,15 +98,36 @@ impl ExtensionWorker {
             ctx,
             process: Arc::new(tokio::sync::Mutex::new(None)),
             launch: None,
+            sessions: Default::default(),
+            status_signatures: Default::default(),
+            status_refreshing: Default::default(),
         }
     }
     pub fn with_launch(ctx: CoreContext, launch: WorkerLaunch) -> Self {
-        Self{launch:Some(launch),..Self::new(ctx)}
+        Self {
+            launch: Some(launch),
+            ..Self::new(ctx)
+        }
     }
 
     pub async fn request(&self, channel: &str, args: Vec<Value>) -> CoreResult {
-        if !CHANNELS.contains(&channel) {
+        if !CHANNELS.contains(&channel) && channel != "core:extension-status-action" {
             return Err(format!("Channel is not an extension operation: {channel}"));
+        }
+        if channel == "extension:dispose-session" {
+            let id = args
+                .first()
+                .and_then(|v| v["sessionId"].as_str())
+                .ok_or("Session identity required")?;
+            let exists = self
+                .sessions
+                .lock()
+                .map(|s| s.contains_key(id))
+                .unwrap_or(false);
+            self.remove_sdk_session(id);
+            if !exists {
+                return Ok(json!(false));
+            }
         }
         let (sender, pending, alive) = {
             let mut process = self.process.lock().await;
@@ -128,6 +156,15 @@ impl ExtensionWorker {
             if !alive.load(Ordering::Acquire) {
                 return Err("Extension Worker stopped before request registration".into());
             }
+            if pending.len()
+                >= if channel == "extension:dispose-session" {
+                    144
+                } else {
+                    128
+                }
+            {
+                return Err("Extension operation capacity reached".into());
+            }
             pending.insert(id.clone(), reply);
         }
         let _request = PendingRequest {
@@ -139,7 +176,8 @@ impl ExtensionWorker {
         } else {
             Duration::from_secs(120)
         };
-        tokio::time::timeout(timeout, async {
+        let request_args = args.clone();
+        let response = tokio::time::timeout(timeout, async {
             sender
                 .send(json!({"type":"invoke", "id":id, "channel":channel, "payload":args}))
                 .await
@@ -149,20 +187,80 @@ impl ExtensionWorker {
                 .map_err(|_| "Extension Worker stopped before replying".to_string())?
         })
         .await
-        .map_err(|_| format!("Extension operation timed out: {channel}"))?
+        .map_err(|_| format!("Extension operation timed out: {channel}"))??;
+        if channel == "extension:run-command" {
+            let extension = request_args[0]["extensionId"].as_str().unwrap_or("");
+            let command = request_args[0]["commandName"].as_str().unwrap_or("");
+            let old = self
+                .sessions
+                .lock()
+                .map(|sessions| {
+                    sessions
+                        .iter()
+                        .filter(|(id, (e, c, _))| {
+                            e == extension
+                                && c == command
+                                && Some(id.as_str()) != response["sessionId"].as_str()
+                        })
+                        .map(|(id, _)| id.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            for id in old {
+                self.remove_sdk_session(&id);
+            }
+        }
+        if channel == "extension:run-command"
+            && response["ok"] == true
+            && response["mode"] == "view"
+        {
+            let extension = request_args[0]["extensionId"]
+                .as_str()
+                .ok_or("Missing extension")?;
+            let session = response["sessionId"].as_str().ok_or("Missing session")?;
+            if response["extensionId"] != extension {
+                return Err("Worker identity mismatch".into());
+            }
+            let mut sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| "Session owner unavailable")?;
+            if sessions.len() >= 128 && !sessions.contains_key(session) {
+                return Err("Too many SDK sessions".into());
+            }
+            sessions.insert(
+                session.into(),
+                (
+                    extension.into(),
+                    request_args[0]["commandName"].as_str().unwrap_or("").into(),
+                    format!("sdk-{}", uuid::Uuid::new_v4()),
+                ),
+            );
+        }
+        if channel == "extension:dispose-session" {
+            self.remove_sdk_session(request_args[0]["sessionId"].as_str().unwrap_or(""));
+        }
+        self.sync_sdk_status(&response)?;
+        Ok(response)
     }
 
     async fn launch(&self) -> Result<Process, String> {
         self.ctx
             .emit("extension-worker-status", json!({"phase":"starting"}));
-        let (bun,directory) = if let Some(launch)=&self.launch {
-            (launch.bun.clone(),launch.directory.clone())
+        let (bun, directory) = if let Some(launch) = &self.launch {
+            (launch.bun.clone(), launch.directory.clone())
         } else {
-            let data=self.ctx.paths.data_dir.clone();
+            let data = self.ctx.paths.data_dir.clone();
             // Discovery remains lazy and exclusive to extension execution.
-            let bun=tokio::task::spawn_blocking(move ||crate::bun::locate_bun(&data)).await.map_err(|e|e.to_string())??;
-            let directory=if cfg!(debug_assertions) { PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist-backend") } else {self.ctx.paths.resource_dir.join("dist-backend")};
-            (bun,directory)
+            let bun = tokio::task::spawn_blocking(move || crate::bun::locate_bun(&data))
+                .await
+                .map_err(|e| e.to_string())??;
+            let directory = if cfg!(debug_assertions) {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist-backend")
+            } else {
+                self.ctx.paths.resource_dir.join("dist-backend")
+            };
+            (bun, directory)
         };
         let entry = directory.join("extension-worker.js");
         if !entry.is_file() {
@@ -253,6 +351,9 @@ impl ExtensionWorker {
         let output_sender = sender.clone();
         let ctx = self.ctx.clone();
         let (cancel_output, mut output_cancelled) = oneshot::channel::<()>();
+        let ui_sessions = self.sessions.clone();
+        let status_signatures = self.status_signatures.clone();
+        let status_refreshing = self.status_refreshing.clone();
         let mut output = tokio::spawn(async move {
             let mut reader = BufReader::new(stdout);
             let mut ready = Some(ready);
@@ -294,9 +395,56 @@ impl ExtensionWorker {
                     Some("core-request") => {
                         let sender = output_sender.clone();
                         let ctx = ctx.clone();
+                        let ui_sessions = ui_sessions.clone();
+                        if host_requests.len() >= 128 {
+                            let _=sender.send(json!({"type":"core-reply","id":message["id"],"error":"Extension host capacity reached"})).await;
+                            continue;
+                        }
                         host_requests.spawn(async move {
                             let channel = message["channel"].as_str().unwrap_or("");
-                            let result = if HOST_CHANNELS.contains(&channel) {
+                            let result = if channel == "core:extension-ui" {
+                                let body = &message["payload"][0];
+                                let valid = ui_sessions
+                                    .lock()
+                                    .map(|sessions| {
+                                        sessions
+                                            .contains_key(body["sessionId"].as_str().unwrap_or(""))
+                                    })
+                                    .unwrap_or(false);
+                                if !valid {
+                                    Err("Unknown SDK source".into())
+                                } else {
+                                    match body["kind"].as_str() {
+                                        Some(
+                                            kind @ ("close" | "preferences" | "clear-search"
+                                            | "hud"),
+                                        ) => {
+                                            use crate::host::ExtensionControl;
+                                            let control = match kind {
+                                                "close" => ExtensionControl::Close,
+                                                "preferences" => ExtensionControl::Preferences,
+                                                "clear-search" => ExtensionControl::ClearSearch,
+                                                _ => ExtensionControl::Hud(
+                                                    body["message"]
+                                                        .as_str()
+                                                        .filter(|s| s.len() <= 4096)
+                                                        .unwrap_or("")
+                                                        .into(),
+                                                ),
+                                            };
+                                            ctx.host
+                                                .extension_control(
+                                                    body["sessionId"].as_str().unwrap_or("").into(),
+                                                    body["source"].as_u64().unwrap_or(0),
+                                                    control,
+                                                )
+                                                .await
+                                                .map(|_| json!(true))
+                                        }
+                                        _ => Err("Unknown SDK control".into()),
+                                    }
+                                }
+                            } else if HOST_CHANNELS.contains(&channel) {
                                 ctx.request(
                                     channel,
                                     message["payload"].as_array().cloned().unwrap_or_default(),
@@ -319,6 +467,48 @@ impl ExtensionWorker {
                         if let Some(channel) = message["channel"].as_str().filter(|c| {
                             c.starts_with("extension:") || *c == "extension-install-status"
                         }) {
+                            if channel == "extension:session-invalidated" {
+                                let id = message["payload"]["sessionId"]
+                                    .as_str()
+                                    .unwrap_or("")
+                                    .to_string();
+                                if host_requests.len() < 128
+                                    && status_signatures
+                                        .lock()
+                                        .map(|s| s.contains_key(&id))
+                                        .unwrap_or(false)
+                                    && status_refreshing
+                                        .lock()
+                                        .map(|mut s| s.insert(id.clone()))
+                                        .unwrap_or(false)
+                                {
+                                    let ctx = ctx.clone();
+                                    let pending = status_refreshing.clone();
+                                    host_requests.spawn(async move {
+                                        struct Release {
+                                            pending: Arc<Mutex<HashSet<String>>>,
+                                            id: String,
+                                        }
+                                        impl Drop for Release {
+                                            fn drop(&mut self) {
+                                                if let Ok(mut pending) = self.pending.lock() {
+                                                    pending.remove(&self.id);
+                                                }
+                                            }
+                                        }
+                                        let _lease = Release {
+                                            pending,
+                                            id: id.clone(),
+                                        };
+                                        let _ = ctx
+                                            .request(
+                                                "core:extension-status-refresh",
+                                                vec![json!({"sessionId":id})],
+                                            )
+                                            .await;
+                                    });
+                                }
+                            }
                             ctx.emit(channel, message["payload"].clone());
                         }
                     }
@@ -329,7 +519,13 @@ impl ExtensionWorker {
                         {
                             // Legacy JS notification compatibility initializes only
                             // when actually used; external processes use generic APIs.
-                            let _ = ctx.host.notify(crate::host::NotificationSpec::Timer { name: name.into(), path: path.into() }).await;
+                            let _ = ctx
+                                .host
+                                .notify(crate::host::NotificationSpec::Timer {
+                                    name: name.into(),
+                                    path: path.into(),
+                                })
+                                .await;
                         }
                     }
                     _ => {}
@@ -367,6 +563,9 @@ impl ExtensionWorker {
         let process_alive = alive.clone();
         let process_pending = pending.clone();
         let ctx = self.ctx.clone();
+        let sdk_sessions = self.sessions.clone();
+        let sdk_signatures = self.status_signatures.clone();
+        let sdk_refreshing = self.status_refreshing.clone();
         let finished = tokio::spawn(async move {
             let mut output_joined = false;
             let mut writer_joined = false;
@@ -399,6 +598,17 @@ impl ExtensionWorker {
             }
             errors.abort();
             let _ = errors.await;
+            if let Ok(mut signatures) = sdk_signatures.lock() {
+                signatures.clear();
+            }
+            if let Ok(mut pending) = sdk_refreshing.lock() {
+                pending.clear();
+            }
+            if let Ok(mut sessions) = sdk_sessions.lock() {
+                for (_, (_, _, scope)) in sessions.drain() {
+                    let _ = ctx.host.status_items().remove(&scope);
+                }
+            }
             ctx.emit("extension-worker-status", json!({"phase":"stopped"}));
         });
         if tokio::time::timeout(Duration::from_secs(20), readiness)
@@ -422,7 +632,164 @@ impl ExtensionWorker {
         })
     }
 
+    pub(crate) async fn retire_sdk(&self, extension: &str, command: Option<&str>) {
+        let ids = self
+            .sessions
+            .lock()
+            .map(|sessions| {
+                sessions
+                    .iter()
+                    .filter(|(_, (e, c, _))| {
+                        e == extension && command.is_none_or(|command| command == c)
+                    })
+                    .map(|(id, _)| id.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        for id in ids {
+            let _ = self
+                .request("extension:dispose-session", vec![json!({"sessionId":id})])
+                .await;
+        }
+    }
+    fn remove_sdk_session(&self, id: &str) {
+        if let Ok(mut signatures) = self.status_signatures.lock() {
+            signatures.remove(id);
+        }
+        if let Ok(mut pending) = self.status_refreshing.lock() {
+            pending.remove(id);
+        }
+        if let Ok(mut sessions) = self.sessions.lock() {
+            if let Some((_, _, scope)) = sessions.remove(id) {
+                let _ = self.ctx.host.status_items().remove(&scope);
+                self.ctx
+                    .emit("extension:session-disposed", json!({"sessionId":id}));
+            }
+        }
+    }
+    fn sync_sdk_status(&self, reply: &Value) -> Result<(), String> {
+        let Some(id) = reply["sessionId"].as_str() else {
+            return Ok(());
+        };
+        let Some((extension, _, scope)) = self
+            .sessions
+            .lock()
+            .map_err(|_| "SDK resources unavailable")?
+            .get(id)
+            .cloned()
+        else {
+            return Ok(());
+        };
+        if reply["root"]["type"] != "MenuBarExtra" {
+            self.status_signatures
+                .lock()
+                .map_err(|_| "Status owner unavailable")?
+                .remove(id);
+            let _ = self.ctx.host.status_items().remove(&scope);
+            return Ok(());
+        }
+        let root = &reply["root"];
+        fn items(node: &Value, out: &mut Vec<Value>, counter: &mut usize) {
+            *counter += 1;
+            let group = format!("group-{}", counter);
+            match node["type"].as_str() {
+                Some("MenuBarExtra.Item") => {
+                    if let Some(action) = node["props"]["actionIds"][0].as_str() {
+                        out.push(json!({"id":action,"title":node["props"]["title"],"enabled":node["props"]["isEnabled"].as_bool().unwrap_or(true),"checked":node["props"]["isSelected"]}));
+                    }
+                }
+                Some("MenuBarExtra.Submenu") => {
+                    let mut nested = Vec::new();
+                    if let Some(children) = node["children"].as_array() {
+                        for child in children {
+                            items(child, &mut nested, counter);
+                        }
+                    }
+                    out.push(json!({"id":group,"kind":"submenu","title":node["props"]["title"],"items":nested}));
+                    return;
+                }
+                Some("MenuBarExtra.Section") => {
+                    if let Some(title) = node["props"]["title"].as_str() {
+                        out.push(
+                            json!({"id":group,"kind":"section","title":title,"enabled":false}),
+                        );
+                    }
+                }
+                Some("MenuBarExtra.Separator") => {
+                    out.push(json!({"id":group,"kind":"separator","title":""}));
+                    return;
+                }
+                _ => {}
+            }
+            if let Some(children) = node["children"].as_array() {
+                for child in children {
+                    items(child, out, counter);
+                }
+            }
+        }
+        let mut menu = Vec::new();
+        items(root, &mut menu, &mut 0);
+        let this = self.clone();
+        let session = id.to_string();
+        let runtime = tokio::runtime::Handle::current();
+        let callback = Arc::new(move |action: String| {
+            let this = this.clone();
+            let session = session.clone();
+            runtime.spawn(async move {
+                // Reject callbacks after dispose/disable/EOF, including queued OS clicks.
+                if !this
+                    .sessions
+                    .lock()
+                    .map(|s| s.contains_key(&session))
+                    .unwrap_or(false)
+                {
+                    return;
+                }
+                let _ = Box::pin(this.request(
+                    "core:extension-status-action",
+                    vec![json!({"sessionId":session,"actionId":action})],
+                ))
+                .await;
+            });
+        });
+        let params =
+            json!({"items":menu,"title":root["props"]["title"],"tooltip":root["props"]["tooltip"]});
+        use std::hash::{Hash, Hasher};
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        params.to_string().hash(&mut hash);
+        let signature = hash.finish();
+        if self
+            .status_signatures
+            .lock()
+            .map_err(|_| "Status owner unavailable")?
+            .get(id)
+            == Some(&signature)
+        {
+            return Ok(());
+        }
+        // No SDK-provided icon paths are admitted into tray decode. Runtime images
+        // retain canonical registry authority through the shared asset service.
+        let _ = extension;
+        crate::extensions::process_host::set_status_item(
+            &self.ctx,
+            &scope,
+            std::path::Path::new(""),
+            &params,
+            callback,
+        )?;
+        self.status_signatures
+            .lock()
+            .map_err(|_| "Status owner unavailable")?
+            .insert(id.into(), signature);
+        Ok(())
+    }
     pub async fn shutdown(&self) {
+        if let Ok(mut signatures) = self.status_signatures.lock() {
+            signatures.clear();
+        }
+        if let Ok(mut pending) = self.status_refreshing.lock() {
+            pending.clear();
+        }
         if let Some(mut process) = self.process.lock().await.take() {
             if let Some(stop) = process.stop.take() {
                 let _ = stop.send(());
@@ -544,15 +911,16 @@ mod launch_path_tests {
     use super::*;
     #[test]
     fn explicit_worker_launch_validates_owned_paths_without_launching() {
-        let root=tempfile::tempdir().unwrap();
-        let bun=root.path().join("fixture-bun");
-        let dir=root.path().join("bundle");std::fs::create_dir(&dir).unwrap();
-        assert!(WorkerLaunch::new(bun.clone(),dir.clone()).is_err());
-        std::fs::write(&bun,b"not invoked by this test").unwrap();
-        assert!(WorkerLaunch::new(bun.clone(),dir.clone()).is_err());
-        std::fs::write(dir.join("extension-worker.js"),b"fixture bundle").unwrap();
-        let launch=WorkerLaunch::new(bun.clone(),dir.clone()).unwrap();
-        assert_eq!(launch.bun,std::fs::canonicalize(bun).unwrap());
-        assert_eq!(launch.directory,std::fs::canonicalize(dir).unwrap());
+        let root = tempfile::tempdir().unwrap();
+        let bun = root.path().join("fixture-bun");
+        let dir = root.path().join("bundle");
+        std::fs::create_dir(&dir).unwrap();
+        assert!(WorkerLaunch::new(bun.clone(), dir.clone()).is_err());
+        std::fs::write(&bun, b"not invoked by this test").unwrap();
+        assert!(WorkerLaunch::new(bun.clone(), dir.clone()).is_err());
+        std::fs::write(dir.join("extension-worker.js"), b"fixture bundle").unwrap();
+        let launch = WorkerLaunch::new(bun.clone(), dir.clone()).unwrap();
+        assert_eq!(launch.bun, std::fs::canonicalize(bun).unwrap());
+        assert_eq!(launch.directory, std::fs::canonicalize(dir).unwrap());
     }
 }

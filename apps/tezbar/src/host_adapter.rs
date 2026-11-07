@@ -64,6 +64,22 @@ impl GpuiHost {
     }
 }
 impl Host for GpuiHost {
+    fn extension_control(
+        &self,
+        session: String,
+        source: u64,
+        control: ExtensionControl,
+    ) -> HostFuture<()> {
+        let (kind, message) = match control {
+            ExtensionControl::Close => ("close", None),
+            ExtensionControl::Preferences => ("preferences", None),
+            ExtensionControl::ClearSearch => ("clear-search", None),
+            ExtensionControl::Hud(message) => ("hud", Some(message)),
+        };
+        let result=self.relay.send_core(CoreEvent::Other{channel:"extension:ui".into(),payload:serde_json::json!({"sessionId":session,"source":source,"kind":kind,"message":message})});
+        Box::pin(async { result })
+    }
+
     fn emit(&self, channel: &str, payload: serde_json::Value) {
         if let Err(error) = self.relay.send_core(CoreEvent::decode(channel, payload)) {
             eprintln!("Core event delivery failed for {channel}: {error}");

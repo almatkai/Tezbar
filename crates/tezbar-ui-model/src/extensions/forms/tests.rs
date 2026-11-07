@@ -221,3 +221,21 @@ fn preferences_keep_command_scopes_and_partition() {
     assert_eq!(parts[&Some("recent".into())]["limit"], "25");
     assert_eq!(parts[&None]["token"], "fixture");
 }
+
+#[test]
+fn sdk_defaults_and_submit_only_validation_errors_allow_corrected_resubmit() {
+    let mut state = FormState::default();
+    state.reconcile(&form(json!([
+        {"type":"Form.TextField","props":{"id":"text","error":"Text required"}},
+        {"type":"Form.Checkbox","props":{"id":"check","defaultValue":true}},
+        {"type":"Form.Dropdown","props":{"id":"choice"},"children":[{"type":"Form.Dropdown.Item","props":{"value":"first"}}]}
+    ])));
+    assert_eq!(state.values()["check"], true);
+    assert_eq!(state.values()["choice"], "first");
+    state.change("text", json!("corrected")).unwrap();
+    assert!(state.validate().is_ok());
+    state.reconcile(&form(
+        json!([{"type":"Form.Checkbox","props":{"id":"check","defaultValue":false}}]),
+    ));
+    assert_eq!(state.values()["check"], true);
+}

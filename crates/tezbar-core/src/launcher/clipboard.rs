@@ -427,6 +427,14 @@ impl Worker {
         Ok(())
     }
     fn write_text(&mut self, text: String) -> Result<(), String> {
+        if let Some(result) = self
+            .ctx
+            .host
+            .desktop_effect(crate::host::DesktopEffect::WriteText(text.clone()))
+        {
+            return result.map(|_| ());
+        }
+
         self.native()?.set_text(text).map_err(|e| e.to_string())
     }
     fn write_image(&mut self, bytes: &[u8]) -> Result<(), String> {
@@ -437,6 +445,17 @@ impl Worker {
             .map_err(|e| e.to_string())?
             .into_rgba8();
         let (width, height) = image.dimensions();
+        if let Some(result) = self
+            .ctx
+            .host
+            .desktop_effect(crate::host::DesktopEffect::WriteImage {
+                bytes: image.as_raw().clone(),
+                width,
+                height,
+            })
+        {
+            return result.map(|_| ());
+        }
         self.native()?
             .set_image(arboard::ImageData {
                 width: width as usize,
@@ -480,6 +499,14 @@ impl Worker {
     fn handle(&mut self, c: &str, a: &[Value]) -> CoreResult {
         match c {
             "clipboard:read" => {
+                if let Some(result) = self
+                    .ctx
+                    .host
+                    .desktop_effect(crate::host::DesktopEffect::ReadClipboard)
+                {
+                    return result;
+                }
+
                 return match self.native()?.get_text() {
                     Ok(text) => Ok(json!(text)),
                     Err(arboard::Error::ContentNotAvailable) => Ok(json!("")),
@@ -581,11 +608,31 @@ impl Worker {
                             .iter()
                             .filter_map(|p| p.as_str().map(str::to_owned))
                             .collect();
-                        native::write_files(&paths)?
+                        if paths.iter().any(|p| p.is_empty() || p.contains('\0')) {
+                            return Err("Invalid clipboard files".into());
+                        }
+                        if let Some(result) =
+                            self.ctx
+                                .host
+                                .desktop_effect(crate::host::DesktopEffect::WriteFiles(
+                                    paths.iter().map(std::path::PathBuf::from).collect(),
+                                ))
+                        {
+                            result?;
+                        } else {
+                            native::write_files(&paths)?;
+                        }
                     }
                     _ => return Err("Unsupported clipboard format".into()),
                 }
-                self.last_sequence = native::sequence();
+                self.last_sequence = match self
+                    .ctx
+                    .host
+                    .desktop_effect(crate::host::DesktopEffect::ClipboardSequence)
+                {
+                    Some(result) => Some(result?.as_u64().ok_or("Invalid clipboard sequence")?),
+                    None => native::sequence(),
+                };
                 self.last_id = id.into();
                 self.ctx.emit("clipboard:changed", json!({}));
                 Ok(json!(true))
@@ -781,8 +828,7 @@ mod tests {
             .unwrap();
         assert!(external.exists());
         assert_eq!(
-            crate::common::read_json(&root.join("search/clipboard.json")).unwrap()
-                ["future"],
+            crate::common::read_json(&root.join("search/clipboard.json")).unwrap()["future"],
             42
         );
         c.shutdown().await;

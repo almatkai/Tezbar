@@ -56,6 +56,7 @@ async function main(): Promise<void> {
           argumentValues,
         })
       }
+      case 'core:extension-status-action':
       case 'extension:invoke-action': {
         if (typeof body?.actionId !== 'string') throw new Error('actionId is required')
         const formValues =
@@ -71,12 +72,14 @@ async function main(): Promise<void> {
                 ])
               )
             : undefined
-        return runner.invokeExtensionAction({ ...session(), actionId: body.actionId, formValues })
+        const result = await runner.invokeExtensionAction({ ...session(), actionId: body.actionId, formValues, hostSource: typeof body.hostSource === 'number' ? body.hostSource : 0 })
+        if (channel === 'core:extension-status-action') runner.invalidateExtensionSession(session().sessionId)
+        return result
       }
       case 'extension:search-text-changed':
         return runner.updateSearchText({ ...session(), searchText: String(body?.searchText ?? '') })
       case 'extension:refresh-session':
-        return runner.refreshExtensionSession(session())
+        return runner.refreshExtensionSession({...session(),viewRevision:typeof body?.viewRevision === 'number' ? body.viewRevision : undefined})
       case 'extension:load-more':
         return runner.loadMoreExtensionSession(session())
       case 'extension:dispose-session':

@@ -290,6 +290,8 @@ manual OS spikes and M3–M11 parity remain outstanding. Inactive services remai
 
 ## §E Extensions
 
+M9 local headless implementation evidence (2026-11-07, unstaged on `db4d0df`): the linked native Store/runtime and all nine actual Bun → initialized NativeCore/TestHost → RuntimeView scenarios pass in the normal native suite (360 tests) and bench suite (362 tests). The [M9 receipt](native-m09/completion.md), [final APIs](native-m09/final-api.md) and [case map](native-m09/final-source-case-map.json) record exact assertions and limits. All 115 original expanded cases and 45 E rows are retained; this note does not change row acceptance. M7 retains E-04/ST-21 settings ownership. Windows, physical IME/AX/GPU/RAM, live installation and fresh independent design/closure review remain pending.
+
 | ID | Behaviour | Current owner | Acceptance | Status |
 | --- | --- | --- | --- | --- |
 | E-01 | Store search (`extension:search-store` paged), paste GitHub URL to install, Raycast catalog (macOS) / Tezbar-loved (Windows) | `ExtensionsView.tsx`, `extensionCatalogState.ts` | port `ExtensionsView.test.ts` (5), `extensionCatalogState.test.ts` (8) | todo |

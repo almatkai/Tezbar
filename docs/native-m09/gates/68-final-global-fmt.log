@@ -1,0 +1,2130 @@
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/build.rs:1:
+-fn main() { println!("cargo:rerun-if-changed=src/fts_rank_math.c"); cc::Build::new().file("src/fts_rank_math.c").compile("tezbar_fts_rank_math"); }
++fn main() {
++    println!("cargo:rerun-if-changed=src/fts_rank_math.c");
++    cc::Build::new()
++        .file("src/fts_rank_math.c")
++        .compile("tezbar_fts_rank_math");
++}
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/canonical_tests.rs:450:
+ #[tokio::test]
+ async fn retry_reuses_original_image_and_preserves_completed_effect_history() {
+     use runtime::transcript::*;
+-    let (_dir,core,mut events)=fixture();
++    let (_dir, core, mut events) = fixture();
+     let png="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII=";
+-    let mut user=Message::text("user","original");
+-    user.blocks.push(Block::Image{mime:"image/png".into(),data:png.into()});
+-    runtime::store::save(&core.inner.ctx.paths.data_dir,"retry","user",&[user]).unwrap();
+-    let completed=Message { role:"assistant".into(),opaque:None,blocks:vec![Block::ToolCall{id:"effect".into(),wire_id:"effect".into(),name:"write".into(),arguments:json!({"path":"effect-marker","content":"once"}).to_string()}] };
+-    let result=Message{role:"tool".into(),opaque:None,blocks:vec![Block::ToolResult{call:"effect".into(),wire_id:"effect".into(),name:"write".into(),blocks:vec![Block::Text{text:"completed effect marker once".into()}],is_error:false}]};
+-    runtime::store::save(&core.inner.ctx.paths.data_dir,"retry","answer",&[completed,result]).unwrap();
+-    let mut fake=server(vec![final_reply(Protocol::OpenaiChat),final_reply(Protocol::OpenaiChat),final_reply(Protocol::OpenaiChat)]).await;
++    let mut user = Message::text("user", "original");
++    user.blocks.push(Block::Image {
++        mime: "image/png".into(),
++        data: png.into(),
++    });
++    runtime::store::save(&core.inner.ctx.paths.data_dir, "retry", "user", &[user]).unwrap();
++    let completed = Message {
++        role: "assistant".into(),
++        opaque: None,
++        blocks: vec![Block::ToolCall {
++            id: "effect".into(),
++            wire_id: "effect".into(),
++            name: "write".into(),
++            arguments: json!({"path":"effect-marker","content":"once"}).to_string(),
++        }],
++    };
++    let result = Message {
++        role: "tool".into(),
++        opaque: None,
++        blocks: vec![Block::ToolResult {
++            call: "effect".into(),
++            wire_id: "effect".into(),
++            name: "write".into(),
++            blocks: vec![Block::Text {
++                text: "completed effect marker once".into(),
++            }],
++            is_error: false,
++        }],
++    };
++    runtime::store::save(
++        &core.inner.ctx.paths.data_dir,
++        "retry",
++        "answer",
++        &[completed, result],
++    )
++    .unwrap();
++    let mut fake = server(vec![
++        final_reply(Protocol::OpenaiChat),
++        final_reply(Protocol::OpenaiChat),
++        final_reply(Protocol::OpenaiChat),
++    ])
++    .await;
+     core.patch_config(json!({"provider":"openai-compatible","model":"vision","providerConfigs":{"openai-compatible":{"baseURL":fake.url}},"providerModels":{"openai-compatible":[{"id":"vision","capabilities":["tools","vision"]}]},"agentApprovalMode":"turbo"})).await.unwrap();
+     core.handle("agent:run",&[json!({"runId":"agent-reopened-retry","task":"original","sessionId":"retry","userTurnId":"user","assistantTurnId":"answer","retry":true})]).await.unwrap().unwrap();
+-    next_event(&mut events,"answer").await; next_event(&mut events,"done").await;
+-    let wire=fake.requests.recv().await.unwrap().to_string();
+-    assert!(wire.contains(png)); assert!(wire.contains("completed effect marker once"));
++    next_event(&mut events, "answer").await;
++    next_event(&mut events, "done").await;
++    let wire = fake.requests.recv().await.unwrap().to_string();
++    assert!(wire.contains(png));
++    assert!(wire.contains("completed effect marker once"));
+     assert!(!core.inner.ctx.paths.home_dir.join("effect-marker").exists());
+     core.patch_config(json!({"model":"text"})).await.unwrap();
+     core.handle("agent:run",&[json!({"runId":"agent-history-nonvision","task":"continue","sessionId":"retry","priorTurnIds":["user","answer"]})]).await.unwrap().unwrap();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/canonical_tests.rs:470:
+-    next_event(&mut events,"answer").await; next_event(&mut events,"done").await;
+-    let wire=fake.requests.recv().await.unwrap().to_string(); assert!(!wire.contains(png)); assert!(wire.contains("Earlier image omitted"));
+-    assert!(serde_json::to_string(&runtime::store::load(&core.inner.ctx.paths.data_dir,"retry","user").unwrap()).unwrap().contains(png));
++    next_event(&mut events, "answer").await;
++    next_event(&mut events, "done").await;
++    let wire = fake.requests.recv().await.unwrap().to_string();
++    assert!(!wire.contains(png));
++    assert!(wire.contains("Earlier image omitted"));
++    assert!(serde_json::to_string(
++        &runtime::store::load(&core.inner.ctx.paths.data_dir, "retry", "user").unwrap()
++    )
++    .unwrap()
++    .contains(png));
+     core.patch_config(json!({"model":"vision"})).await.unwrap();
+     core.handle("agent:run",&[json!({"runId":"agent-history-vision-again","task":"continue","sessionId":"retry","priorTurnIds":["user","answer"]})]).await.unwrap().unwrap();
+-    next_event(&mut events,"answer").await; next_event(&mut events,"done").await;
+-    assert!(fake.requests.recv().await.unwrap().to_string().contains(png));
++    next_event(&mut events, "answer").await;
++    next_event(&mut events, "done").await;
++    assert!(fake
++        .requests
++        .recv()
++        .await
++        .unwrap()
++        .to_string()
++        .contains(png));
+     core.shutdown().await;
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/chat.rs:41:
+ /// This runs on the same blocking-pool task as the canonical transcript lookup.
+ pub(super) fn prior_turn(root: &Path, session: &str, turn: &str) -> Result<Option<Value>, String> {
+     let path = root.join("chat/sessions.sqlite3");
+-    if !path.is_file() { return Ok(None); }
++    if !path.is_file() {
++        return Ok(None);
++    }
+     let db = open(&path)?;
+     let row = db.query_row(
+         "SELECT role, CASE WHEN length(CAST(text AS BLOB)) <= 4194304 THEN text ELSE NULL END, substr(error,1,8192), attachments_json IS NOT NULL AND attachments_json NOT IN ('[]','null','') FROM chat_turns WHERE session_id=? AND id=? AND NOT EXISTS(SELECT 1 FROM chat_deleted_sessions WHERE id=?)",
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/chat.rs:48:
+         params![session,turn,session],
+         |r| Ok((r.get::<_,String>(0)?,r.get::<_,Option<String>>(1)?,r.get::<_,Option<String>>(2)?,r.get::<_,bool>(3)?)),
+     ).optional().map_err(err)?;
+-    row.map(|(role,text,error,images)| {
++    row.map(|(role, text, error, images)| {
+         let text = text.ok_or("Native limit: legacy turn exceeds the 4 MiB context budget")?;
+         Ok(json!({"id":turn,"role":role,"text":text,"error":error,"hasImages":images}))
+-    }).transpose()
++    })
++    .transpose()
+ }
+ fn session_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
+     let mut v = json!({"id":r.get::<_,String>(0)?,"title":r.get::<_,String>(1)?,"createdAt":r.get::<_,i64>(2)?,"updatedAt":r.get::<_,i64>(3)?});
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/chat.rs:363:
+         result
+     }
+ }
+-pub(super) fn clear_targets(value: Option<&Value>) -> Result<Vec<String>,String> {
+-    let Some(value)=value.filter(|v| !v.is_null()) else { return Ok(Vec::new()); };
+-    let values=value.as_array().filter(|v|v.len()<=64).ok_or("Invalid clear conversation identities")?;
+-    let mut ids=Vec::new();
++pub(super) fn clear_targets(value: Option<&Value>) -> Result<Vec<String>, String> {
++    let Some(value) = value.filter(|v| !v.is_null()) else {
++        return Ok(Vec::new());
++    };
++    let values = value
++        .as_array()
++        .filter(|v| v.len() <= 64)
++        .ok_or("Invalid clear conversation identities")?;
++    let mut ids = Vec::new();
+     for value in values {
+-        let id=value.as_str().filter(|id|!id.is_empty()&&id.len()<=4096&&!id.chars().any(char::is_control)).ok_or("Invalid clear conversation identity")?;
+-        if !ids.iter().any(|i|i==id) { ids.push(id.to_string()); }
++        let id = value
++            .as_str()
++            .filter(|id| !id.is_empty() && id.len() <= 4096 && !id.chars().any(char::is_control))
++            .ok_or("Invalid clear conversation identity")?;
++        if !ids.iter().any(|i| i == id) {
++            ids.push(id.to_string());
++        }
+     }
+     Ok(ids)
+ }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/ext/project.rs:113:
+         }
+         Ok(result)
+     }
+-    pub(in crate::ai) async fn revoke_changed_projects(
+-        &self,
+-        cwd: &Path,
+-    ) -> Result<(), String> {
++    pub(in crate::ai) async fn revoke_changed_projects(&self, cwd: &Path) -> Result<(), String> {
+         let data = self.ext_read().await?;
+         let mut changed = vec![];
+         for e in data["extensions"].as_array().unwrap() {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/ext/project.rs:171:
+         .await
+         .map(|_| ())
+     }
+-    pub(in crate::ai) async fn trust_project(
+-        &self,
+-        cwd: &str,
+-        pin: &str,
+-    ) -> CoreResult {
++    pub(in crate::ai) async fn trust_project(&self, cwd: &str, pin: &str) -> CoreResult {
+         let cwd = PathBuf::from(cwd);
+         let project = tokio::task::spawn_blocking(move || read_project(&cwd))
+             .await
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/ext/secrets.rs:79:
+         let had_revoked = revoked.exists();
+         if had_revoked {
+             if let Err(error) = std::fs::rename(&revoked, &archived_revoked) {
+-                if had_ciphertext { std::fs::rename(&archived, &self.path).map_err(err)?; }
++                if had_ciphertext {
++                    std::fs::rename(&archived, &self.path).map_err(err)?;
++                }
+                 return Err(err(error));
+             }
+         }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/ext/secrets.rs:621:
+     assert!(!store.path.exists());
+     store.reset_missing().unwrap();
+     assert!(!store.reset_available().unwrap());
+-    store.put("c", "token", Some("fixture-after-second-reset")).unwrap();
+-    assert_eq!(store.values("c").unwrap()["token"], "fixture-after-second-reset");
++    store
++        .put("c", "token", Some("fixture-after-second-reset"))
++        .unwrap();
++    assert_eq!(
++        store.values("c").unwrap()["token"],
++        "fixture-after-second-reset"
++    );
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/legacy.rs:124:
+             .map(|clock| clock.pause());
+         let answer = tokio::select! {r=rx=>r.unwrap_or(false),_=cancel.cancelled()=>false,_=tokio::time::sleep(Duration::from_secs(300))=>false};
+         self.inner.state.lock().unwrap().approvals.remove(&id);
+-        self.agent_event(run_id,json!({"type":"approval-expired","approvalId":id}));
++        self.agent_event(run_id, json!({"type":"approval-expired","approvalId":id}));
+         answer && !cancel.is_cancelled()
+     }
+     pub(super) async fn approve(&self, v: &Value) -> CoreResult {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/legacy.rs:141:
+             }
+             state.approvals.remove(id).unwrap()
+         };
+-        if decision == "always" && !approval.remember_command && approval.extension_identity.is_none() {
++        if decision == "always"
++            && !approval.remember_command
++            && approval.extension_identity.is_none()
++        {
+             let _ = approval.reply.send(false);
+             return Err("This operation requires review every time.".into());
+         }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/mod.rs:842:
+                 )
+                 .await
+             }
+-            "chat:list" | "chat:get" | "chat:image" | "chat:append" | "chat:update-title" | "chat:delete-turn"
+-            | "chat:delete" | "chat:clear" => {
+-                let requested_sessions = if channel=="chat:clear" {chat::clear_targets(args.get(1))?} else {Vec::new()};
++            "chat:list" | "chat:get" | "chat:image" | "chat:append" | "chat:update-title"
++            | "chat:delete-turn" | "chat:delete" | "chat:clear" => {
++                let requested_sessions = if channel == "chat:clear" {
++                    chat::clear_targets(args.get(1))?
++                } else {
++                    Vec::new()
++                };
+                 let _lifecycle =
+                     if matches!(channel, "chat:delete" | "chat:clear" | "chat:delete-turn") {
+                         Some(self.inner.session_lifecycle.lock().await)
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/native_tests.rs:1174:
+         .await
+         .unwrap();
+     assert!(result.is_err());
+-    assert!(
+-        !core
+-            .inner
+-            .state
+-            .lock()
+-            .unwrap()
+-            .agents
+-            .contains_key("agent-invalid-selection")
+-    );
++    assert!(!core
++        .inner
++        .state
++        .lock()
++        .unwrap()
++        .agents
++        .contains_key("agent-invalid-selection"));
+     no_extra(&mut http).await;
+     core.shutdown().await;
+ }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/native_tools.rs:440:
+                     Duration::from_secs(timeout),
+                     cancel,
+                 )
+-                .await?.result()
++                .await?
++                .result()
+             }
+             Tool::Screen => Err("Screen capture must use the image result path".into()),
+             Tool::Read(p, offset, limit) => tokio::task::spawn_blocking(move || {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/process.rs:1:
++use super::*;
+ #[cfg(windows)]
+ use crate::windows_job;
+-use super::*;
+ use std::process::Stdio;
+ use tokio::{
+     io::{AsyncRead, AsyncReadExt},
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/providers/antigravity.rs:706:
+ }
+ 
+ impl AiCore {
+-    pub(in crate::ai) fn antigravity_bases(
+-        &self,
+-        cfg: &Value,
+-    ) -> Result<Vec<String>, String> {
++    pub(in crate::ai) fn antigravity_bases(&self, cfg: &Value) -> Result<Vec<String>, String> {
+         let mut bases = if cfg["_explicitBaseURL"] == true {
+             vec![s(&cfg["baseURL"]).to_string()]
+         } else if let Some(base) = env("BASE_URL") {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/providers/copilot.rs:19:
+             .await
+             .remove(&hash(github));
+     }
+-    pub(in crate::ai) async fn cached_copilot_session(
+-        &self,
+-        github: &str,
+-    ) -> Option<Session> {
++    pub(in crate::ai) async fn cached_copilot_session(&self, github: &str) -> Option<Session> {
+         self.inner
+             .copilot_sessions
+             .lock()
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/agent.rs:85:
+                 let saved_id = id.to_string();
+                 let (stored, legacy) = tokio::task::spawn_blocking(move || {
+                     let stored = runtime::store::load(&data, &saved_session, &saved_id)?;
+-                    let legacy = if stored.is_none() { chat::prior_turn(&data,&saved_session,&saved_id)? } else { None };
+-                    Ok::<_,String>((stored,legacy))
++                    let legacy = if stored.is_none() {
++                        chat::prior_turn(&data, &saved_session, &saved_id)?
++                    } else {
++                        None
++                    };
++                    Ok::<_, String>((stored, legacy))
+                 })
+                 .await
+                 .map_err(err)??;
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/agent.rs:93:
+                 if let Some(stored) = stored {
+                     messages.extend(stored)
+-                } else if let Some(prior) = legacy.as_ref().or_else(|| fallback.iter().find(|p| p["id"] == id)) {
++                } else if let Some(prior) = legacy
++                    .as_ref()
++                    .or_else(|| fallback.iter().find(|p| p["id"] == id))
++                {
+                     if !matches!(s(&prior["role"]), "user" | "assistant") {
+                         return Err("Native validation: invalid prior turn role".into());
+                     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/store.rs:9:
+     path::{Path, PathBuf},
+ };
+ static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+-static REVISIONS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String,u64>>> = std::sync::OnceLock::new();
+-fn revisions() -> &'static std::sync::Mutex<std::collections::HashMap<String,u64>> { REVISIONS.get_or_init(Default::default) }
+-fn revision_keys(root: &Path, session: &str, turn: &str) -> [String;3] {
+-    [root.join("llm/transcripts").to_string_lossy().into_owned(), folder(root,session).to_string_lossy().into_owned(), folder(root,session).join(key(turn)).to_string_lossy().into_owned()]
++static REVISIONS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, u64>>> =
++    std::sync::OnceLock::new();
++fn revisions() -> &'static std::sync::Mutex<std::collections::HashMap<String, u64>> {
++    REVISIONS.get_or_init(Default::default)
+ }
++fn revision_keys(root: &Path, session: &str, turn: &str) -> [String; 3] {
++    [
++        root.join("llm/transcripts").to_string_lossy().into_owned(),
++        folder(root, session).to_string_lossy().into_owned(),
++        folder(root, session)
++            .join(key(turn))
++            .to_string_lossy()
++            .into_owned(),
++    ]
++}
+ pub fn generation(root: &Path, session: &str, turn: &str) -> Vec<u64> {
+     let _guard = LOCK.lock().unwrap();
+     let revisions = revisions().lock().unwrap();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/store.rs:20:
+-    revision_keys(root,session,turn).iter().map(|k| *revisions.get(k).unwrap_or(&0)).collect()
++    revision_keys(root, session, turn)
++        .iter()
++        .map(|k| *revisions.get(k).unwrap_or(&0))
++        .collect()
+ }
+-pub fn save_at(root: &Path, session: &str, turn: &str, messages: &[Message], expected: &[u64]) -> Result<(),String> {
+-    let _guard = LOCK.lock().map_err(|_| "Native transcript store lock failed")?;
++pub fn save_at(
++    root: &Path,
++    session: &str,
++    turn: &str,
++    messages: &[Message],
++    expected: &[u64],
++) -> Result<(), String> {
++    let _guard = LOCK
++        .lock()
++        .map_err(|_| "Native transcript store lock failed")?;
+     let revisions = revisions().lock().map_err(err)?;
+-    let current: Vec<_> = revision_keys(root,session,turn).iter().map(|k| *revisions.get(k).unwrap_or(&0)).collect();
+-    if current != expected { return Err("Conversation was deleted. This run cannot save history.".into()); }
++    let current: Vec<_> = revision_keys(root, session, turn)
++        .iter()
++        .map(|k| *revisions.get(k).unwrap_or(&0))
++        .collect();
++    if current != expected {
++        return Err("Conversation was deleted. This run cannot save history.".into());
++    }
+     drop(revisions);
+-    save_unlocked(root,session,turn,messages)
++    save_unlocked(root, session, turn, messages)
+ }
+ fn key(id: &str) -> String {
+     format!("{:x}", Sha256::digest(id.as_bytes()))
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/store.rs:53:
+     let _guard = LOCK
+         .lock()
+         .map_err(|_| "Native transcript store lock failed")?;
+-    save_unlocked(root,session,turn,messages)
++    save_unlocked(root, session, turn, messages)
+ }
+-fn save_unlocked(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
++fn save_unlocked(
++    root: &Path,
++    session: &str,
++    turn: &str,
++    messages: &[Message],
++) -> Result<(), String> {
+     let dir = folder(root, session);
+     let blobs = dir.join("blobs");
+     let mut messages = messages.to_vec();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/store.rs:138:
+ }
+ /// Read one canonical user image without inflating other blobs or shifting indices
+ /// when an earlier image is unavailable. The caller verifies durable session ownership.
+-pub fn load_user_image(root: &Path, session: &str, turn: &str, index: usize) -> Result<Option<Value>, String> {
+-    let _guard = LOCK.lock().map_err(|_| "Native transcript store lock failed")?;
++pub fn load_user_image(
++    root: &Path,
++    session: &str,
++    turn: &str,
++    index: usize,
++) -> Result<Option<Value>, String> {
++    let _guard = LOCK
++        .lock()
++        .map_err(|_| "Native transcript store lock failed")?;
+     let dir = folder(root, session);
+     let path = dir.join(format!("{}.json", key(turn)));
+-    if !path.is_file() { return Ok(None); }
++    if !path.is_file() {
++        return Ok(None);
++    }
+     if path.metadata().map_err(err)?.len() > 32 * 1024 * 1024 {
+         return Err("Native store: transcript exceeds limit".into());
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/store.rs:149:
+     let messages: Vec<Message> = serde_json::from_value(common::read_json(&path)?).map_err(err)?;
+-    if messages.len() != 1 || messages[0].role != "user" { return Ok(None); }
+-    let Some(Block::Image { mime, data }) = messages[0].blocks.iter().filter(|b| matches!(b,Block::Image{..})).nth(index) else { return Ok(None); };
++    if messages.len() != 1 || messages[0].role != "user" {
++        return Ok(None);
++    }
++    let Some(Block::Image { mime, data }) = messages[0]
++        .blocks
++        .iter()
++        .filter(|b| matches!(b, Block::Image { .. }))
++        .nth(index)
++    else {
++        return Ok(None);
++    };
+     let data = if let Some(hash) = data.strip_prefix("blob:") {
+-        if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) { return Ok(None); }
++        if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
++            return Ok(None);
++        }
+         let bytes = match std::fs::File::open(dir.join("blobs").join(hash)) {
+-            Ok(file) => { use std::io::Read; let mut bytes=Vec::new(); file.take(super::limits::IMAGE_BYTES as u64+1).read_to_end(&mut bytes).map_err(err)?; bytes },
+-            Err(error) if error.kind()==std::io::ErrorKind::NotFound => return Ok(None),
++            Ok(file) => {
++                use std::io::Read;
++                let mut bytes = Vec::new();
++                file.take(super::limits::IMAGE_BYTES as u64 + 1)
++                    .read_to_end(&mut bytes)
++                    .map_err(err)?;
++                bytes
++            }
++            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+             Err(error) => return Err(err(error)),
+         };
+-        if bytes.len() > super::limits::IMAGE_BYTES { return Err("Native store: image exceeds limit".into()); }
++        if bytes.len() > super::limits::IMAGE_BYTES {
++            return Err("Native store: image exceeds limit".into());
++        }
+         base64::engine::general_purpose::STANDARD.encode(bytes)
+     } else {
+-        if data.len() > super::limits::IMAGE_BYTES * 4 / 3 + 4 { return Err("Native store: image exceeds limit".into()); }
++        if data.len() > super::limits::IMAGE_BYTES * 4 / 3 + 4 {
++            return Err("Native store: image exceeds limit".into());
++        }
+         data.clone()
+     };
+     Ok(Some(serde_json::json!({"mimeType":mime,"data":data})))
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/store.rs:224:
+     let dir = session
+         .map(|s| folder(root, s))
+         .unwrap_or_else(|| root.join("llm/transcripts"));
+-    let revision_key = if let (Some(session),Some(turn)) = (session,turn) { folder(root,session).join(key(turn)) } else { dir.clone() };
++    let revision_key = if let (Some(session), Some(turn)) = (session, turn) {
++        folder(root, session).join(key(turn))
++    } else {
++        dir.clone()
++    };
+     let mut revisions = revisions().lock().map_err(err)?;
+-    *revisions.entry(revision_key.to_string_lossy().into_owned()).or_default() += 1;
++    *revisions
++        .entry(revision_key.to_string_lossy().into_owned())
++        .or_default() += 1;
+     drop(revisions);
+     if !dir.exists() {
+         return Ok(());
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/transcript.rs:141:
+ /// Capability projection is disposable: canonical images survive model changes.
+ pub fn image_view(messages: &[Message], vision: bool) -> Vec<Message> {
+     fn project(blocks: &mut [Block]) {
+-        for b in blocks { match b {
+-            Block::Image{..} => *b=Block::Text{text:"[Earlier image omitted: the selected model cannot read images]".into()},
+-            Block::ToolResult{blocks,..} => project(blocks), _=>{}
+-        } }
++        for b in blocks {
++            match b {
++                Block::Image { .. } => {
++                    *b = Block::Text {
++                        text: "[Earlier image omitted: the selected model cannot read images]"
++                            .into(),
++                    }
++                }
++                Block::ToolResult { blocks, .. } => project(blocks),
++                _ => {}
++            }
++        }
+     }
+-    let mut view=messages.to_vec();
+-    if !vision { for m in &mut view { project(&mut m.blocks); } }
++    let mut view = messages.to_vec();
++    if !vision {
++        for m in &mut view {
++            project(&mut m.blocks);
++        }
++    }
+     view
+ }
+ fn text_size(b: &Block) -> usize {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/transcript.rs:154:
+-    match b { Block::Image{..}=>0, Block::ToolResult{blocks,..}=>128+blocks.iter().map(text_size).sum::<usize>(), _=>serde_json::to_vec(b).map(|b|b.len()).unwrap_or(usize::MAX/1024) }
++    match b {
++        Block::Image { .. } => 0,
++        Block::ToolResult { blocks, .. } => 128 + blocks.iter().map(text_size).sum::<usize>(),
++        _ => serde_json::to_vec(b)
++            .map(|b| b.len())
++            .unwrap_or(usize::MAX / 1024),
++    }
+ }
+ pub fn bound_context(messages: &mut [Message]) -> Result<bool, String> {
+     let size = |ms: &[Message]| -> usize {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/transcript.rs:158:
+         ms.iter()
+             .map(|m| {
+-                m.blocks
+-                    .iter()
+-                    .map(text_size)
+-                    .sum::<usize>()
++                m.blocks.iter().map(text_size).sum::<usize>()
+                     + m.opaque
+                         .as_ref()
+                         .map(|o| o.value.to_string().len())
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/runtime/transcript.rs:289:
+     use super::*;
+     #[test]
+     fn nested_images_are_excluded_from_text_context_and_projected_recursively() {
+-        let image=Block::Image{mime:"image/png".into(),data:"A".repeat(5*1024*1024)};
+-        let mut messages=vec![Message{role:"tool".into(),opaque:None,blocks:vec![Block::ToolResult{call:"c".into(),wire_id:"c".into(),name:"screen".into(),blocks:vec![image],is_error:false}]}];
++        let image = Block::Image {
++            mime: "image/png".into(),
++            data: "A".repeat(5 * 1024 * 1024),
++        };
++        let mut messages = vec![Message {
++            role: "tool".into(),
++            opaque: None,
++            blocks: vec![Block::ToolResult {
++                call: "c".into(),
++                wire_id: "c".into(),
++                name: "screen".into(),
++                blocks: vec![image],
++                is_error: false,
++            }],
++        }];
+         assert!(!bound_context(&mut messages).unwrap());
+-        assert!(!serde_json::to_string(&image_view(&messages,false)).unwrap().contains(&"A".repeat(100)));
+-        assert!(serde_json::to_string(&messages).unwrap().contains(&"A".repeat(100)));
++        assert!(!serde_json::to_string(&image_view(&messages, false))
++            .unwrap()
++            .contains(&"A".repeat(100)));
++        assert!(serde_json::to_string(&messages)
++            .unwrap()
++            .contains(&"A".repeat(100)));
+     }
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/ai/tests.rs:555:
+     ] {
+         assert!(!ai.join(removed).exists())
+     }
+-    assert!(!std::fs::read_to_string(root.join("../../src-tauri/tauri.conf.json"))
+-        .unwrap()
+-        .contains("raymes-pi-policy.ts"));
++    assert!(
++        !std::fs::read_to_string(root.join("../../src-tauri/tauri.conf.json"))
++            .unwrap()
++            .contains("raymes-pi-policy.ts")
++    );
+     let provider = std::fs::read_to_string(ai.join("provider.rs")).unwrap();
+     assert!(!provider.contains("self.command(\"opencode\")"));
+ }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/bun.rs:1:
+-use std::{path::PathBuf, process::{Command, Stdio}};
++use std::{
++    path::PathBuf,
++    process::{Command, Stdio},
++};
+ pub fn bun_executable_name() -> &'static str {
+     if cfg!(target_os = "windows") {
+         "bun.exe"
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/catalog.rs:33:
+             .await
+             .map_err(|e| e.to_string())?;
+ 
+-        if let Some(value) = disk.as_ref().filter(|v| v["version"].as_u64().unwrap_or(0) >= 6) {
++        if let Some(value) = disk
++            .as_ref()
++            .filter(|v| v["version"].as_u64().unwrap_or(0) >= 6)
++        {
+             let fetched_at = value["fetchedAt"].as_u64().unwrap_or(0);
+             let entries = prepare(normalize(&value["entries"]));
+             if !entries.is_empty() {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/catalog.rs:310:
+         .filter(|v| v["name"].as_str().is_some_and(|s| !s.is_empty()))
+         .map(|v| {
+             let name = v["name"].as_str().unwrap_or("");
+-            let title = v["title"].as_str().filter(|s| !s.is_empty()).unwrap_or(name);
++            let title = v["title"]
++                .as_str()
++                .filter(|s| !s.is_empty())
++                .unwrap_or(name);
+             let description = v["description"].as_str().unwrap_or("");
+             let author = v["author"]
+                 .as_str()
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/catalog.rs:319:
+                 .unwrap_or("Raycast Community");
+             let icon_url = v["iconUrl"].as_str().or_else(|| v["icon_url"].as_str());
+             let icon = v["icon"].as_str();
+-            let screenshots = v["screenshotUrls"].as_array().or_else(|| v["screenshot_urls"].as_array());
+-            let install_count = v["installCount"].as_u64().or_else(|| v["install_count"].as_u64()).unwrap_or(0);
++            let screenshots = v["screenshotUrls"]
++                .as_array()
++                .or_else(|| v["screenshot_urls"].as_array());
++            let install_count = v["installCount"]
++                .as_u64()
++                .or_else(|| v["install_count"].as_u64())
++                .unwrap_or(0);
+             let categories = v["categories"].clone();
+             let commands = v["commands"]
+                 .as_array()
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/catalog.rs:328:
+                 .flatten()
+                 .filter_map(|c| {
+                     let cmd_name = c["name"].as_str()?;
+-                    let cmd_title = c["title"].as_str().filter(|s| !s.is_empty()).unwrap_or(cmd_name);
++                    let cmd_title = c["title"]
++                        .as_str()
++                        .filter(|s| !s.is_empty())
++                        .unwrap_or(cmd_name);
+                     let cmd_desc = c["description"].as_str().unwrap_or("");
+                     Some(json!({
+                         "name": cmd_name,
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/catalog.rs:346:
+             obj.insert("installCount".into(), json!(install_count));
+             obj.insert("categories".into(), categories);
+             obj.insert("commands".into(), json!(commands));
+-            if let Some(u) = icon_url { obj.insert("iconUrl".into(), json!(u)); }
+-            if let Some(i) = icon { obj.insert("icon".into(), json!(i)); }
+-            if let Some(s) = screenshots { obj.insert("screenshotUrls".into(), json!(s)); }
++            if let Some(u) = icon_url {
++                obj.insert("iconUrl".into(), json!(u));
++            }
++            if let Some(i) = icon {
++                obj.insert("icon".into(), json!(i));
++            }
++            if let Some(s) = screenshots {
++                obj.insert("screenshotUrls".into(), json!(s));
++            }
+             Value::Object(obj)
+         })
+         .collect()
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/command_inputs.rs:127:
+     }
+ }
+ 
+-pub(in crate::extensions) fn command_inputs(
+-    ctx: &CoreContext,
+-) -> Result<Inputs, String> {
++pub(in crate::extensions) fn command_inputs(ctx: &CoreContext) -> Result<Inputs, String> {
+     let roots = roots(ctx);
+     let mut probe = Probe(BTreeMap::new());
+     for root in &roots {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/command_list.rs:102:
+                     // only matching observations, within the same two-attempt
+                     // bound. This rare fallback does extra verification work;
+                     // normal cache hits still never hash package contents.
+-                    let unchanged = result == registry::handle(ctx, "core:extensions:commands", &[]);
++                    let unchanged =
++                        result == registry::handle(ctx, "core:extensions:commands", &[]);
+                     // Uncached output is still published to the caller. Fence
+                     // it too: uninstall/update may finish during this read.
+                     let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/command_list_tests.rs:354:
+     write_json_atomic(
+         &ctx.paths.data_dir.join("extensions/oversized/package.json"),
+         &json!({"padding":"x".repeat(2 * 1024 * 1024 + 1),"commands":[]}),
+-    ).unwrap();
++    )
++    .unwrap();
+     let core = ExtensionsCore::new(ctx.clone());
+     let (ready, received) = tokio::sync::oneshot::channel();
+     let (release, held) = std::sync::mpsc::channel();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/command_list_tests.rs:361:
+     core.commands.before_publish(move || {
+         ready.send(()).unwrap();
+-        held.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
++        held.recv_timeout(std::time::Duration::from_secs(10))
++            .unwrap();
+     });
+     let reader = core.clone();
+     let pending = tokio::spawn(async move { commands(&reader).await });
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/command_list_tests.rs:367:
+     received.await.unwrap();
+-    core.handle("extension:uninstall", &[json!("com.tezbar.native.perplexity")])
+-        .await.unwrap().unwrap();
++    core.handle(
++        "extension:uninstall",
++        &[json!("com.tezbar.native.perplexity")],
++    )
++    .await
++    .unwrap()
++    .unwrap();
+     release.send(()).unwrap();
+     let listed = pending.await.unwrap();
+     assert_eq!(listed, uncached(&ctx));
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/command_list_tests.rs:383:
+         write_json_atomic(
+             &ctx.paths.data_dir.join("extensions/oversized/package.json"),
+             &json!({"padding":"x".repeat(2 * 1024 * 1024 + 1),"commands":[]}),
+-        ).unwrap();
++        )
++        .unwrap();
+         let core = ExtensionsCore::new(ctx.clone());
+         let external = ctx.clone();
+         core.commands.before_publish(move || {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/command_list_tests.rs:390:
+             // CLI/filesystem mutation deliberately bypasses CommandList::mutation.
+             if remove {
+-                let root = process_install::root(&external, "com.tezbar.native.perplexity").unwrap();
++                let root =
++                    process_install::root(&external, "com.tezbar.native.perplexity").unwrap();
+                 std::fs::remove_file(root.join("active.json")).unwrap();
+             } else {
+                 process_install::test_install_with(&external, "normal", |m| {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/process.rs:1:
+ //! Revision-1 independent bidirectional pipes and supervised process ownership.
++use super::{process_host::Host, process_install::Package};
+ #[cfg(test)]
+ use crate::child_supervisor as supervisor;
+-use super::{process_host::Host, process_install::Package};
+ use crate::common::{CoreContext, CoreResult};
+ use serde_json::{json, Value};
+ use std::{
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/process_install.rs:323:
+ pub(super) mod hash_work {
+     use std::{
+         cell::RefCell,
+-        sync::{atomic::{AtomicU64, Ordering}, Arc},
++        sync::{
++            atomic::{AtomicU64, Ordering},
++            Arc,
++        },
+     };
+     #[derive(Default)]
+     pub struct Work {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/registry.rs:1:
+-use crate::common::{
+-    now_ms, read_json, write_json_atomic, ConfigStore, CoreContext, CoreResult,
+-};
++use crate::common::{now_ms, read_json, write_json_atomic, ConfigStore, CoreContext, CoreResult};
+ use base64::Engine;
+ use serde_json::{json, Map, Value};
+ use sha2::{Digest, Sha256};
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/extensions/registry.rs:10:
+     time::UNIX_EPOCH,
+ };
+ 
+-#[path = "command_inputs.rs"]
+-mod inputs;
+ #[path = "asset_scope.rs"]
+ mod asset_scope;
++#[path = "command_inputs.rs"]
++mod inputs;
+ pub(crate) use asset_scope::{scope as asset_scope, scope_for_root as asset_scope_for_root};
+ pub(super) use inputs::command_inputs;
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/db.rs:235:
+ }
+ impl Store {
+     pub(crate) fn from_connection(db: Connection, vector: bool, path: PathBuf) -> Self {
+-        let rank_join = crate::fts_rank::register(&db).is_ok()
+-            && crate::fts_rank::supported();
++        let rank_join = crate::fts_rank::register(&db).is_ok() && crate::fts_rank::supported();
+         let store = Self {
+             db,
+             vector,
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/db.rs:561:
+     pub fn complete_batch(&mut self, completed: &[(String, i64, bool)]) -> Result<(), String> {
+         let tx = self.db.transaction().map_err(err)?;
+         for (job, position, failed) in completed {
+-            let n = tx.execute(
+-                "DELETE FROM knowledge_indexing_queue WHERE job_id=? AND position=?",
+-                params![job, position],
+-            ).map_err(err)?;
++            let n = tx
++                .execute(
++                    "DELETE FROM knowledge_indexing_queue WHERE job_id=? AND position=?",
++                    params![job, position],
++                )
++                .map_err(err)?;
+             if n > 0 {
+                 tx.execute("UPDATE knowledge_indexing_jobs SET processed_sources=processed_sources+1,failed_sources=failed_sources+? WHERE id=1 AND job_id=?",params![*failed as i64,job]).map_err(err)?;
+             }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/db.rs:1002:
+             if fts_query.is_empty() {
+                 continue;
+             }
+-            let sizes = if self.rank_join { "LEFT JOIN knowledge_chunks_fts_docsize sz ON sz.id=f.rowid" } else { "" };
++            let sizes = if self.rank_join {
++                "LEFT JOIN knowledge_chunks_fts_docsize sz ON sz.id=f.rowid"
++            } else {
++                ""
++            };
+             let matches = format!("FROM knowledge_chunks_fts f JOIN knowledge_chunks c ON c.rowid=f.rowid JOIN knowledge_sources s ON s.id=c.source_id JOIN knowledge_roots r ON r.id=s.root_id {sizes} WHERE knowledge_chunks_fts MATCH ? AND s.status='indexed' AND r.enabled=1 AND r.id IN ({root_filter})");
+             let budget = limit.saturating_mul(5).max(40);
+             let rows = if distinct_sources {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/db.rs:1139:
+         Ok(hits)
+     }
+     fn lexical_rank(&self) -> &'static str {
+-        if self.rank_join { "tezbar_bm25(knowledge_chunks_fts,sz.sz,1.0)" } else { "bm25(knowledge_chunks_fts,1.0)" }
++        if self.rank_join {
++            "tezbar_bm25(knowledge_chunks_fts,sz.sz,1.0)"
++        } else {
++            "bm25(knowledge_chunks_fts,1.0)"
++        }
+     }
+     /// Reduce matching IDs to their exact best chunk/source before hydrating.
+     /// The first row/source in global (BM25, chunk ID) order is exactly the
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/db.rs:1810:
+         };
+         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+             .parent()
+-            .unwrap().parent().unwrap()
++            .unwrap()
++            .parent()
++            .unwrap()
+             .join(format!("dist-backend/vec0.{ext}"));
+         if !path.is_file() {
+             eprintln!("No bundled vec0; exercising the no-extension fallback only");
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:3:
+ mod db;
+ mod embedding_schema;
+ mod extract;
+-mod runtime;
+ #[cfg(test)]
+-mod tests;
++mod lifecycle_tests;
+ #[cfg(test)]
+ mod performance_tests;
++mod runtime;
+ #[cfg(test)]
+-mod lifecycle_tests;
++mod tests;
+ mod text;
+ use crate::common::{now_ms, CoreContext, CoreResult, HandlerResult};
+-use db::{number, string, Database};
+ use db::semantic_work::{CountObservation, Scope};
++use db::{number, string, Database};
+ use extract::Cancellation;
+ use notify::{RecursiveMode, Watcher};
+ use runtime::{EmbeddingVariantId, ForegroundEmbedding, Runtime};
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:551:
+     fn semantic_scope_for(&self, settings: &Value, roots: &[Value]) -> (EmbeddingVariantId, Scope) {
+         let variant =
+             serde_json::from_value(settings["embeddingVariant"].clone()).unwrap_or_default();
+-        (variant, Scope::new(settings, roots, self.runtime(variant).model_key()))
++        (
++            variant,
++            Scope::new(settings, roots, self.runtime(variant).model_key()),
++        )
+     }
+     fn semantic_snapshot(&self, cache: &Cache) -> Value {
+         let settings = &cache.settings;
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:623:
+             .database()
+             .await?
+             .call_search(db::SearchToken::background(cancel.clone()), move |s| {
+-                let observation = s.semantic_counts_if_due(&requested, std::time::Instant::now())?;
++                let observation =
++                    s.semantic_counts_if_due(&requested, std::time::Instant::now())?;
+                 let storage = observation.reconciled.then(|| s.storage());
+                 Ok((observation, storage))
+             })
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:723:
+         let pending = self.inner.pending.clone();
+         let profiles = self.inner.profile_roots.clone();
+         let wake = self.inner.wake.clone();
+-        let watched_paths: Vec<_> = roots.iter().map(|r| PathBuf::from(string(r, "path"))).collect();
++        let watched_paths: Vec<_> = roots
++            .iter()
++            .map(|r| PathBuf::from(string(r, "path")))
++            .collect();
+         let watcher = tokio::task::spawn_blocking(move || {
+             // FSEvents may return /private/var/... for a configured /var/...
+             // root. Keep stored source paths in the configured namespace, even
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:738:
+                 })
+                 .collect();
+             aliases.sort_by_key(|(path, _)| std::cmp::Reverse(path.components().count()));
+-            let mut watcher = notify::recommended_watcher(
+-                move |mut event: notify::Result<notify::Event>| {
++            let mut watcher =
++                notify::recommended_watcher(move |mut event: notify::Result<notify::Event>| {
+                     if let Ok(event) = &mut event {
+                         for path in &mut event.paths {
+                             if let Some((_, root, relative)) =
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:764:
+                     ) {
+                         wake.notify_waiters();
+                     }
+-                },
+-            )
+-            .map_err(|e| e.to_string())?;
++                })
++                .map_err(|e| e.to_string())?;
+             for root in roots {
+                 if let Err(error) =
+                     watcher.watch(Path::new(string(&root, "path")), RecursiveMode::Recursive)
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:799:
+             let wake = self.inner.wake.notified();
+             tokio::pin!(wake);
+             wake.as_mut().enable();
+-            if self.inner.closed.load(Ordering::SeqCst) { break; }
++            if self.inner.closed.load(Ordering::SeqCst) {
++                break;
++            }
+             #[cfg(test)]
+             self.inner.observer_ticks[0].fetch_add(1, Ordering::Relaxed);
+             let settings = self.settings();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:980:
+             // pending work, external writers and counts. Filesystem/runtime/
+             // settings changes and shutdown wake both observers immediately.
+             let now = now_ms();
+-            let mut next = if self.inner.paused.load(Ordering::SeqCst) { now.saturating_add(FULL_RECONCILE_MS) } else { last_rescan.saturating_add(FULL_RECONCILE_MS) };
+-            if !started { next = next.min(startup); }
++            let mut next = if self.inner.paused.load(Ordering::SeqCst) {
++                now.saturating_add(FULL_RECONCILE_MS)
++            } else {
++                last_rescan.saturating_add(FULL_RECONCILE_MS)
++            };
++            if !started {
++                next = next.min(startup);
++            }
+             if !self.inner.paused.load(Ordering::SeqCst) {
+                 if let Some(due) = self.inner.pending.lock().unwrap().deadline(last_rescan) {
+                     next = next.min(due);
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:1300:
+                 break;
+             }
+             use futures_util::{stream, StreamExt};
+-            let mut futures = stream::iter(jobs).map(|(job, position, root_id, path)| {
+-                let root = self
+-                    .roots()
+-                    .into_iter()
+-                    .find(|r| string(r, "id") == root_id);
+-                let ocr = ocr.clone();
+-                async move {
+-                    let result = if let Some(root) = root {
+-                        self.index_one(&root, &path, cancel, ocr).await
+-                    } else {
+-                        Ok(IndexOutcome::Unchanged)
+-                    };
+-                    (job, position, path, result)
+-                }
+-            }).buffer_unordered(concurrency);
++            let mut futures = stream::iter(jobs)
++                .map(|(job, position, root_id, path)| {
++                    let root = self
++                        .roots()
++                        .into_iter()
++                        .find(|r| string(r, "id") == root_id);
++                    let ocr = ocr.clone();
++                    async move {
++                        let result = if let Some(root) = root {
++                            self.index_one(&root, &path, cancel, ocr).await
++                        } else {
++                            Ok(IndexOutcome::Unchanged)
++                        };
++                        (job, position, path, result)
++                    }
++                })
++                .buffer_unordered(concurrency);
+             while let Some((job, position, path, result)) = futures.next().await {
+                 cancel.check()?;
+                 let paced = result != Ok(IndexOutcome::Unchanged);
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:1860:
+                     .await;
+             }
+             "knowledge:choose-folder" => {
+-                return match self.inner.ctx.host.dialog(crate::host::DialogRequest::ChooseFolder).await? {
+-                    crate::host::DialogReply::Path(path) => Ok(path.map(|p| json!(p)).unwrap_or(Value::Null)),
++                return match self
++                    .inner
++                    .ctx
++                    .host
++                    .dialog(crate::host::DialogRequest::ChooseFolder)
++                    .await?
++                {
++                    crate::host::DialogReply::Path(path) => {
++                        Ok(path.map(|p| json!(p)).unwrap_or(Value::Null))
++                    }
+                     _ => Err("Invalid folder selection reply".into()),
+                 };
+             }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/mod.rs:2217:
+         {
+             return true;
+         }
+-        !components.iter().enumerate().any(|(i, component)| match component {
+-            std::path::Component::Normal(name) => {
+-                // No stat here: removed directories still reconcile children.
+-                // File exclusions apply to leaves, directory rules to ancestors.
+-                extract::skip(&name.to_string_lossy(), i + 1 < components.len())
+-                    || extract::skip(&name.to_string_lossy(), true)
+-            }
+-            _ => false,
+-        })
++        !components
++            .iter()
++            .enumerate()
++            .any(|(i, component)| match component {
++                std::path::Component::Normal(name) => {
++                    // No stat here: removed directories still reconcile children.
++                    // File exclusions apply to leaves, directory rules to ancestors.
++                    extract::skip(&name.to_string_lossy(), i + 1 < components.len())
++                        || extract::skip(&name.to_string_lossy(), true)
++                }
++                _ => false,
++            })
+     })
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/performance_tests.rs:99:
+     // Built-in selection is inactive even if Gemma remains installed/verified.
+     runtime.patch(json!({"modelState":"ready","integrityState":"verified"}));
+     core.handle("knowledge:embedding:set", &[json!("built-in")])
+-        .await.unwrap().unwrap();
++        .await
++        .unwrap()
++        .unwrap();
+     core.refresh_semantic_counts().await.unwrap();
+     assert_eq!(semantic(&core)["countsStale"], true);
+     assert!(semantic(&core)["indexVariant"].is_null());
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/runtime_bundle.rs:315:
+         .unwrap();
+         let selected = archive_path(&resources, &source, true);
+         let bytes = fs::read(&selected).expect("build hook must stage the actual development ZIP");
+-        let catalog: Catalog =
+-            serde_json::from_str(include_str!("../../../../src-tauri/runtime/embedding-macos-arm64.json"))
+-                .unwrap();
++        let catalog: Catalog = serde_json::from_str(include_str!(
++            "../../../../src-tauri/runtime/embedding-macos-arm64.json"
++        ))
++        .unwrap();
+         assert_eq!(bytes.len() as u64, catalog.archive_bytes);
+         assert_eq!(
+             format!("{:x}", Sha256::digest(bytes)),
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1028:
+     #[ignore = "scaled on-disk cache memory/parity probe; no inference or user data"]
+     fn scaled_cache_memory() {
+         let count = std::env::var("TEZBAR_MEMORY_ROWS")
+-            .ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(100_000)
++            .ok()
++            .and_then(|v| v.parse::<usize>().ok())
++            .unwrap_or(100_000)
+             .clamp(10_000, 1_000_000);
+         let directory = tempfile::tempdir().unwrap();
+         let db = Connection::open(directory.path().join("synthetic.sqlite3")).unwrap();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1035:
+         db.execute_batch(include_str!("schema.sql")).unwrap();
+-        db.execute_batch("BEGIN; INSERT INTO knowledge_roots VALUES('r','/synthetic','smart','local',1,0,0);").unwrap();
++        db.execute_batch(
++            "BEGIN; INSERT INTO knowledge_roots VALUES('r','/synthetic','smart','local',1,0,0);",
++        )
++        .unwrap();
+         db.execute("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<?) INSERT INTO knowledge_sources(id,root_id,path,content_hash,byte_size,modified_at,status) SELECT printf('s%08d',i),'r',printf('/synthetic/s%08d',i),'',0,0,'indexed' FROM n", [count.div_ceil(16)]).unwrap();
+         db.execute("WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<?) INSERT INTO knowledge_chunks(rowid,id,source_id,text) SELECT i,printf('c%08d',i),printf('s%08d',1+(i-1)/16),'archive' FROM n", [count]).unwrap();
+-        db.execute("INSERT INTO knowledge_gemma_embeddings SELECT id,?,? FROM knowledge_chunks", params![MODEL_KEY, text::encode(&vector(true))]).unwrap();
++        db.execute(
++            "INSERT INTO knowledge_gemma_embeddings SELECT id,?,? FROM knowledge_chunks",
++            params![MODEL_KEY, text::encode(&vector(true))],
++        )
++        .unwrap();
+         db.execute_batch("COMMIT").unwrap();
+         let s = Store::from_connection(db, false, directory.path().into());
+         let footprint = || {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1043:
+             let output = std::process::Command::new("ps")
+                 .args(["-o", "rss=", "-p", &std::process::id().to_string()])
+-                .output().unwrap();
+-            String::from_utf8_lossy(&output.stdout).trim().parse::<u64>().unwrap() * 1024
++                .output()
++                .unwrap();
++            String::from_utf8_lossy(&output.stdout)
++                .trim()
++                .parse::<u64>()
++                .unwrap()
++                * 1024
+         };
+         let rss_before = footprint();
+         let begin = Instant::now();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1057:
+         let build_ms = begin.elapsed().as_secs_f64() * 1000.;
+         let (ready, rejected, allocated, budget, loaded) = {
+             let c = s.search_cache.borrow();
+-            (c.ready, c.rejected, c.packed.as_ref().map(Packed::allocated).unwrap_or(0), c.budget, c.loaded_rows)
++            (
++                c.ready,
++                c.rejected,
++                c.packed.as_ref().map(Packed::allocated).unwrap_or(0),
++                c.budget,
++                c.loaded_rows,
++            )
+         };
+         assert!(allocated <= budget);
+         assert!(ready || rejected);
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1064:
+         let begin = Instant::now();
+-        assert_eq!(query(&s), cold, "scaled cache/fallback must preserve full ordered results");
++        assert_eq!(
++            query(&s),
++            cold,
++            "scaled cache/fallback must preserve full ordered results"
++        );
+         let warm_ms = begin.elapsed().as_secs_f64() * 1000.;
+         let rss_warm = footprint();
+         s.clear_search_cache();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1069:
+         assert_eq!(query(&s), cold);
+-        eprintln!("TEZBAR_MEMORY {}", serde_json::json!({
+-            "rows":count,"sources":count.div_ceil(16),"ready":ready,"rejected":rejected,
+-            "loaded":loaded,"estimated_allocated_bytes":allocated,"budget_bytes":budget,
+-            "rss_before":rss_before,"rss_warm":rss_warm,"rss_after_clear":footprint(),
+-            "cold_ms":cold_ms,"cache_build_ms":build_ms,"warm_ms":warm_ms,
+-            "database_bytes":std::fs::metadata(directory.path().join("synthetic.sqlite3")).unwrap().len(),
+-            "ordered_parity":true
+-        }));
++        eprintln!(
++            "TEZBAR_MEMORY {}",
++            serde_json::json!({
++                "rows":count,"sources":count.div_ceil(16),"ready":ready,"rejected":rejected,
++                "loaded":loaded,"estimated_allocated_bytes":allocated,"budget_bytes":budget,
++                "rss_before":rss_before,"rss_warm":rss_warm,"rss_after_clear":footprint(),
++                "cold_ms":cold_ms,"cache_build_ms":build_ms,"warm_ms":warm_ms,
++                "database_bytes":std::fs::metadata(directory.path().join("synthetic.sqlite3")).unwrap().len(),
++                "ordered_parity":true
++            })
++        );
+     }
+     #[test]
+     fn source_winners_match_full_sort_for_dense_legacy_ties_and_updates() {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1271:
+     #[test]
+     fn store_selects_joined_rank_only_on_qualified_target() {
+         let s = fixture(1);
+-        assert_eq!(s.rank_join, cfg!(all(target_os = "macos", target_arch = "aarch64")));
++        assert_eq!(
++            s.rank_join,
++            cfg!(all(target_os = "macos", target_arch = "aarch64"))
++        );
+     }
+ 
+     #[test]
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/search_cache.rs:1278:
+     fn joined_lengths_preserve_source_and_chunk_apis_through_root_and_chunk_mutations() {
+-        let mut s=fixture(200);
+-        s.db.execute("UPDATE knowledge_chunks SET source_id='s00001' WHERE rowid<=100",[]).unwrap();
++        let mut s = fixture(200);
++        s.db.execute(
++            "UPDATE knowledge_chunks SET source_id='s00001' WHERE rowid<=100",
++            [],
++        )
++        .unwrap();
+         s.db.execute_batch("INSERT INTO knowledge_chunks_fts(rowid,id,source_id,text) SELECT rowid,id,source_id,text FROM knowledge_chunks;").unwrap();
+         for phase in 0..5 {
+-            if phase==1 { s.db.execute_batch("UPDATE knowledge_roots SET enabled=0 WHERE id='other'; UPDATE knowledge_sources SET status='pending' WHERE id='s00105'; UPDATE knowledge_sources SET root_id='other' WHERE id='s00106';").unwrap(); }
+-            if phase==2 { s.db.execute_batch("DELETE FROM knowledge_chunks_fts WHERE rowid%11=0; DELETE FROM knowledge_chunks WHERE rowid%11=0; UPDATE knowledge_chunks SET text='unrelated archive café extra' WHERE rowid%7=0; UPDATE knowledge_chunks_fts SET text='unrelated archive café extra' WHERE rowid%7=0;").unwrap(); }
+-            if phase==3 { s.db.execute_batch("BEGIN; UPDATE knowledge_roots SET enabled=0; DELETE FROM knowledge_chunks_fts; ROLLBACK;").unwrap(); }
+-            if phase==4 { s.db.execute_batch("UPDATE knowledge_roots SET enabled=1;").unwrap(); }
++            if phase == 1 {
++                s.db.execute_batch("UPDATE knowledge_roots SET enabled=0 WHERE id='other'; UPDATE knowledge_sources SET status='pending' WHERE id='s00105'; UPDATE knowledge_sources SET root_id='other' WHERE id='s00106';").unwrap();
++            }
++            if phase == 2 {
++                s.db.execute_batch("DELETE FROM knowledge_chunks_fts WHERE rowid%11=0; DELETE FROM knowledge_chunks WHERE rowid%11=0; UPDATE knowledge_chunks SET text='unrelated archive café extra' WHERE rowid%7=0; UPDATE knowledge_chunks_fts SET text='unrelated archive café extra' WHERE rowid%7=0;").unwrap();
++            }
++            if phase == 3 {
++                s.db.execute_batch("BEGIN; UPDATE knowledge_roots SET enabled=0; DELETE FROM knowledge_chunks_fts; ROLLBACK;").unwrap();
++            }
++            if phase == 4 {
++                s.db.execute_batch("UPDATE knowledge_roots SET enabled=1;")
++                    .unwrap();
++            }
+             for query in ["unrelated", "unrelated archive", "archive café", "absent"] {
+-                for roots in [vec!["r".into()],vec!["other".into()],vec!["r".into(),"other".into()]] {
+-                    for limit in [1,16,80] {
+-                        for distinct in [false,true] {
+-                            s.rank_join=false;
+-                            let old=if distinct { s.search_sources(query,limit,&roots,true,None) } else { s.search(query,limit,&roots,true,None) }.unwrap();
+-                            s.rank_join=true;
+-                            let new=if distinct { s.search_sources(query,limit,&roots,true,None) } else { s.search(query,limit,&roots,true,None) }.unwrap();
++                for roots in [
++                    vec!["r".into()],
++                    vec!["other".into()],
++                    vec!["r".into(), "other".into()],
++                ] {
++                    for limit in [1, 16, 80] {
++                        for distinct in [false, true] {
++                            s.rank_join = false;
++                            let old = if distinct {
++                                s.search_sources(query, limit, &roots, true, None)
++                            } else {
++                                s.search(query, limit, &roots, true, None)
++                            }
++                            .unwrap();
++                            s.rank_join = true;
++                            let new = if distinct {
++                                s.search_sources(query, limit, &roots, true, None)
++                            } else {
++                                s.search(query, limit, &roots, true, None)
++                            }
++                            .unwrap();
+                             assert_eq!(new,old,"phase={phase} query={query} roots={roots:?} limit={limit} distinct={distinct}");
+                         }
+                     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/semantic_work.rs:126:
+                 // incomplete count gets this extra reconciliation: repeated
+                 // already-complete mini-batches retain the normal 10s budget.
+                 let drained_incomplete = c.value.0 < c.value.1
+-                    && work.empty.as_ref().is_some_and(|e| {
+-                        e.scope == *scope && e.stamp == stamp
+-                    });
++                    && work
++                        .empty
++                        .as_ref()
++                        .is_some_and(|e| e.scope == *scope && e.stamp == stamp);
+                 if now.saturating_duration_since(c.completed) < COUNT_INTERVAL
+                     && !drained_incomplete
+                 {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/semantic_work_tests.rs:463:
+     let f = fixture();
+     let s = &f.store;
+     let at = Instant::now();
+-    s.db.execute_batch("UPDATE knowledge_chunks SET embedding_json='[]' WHERE id='old'").unwrap();
++    s.db.execute_batch("UPDATE knowledge_chunks SET embedding_json='[]' WHERE id='old'")
++        .unwrap();
+     let key = scope(s, "q8");
+     assert_eq!(count(s, &key, at).value, Some((1, 2)));
+     s.db.execute_batch("INSERT INTO knowledge_gemma_embeddings VALUES('old','q8',X'00'); INSERT INTO knowledge_gemma_embeddings VALUES('a','q4',X'00'),('old','q4',X'00');").unwrap();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/semantic_work_tests.rs:474:
+     assert_eq!(f.queries.counts.load(Ordering::SeqCst), 1);
+     assert!(s.semantic_pending(&key, 8, at).unwrap().is_empty());
+     let complete = count(s, &key, at + Duration::from_millis(1));
+-    assert!(complete.fresh && complete.reconciled, "known incomplete progress must become fresh when its exact queue drains");
++    assert!(
++        complete.fresh && complete.reconciled,
++        "known incomplete progress must become fresh when its exact queue drains"
++    );
+     assert_eq!(complete.value, Some((2, 2)));
+     assert_eq!(f.queries.counts.load(Ordering::SeqCst), 2);
+     // A stream of already-complete tiny additions retains normal coalescing.
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/semantic_work_tests.rs:483:
+         assert!(s.semantic_pending(&key, 8, at).unwrap().is_empty());
+         assert!(!count(s, &key, at + Duration::from_millis(2)).fresh);
+     }
+-    assert_eq!(f.queries.counts.load(Ordering::SeqCst), 2, "no COUNT per already-complete mini-batch");
++    assert_eq!(
++        f.queries.counts.load(Ordering::SeqCst),
++        2,
++        "no COUNT per already-complete mini-batch"
++    );
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/tests.rs:1:
+ use super::*;
+ use crate::common::CorePaths;
+ fn source_root() -> PathBuf {
+-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
++    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
++        .join("../..")
++        .canonicalize()
++        .unwrap()
+ }
+ fn profile(dir: &Path) -> CoreContext {
+     CoreContext::headless(CorePaths {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/tests.rs:1559:
+         while core.selected_runtime().snapshot()["integrityState"] == "verifying" {
+             tokio::time::sleep(Duration::from_millis(10)).await;
+         }
+-    }).await.unwrap();
+-    core.selected_runtime().patch(json!({"modelState":"ready","integrityState":"verified","error":"DB-only fixture"}));
++    })
++    .await
++    .unwrap();
++    core.selected_runtime()
++        .patch(json!({"modelState":"ready","integrityState":"verified","error":"DB-only fixture"}));
+     let counts = tokio::time::timeout(Duration::from_secs(2), async {
+         loop {
+             let snapshot = core
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/tests.rs:1594:
+ 
+ #[tokio::test]
+ async fn host_folder_dialog_preserves_path_cancel_and_error_contracts() {
+-    use crate::host::{TestHost,DialogReply};
+-    let d=tempfile::tempdir().unwrap(); let desktop=Arc::new(TestHost {allow_interaction:true,..Default::default()});
+-    let mut ctx=profile(d.path()); ctx.host=desktop.clone(); let core=KnowledgeCore::new(ctx);
+-    for path in [Some(d.path().to_path_buf()),None] {
+-        desktop.dialogs.lock().unwrap().push_back(Ok(DialogReply::Path(path.clone())));
+-        let reply=core.handle("knowledge:choose-folder",&[]).await.unwrap().unwrap();
+-        assert_eq!(reply,path.map(|p|json!(p)).unwrap_or(Value::Null));
++    use crate::host::{DialogReply, TestHost};
++    let d = tempfile::tempdir().unwrap();
++    let desktop = Arc::new(TestHost {
++        allow_interaction: true,
++        ..Default::default()
++    });
++    let mut ctx = profile(d.path());
++    ctx.host = desktop.clone();
++    let core = KnowledgeCore::new(ctx);
++    for path in [Some(d.path().to_path_buf()), None] {
++        desktop
++            .dialogs
++            .lock()
++            .unwrap()
++            .push_back(Ok(DialogReply::Path(path.clone())));
++        let reply = core
++            .handle("knowledge:choose-folder", &[])
++            .await
++            .unwrap()
++            .unwrap();
++        assert_eq!(reply, path.map(|p| json!(p)).unwrap_or(Value::Null));
+     }
+-    desktop.dialogs.lock().unwrap().push_back(Err("fixture dialog closed".into()));
+-    assert_eq!(core.handle("knowledge:choose-folder",&[]).await.unwrap().unwrap_err(),"fixture dialog closed");
+-    assert_eq!(desktop.calls.lock().unwrap().len(),3);
++    desktop
++        .dialogs
++        .lock()
++        .unwrap()
++        .push_back(Err("fixture dialog closed".into()));
++    assert_eq!(
++        core.handle("knowledge:choose-folder", &[])
++            .await
++            .unwrap()
++            .unwrap_err(),
++        "fixture dialog closed"
++    );
++    assert_eq!(desktop.calls.lock().unwrap().len(), 3);
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/text.rs:1:
+ use serde_json::{json, Value};
+ use sha2::{Digest, Sha256};
+-use unicode_normalization::UnicodeNormalization;
+ use std::sync::LazyLock;
++use unicode_normalization::UnicodeNormalization;
+ #[cfg(test)]
+ #[path = "text_performance_tests.rs"]
+ mod performance_tests;
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/text.rs:33:
+     // FNV is incremental: seed each domain once instead of allocating a
+     // prefixed UTF-16 Vec for every word and every overlapping ngram. Preserve
+     // the exact feature order and F32 accumulation used by persisted vectors.
+-    let seeds = |prefix: &[u16]| (feature_hash(prefix, 2166136261), feature_hash(prefix, 0x9e3779b9));
++    let seeds = |prefix: &[u16]| {
++        (
++            feature_hash(prefix, 2166136261),
++            feature_hash(prefix, 0x9e3779b9),
++        )
++    };
+     let word_seed = seeds(&[119, 58]); // w:
+     let char_seed = seeds(&[99, 58]); // c:
+     let mut add = |seed: (u32, u32), word: &[u16]| {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/text.rs:220:
+     embedding: bool,
+     mut checkpoint: impl FnMut() -> Result<(), String>,
+ ) -> Result<Vec<Value>, String> {
+-    static TRAILING_SPACE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"[ \t]+\n").unwrap());
+-    static EMPTY_LINES: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\n{3,}").unwrap());
++    static TRAILING_SPACE: LazyLock<regex::Regex> =
++        LazyLock::new(|| regex::Regex::new(r"[ \t]+\n").unwrap());
++    static EMPTY_LINES: LazyLock<regex::Regex> =
++        LazyLock::new(|| regex::Regex::new(r"\n{3,}").unwrap());
+     let mut chunks = vec![];
+     for page in pages {
+         let extracted = page["extractedText"].as_str().unwrap_or("").trim();
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/knowledge/text.rs:235:
+         };
+         let text = text.replace('\0', "");
+         let text = TRAILING_SPACE.replace_all(&text, "\n");
+-        let text = EMPTY_LINES
+-            .replace_all(&text, "\n\n")
+-            .trim()
+-            .to_string();
++        let text = EMPTY_LINES.replace_all(&text, "\n\n").trim().to_string();
+         let units: Vec<_> = text.encode_utf16().collect();
+         let mut start = 0;
+         while start < units.len() && chunks.len() < 4000 {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/clipboard_native.rs:113:
+             s0::<isize>(pb, "clearContents");
+             let value = ns_string(text)?;
+             let empty = ns_string("")?;
+-            if !s2::<_, _, bool>(pb, "setString:forType:", value, ns_string("public.utf8-plain-text")?) {
++            if !s2::<_, _, bool>(
++                pb,
++                "setString:forType:",
++                value,
++                ns_string("public.utf8-plain-text")?,
++            ) {
+                 return Err("Could not write to the pasteboard".into());
+             }
+             for marker in [super::CONCEALED_TYPE, super::TRANSIENT_TYPE] {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/clipboard_native.rs:351:
+ 
+     #[test]
+     fn concealed_and_transient_contents_are_private() {
+-        assert!(is_private_types(&["public.utf8-plain-text", CONCEALED_TYPE]));
++        assert!(is_private_types(&[
++            "public.utf8-plain-text",
++            CONCEALED_TYPE
++        ]));
+         assert!(is_private_types(&[TRANSIENT_TYPE]));
+-        assert!(!is_private_types(&["public.utf8-plain-text", "public.html"]));
++        assert!(!is_private_types(&[
++            "public.utf8-plain-text",
++            "public.html"
++        ]));
+         assert!(!is_private_types::<&str>(&[]));
+     }
+ }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/db.rs:280:
+ const FTS_SELECT_BUILTIN: &str = "WITH selected AS MATERIALIZED (SELECT rowid,bm25(documents_fts,5.0,2.0,1.0) AS score FROM documents_fts WHERE documents_fts MATCH ? ORDER BY score,rowid LIMIT 160) SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity,selected.score FROM selected JOIN documents d ON d.rowid=selected.rowid ORDER BY selected.score,selected.rowid";
+ const FTS_SELECT: &str = "WITH selected AS MATERIALIZED (SELECT f.rowid,tezbar_bm25(documents_fts,sz.sz,5.0,2.0,1.0) AS score FROM documents_fts f LEFT JOIN documents_fts_docsize sz ON sz.id=f.rowid WHERE documents_fts MATCH ? ORDER BY score,f.rowid LIMIT 160) SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity,selected.score FROM selected JOIN documents d ON d.rowid=selected.rowid ORDER BY selected.score,selected.rowid";
+ fn fts_select() -> &'static str {
+-    if crate::fts_rank::supported() { FTS_SELECT } else { FTS_SELECT_BUILTIN }
++    if crate::fts_rank::supported() {
++        FTS_SELECT
++    } else {
++        FTS_SELECT_BUILTIN
++    }
+ }
+ // Candidate pages are internal, not IPC JSON. Keep them typed until the final
+ // result cap: broad/fuzzy searches discard most rows before serialization.
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/db.rs:702:
+     #[ignore = "frozen broad fixture through the production read-only snapshot"]
+     fn broad_reader_matrix() {
+         use crate::performance::measure;
+-        let path = PathBuf::from(std::env::var_os("TEZBAR_BROAD_FIXTURE").expect("isolated fixture path"));
++        let path =
++            PathBuf::from(std::env::var_os("TEZBAR_BROAD_FIXTURE").expect("isolated fixture path"));
+         // Install ordinary schema/triggers outside measurement, then use the
+         // same read-only connection and per-request snapshot as Database::search.
+         drop(init(path.clone()).unwrap());
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/db.rs:816:
+     #[tokio::test]
+     async fn joined_lengths_keep_complete_order_scores_actions_after_stats_rollback_and_reopen() {
+         let dir = tempfile::tempdir().unwrap();
+-        let path=dir.path().join("index.sqlite3");
+-        let mut db=Database::new(path.clone());
++        let path = dir.path().join("index.sqlite3");
++        let mut db = Database::new(path.clone());
+         let docs=(0..520).map(|n| json!({"id":format!("doc:{n}"),"category":if n%9==0 {"applications"} else {"files"},
+             "title":if n%7==0 {"Archive café"} else {"Project document"},
+             "subtitle":format!("/archive/{}", "document ".repeat(n%13)),
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/db.rs:824:
+             "tokens":if n%3==0 {"project archive document"} else {"project"},
+             "action":{"type":"open","path":format!("/fixture/{n}"),"nested":{"unicode":"東京😀"}},"updatedAt":n})).collect();
+-        db.upsert(docs,vec![]).await.unwrap();
++        db.upsert(docs, vec![]).await.unwrap();
+         for phase in 0..5 {
+-            if phase==1 {
+-                db.record("doc:7".into(),json!({"query":"archive","rank":2}),true).await.unwrap();
+-                db.record("doc:0".into(),json!({"query":"document"}),false).await.unwrap();
++            if phase == 1 {
++                db.record("doc:7".into(), json!({"query":"archive","rank":2}), true)
++                    .await
++                    .unwrap();
++                db.record("doc:0".into(), json!({"query":"document"}), false)
++                    .await
++                    .unwrap();
+             }
+-            if phase==2 { db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='different archive' WHERE rowid%5=0; DELETE FROM documents WHERE rowid%11=0; COMMIT;").map_err(err)?; Ok(Value::Null) }).await.unwrap(); }
+-            if phase==3 { db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='rollback archive'; DELETE FROM action_stats; ROLLBACK;").map_err(err)?; Ok(Value::Null) }).await.unwrap(); }
+-            if phase==4 { db.shutdown().await.unwrap(); db=Database::new(path.clone()); }
++            if phase == 2 {
++                db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='different archive' WHERE rowid%5=0; DELETE FROM documents WHERE rowid%11=0; COMMIT;").map_err(err)?; Ok(Value::Null) }).await.unwrap();
++            }
++            if phase == 3 {
++                db.call(|c| { c.execute_batch("BEGIN; UPDATE documents SET title='rollback archive'; DELETE FROM action_stats; ROLLBACK;").map_err(err)?; Ok(Value::Null) }).await.unwrap();
++            }
++            if phase == 4 {
++                db.shutdown().await.unwrap();
++                db = Database::new(path.clone());
++            }
+             db.read(move |c| {
+-                let snapshot=c.transaction().map_err(err)?;
+-                let now=now_ms();
+-                for query in ["", "document", "archive", "project archive", "café", "doc", "archve", "zzzxxyyqq"] {
+-                    for candidates in [false,true] {
+-                        assert_eq!(search_at(&snapshot,query,candidates,now,FTS_SELECT).unwrap(),search_at(&snapshot,query,candidates,now,FTS_SELECT_BUILTIN).unwrap(),"phase={phase} query={query} candidates={candidates}");
++                let snapshot = c.transaction().map_err(err)?;
++                let now = now_ms();
++                for query in [
++                    "",
++                    "document",
++                    "archive",
++                    "project archive",
++                    "café",
++                    "doc",
++                    "archve",
++                    "zzzxxyyqq",
++                ] {
++                    for candidates in [false, true] {
++                        assert_eq!(
++                            search_at(&snapshot, query, candidates, now, FTS_SELECT).unwrap(),
++                            search_at(&snapshot, query, candidates, now, FTS_SELECT_BUILTIN)
++                                .unwrap(),
++                            "phase={phase} query={query} candidates={candidates}"
++                        );
+                     }
+                 }
+                 Ok(Value::Null)
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/db.rs:844:
+-            }).await.unwrap();
++            })
++            .await
++            .unwrap();
+         }
+         db.shutdown().await.unwrap();
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/db.rs:857:
+         let dir = tempfile::tempdir().unwrap();
+         let db = init(dir.path().join("index.sqlite3")).unwrap();
+         upsert(&db, &json!({"id":"doc:0","category":"files","title":"archive","subtitle":"","tokens":"","action":{},"updatedAt":0})).unwrap();
+-        let mut plan = db.prepare(&format!("EXPLAIN QUERY PLAN {}", fts_select())).unwrap();
+-        let joined = plan.query_map(["archive*"], |r| r.get::<_, String>(3)).unwrap()
++        let mut plan = db
++            .prepare(&format!("EXPLAIN QUERY PLAN {}", fts_select()))
++            .unwrap();
++        let joined = plan
++            .query_map(["archive*"], |r| r.get::<_, String>(3))
++            .unwrap()
+             .any(|detail| detail.unwrap().contains("sz USING"));
+         assert_eq!(joined, qualified);
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/db.rs:868:
+         let dir = tempfile::tempdir().unwrap();
+         let db = init(dir.path().join("index.sqlite3")).unwrap();
+         for n in 0..480 {
+-            upsert(&db, &json!({"id":format!("doc:{n}"),"category":"files",
++            upsert(
++                &db,
++                &json!({"id":format!("doc:{n}"),"category":"files",
+                 "title":if n%3==0 {"archive archive café"} else {"other"},
+-                "subtitle":"archive location", "tokens":"common", "action":{}, "updatedAt":n})).unwrap();
++                "subtitle":"archive location", "tokens":"common", "action":{}, "updatedAt":n}),
++            )
++            .unwrap();
+         }
+         let mut stmt = db.prepare("SELECT bm25(documents_fts,5.0,2.0,1.0),tezbar_bm25(documents_fts,sz.sz,5.0,2.0,1.0) FROM documents_fts f LEFT JOIN documents_fts_docsize sz ON sz.id=f.rowid WHERE documents_fts MATCH ?").unwrap();
+-        for query in ["archive*", "archive* OR common*", "\"archive café\"", "absent*"] {
+-            for row in stmt.query_map([query], |r| Ok((r.get::<_,f64>(0)?.to_bits(),r.get::<_,f64>(1)?.to_bits()))).unwrap() {
++        for query in [
++            "archive*",
++            "archive* OR common*",
++            "\"archive café\"",
++            "absent*",
++        ] {
++            for row in stmt
++                .query_map([query], |r| {
++                    Ok((r.get::<_, f64>(0)?.to_bits(), r.get::<_, f64>(1)?.to_bits()))
++                })
++                .unwrap()
++            {
+                 let (builtin, supplied) = row.unwrap();
+                 assert_eq!(builtin, supplied, "{query}");
+             }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/mod.rs:131:
+         }
+         self.inner.db.call(|_| Ok(Value::Null)).await?;
+         self.inner.terminal.initialize().await?;
+-        self.inner.clipboard.start(self.inner.ctx.runs_desktop_services());
++        self.inner
++            .clipboard
++            .start(self.inner.ctx.runs_desktop_services());
+         let this = self.clone();
+         let refresh = tokio::spawn(async move {
+             let _ = this
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/launcher/tests.rs:821:
+     let core = LauncherCore::new(ctx.clone());
+     core.local_refresh().await.unwrap();
+     let rows = core.search("клауд").await.unwrap();
+-    assert!(rows.as_array().unwrap().iter().any(|r| r["id"] == "vault:cf"));
++    assert!(rows
++        .as_array()
++        .unwrap()
++        .iter()
++        .any(|r| r["id"] == "vault:cf"));
+     core.shutdown().await.unwrap();
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/native_v2_cli.rs:246:
+                     return 1;
+                 }
+             };
+-            match runtime.block_on(crate::extensions::v3_cli_import(
+-                &ctx, manifest, zip,
+-            )) {
++            match runtime.block_on(crate::extensions::v3_cli_import(&ctx, manifest, zip)) {
+                 Ok(value) => {
+                     println!("{}", json!({"ok":true,"result":value}));
+                     0
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/performance.rs:49:
+         result["first_cpu_ms"] = json!(first_cpu_ms);
+         result["cpu_p50_ms"] = json!(cpu[(cpu.len() * 50).div_ceil(100) - 1]);
+         result["cpu_p95_ms"] = json!(cpu[(cpu.len() * 95).div_ceil(100) - 1]);
+-        result["cpu_accounting"] = json!("getrusage RUSAGE_SELF: timeval seconds + microseconds/1e6");
++        result["cpu_accounting"] =
++            json!("getrusage RUSAGE_SELF: timeval seconds + microseconds/1e6");
+     }
+     eprintln!("TEZBAR_PERF {result}");
+     result
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/terminal_bridge.rs:24:
+ ];
+ 
+ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> HandlerResult {
+-    if matches!(channel, "core:terminal:stream-attach" | "core:terminal:stream-detach" | "core:terminal:replay-read" | "core:terminal:replay-release" | "core:terminal:input") {
+-        let ctx=ctx.clone(); let channel=channel.to_owned(); let raw=args.first().cloned().unwrap_or(Value::Null);
+-        if channel == "core:terminal:stream-attach" {native_terminal_replay_reaper(&ctx.terminal);}
+-        return Some(tokio::task::spawn_blocking(move || {
+-            if !ctx.runs_desktop_services() { return Err("Native terminal requires the desktop application".into()); }
+-            let state=&*ctx.terminal;
+-            let text=|key: &str| raw[key].as_str().ok_or_else(|| format!("Terminal {key} is required"));
+-            match channel.as_str() {
+-                "core:terminal:stream-attach" => native_terminal_stream_attach(ctx.clone(),state,serde_json::from_value(raw.clone()).map_err(|e| e.to_string())?),
+-                "core:terminal:replay-read" => native_terminal_stream_read(state,text("replay")?,raw["position"].as_u64().ok_or("Replay position required")?,raw["limit"].as_u64().ok_or("Replay limit required")?.try_into().map_err(|_| "Replay limit too large")?),
+-                "core:terminal:replay-release" => Ok(json!(native_terminal_stream_release(state,text("replay")?))),
+-                "core:terminal:stream-detach" => Ok(json!(native_terminal_stream_detach(ctx.clone(),state,text("sessionId")?.into(),text("generation")?)?)),
+-                "core:terminal:input" => Ok(json!(native_terminal_binary_input(state,text("sessionId")?,text("generation")?,text("bytes")?)?)),
+-                _ => unreachable!(),
+-            }
+-        }).await.map_err(|e| e.to_string()).and_then(|r|r));
++    if matches!(
++        channel,
++        "core:terminal:stream-attach"
++            | "core:terminal:stream-detach"
++            | "core:terminal:replay-read"
++            | "core:terminal:replay-release"
++            | "core:terminal:input"
++    ) {
++        let ctx = ctx.clone();
++        let channel = channel.to_owned();
++        let raw = args.first().cloned().unwrap_or(Value::Null);
++        if channel == "core:terminal:stream-attach" {
++            native_terminal_replay_reaper(&ctx.terminal);
++        }
++        return Some(
++            tokio::task::spawn_blocking(move || {
++                if !ctx.runs_desktop_services() {
++                    return Err("Native terminal requires the desktop application".into());
++                }
++                let state = &*ctx.terminal;
++                let text = |key: &str| {
++                    raw[key]
++                        .as_str()
++                        .ok_or_else(|| format!("Terminal {key} is required"))
++                };
++                match channel.as_str() {
++                    "core:terminal:stream-attach" => native_terminal_stream_attach(
++                        ctx.clone(),
++                        state,
++                        serde_json::from_value(raw.clone()).map_err(|e| e.to_string())?,
++                    ),
++                    "core:terminal:replay-read" => native_terminal_stream_read(
++                        state,
++                        text("replay")?,
++                        raw["position"].as_u64().ok_or("Replay position required")?,
++                        raw["limit"]
++                            .as_u64()
++                            .ok_or("Replay limit required")?
++                            .try_into()
++                            .map_err(|_| "Replay limit too large")?,
++                    ),
++                    "core:terminal:replay-release" => Ok(json!(native_terminal_stream_release(
++                        state,
++                        text("replay")?
++                    ))),
++                    "core:terminal:stream-detach" => Ok(json!(native_terminal_stream_detach(
++                        ctx.clone(),
++                        state,
++                        text("sessionId")?.into(),
++                        text("generation")?
++                    )?)),
++                    "core:terminal:input" => Ok(json!(native_terminal_binary_input(
++                        state,
++                        text("sessionId")?,
++                        text("generation")?,
++                        text("bytes")?
++                    )?)),
++                    _ => unreachable!(),
++                }
++            })
++            .await
++            .map_err(|e| e.to_string())
++            .and_then(|r| r),
++        );
+     }
+     let channel = match channel {
+         "core:terminal:create" => "terminal:create",
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/tests.rs:18:
+     std::fs::create_dir_all(background.parent().unwrap()).unwrap();
+     std::fs::write(&background, b"invalid background JSON").unwrap();
+     let core = NativeCore::new(CoreContext::headless(paths.clone())).unwrap();
+-    core.start_with_options(StartupOptions::ISOLATED_PREVIEW).await.unwrap();
++    core.start_with_options(StartupOptions::ISOLATED_PREVIEW)
++        .await
++        .unwrap();
+     assert!(core.knowledge_start.lock().unwrap().is_none());
+     assert!(!paths.data_dir.join("knowledge").exists());
+-    assert_eq!(core.request("health:ping", &[]).await.unwrap()["runtime"], "rust");
+-    let note = core.request("notes:append", &[json!("Preview only Қазақша")]).await.unwrap();
++    assert_eq!(
++        core.request("health:ping", &[]).await.unwrap()["runtime"],
++        "rust"
++    );
++    let note = core
++        .request("notes:append", &[json!("Preview only Қазақша")])
++        .await
++        .unwrap();
+     assert!(note["createdAt"].as_u64().is_some());
+-    let results = core.request("search:all", &[json!("Preview only")]).await.unwrap();
+-    assert!(results.as_array().unwrap().iter().any(|row| row["category"] == "quick-notes"));
++    let results = core
++        .request("search:all", &[json!("Preview only")])
++        .await
++        .unwrap();
++    assert!(results
++        .as_array()
++        .unwrap()
++        .iter()
++        .any(|row| row["category"] == "quick-notes"));
+     // Passive background status does not opt into Knowledge initialization.
+-    core.ctx.request("core:knowledge:background", vec![]).await.unwrap();
++    core.ctx
++        .request("core:knowledge:background", vec![])
++        .await
++        .unwrap();
+     assert!(!paths.data_dir.join("knowledge").exists());
+     core.shutdown().await;
+     assert!(!paths.data_dir.join("knowledge").exists());
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/tests.rs:34:
+-    assert_eq!(std::fs::read(background).unwrap(), b"invalid background JSON");
+-    assert!(core.start_with_options(StartupOptions::ISOLATED_PREVIEW).await.is_err());
++    assert_eq!(
++        std::fs::read(background).unwrap(),
++        b"invalid background JSON"
++    );
++    assert!(core
++        .start_with_options(StartupOptions::ISOLATED_PREVIEW)
++        .await
++        .is_err());
+ }
+ 
+ #[tokio::test]
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/crypto.rs:75:
+         (0..s.len())
+             .step_by(2)
+             .map(|i| {
+-                u8::from_str_radix(&s[i..i + 2], 16)
+-                    .map_err(|e| format!("Invalid hex byte: {e}"))
++                u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| format!("Invalid hex byte: {e}"))
+             })
+             .collect()
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:4:
+ pub mod storage;
+ 
+ use crate::common::{now_ms, CoreResult};
++use crate::host::{Host, SurfaceOp};
+ use auth::{AuthOutcome, DeviceAuthenticator, SystemAuthenticator};
+ use crypto::{decrypt, encrypt, generate_random_bytes, KEY_LEN};
+ use keychain::{KeyStore, SystemKeychain, VaultKey};
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:11:
+ use std::path::{Path, PathBuf};
+ use std::sync::{Arc, Mutex};
+ use std::time::{Duration, Instant};
+-use crate::host::{Host, SurfaceOp};
+ use storage::{
+     exists, read_envelope, set_aside_legacy, write_envelope, VaultEnvelope, VaultItem,
+     VaultItemHeader, VaultPayload, ENVELOPE_VERSION,
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:115:
+         }
+         if !self.supported {
+             return Some(match channel {
+-                "vault:status" => Ok(json!({ "supported": false, "unlocked": false, "itemCount": 0 })),
++                "vault:status" => {
++                    Ok(json!({ "supported": false, "unlocked": false, "itemCount": 0 }))
++                }
+                 _ => Err(UNSUPPORTED.to_string()),
+             });
+         }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:160:
+     }
+ 
+     async fn set_blur_suppressed(&self, value: bool) {
+-        if let Some(host) = &self.app { let _ = host.surface(SurfaceOp::SuppressBlurHide(value)).await; }
++        if let Some(host) = &self.app {
++            let _ = host.surface(SurfaceOp::SuppressBlurHide(value)).await;
++        }
+     }
+     async fn refocus_main_window(&self) {
+-        if let Some(host) = &self.app { let _ = host.surface(SurfaceOp::ShowAfterAuth).await; }
++        if let Some(host) = &self.app {
++            let _ = host.surface(SurfaceOp::ShowAfterAuth).await;
++        }
+     }
+ 
+     async fn unlock(&self) -> CoreResult {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:300:
+         if value.trim().is_empty() {
+             return Err("Paste a value to save".to_string());
+         }
+-        let name = input["name"].as_str().unwrap_or_default().trim().to_string();
++        let name = input["name"]
++            .as_str()
++            .unwrap_or_default()
++            .trim()
++            .to_string();
+         let kind = input["kind"]
+             .as_str()
+             .filter(|kind| KINDS.contains(kind))
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:326:
+         let key = state.key.ok_or(LOCKED)?;
+         let payload = state.payload.as_mut().ok_or(LOCKED)?;
+         let now = now_ms();
+-        let item = if let Some(existing) = payload.items.iter_mut().find(|it| !id.is_empty() && it.id == id) {
+-            existing.name = if name.is_empty() { existing.name.clone() } else { name };
++        let item = if let Some(existing) = payload
++            .items
++            .iter_mut()
++            .find(|it| !id.is_empty() && it.id == id)
++        {
++            existing.name = if name.is_empty() {
++                existing.name.clone()
++            } else {
++                name
++            };
+             existing.value.zeroize();
+             existing.value = value;
+             existing.kind = kind;
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:339:
+         } else {
+             let item = VaultItem {
+                 id: uuid::Uuid::new_v4().to_string(),
+-                name: if name.is_empty() { "Untitled".to_string() } else { name },
++                name: if name.is_empty() {
++                    "Untitled".to_string()
++                } else {
++                    name
++                },
+                 value,
+                 kind,
+                 icon,
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:445:
+         }
+     }
+ 
+-    fn service(root: &Path, outcome: AuthOutcome, keys: Arc<FakeKeys>) -> (VaultService, Arc<AtomicUsize>) {
++    fn service(
++        root: &Path,
++        outcome: AuthOutcome,
++        keys: Arc<FakeKeys>,
++    ) -> (VaultService, Arc<AtomicUsize>) {
+         let calls = Arc::new(AtomicUsize::new(0));
+         let service = VaultService::with_parts(
+             root.to_path_buf(),
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:654:
+         assert_eq!(edited["kind"], "password");
+         assert_eq!(edited["createdAt"].as_u64().unwrap(), created);
+ 
+-        assert!(call(&vault, "vault:save", &[json!({ "item": { "name": "x", "value": "  " } })]).await.is_err());
++        assert!(call(
++            &vault,
++            "vault:save",
++            &[json!({ "item": { "name": "x", "value": "  " } })]
++        )
++        .await
++        .is_err());
+ 
+         call(&vault, "vault:delete", &[json!(id)]).await.unwrap();
+-        assert_eq!(call(&vault, "vault:list", &[]).await.unwrap().as_array().unwrap().len(), 0);
++        assert_eq!(
++            call(&vault, "vault:list", &[])
++                .await
++                .unwrap()
++                .as_array()
++                .unwrap()
++                .len(),
++            0
++        );
+     }
+ 
+     #[tokio::test]
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:672:
+         let (vault, _) = service(dir.path(), AuthOutcome::Granted, keys);
+         assert_eq!(call(&vault, "vault:unlock", &[]).await.unwrap()["ok"], true);
+         assert!(storage::legacy_backup_path(dir.path()).exists());
+-        assert_eq!(call(&vault, "vault:status", &[]).await.unwrap()["itemCount"], 0);
++        assert_eq!(
++            call(&vault, "vault:status", &[]).await.unwrap()["itemCount"],
++            0
++        );
+     }
+ 
+     #[tokio::test]
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:683:
+         call(&vault, "vault:unlock", &[]).await.unwrap();
+ 
+         let (denied, _) = service(dir.path(), AuthOutcome::Cancelled, keys.clone());
+-        assert_eq!(call(&denied, "vault:reset", &[]).await.unwrap()["cancelled"], true);
++        assert_eq!(
++            call(&denied, "vault:reset", &[]).await.unwrap()["cancelled"],
++            true
++        );
+         assert!(exists(dir.path()));
+         assert!(keys.key.lock().unwrap().is_some());
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:699:
+         let vault = VaultService::with_parts(
+             dir.path().to_path_buf(),
+             false,
+-            Arc::new(FakeAuth(AuthOutcome::Granted, Arc::new(AtomicUsize::new(0)))),
++            Arc::new(FakeAuth(
++                AuthOutcome::Granted,
++                Arc::new(AtomicUsize::new(0)),
++            )),
+             Arc::new(FakeKeys::default()),
+             None,
+         );
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:706:
+-        assert_eq!(call(&vault, "vault:status", &[]).await.unwrap()["supported"], false);
++        assert_eq!(
++            call(&vault, "vault:status", &[]).await.unwrap()["supported"],
++            false
++        );
+         assert!(call(&vault, "vault:unlock", &[]).await.is_err());
+     }
+     #[tokio::test]
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/mod.rs:710:
+     async fn host_auth_paths_restore_blur_and_show_after_grant_cancel_and_failure() {
+-        for outcome in [AuthOutcome::Granted,AuthOutcome::Cancelled,AuthOutcome::Failed("fixture denied".into())] {
+-            let d=tempfile::tempdir().unwrap(); let keys=Arc::new(FakeKeys::default());
+-            let (mut vault,_)=service(d.path(),outcome,keys);
+-            let host=Arc::new(crate::host::TestHost {allow_interaction:true,..Default::default()});
+-            vault.app=Some(host.clone()); let _=call(&vault,"vault:unlock",&[]).await;
+-            assert_eq!(*host.calls.lock().unwrap(),["surface:SuppressBlurHide(true)","surface:SuppressBlurHide(false)","surface:ShowAfterAuth"]);
++        for outcome in [
++            AuthOutcome::Granted,
++            AuthOutcome::Cancelled,
++            AuthOutcome::Failed("fixture denied".into()),
++        ] {
++            let d = tempfile::tempdir().unwrap();
++            let keys = Arc::new(FakeKeys::default());
++            let (mut vault, _) = service(d.path(), outcome, keys);
++            let host = Arc::new(crate::host::TestHost {
++                allow_interaction: true,
++                ..Default::default()
++            });
++            vault.app = Some(host.clone());
++            let _ = call(&vault, "vault:unlock", &[]).await;
++            assert_eq!(
++                *host.calls.lock().unwrap(),
++                [
++                    "surface:SuppressBlurHide(true)",
++                    "surface:SuppressBlurHide(false)",
++                    "surface:ShowAfterAuth"
++                ]
++            );
+         }
+     }
+-
+ }
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/storage.rs:137:
+ 
+ pub fn read_envelope(root: &Path) -> Result<VaultEnvelope, String> {
+     let value = read_json(&vault_path(root))?;
+-    let envelope: VaultEnvelope = serde_json::from_value(value)
+-        .map_err(|e| format!("Failed to parse vault file: {e}"))?;
++    let envelope: VaultEnvelope =
++        serde_json::from_value(value).map_err(|e| format!("Failed to parse vault file: {e}"))?;
+     if envelope.version != ENVELOPE_VERSION {
+-        return Err(format!("Unsupported vault file version {}", envelope.version));
++        return Err(format!(
++            "Unsupported vault file version {}",
++            envelope.version
++        ));
+     }
+     Ok(envelope)
+ }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core/src/vault/storage.rs:150:
+     if !exists(root) {
+         return vec![];
+     }
+-    read_envelope(root).map(|envelope| envelope.index).unwrap_or_default()
++    read_envelope(root)
++        .map(|envelope| envelope.index)
++        .unwrap_or_default()
+ }
+ 
+ pub fn write_envelope(root: &Path, envelope: &VaultEnvelope) -> Result<(), String> {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-host/src/lib.rs:9:
+ 
+ pub mod desktop;
+ pub mod logging;
++pub mod monitors;
+ pub mod paths;
+ pub mod single_instance;
+-pub mod monitors;
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui-model/src/chat/tests.rs:1172:
+     assert_eq!(c.attach_references("a", (1..8).map(image).collect()), Ok(7));
+     assert!(c.attach_references("a", vec![image(8)]).is_err());
+     assert_eq!(c.conversation("a").unwrap().attachments.len(), 8);
+-    assert!(
+-        c.attach_references(
++    assert!(c
++        .attach_references(
+             "a",
+             vec![Reference::SignedHistory {
+                 turn_id: "secret".into()
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui-model/src/chat/tests.rs:1180:
+             }]
+         )
+-        .is_err()
+-    );
++        .is_err());
+     c.boot(
+         Boot::NewChat {
+             session_id: "b".into(),
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui-model/src/chat/tests.rs:1234:
+         panic!()
+     };
+     let clear = c.begin_clear();
+-    assert!(
+-        clear
+-            .iter()
+-            .any(|e| matches!(e,Effect::Cancel{run_id} if run_id=="running-a"))
+-    );
++    assert!(clear
++        .iter()
++        .any(|e| matches!(e,Effect::Cancel{run_id} if run_id=="running-a")));
+     let tickets: Vec<_> = clear
+         .into_iter()
+         .filter_map(|e| match e {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui-model/src/chat/tests.rs:1251:
+     for (id, token) in tickets {
+         let deferred = c.delete_result(&id, token, false);
+         if id == "b" {
+-            assert!(
+-                deferred
+-                    .iter()
+-                    .any(|e| matches!(e,Effect::PersistTurn{session_id,..} if session_id=="b"))
+-            );
++            assert!(deferred
++                .iter()
++                .any(|e| matches!(e,Effect::PersistTurn{session_id,..} if session_id=="b")));
+         }
+     }
+     assert_eq!(c.conversation("c").unwrap().draft, "preparing");
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/app/m8_tests.rs:453:
+     assert_eq!(f.count("agent:run"), 1);
+ }
+ 
+-
+ fn repair_failed_quit_continue(cx: &mut TestAppContext, failure: &str) {
+     let (rt, root, f, view, cx) = mount(cx);
+     let app = owner(cx, &rt, &root, &f);
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/lib.rs:12:
+ 
+ pub mod surfaces;
+ 
+-mod settings_transport;
+ mod chat_transport;
++mod settings_transport;
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/command_bar/task_indicator.rs:264:
+         let visible = self.ready
+             && self.visible
+             && !self.onboarding_active
+-            && self.navigation.as_ref().is_none_or(|_| self.chat_mounted() || self.terminal_mounted());
++            && self
++                .navigation
++                .as_ref()
++                .is_none_or(|_| self.chat_mounted() || self.terminal_mounted());
+         self.task_indicator
+             .update(cx, |indicator, cx| indicator.set_visible(visible, cx));
+     }

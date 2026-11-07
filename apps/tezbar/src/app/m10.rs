@@ -63,16 +63,21 @@ impl Owner {
                     Zoom::Reset => 0.,
                 }));
             }
-            TerminalEffect::Pins(pins) => {
+            TerminalEffect::TogglePin(id) => {
                 let _ = self
                     .launcher
-                    .update(cx, |v, _, cx| v.terminal_pins(pins, cx));
+                    .update(cx, |v, _, cx| v.apply_terminal_pin_change(id, true, cx));
+            }
+            TerminalEffect::Unpin(id) => {
+                let _ = self
+                    .launcher
+                    .update(cx, |v, _, cx| v.apply_terminal_pin_change(id, false, cx));
             }
         }
     }
 }
 fn allowed_url(url: &str) -> bool {
-    (url.starts_with("https://") || url.starts_with("http://"))
+    (url.starts_with("https://") || url.starts_with("http://") || url.starts_with("mailto:"))
         && !url.chars().any(char::is_control)
 }
 #[cfg(test)]
@@ -80,6 +85,7 @@ mod tests {
     #[test]
     fn host_url_scheme_is_finite() {
         assert!(super::allowed_url("https://example.test/a"));
+        assert!(super::allowed_url("mailto:fixture@example.test"));
         for s in ["file:///private", "javascript:alert(1)", "https://a\n"] {
             assert!(!super::allowed_url(s));
         }

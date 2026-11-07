@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, it, vi } from 'vitest'
 
-const host = vi.hoisted(() => ({ copy: vi.fn(), open: vi.fn(), reveal: vi.fn() }))
+const host = vi.hoisted(() => ({ copy: vi.fn(), open: vi.fn(), reveal: vi.fn(), control: vi.fn(async () => undefined) }))
 const root = mkdtempSync(join(tmpdir(), 'tezbar-m03b-effects-'))
 vi.mock('@tezbar/desktop-runtime', () => ({
   app: { isPackaged: false, getPath: () => root, getAppPath: () => process.cwd(), hide() {}, show() {} },
   BrowserWindow: class { static getAllWindows(): never[] { return [] } },
   clipboard: { readText: () => '', writeText: host.copy },
+  extensionControl: host.control,
   nativeImage: { createFromPath: () => ({ isEmpty: () => true }) },
   shell: { openExternal: host.open, showItemInFolder: host.reveal },
 }))
@@ -38,6 +39,8 @@ it('sequences sliding execution records without replaying system effects on rere
     expect(host.copy).toHaveBeenCalledTimes(i)
     expect(host.open).toHaveBeenCalledTimes(i)
     expect(host.reveal).toHaveBeenCalledTimes(i)
+    expect(host.control).toHaveBeenCalledTimes(i)
+    expect(host.control).toHaveBeenLastCalledWith(initial.sessionId, 'hud', 'identical', 0)
   }
   expect(host.copy).toHaveBeenLastCalledWith('x'.repeat(10000))
 })

@@ -1,0 +1,1454 @@
+--- a/apps/tezbar/src/app/m10.rs
++++ b/apps/tezbar/src/app/m10.rs
+@@ -63,16 +63,21 @@
+                     Zoom::Reset => 0.,
+                 }));
+             }
+-            TerminalEffect::Pins(pins) => {
++            TerminalEffect::TogglePin(id) => {
+                 let _ = self
+                     .launcher
+-                    .update(cx, |v, _, cx| v.terminal_pins(pins, cx));
++                    .update(cx, |v, _, cx| v.terminal_pin(id, true, cx));
++            }
++            TerminalEffect::Unpin(id) => {
++                let _ = self
++                    .launcher
++                    .update(cx, |v, _, cx| v.terminal_pin(id, false, cx));
+             }
+         }
+     }
+ }
+ fn allowed_url(url: &str) -> bool {
+-    (url.starts_with("https://") || url.starts_with("http://"))
++    (url.starts_with("https://") || url.starts_with("http://") || url.starts_with("mailto:"))
+         && !url.chars().any(char::is_control)
+ }
+ #[cfg(test)]
+@@ -80,6 +85,7 @@
+     #[test]
+     fn host_url_scheme_is_finite() {
+         assert!(super::allowed_url("https://example.test/a"));
++        assert!(super::allowed_url("mailto:fixture@example.test"));
+         for s in ["file:///private", "javascript:alert(1)", "https://a\n"] {
+             assert!(!super::allowed_url(s));
+         }
+--- a/apps/tezbar/src/app.rs
++++ b/apps/tezbar/src/app.rs
+@@ -728,7 +728,7 @@
+             });
+         }
+     }
+-    fn panel(&mut self, rows: Vec<(String, String)>, cx: &mut Context<Self>) {
++    fn panel(&mut self, rows: Vec<windows::terminal_sessions::SessionRow>, cx: &mut Context<Self>) {
+         if !self.lifecycle.visible {
+             return;
+         }
+@@ -765,6 +765,7 @@
+                     ..Default::default()
+                 },
+                 move |w, cx| {
++                    w.set_window_title("Terminal Sessions");
+                     let _ = native::no_shadow(w);
+                     let close = relay.clone();
+                     w.on_window_should_close(cx, move |_, _| {
+--- a/apps/tezbar/src/events.rs
++++ b/apps/tezbar/src/events.rs
+@@ -31,7 +31,7 @@
+ }
+ pub enum Event {
+     TerminalEffect(crate::surfaces::command_bar::TerminalSource,crate::surfaces::terminal::TerminalEffect),
+-    TerminalRows(Vec<(String,String)>),
++    TerminalRows(Vec<crate::windows::terminal_sessions::SessionRow>),
+     TerminalPanelAction(Option<String>),
+     ChatEffect(crate::surfaces::command_bar::ChatSource, crate::surfaces::ai_chat::ChatEffect),
+     SettingsEffect(gpui::EntityId, crate::surfaces::settings::SettingsEffect),
+@@ -69,7 +69,7 @@
+     SnapEnd,
+     SnapDwell(u64),
+     Zoom(f32),
+-    PanelShow(Vec<(String, String)>),
++    PanelShow(Vec<crate::windows::terminal_sessions::SessionRow>),
+     PanelHide,
+     PanelFocused(bool),
+     Menu(String),
+--- a/apps/tezbar/src/surfaces/command_bar/mod.rs
++++ b/apps/tezbar/src/surfaces/command_bar/mod.rs
+@@ -2,8 +2,8 @@
+ mod arguments;
+ pub(crate) mod chat_integration;
+ mod terminal_integration;
++pub use chat_integration::ChatSource;
+ pub use terminal_integration::TerminalSource;
+-pub use chat_integration::ChatSource;
+ mod interactions;
+ pub(crate) mod locale;
+ mod model_picker;
+@@ -601,7 +601,7 @@
+         }
+         let was_visible = self.visible;
+         self.visible = true;
+-        let chat_active = self.show_chat(cx) || self.show_terminal(w,cx);
++        let chat_active = self.show_chat(cx) || self.show_terminal(w, cx);
+         self.visible = was_visible;
+         let utility_active = chat_active || self.show_utilities(w, cx);
+         if !self.visible {
+@@ -626,7 +626,7 @@
+     pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+         self.hide_onboarding(cx);
+         self.hide_chat(cx);
+-        self.hide_terminal(w,cx);
++        self.hide_terminal(w, cx);
+         self.acknowledge_navigation(cx);
+         self.hide_utilities(w, cx);
+         self.visible = false;
+@@ -1018,6 +1018,7 @@
+         }));
+     }
+     fn persist(&mut self, cx: &mut Context<Self>) {
++        self.sync_terminal_pins(cx);
+         let Some(path) = self.state_path.clone() else {
+             return;
+         };
+@@ -1502,7 +1503,7 @@
+             return;
+         }
+         self.navigation = Some(intent.clone());
+-        self.route_terminal_navigation(intent.clone(),cx);
++        self.route_terminal_navigation(intent.clone(), cx);
+         self.route_chat_navigation(intent, cx);
+         self.sync_task_indicator(cx);
+         cx.notify();
+--- a/apps/tezbar/src/surfaces/command_bar/terminal_integration.rs
++++ b/apps/tezbar/src/surfaces/command_bar/terminal_integration.rs
+@@ -131,6 +131,7 @@
+             view
+         };
+         view.update(cx, |v, cx| {
++            v.update_pins(self.state.terminal_pinned_sessions.clone());
+             v.activate(intent.payload, intent.nonce, w, cx);
+             if !self.visible {
+                 v.set_visible(false, w, cx);
+@@ -162,23 +163,23 @@
+             view.update(cx, |v, cx| v.layout_changed(cx));
+         }
+     }
+-    pub(crate) fn terminal_panel_rows(&self, cx: &App) -> Vec<(String, String)> {
++    pub(crate) fn terminal_panel_rows(
++        &self,
++        cx: &App,
++    ) -> Vec<crate::windows::terminal_sessions::SessionRow> {
+         self.terminal
+             .view
+             .as_ref()
+             .map(|v| {
+-                v.read(cx)
+-                    .session_rows()
++                let view = v.read(cx);
++                view.session_rows()
+                     .iter()
+-                    .map(|s| {
+-                        (
+-                            s.session_id.clone(),
+-                            format!(
+-                                "{} · {}",
+-                                s.name,
+-                                if s.running { "running" } else { "saved" }
+-                            ),
+-                        )
++                    .map(|s| crate::windows::terminal_sessions::SessionRow {
++                        id: s.session_id.clone(),
++                        title: s.name.clone(),
++                        cwd: s.cwd.clone(),
++                        running: s.running,
++                        active: view.active_session() == Some(s.session_id.as_str()),
+                     })
+                     .collect()
+             })
+@@ -215,8 +216,20 @@
+             self.edit(">", w, cx);
+         }
+     }
+-    pub(crate) fn terminal_pins(&mut self, pins: Vec<String>, cx: &mut Context<Self>) {
+-        self.state.terminal_pinned_sessions = pins;
++    pub(super) fn sync_terminal_pins(&mut self, cx: &mut Context<Self>) {
++        if let Some(view) = &self.terminal.view {
++            view.update(cx, |v, cx| {
++                v.update_pins(self.state.terminal_pinned_sessions.clone());
++                cx.notify();
++            });
++        }
++    }
++    pub(crate) fn terminal_pin(&mut self, id: String, toggle: bool, cx: &mut Context<Self>) {
++        let present = self.state.terminal_pinned_sessions.contains(&id);
++        self.state.terminal_pinned_sessions.retain(|p| p != &id);
++        if toggle && !present {
++            self.state.terminal_pinned_sessions.insert(0, id);
++        }
+         self.persist(cx);
+     }
+     pub(crate) fn terminal_paste(
+--- a/apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs
++++ b/apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs
+@@ -177,3 +177,63 @@
+     settle(&rt, cx);
+     assert!(rt.block_on(drain).is_ok());
+ }
++
++#[gpui::test]
++fn review_m10_f4_pins_merge_from_live_ui_owner_without_loss_or_resurrection(
++    cx: &mut TestAppContext,
++) {
++    let rt = crate::surfaces::settings::tests::runtime(cx);
++    let f = Arc::new(Fixture::default());
++    let (relay, _rx) = Relay::new();
++    cx.update(|cx| cx.set_global(CoreEvents::new(relay.clone())));
++    let (launcher, cx) =
++        cx.add_window_view(|w, cx| Launcher::with_adapter(f.clone(), relay, None, w, cx));
++    launcher.update(cx, |v, cx| {
++        v.visible = true;
++        v.ready = true;
++        v.receive_navigation(intent(1), cx);
++    });
++    settle(&rt, cx);
++    launcher.update(cx, |v, cx| {
++        v.state.terminal_pinned_sessions = vec!["b".into(), "saved".into()];
++        v.persist(cx);
++        v.terminal_pin("a".into(), true, cx);
++        assert_eq!(v.state.terminal_pinned_sessions, vec!["a", "b", "saved"]);
++        // A second surface removes b; a later terminal toggle must preserve it.
++        v.state.terminal_pinned_sessions.retain(|p| p != "b");
++        v.persist(cx);
++        v.terminal_pin("a".into(), true, cx);
++        assert_eq!(v.state.terminal_pinned_sessions, vec!["saved"]);
++        v.terminal_pin("new".into(), true, cx);
++        v.terminal_pin("a".into(), false, cx);
++        assert_eq!(v.state.terminal_pinned_sessions, vec!["new", "saved"]);
++    });
++}
++
++#[gpui::test]
++fn review_m10_panel_projects_active_session_and_cwd(cx: &mut TestAppContext) {
++    let rt = crate::surfaces::settings::tests::runtime(cx);
++    let f = Arc::new(Fixture::default());
++    let (relay, _rx) = Relay::new();
++    cx.update(|cx| cx.set_global(CoreEvents::new(relay.clone())));
++    let (launcher, cx) = cx.add_window_view(|w, cx| Launcher::with_adapter(f, relay, None, w, cx));
++    launcher.update(cx, |v, cx| {
++        v.visible = true;
++        v.ready = true;
++        v.receive_navigation(intent(1), cx);
++    });
++    settle(&rt, cx);
++    let rows = launcher.read_with(cx, |v, cx| v.terminal_panel_rows(cx));
++    assert_eq!(rows.len(), 2);
++    assert!(rows[0].active);
++    assert_eq!(rows[0].cwd, "/fixture");
++    assert!(rows[0].running);
++    assert!(!rows[1].active);
++    cx.update(|w, cx| {
++        launcher.update(cx, |v, cx| v.terminal_panel_action(Some("b".into()), w, cx))
++    });
++    settle(&rt, cx);
++    let rows = launcher.read_with(cx, |v, cx| v.terminal_panel_rows(cx));
++    assert!(!rows[0].active);
++    assert!(rows[1].active);
++}
+--- a/apps/tezbar/src/surfaces/terminal/input.rs
++++ b/apps/tezbar/src/surfaces/terminal/input.rs
+@@ -1,7 +1,7 @@
+ //! Xterm input encoding and app interception; no VT output parsing lives here.
+ use alacritty_terminal::term::TermMode;
+ 
+-#[derive(Clone, Copy, Debug, Default)]
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+ pub struct Modifiers {
+     pub command: bool,
+     pub control: bool,
+@@ -35,7 +35,10 @@
+         return KeyResult::PlatformText;
+     }
+     let lower = key.to_lowercase();
+-    let primary = m.command || m.control;
++    // Shell control characters are never app actions on macOS. Windows app
++    // actions use Ctrl+Shift so Ctrl+D/X/K/P remain available to the shell.
++    let primary = m.command || (cfg!(not(target_os = "macos")) && m.control);
++    let app_action = m.command || (cfg!(not(target_os = "macos")) && m.control && m.shift);
+     if primary {
+         let z = match (key, code) {
+             ("+" | "=", _) | (_, "NumpadAdd") => Some(Zoom::In),
+@@ -50,7 +53,7 @@
+                 KeyResult::TextZoom(z)
+             };
+         }
+-        if !m.alt {
++        if !m.alt && app_action {
+             match lower.as_str() {
+                 "k" => return KeyResult::Configure,
+                 "x" => return KeyResult::Stop,
+@@ -70,6 +73,11 @@
+     }
+     if key == "escape" || key == "Escape" {
+         return KeyResult::Back;
++    }
++    // macOptionIsMeta was false in the old terminal. Let AppKit insert the
++    // produced character (or start a dead-key composition), not ESC+base key.
++    if cfg!(target_os = "macos") && m.alt && !m.command && !m.control && key.chars().count() == 1 {
++        return KeyResult::PlatformText;
+     }
+     let modifier = 1 + u8::from(m.shift) + 2 * u8::from(m.alt) + 4 * u8::from(m.control);
+     let final_char = match lower.as_str() {
+@@ -232,3 +240,84 @@
+         Zoom::Reset => 12,
+     }
+ }
++
++/// Fractional trackpad pixels survive event boundaries. Pathological single
++/// deltas are bounded to 128 rows/reports rather than creating unbounded input.
++#[derive(Default)]
++pub struct WheelAccumulator {
++    pixels: f32,
++}
++impl WheelAccumulator {
++    pub fn reset(&mut self) {
++        self.pixels = 0.;
++    }
++    pub fn lines(&mut self, delta: f32, height: f32) -> i32 {
++        if !delta.is_finite() || !height.is_finite() || height <= 0. {
++            return 0;
++        }
++        self.pixels += delta.clamp(-128. * height, 128. * height);
++        let rows = (self.pixels / height).trunc() as i32;
++        self.pixels -= rows as f32 * height;
++        rows
++    }
++}
++#[derive(Debug, PartialEq, Eq)]
++pub enum ScrollResult {
++    None,
++    Rows(i32),
++    Bytes(Vec<u8>),
++}
++pub fn scroll(lines: i32, col: usize, row: usize, m: Modifiers, mode: TermMode) -> ScrollResult {
++    if lines == 0 {
++        return ScrollResult::None;
++    }
++    let lines = lines.clamp(-128, 128);
++    if !m.shift && mode.intersects(TermMode::MOUSE_MODE) {
++        return mouse(MouseKind::Wheel(lines > 0), col, row, m, mode)
++            .map(|b| ScrollResult::Bytes(b.repeat(lines.unsigned_abs() as usize)))
++            .unwrap_or(ScrollResult::None);
++    }
++    if mode.contains(TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL)
++        && !mode.intersects(TermMode::MOUSE_MODE)
++    {
++        let seq = match (lines > 0, mode.contains(TermMode::APP_CURSOR)) {
++            (true, false) => b"\x1b[A",
++            (false, false) => b"\x1b[B",
++            (true, true) => b"\x1bOA",
++            (false, true) => b"\x1bOB",
++        };
++        ScrollResult::Bytes(seq.repeat(lines.unsigned_abs() as usize))
++    } else {
++        ScrollResult::Rows(lines)
++    }
++}
++#[derive(Default)]
++pub struct MotionReporter {
++    last: Option<(u64, usize, usize, Option<u8>, Modifiers, TermMode)>,
++}
++impl MotionReporter {
++    pub fn reset(&mut self) {
++        self.last = None;
++    }
++    pub fn report(
++        &mut self,
++        owner: u64,
++        col: usize,
++        row: usize,
++        button: Option<u8>,
++        modifiers: Modifiers,
++        mode: TermMode,
++    ) -> Option<Vec<u8>> {
++        let key = (owner, col, row, button, modifiers, mode);
++        let result = mouse(MouseKind::Motion(button), col, row, modifiers, mode);
++        if result.is_none() {
++            self.reset();
++            return None;
++        }
++        if self.last == Some(key) {
++            return None;
++        }
++        self.last = Some(key);
++        result
++    }
++}
+--- a/apps/tezbar/src/surfaces/terminal/mod.rs
++++ b/apps/tezbar/src/surfaces/terminal/mod.rs
+@@ -36,6 +36,8 @@
+     name: Entity<TextInput>,
+     _subscriptions: Vec<Subscription>,
+     wheel: f32,
++    scroll_wheel: input::WheelAccumulator,
++    motion: input::MotionReporter,
+     frame: Option<tezbar_ui::terminal_grid::Frame>,
+     task_indicator: Option<AnyView>,
+ }
+@@ -85,6 +87,8 @@
+             name,
+             _subscriptions: vec![name_sub, focus_in, blur, active],
+             wheel: 0.,
++            scroll_wheel: Default::default(),
++            motion: Default::default(),
+             frame: None,
+             task_indicator: None,
+         }
+@@ -140,6 +144,8 @@
+         } else {
+             self.cwd_timer = None;
+             self.selection_drag = false;
++            self.motion.reset();
++            self.scroll_wheel.reset();
+         }
+         self.pump(cx);
+         self.sync_blink(cx);
+@@ -150,8 +156,8 @@
+         self.state.dirty = true;
+         self.changed(cx);
+     }
+-    /// Call on parent Bounds/font/UI-zoom events after measured layout. Prepaint only caches
+-    /// cell geometry; it never schedules a request, a timer or a render notification.
++    /// Called after measured geometry changes. Prepaint schedules this bounded
++    /// follow-up; resizing and core requests happen here, outside render/paint.
+     pub fn layout_changed(&mut self, cx: &mut Context<Self>) {
+         if let Some((bounds, metrics)) = self.geometry {
+             if let Some(size) =
+@@ -249,6 +255,9 @@
+     pub fn error(&self) -> Option<&str> {
+         self.state.error.as_deref()
+     }
++    pub fn active_session(&self) -> Option<&str> {
++        self.state.active.as_deref()
++    }
+     pub fn session_rows(&self) -> &[tezbar_ui_model::terminal::Session] {
+         &self.state.sessions.rows
+     }
+--- a/apps/tezbar/src/surfaces/terminal/request.rs
++++ b/apps/tezbar/src/surfaces/terminal/request.rs
+@@ -161,6 +161,8 @@
+     pub replay: String,
+     #[serde(default)]
+     pub watermark: u64,
++    #[serde(default)]
++    pub origin: Option<u64>,
+ }
+ pub type Reply = Result<Value, String>;
+ pub trait TerminalTransport: Send + Sync + 'static {
+--- a/apps/tezbar/src/surfaces/terminal/state.rs
++++ b/apps/tezbar/src/surfaces/terminal/state.rs
+@@ -19,7 +19,8 @@
+     Copy(String),
+     ReadPaste { generation: u64 },
+     Zoom(input::Zoom),
+-    Pins(Vec<String>),
++    TogglePin(String),
++    Unpin(String),
+ }
+ #[derive(Clone, Debug)]
+ pub struct Boot {
+@@ -95,6 +96,9 @@
+     replay_token: Option<String>,
+     position: u64,
+     watermark: u64,
++    own_create: Option<(String, String)>,
++    pending_input: VecDeque<(Vec<u8>, bool)>,
++    pending_input_bytes: usize,
+     target: u64,
+     final_exit: Option<(String, u64, u32)>,
+     input: String,
+@@ -138,6 +142,9 @@
+             replay_token: None,
+             position: 0,
+             watermark: 0,
++            own_create: None,
++            pending_input: VecDeque::new(),
++            pending_input_bytes: 0,
+             target: 0,
+             final_exit: None,
+             input: String::new(),
+@@ -209,6 +216,7 @@
+         true
+     }
+     pub fn next_work(&mut self) -> Option<Work> {
++        self.flush_pending_input();
+         while let Some(w) = self.work.pop_front() {
+             if w.cleanup() || w.generation == self.generation {
+                 return Some(w);
+@@ -216,13 +224,13 @@
+         }
+         None
+     }
+-    fn detach_request(&mut self, id: String, generation: Option<String>) {
+-        if let Some(generation) = generation {
++    fn detach_request(&mut self, id: String, generation: Option<String>) -> bool {
++        generation.is_some_and(|generation| {
+             self.enqueue(
+                 TerminalRequest::DetachGeneration { id, generation },
+                 Purpose::Cleanup,
+-            );
+-        }
++            )
++        })
+     }
+     fn detach_active(&mut self) {
+         if let Some(id) = self.active.take() {
+@@ -239,6 +247,9 @@
+         self.replaying = false;
+         self.visibility_detached = false;
+         self.input.clear();
++        self.own_create = None;
++        self.pending_input.clear();
++        self.pending_input_bytes = 0;
+     }
+     /// Visibility changes core attachment policy, while retaining every local grid cell.
+     /// Events remain owned, so a successful resume never replays/resets retained state.
+@@ -267,8 +278,7 @@
+     fn detach_hidden(&mut self) {
+         if !self.visible && !self.visibility_detached {
+             if let Some(id) = self.active.clone() {
+-                self.visibility_detached = true;
+-                self.detach_request(id, self.stream_generation.clone());
++                self.visibility_detached = self.detach_request(id, self.stream_generation.clone());
+             }
+         }
+     }
+@@ -404,11 +414,15 @@
+             Err(e) => {
+                 self.error = Some(e.chars().take(2048).collect());
+                 self.replaying = false;
++                if matches!(w.purpose, Purpose::Write) {
++                    self.work.retain(|w| !matches!(w.purpose, Purpose::Write));
++                    self.discard_pending_input();
++                }
+                 if matches!(w.purpose, Purpose::Replay) {
+                     self.release_replay();
+                     if e.contains("expired or released") {
+                         if let Some(id) = self.active.clone() {
+-                            self.enqueue(
++                            self.replaying = self.enqueue(
+                                 TerminalRequest::Attach {
+                                     id: id.clone(),
+                                     cols: self.grid.size.cols,
+@@ -417,6 +431,9 @@
+                                 Purpose::Resume(id),
+                             );
+                         }
++                    }
++                    if !self.replaying {
++                        self.discard_pending_input();
+                     }
+                 }
+                 return;
+@@ -459,6 +476,8 @@
+             }
+             Purpose::Create => match serde_json::from_value::<Attached>(value.clone()) {
+                 Ok(r) => {
++                    self.own_create = (!r.generation.is_empty())
++                        .then(|| (r.session_id.clone(), r.generation.clone()));
+                     self.upsert(r.summary);
+                     self.attach(r.session_id);
+                 }
+@@ -546,6 +565,8 @@
+                     "Terminal input was not accepted; the remaining input was cancelled.".into(),
+                 );
+                 self.work.retain(|w| !matches!(w.purpose, Purpose::Write));
++                self.pending_input.clear();
++                self.pending_input_bytes = 0;
+             }
+             Purpose::Mutation => self.refresh(),
+             _ => {}
+@@ -595,9 +616,31 @@
+         }
+         self.release_replay();
+         self.error = None;
++        if self
++            .stream_generation
++            .as_ref()
++            .is_some_and(|old| old != &r.generation)
++        {
++            self.error = Some("Terminal process changed.".into());
++            self.discard_pending_input();
++        }
+         self.stream_generation = Some(r.generation);
+         self.replay_token = Some(r.replay);
+-        self.watermark = r.watermark;
++        // Only this owner's first attach to the process it just created can
++        // answer pre-watermark device queries. Restored prior-process bytes and
++        // all later attaches stay historical and side-effect-free.
++        self.watermark = if !resume
++            && self.own_create.take().as_ref()
++                == Some(&(
++                    r.session_id.clone(),
++                    self.stream_generation.clone().unwrap(),
++                )) {
++            r.origin
++                .filter(|origin| *origin <= r.watermark)
++                .unwrap_or(r.watermark)
++        } else {
++            r.watermark
++        };
+         self.target = self.target.max(r.watermark);
+         self.replaying = true;
+         self.running = true;
+@@ -628,6 +671,8 @@
+             || v["start"].as_u64() != Some(self.position)
+         {
+             self.error = Some("Terminal replay identity/position mismatch".into());
++            self.replaying = false;
++            self.discard_pending_input();
+             self.release_replay();
+             return;
+         }
+@@ -639,6 +684,8 @@
+             b.len() <= 65536 && v["end"].as_u64() == Some(self.position + b.len() as u64)
+         }) else {
+             self.error = Some("Invalid terminal replay chunk".into());
++            self.replaying = false;
++            self.discard_pending_input();
+             self.release_replay();
+             return;
+         };
+@@ -765,47 +812,92 @@
+         }
+     }
+     pub fn write_bytes(&mut self, bytes: Vec<u8>) {
+-        if self.quit_preparing {
+-            return;
+-        }
+-        if self.disposed || self.replaying || !self.running || bytes.is_empty() {
+-            return;
+-        }
++        self.admit_input(bytes, false);
++    }
++    fn admit_input(&mut self, bytes: Vec<u8>, track: bool) {
++        if self.quit_preparing || self.disposed || bytes.is_empty() {
++            return;
++        }
++        if self.replaying || !self.pending_input.is_empty() {
++            if self.pending_input.len() >= 60
++                || self.pending_input_bytes.saturating_add(bytes.len()) > WRITE_BUDGET
++            {
++                self.error = Some(
++                    "Terminal history is loading; input buffer is full. This input was not sent."
++                        .into(),
++                );
++            } else {
++                self.pending_input_bytes += bytes.len();
++                self.pending_input.push_back((bytes, track));
++            }
++            return;
++        }
++        if !self.running {
++            return;
++        }
++        self.enqueue_input(bytes, track);
++    }
++    fn enqueue_input(&mut self, bytes: Vec<u8>, track: bool) {
+         let (Some(id), Some(generation)) = (self.active.clone(), self.stream_generation.clone())
+         else {
+             return;
+         };
+-        // One request is one atomic input admission, including both paste delimiters.
+-        self.enqueue(
++        let tracked = track.then(|| String::from_utf8_lossy(&bytes).into_owned());
++        if self.enqueue(
+             TerminalRequest::Input {
+                 id,
+                 generation,
+                 bytes,
+             },
+             Purpose::Write,
+-        );
++        ) {
++            if let Some(text) = tracked {
++                self.track_input(&text);
++            }
++        }
++    }
++    fn discard_pending_input(&mut self) {
++        if !self.pending_input.is_empty() {
++            self.pending_input.clear();
++            self.pending_input_bytes = 0;
++            self.error = Some(format!(
++                "{} Pending input was not sent.",
++                self.error.as_deref().unwrap_or("Terminal unavailable.")
++            ));
++        }
++    }
++    fn flush_pending_input(&mut self) {
++        if self.replaying || self.disposed || !self.running {
++            return;
++        }
++        while let Some((bytes, _)) = self.pending_input.front() {
++            let retained = self
++                .work
++                .iter()
++                .map(|w| w.request.retained_bytes())
++                .sum::<usize>();
++            if self.work.len() >= WORK_LIMIT - 4 || retained + bytes.len() > WRITE_BUDGET {
++                break;
++            }
++            let (bytes, track) = self.pending_input.pop_front().unwrap();
++            self.pending_input_bytes -= bytes.len();
++            self.enqueue_input(bytes, track);
++        }
+     }
+     pub fn write(&mut self, data: String, track: bool) {
+         if self.quit_preparing {
+             return;
+         }
+-        if self.disposed || self.replaying || !self.running {
+-            return;
+-        }
+-        let Some(id) = self.active.clone() else {
+-            return;
+-        };
+         if data.len() > WRITE_BUDGET {
+             self.error = Some("Terminal input exceeds 1 MiB.".into());
+             return;
+         }
+-        if data.is_empty() {
+-            return;
+-        }
+-        self.write_bytes(data.as_bytes().to_vec());
+-        if !track {
+-            return;
+-        }
++        self.admit_input(data.into_bytes(), track);
++    }
++    fn track_input(&mut self, data: &str) {
++        let Some(id) = self.active.clone() else {
++            return;
++        };
+         self.grid.bottom();
+         self.grid.clear_selection();
+         self.dirty = true;
+@@ -912,19 +1004,13 @@
+             self.generation += 1;
+             self.cancel_queued();
+             self.detach_active();
+-            self.sessions.pins.remove(&id);
+-            self.emit(TerminalEffect::Pins(
+-                self.sessions.pins.iter().cloned().collect(),
+-            ));
++            self.emit(TerminalEffect::Unpin(id.clone()));
+             self.enqueue(TerminalRequest::Delete(id), Purpose::Mutation);
+         }
+     }
+     pub fn pin(&mut self) {
+         if let Some(id) = self.active.clone() {
+-            let model::Effect::PersistPins(pins) = self.sessions.toggle_pin(id) else {
+-                unreachable!()
+-            };
+-            self.emit(TerminalEffect::Pins(pins));
++            self.emit(TerminalEffect::TogglePin(id));
+         }
+     }
+     pub fn emit(&mut self, e: TerminalEffect) {
+--- a/apps/tezbar/src/surfaces/terminal/tests.rs
++++ b/apps/tezbar/src/surfaces/terminal/tests.rs
+@@ -83,16 +83,47 @@
+     );
+ }
+ fn replay(snapshot: &str, data: &str, expected: &str) {
++    let expected = if expected.ends_with(data) {
++        expected.to_owned()
++    } else {
++        format!("{expected}\n")
++    };
++    assert!(expected.starts_with(snapshot));
++    assert!(expected.ends_with(data));
+     let mut s = state();
+     s.listeners_ready(true, true);
+     s.activate(boot(), 1);
+-    let w = s.next_work().unwrap();
+-    s.complete(w, Ok(json!([summary("a", true)])));
+-    let w = s.next_work().unwrap();
+-    s.stream_data("a", "gen-a", snapshot.len() as u64, data.as_bytes(), true);
+-    // Full durable stream carries the ordered bytes; no text-overlap heuristic.
+-    complete_attach(&mut s, w, "a", expected);
+-    assert!(s.grid.frame().text.starts_with(expected));
++    let list = s.next_work().unwrap();
++    s.complete(list, Ok(json!([summary("a", true)])));
++    let attach = s.next_work().unwrap();
++    s.complete(attach, Ok(attached("a", snapshot)));
++    // This event is admitted after attach, while the durable snapshot is replaying.
++    let start = (expected.len() - data.len()) as u64;
++    s.stream_data("a", "gen-a", start, data.as_bytes(), true);
++    let replay = s.next_work().unwrap();
++    s.complete(
++        replay,
++        Ok(replay_value(0, snapshot.as_bytes(), expected.len() as u64)),
++    );
++    if snapshot.len() < expected.len() {
++        let replay = s.next_work().unwrap();
++        s.complete(
++            replay,
++            Ok(replay_value(
++                snapshot.len() as u64,
++                &expected.as_bytes()[snapshot.len()..],
++                expected.len() as u64,
++            )),
++        );
++    }
++    assert!(s.grid.frame().text.starts_with(&expected));
++    let before = s.grid.frame().text;
++    s.stream_data("a", "gen-a", start, data.as_bytes(), true);
++    assert_eq!(
++        s.grid.frame().text,
++        before,
++        "same positioned bytes must not replay twice"
++    );
+ }
+ #[test]
+ fn explicit_selection_no_implicit_first() {
+@@ -141,7 +172,8 @@
+             "Numpad9",
+             "9",
+             input::Modifiers {
+-                control: true,
++                command: cfg!(target_os = "macos"),
++                control: cfg!(not(target_os = "macos")),
+                 ..Default::default()
+             },
+             8,
+@@ -325,7 +357,7 @@
+ fn detach_is_not_delete_and_pin_persistence_is_typed() {
+     let mut s = live();
+     s.pin();
+-    assert!(matches!(s.effects.pop_front(),Some((_,TerminalEffect::Pins(p))) if p==vec!["a"]));
++    assert!(matches!(s.effects.pop_front(),Some((_,TerminalEffect::TogglePin(id))) if id=="a"));
+     s.select("b");
+     assert!(matches!(
+         s.next_work().unwrap().request,
+@@ -368,10 +400,15 @@
+             input::KeyResult::Bytes(expected.into())
+         );
+     }
+-    for command in [true, false] {
++    for command in if cfg!(target_os = "macos") {
++        vec![true]
++    } else {
++        vec![true, false]
++    } {
+         let m = input::Modifiers {
+             command,
+             control: !command,
++            shift: !command,
+             ..Default::default()
+         };
+         for (k, want) in [
+@@ -937,3 +974,298 @@
+         matches!(s.next_work().unwrap().request,TerminalRequest::Input{bytes,..} if bytes==[0x1b,0x5b,0x4d,0xff])
+     );
+ }
++
++#[test]
++fn review_m10_f1_control_letters_reach_shell_and_app_modifier_is_explicit() {
++    let mut s = live();
++    for (key, byte) in [("k", 11), ("x", 24), ("p", 16), ("d", 4)] {
++        let result = input::key(
++            key,
++            "",
++            input::Modifiers {
++                control: true,
++                ..Default::default()
++            },
++            TermMode::empty(),
++            false,
++        );
++        assert_eq!(result, input::KeyResult::Bytes((byte as char).to_string()));
++        s.handle_key(result);
++    }
++    assert!(s.effects.is_empty());
++    assert!(s.configure.is_none());
++    assert_eq!(s.active.as_deref(), Some("a"));
++    assert!(
++        s.work
++            .iter()
++            .all(|w| matches!(w.request, TerminalRequest::Input { .. }))
++    );
++    for (key, action) in [
++        ("k", input::KeyResult::Configure),
++        ("x", input::KeyResult::Stop),
++        ("p", input::KeyResult::Pin),
++        ("d", input::KeyResult::Delete),
++    ] {
++        let modifier = input::Modifiers {
++            command: cfg!(target_os = "macos"),
++            control: cfg!(not(target_os = "macos")),
++            shift: cfg!(not(target_os = "macos")),
++            ..Default::default()
++        };
++        assert_eq!(
++            input::key(key, "", modifier, TermMode::empty(), false),
++            action
++        );
++    }
++}
++#[cfg(target_os = "macos")]
++#[gpui::test]
++fn review_m10_f2_real_option_base_key_and_native_commit(cx: &mut TestAppContext) {
++    let rt = runtime(cx);
++    let fixture = Arc::new(Fixture::default());
++    let (view, cx) =
++        cx.add_window_view(|w, cx| TerminalView::new(fixture.clone(), &UiState::default(), w, cx));
++    cx.update(|w, cx| {
++        view.update(cx, |v, cx| {
++            v.listeners_ready(true, true, cx);
++            v.activate(payload(), 1, w, cx);
++        })
++    });
++    settle(&rt, cx);
++    fixture.calls.lock().unwrap().clear();
++    cx.update(|w, cx| {
++        view.update(cx, |v, cx| {
++            // Exact GPUI event shape: ignoring-modifier key l, produced character @.
++            v.key(
++                &KeyDownEvent {
++                    keystroke: Keystroke {
++                        key: "l".into(),
++                        key_char: Some("@".into()),
++                        modifiers: gpui::Modifiers {
++                            alt: true,
++                            ..Default::default()
++                        },
++                    },
++                    is_held: false,
++                    prefer_character_input: false,
++                },
++                w,
++                cx,
++            );
++            v.replace_and_mark_text_in_range(None, "´", Some(1..1), w, cx);
++            assert!(!v.preedit.text.is_empty());
++            v.replace_text_in_range(None, "@é", w, cx);
++        })
++    });
++    settle(&rt, cx);
++    let input: Vec<Vec<u8>> = fixture
++        .calls
++        .lock()
++        .unwrap()
++        .iter()
++        .filter(|(c, _)| *c == "core:terminal:input")
++        .map(|(_, a)| STANDARD.decode(a[0]["bytes"].as_str().unwrap()).unwrap())
++        .collect();
++    assert_eq!(input, vec!["@é".as_bytes().to_vec()]);
++}
++#[test]
++fn review_m10_f3_wheel_pixels_modes_and_horizontal_swipes() {
++    let mut wheel = input::WheelAccumulator::default();
++    for d in [3., 4., 6.] {
++        assert_eq!(wheel.lines(d, 14.), 0);
++    }
++    assert_eq!(wheel.lines(1., 14.), 1);
++    assert_eq!(wheel.lines(-42., 14.), -3);
++    let m = Default::default();
++    let alternate = TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL;
++    assert_eq!(
++        input::scroll(2, 0, 0, m, alternate),
++        input::ScrollResult::Bytes(b"\x1b[A\x1b[A".to_vec())
++    );
++    assert_eq!(
++        input::scroll(-2, 0, 0, m, alternate | TermMode::APP_CURSOR),
++        input::ScrollResult::Bytes(b"\x1bOB\x1bOB".to_vec())
++    );
++    let mouse = TermMode::MOUSE_CLICK | TermMode::SGR_MOUSE;
++    assert_eq!(input::scroll(0, 0, 0, m, mouse), input::ScrollResult::None);
++    assert_eq!(
++        input::scroll(3, 0, 0, m, mouse),
++        input::ScrollResult::Bytes(b"\x1b[<64;1;1M".repeat(3))
++    );
++    assert_eq!(
++        input::scroll(-2, 0, 0, m, TermMode::empty()),
++        input::ScrollResult::Rows(-2)
++    );
++}
++#[test]
++fn review_m10_f5_hide_during_attach_detaches_exactly_once() {
++    for create_first in [false, true] {
++        let mut s = state();
++        s.listeners_ready(true, true);
++        s.activate(boot(), 1);
++        let list = s.next_work().unwrap();
++        s.complete(
++            list,
++            Ok(if create_first {
++                json!([])
++            } else {
++                json!([summary("a", true)])
++            }),
++        );
++        let mut attach = s.next_work().unwrap();
++        s.set_visible(false);
++        if create_first {
++            s.complete(
++                attach,
++                Ok(json!({"sessionId":"a","summary":summary("a",true),"generation":"gen-a"})),
++            );
++            attach = s.next_work().unwrap();
++        }
++        s.complete(attach, Ok(attached("a", "")));
++        assert_eq!(s.work.iter().filter(|w|matches!(&w.request,TerminalRequest::DetachGeneration{id,generation} if id=="a" && generation=="gen-a")).count(),1);
++        s.dispose();
++        assert_eq!(
++            s.work
++                .iter()
++                .filter(|w| matches!(w.request, TerminalRequest::DetachGeneration { .. }))
++                .count(),
++            1
++        );
++    }
++}
++#[test]
++fn review_m10_f6_own_create_replies_from_process_origin_only() {
++    let old = b"old\x1b[6n";
++    let current = b"\x1b[6n";
++    let mut s = state();
++    s.listeners_ready(true, true);
++    s.activate(boot(), 1);
++    let list = s.next_work().unwrap();
++    s.complete(list, Ok(json!([])));
++    let create = s.next_work().unwrap();
++    s.complete(
++        create,
++        Ok(json!({"sessionId":"fresh","summary":summary("fresh",true),"generation":"gen-a"})),
++    );
++    let attach = s.next_work().unwrap();
++    let data = [old.as_slice(), current.as_slice()].concat();
++    let mut reply = attached("fresh", std::str::from_utf8(&data).unwrap());
++    reply["origin"] = json!(old.len());
++    s.complete(attach, Ok(reply));
++    let replay = s.next_work().unwrap();
++    s.complete(replay, Ok(replay_value(0, &data, data.len() as u64)));
++    assert_eq!(
++        s.work
++            .iter()
++            .filter(|w| matches!(w.request, TerminalRequest::Input { .. }))
++            .count(),
++        1
++    );
++    let mut restored = state();
++    restored.listeners_ready(true, true);
++    restored.activate(boot(), 1);
++    let list = restored.next_work().unwrap();
++    restored.complete(list, Ok(json!([summary("fresh", true)])));
++    let attach = restored.next_work().unwrap();
++    let mut reply = attached("fresh", std::str::from_utf8(&data).unwrap());
++    reply["origin"] = json!(old.len());
++    restored.complete(attach, Ok(reply));
++    let replay = restored.next_work().unwrap();
++    restored.complete(replay, Ok(replay_value(0, &data, data.len() as u64)));
++    assert!(
++        !restored
++            .work
++            .iter()
++            .any(|w| matches!(w.request, TerminalRequest::Input { .. }))
++    );
++}
++#[test]
++fn review_m10_f7_motion_reports_only_on_cell_or_button_change() {
++    let mut motion = input::MotionReporter::default();
++    let m = Default::default();
++    let mode = TermMode::MOUSE_MOTION | TermMode::SGR_MOUSE;
++    assert!(motion.report(1, 2, 3, None, m, mode).is_some());
++    for _ in 0..1000 {
++        assert!(motion.report(1, 2, 3, None, m, mode).is_none());
++    }
++    assert!(motion.report(1, 3, 3, None, m, mode).is_some());
++    assert!(motion.report(1, 3, 3, Some(0), m, mode).is_some());
++    assert!(motion.report(2, 3, 3, Some(0), m, mode).is_some());
++}
++#[test]
++fn review_m10_f8_replay_preserves_ordered_input_and_retires_old_generation() {
++    let mut s = state();
++    s.listeners_ready(true, true);
++    s.activate(boot(), 1);
++    let list = s.next_work().unwrap();
++    s.complete(list, Ok(json!([summary("a", true), summary("b", true)])));
++    let attach = s.next_work().unwrap();
++    s.write("echo ".into(), true);
++    s.complete(attach, Ok(attached("a", "abcdef")));
++    let replay = s.next_work().unwrap();
++    s.write("é".into(), true);
++    s.paste(s.generation, "z");
++    s.complete(replay, Ok(replay_value(0, b"abc", 6)));
++    let replay = s.next_work().unwrap();
++    s.complete(replay, Ok(replay_value(3, b"def", 6)));
++    let mut input = vec![];
++    while let Some(w) = s.next_work() {
++        if let TerminalRequest::Input { bytes, .. } = w.request {
++            input.push(bytes);
++        }
++    }
++    assert_eq!(
++        input,
++        vec![b"echo ".to_vec(), "é".as_bytes().to_vec(), b"z".to_vec()]
++    );
++    s.stream_data("a", "gen-a", 10, b"gap", true);
++    s.write("old".into(), true);
++    s.select("b");
++    let next = loop {
++        let w = s.next_work().unwrap();
++        if matches!(w.purpose, Purpose::Attach(_)) {
++            break w;
++        }
++        s.complete(w, Ok(json!(true)));
++    };
++    complete_attach(&mut s, next, "b", "");
++    assert!(
++        !s.work
++            .iter()
++            .any(|w| matches!(&w.request,TerminalRequest::Input{bytes,..} if bytes==b"old"))
++    );
++}
++#[test]
++fn review_m10_f8_loading_input_is_bounded_and_overload_visible() {
++    let mut s = state();
++    s.listeners_ready(true, true);
++    s.activate(boot(), 1);
++    let list = s.next_work().unwrap();
++    s.complete(list, Ok(json!([summary("a", true)])));
++    s.write_bytes(vec![b'x'; 1024 * 1024]);
++    s.write_bytes(b"overload".to_vec());
++    assert!(s.error.as_deref().unwrap().contains("buffer is full"));
++}
++
++#[test]
++fn review_m10_f8_replay_failure_refuses_queued_input_visibly() {
++    let mut s = state();
++    s.listeners_ready(true, true);
++    s.activate(boot(), 1);
++    let list = s.next_work().unwrap();
++    s.complete(list, Ok(json!([summary("a", true)])));
++    let attach = s.next_work().unwrap();
++    s.complete(attach, Ok(attached("a", "abcdef")));
++    let replay = s.next_work().unwrap();
++    s.write("never send".into(), true);
++    s.complete(replay, Err("history unavailable".into()));
++    assert!(
++        s.error
++            .as_deref()
++            .unwrap()
++            .contains("Pending input was not sent")
++    );
++    while let Some(work) = s.next_work() {
++        assert!(!matches!(work.request, TerminalRequest::Input { .. }));
++    }
++}
+--- a/apps/tezbar/src/surfaces/terminal/view.rs
++++ b/apps/tezbar/src/surfaces/terminal/view.rs
+@@ -23,6 +23,7 @@
+         if !self.state.visible || self.state.configure.is_some() {
+             return;
+         }
++        self.motion.reset();
+         self.focus.focus(w, cx);
+         let Some((col, row)) = self.mouse_cell(e.position) else {
+             return;
+@@ -68,6 +69,7 @@
+     }
+     fn pointer_up(&mut self, e: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+         self.selection_drag = false;
++        self.motion.reset();
+         if let Some((col, row)) = self.mouse_cell(e.position) {
+             if let Some(b) = input::mouse(
+                 MouseKind::Release(button(e.button)),
+@@ -90,10 +92,11 @@
+             self.state.grid.extend_selection(col, row);
+             self.state.dirty = true;
+             self.changed(cx);
+-        } else if let Some(b) = input::mouse(
+-            MouseKind::Motion(e.pressed_button.map(button)),
++        } else if let Some(b) = self.motion.report(
++            self.state.generation,
+             col,
+             row,
++            e.pressed_button.map(button),
+             modifiers(e.modifiers),
+             self.state.grid.mode(),
+         ) {
+@@ -103,7 +106,8 @@
+     }
+     fn wheel(&mut self, e: &ScrollEvent, w: &mut Window, cx: &mut Context<Self>) {
+         let delta = f32::from(e.delta.pixel_delta(px(self.state.metrics.height)).y);
+-        if e.modifiers.platform || e.modifiers.control {
++        if e.modifiers.platform || (cfg!(not(target_os = "macos")) && e.modifiers.control) {
++            self.scroll_wheel.reset();
+             self.wheel += delta;
+             if self.wheel.abs() >= 40. {
+                 let z = if self.wheel > 0. { Zoom::In } else { Zoom::Out };
+@@ -121,22 +125,25 @@
+         } else {
+             self.wheel = 0.;
+             let (col, row) = self.mouse_cell(e.position).unwrap_or((0, 0));
+-            if let Some(b) = input::mouse(
+-                MouseKind::Wheel(delta > 0.),
++            let lines = self.scroll_wheel.lines(delta, self.state.metrics.height);
++            match input::scroll(
++                lines,
+                 col,
+                 row,
+                 modifiers(e.modifiers),
+                 self.state.grid.mode(),
+             ) {
+-                self.state.write_bytes(b);
+-                self.pump(cx);
+-            } else {
+-                self.state
+-                    .grid
+-                    .scroll((delta / self.state.metrics.height).round() as i32);
+-                self.state.dirty = true;
+-                self.sync_blink(cx);
+-                self.changed(cx);
++                input::ScrollResult::Bytes(b) => {
++                    self.state.write_bytes(b);
++                    self.pump(cx);
++                }
++                input::ScrollResult::Rows(lines) => {
++                    self.state.grid.scroll(lines);
++                    self.state.dirty = true;
++                    self.sync_blink(cx);
++                    self.changed(cx);
++                }
++                input::ScrollResult::None => {}
+             }
+         }
+         cx.stop_propagation();
+@@ -320,7 +327,11 @@
+                             cx.listener(|this, _, w, cx| this.act(KeyResult::Configure, w, cx)),
+                         ),
+                     )
+-                    .child("⌘/Ctrl K   Switch sessions ⌘/Ctrl 1–9   Back Esc / ⌘["),
++                    .child(if cfg!(target_os = "macos") {
++                        "Configure ⌘K   Switch sessions ⌘1–9   Back Esc / ⌘["
++                    } else {
++                        "Configure Ctrl+Shift+K   Switch sessions Ctrl+1–9   Back Esc"
++                    }),
+             );
+         if let Some(error) = &self.state.error {
+             sheet = sheet.child(
+--- a/apps/tezbar/src/windows/terminal_sessions.rs
++++ b/apps/tezbar/src/windows/terminal_sessions.rs
+@@ -14,15 +14,23 @@
+         ),
+     )
+ }
++#[derive(Clone, Debug)]
++pub struct SessionRow {
++    pub id: String,
++    pub title: String,
++    pub cwd: String,
++    pub running: bool,
++    pub active: bool,
++}
+ pub struct SessionsPanel {
+-    pub sessions: Vec<(String, String)>,
++    pub sessions: Vec<SessionRow>,
+     relay: crate::events::Relay,
+     focus: FocusHandle,
+     _focus: Subscription,
+ }
+ impl SessionsPanel {
+     pub fn new(
+-        sessions: Vec<(String, String)>,
++        sessions: Vec<SessionRow>,
+         relay: crate::events::Relay,
+         w: &mut Window,
+         cx: &mut Context<Self>,
+@@ -52,6 +60,17 @@
+                     let _ = this.relay.send(crate::events::Event::PanelHide);
+                     cx.stop_propagation();
+                 }
++                let m = e.keystroke.modifiers;
++                if e.keystroke.key == "n"
++                    && (m.platform || (cfg!(not(target_os = "macos")) && m.control))
++                    && !m.alt
++                    && !m.shift
++                {
++                    let _ = this
++                        .relay
++                        .send(crate::events::Event::TerminalPanelAction(None));
++                    cx.stop_propagation();
++                }
+                 if let Some(i) = tezbar_ui_model::terminal::shortcut_index(
+                     "",
+                     &e.keystroke.key,
+@@ -60,10 +79,12 @@
+                     e.keystroke.modifiers.alt,
+                     e.keystroke.modifiers.shift,
+                 ) {
+-                    if let Some((id, _)) = this.sessions.get(i) {
++                    if let Some(row) = this.sessions.get(i) {
+                         let _ = this
+                             .relay
+-                            .send(crate::events::Event::TerminalPanelAction(Some(id.clone())));
++                            .send(crate::events::Event::TerminalPanelAction(Some(
++                                row.id.clone(),
++                            )));
+                         cx.stop_propagation();
+                     }
+                 }
+@@ -71,7 +92,11 @@
+             .child(
+                 tezbar_ui::controls::button(
+                     "terminal-new",
+-                    "New session",
++                    if cfg!(target_os = "macos") {
++                        "New session · ⌘N"
++                    } else {
++                        "New session · Ctrl+N"
++                    },
+                     tezbar_ui::controls::ButtonTone::Quiet,
+                     false,
+                     t,
+@@ -80,7 +105,10 @@
+                     let _ = relay.send(crate::events::Event::TerminalPanelAction(None));
+                 }),
+             )
+-            .child(tezbar_ui::controls::header(t).child("Terminal sessions"))
++            .child(tezbar_ui::controls::header(t).child(format!(
++                "Terminal sessions · {} running",
++                self.sessions.iter().filter(|s| s.running).count()
++            )))
+             .when(self.sessions.is_empty(), |d| d.child("Starting shell…"))
+             .child(
+                 uniform_list(
+@@ -89,15 +117,15 @@
+                     cx.processor(move |this, range: std::ops::Range<usize>, _, _| {
+                         range
+                             .map(|i| {
+-                                let (id, title) = &this.sessions[i];
++                                let row = &this.sessions[i];
+                                 let relay = this.relay.clone();
+-                                let selected = id.clone();
++                                let selected = row.id.clone();
+                                 tezbar_ui::virtual_list::row(
+-                                    id.clone().into(),
+-                                    title.clone().into(),
++                                    row.id.clone().into(),
++                                    format!("{}, {}", row.title, row.cwd).into(),
+                                     i,
+                                     this.sessions.len(),
+-                                    false,
++                                    row.active,
+                                     t,
+                                 )
+                                 .on_click(move |_, _, _| {
+@@ -105,7 +133,38 @@
+                                         Some(selected.clone()),
+                                     ));
+                                 })
+-                                .child(title.clone())
++                                .child(
++                                    div()
++                                        .flex_1()
++                                        .min_w_0()
++                                        .flex()
++                                        .flex_col()
++                                        .child(div().truncate().child(row.title.clone()))
++                                        .child(
++                                            div()
++                                                .text_size(px(11. * t.zoom))
++                                                .text_color(if row.active {
++                                                    rgb(0xffffff).into()
++                                                } else {
++                                                    t.text3
++                                                })
++                                                .truncate()
++                                                .child(tezbar_ui_model::terminal::compact_path(
++                                                    &row.cwd,
++                                                )),
++                                        ),
++                                )
++                                .when(i < 9, |d| {
++                                    d.child(div().text_size(px(11. * t.zoom)).child(format!(
++                                        "{}{}",
++                                        if cfg!(target_os = "macos") {
++                                            "⌘"
++                                        } else {
++                                            "Ctrl+"
++                                        },
++                                        i + 1
++                                    )))
++                                })
+                                 .into_any_element()
+                             })
+                             .collect()
+--- a/crates/tezbar-core/src/terminal/stream.rs
++++ b/crates/tezbar-core/src/terminal/stream.rs
+@@ -17,6 +17,7 @@
+     file: File,
+     path: PathBuf,
+     pub position: u64,
++    origin: u64,
+     durable: bool,
+ }
+ impl Stream {
+@@ -27,6 +28,7 @@
+             file,
+             path,
+             position,
++            origin: position,
+             durable: true,
+         })
+     }
+@@ -107,7 +109,7 @@
+         let s = stream.lock().unwrap();
+         s.validate()?;
+         let token = uuid::Uuid::new_v4().to_string();
+-        let result = json!({"generation":s.generation,"replay":token,"watermark":s.position});
++        let result = json!({"generation":s.generation,"replay":token,"watermark":s.position,"origin":s.origin});
+         drop(s);
+         self.cursors.insert(
+             token,
+@@ -195,6 +197,27 @@
+         (d, Arc::new(Mutex::new(Stream::new(f, p).unwrap())))
+     }
+     #[test]
++    fn review_m10_f6_origin_distinguishes_prior_history_from_this_process() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("history");
++        std::fs::write(&path, b"old\x1b[6n").unwrap();
++        let file = std::fs::OpenOptions::new()
++            .read(true)
++            .append(true)
++            .open(&path)
++            .unwrap();
++        let stream = Arc::new(Mutex::new(Stream::new(file, path).unwrap()));
++        stream.lock().unwrap().append(b"\x1b[6nnew");
++        let mut registry = ReplayRegistry::default();
++        let attached = registry.open(stream.clone()).unwrap();
++        assert_eq!(attached["origin"], 7);
++        assert_eq!(attached["watermark"], 14);
++        stream.lock().unwrap().append(b"later");
++        let again = registry.open(stream).unwrap();
++        assert_eq!(again["origin"], 7);
++        assert_eq!(again["watermark"], 19);
++    }
++    #[test]
+     fn bounded_history_repeated_bytes_watermark_release_expiry_and_truncation() {
+         let (d, s) = stream();
+         let mut r = ReplayRegistry::default();
+--- a/crates/tezbar-ui/src/terminal_grid.rs
++++ b/crates/tezbar-ui/src/terminal_grid.rs
+@@ -185,7 +185,7 @@
+             size,
+             palette: Palette::new(light),
+         };
+-        this.feed(b"\x1b[20h"); // xterm convertEol:true; programs can disable LNM.
++        this.feed(b"\x1b[20h"); // Match xterm convertEol:true (LF is normalized during feed).
+         this
+     }
+     pub fn feed(&mut self, data: &[u8]) {

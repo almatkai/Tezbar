@@ -1,0 +1,35 @@
+{
+  "freeze": "docs/native-m09/final-source-freeze-06.json",
+  "aggregate_sha256": "185165ded66563538834c524d72dbf0cf04bd966486997a6010004ec9b0dcfa4",
+  "gates": [
+    {
+      "gate": "core-color-formats",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--features",
+        "native-ui-instant",
+        "--lib",
+        "instant::color::",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-color-core-color-formats.log",
+      "exit_code": 0,
+      "seconds": 45.3,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 43.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 697 filtered out; finished in 0.01s"
+      ]
+    }
+  ]
+}

@@ -8,6 +8,8 @@ pub struct CoreClient(
     Arc<tokio::sync::Mutex<StartOwner>>,
     #[cfg(feature = "bench-control")] Arc<crate::bench_control::ShutdownGate>,
     Arc<tokio::sync::Semaphore>,
+    Arc<std::sync::Mutex<Option<tokio::runtime::Handle>>>,
+    Arc<tokio::sync::Semaphore>,
 );
 #[derive(Default)]
 struct ShutdownOwner {
@@ -39,6 +41,7 @@ impl ShutdownOwner {
 pub type SearchRow = tezbar_ui_model::launcher::Row;
 #[derive(Clone, Debug)]
 pub enum Request {
+    Extension(crate::surfaces::extensions_store::request::ExtensionRequest),
     Terminal(crate::surfaces::terminal::TerminalRequest),
     Chat(crate::surfaces::ai_chat::ChatRequest),
     Settings(crate::surfaces::settings::SettingsRequest),
@@ -97,6 +100,7 @@ impl Request {
     pub fn wire(self) -> (&'static str, Vec<Value>) {
         let context = |action, query, rank, id: Option<String>| json!({"action":action,"context":{"query":query,"rank":rank,"resultId":id}});
         match self {
+            Self::Extension(request) => request.wire(),
             Self::Terminal(request) => request.wire(),
             Self::Chat(request) => request.wire(),
             Self::Utility(request) => request.wire(),
@@ -167,6 +171,39 @@ impl RequestAdapter for CoreClient {
         &self,
         request: Request,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send>> {
+        if let Request::ExtensionRun(value) = &request {
+            use crate::surfaces::extensions_store::request::{
+                ExtensionRequest, ExtensionTransport,
+            };
+            let parsed: Result<ExtensionRequest, &'static str> = (|| {
+                Ok(ExtensionRequest::Run {
+                    extension: value["extensionId"]
+                        .as_str()
+                        .ok_or("Missing extension")?
+                        .into(),
+                    command: value["commandName"]
+                        .as_str()
+                        .ok_or("Missing command")?
+                        .into(),
+                    arguments: serde_json::from_value(
+                        value
+                            .get("argumentValues")
+                            .cloned()
+                            .unwrap_or_else(|| json!({})),
+                    )
+                    .map_err(|_| "Invalid command arguments")?,
+                })
+            })();
+            return match parsed {
+                Ok(request) => ExtensionTransport::send(self, request),
+                Err(error) => Box::pin(async move { Err(error.to_string()) }),
+            };
+        }
+        if let Request::Extension(request) = request {
+            return crate::surfaces::extensions_store::request::ExtensionTransport::send(
+                self, request,
+            );
+        }
         let client = self.clone();
         Box::pin(async move { client.request(request).await })
     }
@@ -188,6 +225,13 @@ impl CoreClient {
             .map_err(|_| "Native operations are still finishing; try again".to_owned())?;
         tezbar_update::notes::http::fetch(&url, accept).await
     }
+    pub(crate) fn bind_extension_runtime(&self, handle: tokio::runtime::Handle) {
+        #[cfg(feature = "bench-control")]
+        let owner = &self.5;
+        #[cfg(not(feature = "bench-control"))]
+        let owner = &self.4;
+        *owner.lock().unwrap() = Some(handle);
+    }
     pub fn new(core: Arc<tezbar_core::NativeCore>) -> Self {
         Self(
             core,
@@ -195,6 +239,10 @@ impl CoreClient {
             Arc::default(),
             #[cfg(feature = "bench-control")]
             Arc::default(),
+            Arc::new(tokio::sync::Semaphore::new(16)),
+            Arc::new(std::sync::Mutex::new(
+                tokio::runtime::Handle::try_current().ok(),
+            )),
             Arc::new(tokio::sync::Semaphore::new(16)),
         )
     }
@@ -421,5 +469,121 @@ impl crate::surfaces::terminal::TerminalTransport for CoreClient {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send>> {
         let client = self.clone();
         Box::pin(async move { client.request(Request::Terminal(request)).await })
+    }
+}
+
+impl crate::surfaces::extensions_store::request::ExtensionTransport for CoreClient {
+    fn send(
+        &self,
+        request: crate::surfaces::extensions_store::request::ExtensionRequest,
+    ) -> crate::surfaces::extensions_store::request::ExtensionFuture {
+        #[cfg(feature = "bench-control")]
+        let (normal, runtime, disposal) = (&self.4, &self.5, &self.6);
+        #[cfg(not(feature = "bench-control"))]
+        let (normal, runtime, disposal) = (&self.3, &self.4, &self.5);
+        let slots = if matches!(
+            request,
+            crate::surfaces::extensions_store::request::ExtensionRequest::Dispose(_)
+        ) {
+            disposal
+        } else {
+            normal
+        };
+        let permit = match slots.clone().try_acquire_owned() {
+            Ok(v) => v,
+            Err(_) => {
+                return Box::pin(async {
+                    Err("Native operations are still finishing; retry".into())
+                });
+            }
+        };
+        let handle = runtime
+            .lock()
+            .unwrap()
+            .clone()
+            .or_else(|| tokio::runtime::Handle::try_current().ok());
+        let Some(handle) = handle else {
+            return Box::pin(async { Err("Core runtime unavailable".into()) });
+        };
+        let (channel, args) = request.wire();
+        let core = self.0.clone();
+        let task = handle.spawn(async move {
+            let _permit = permit;
+            core.request(channel, &args).await
+        });
+        Box::pin(async move {
+            task.await
+                .map_err(|_| "Core operation interrupted".to_string())?
+        })
+    }
+    fn drain(&self) -> crate::surfaces::extensions_store::request::ExtensionFuture {
+        #[cfg(feature = "bench-control")]
+        let (slots, disposal) = (self.4.clone(), self.6.clone());
+        #[cfg(not(feature = "bench-control"))]
+        let (slots, disposal) = (self.3.clone(), self.5.clone());
+        Box::pin(async move {
+            let _all = slots
+                .acquire_many_owned(16)
+                .await
+                .map_err(|_| "Core admission closed")?;
+            let _dispose = disposal
+                .acquire_many_owned(16)
+                .await
+                .map_err(|_| "Disposal admission closed")?;
+            Ok(json!(true))
+        })
+    }
+}
+
+#[cfg(test)]
+mod m9_admission_tests {
+    use super::*;
+    use crate::surfaces::extensions_store::request::{ExtensionRequest, ExtensionTransport};
+    #[tokio::test]
+    async fn extension_admission_precedes_poll_and_drain_owns_dropped_waiters() {
+        let root = tempfile::tempdir().unwrap();
+        let host = Arc::new(tezbar_core::host::TestHost {
+            allow_interaction: true,
+            ..Default::default()
+        });
+        let ctx = tezbar_core::common::CoreContext::new(
+            tezbar_core::common::CorePaths {
+                data_dir: root.path().join("data"),
+                config_dir: root.path().join("config"),
+                resource_dir: root.path().join("resources"),
+                home_dir: root.path().join("home"),
+                temp_dir: root.path().join("tmp"),
+            },
+            Some(host.clone()),
+        );
+        let core = tezbar_core::NativeCore::new(ctx).unwrap();
+        let client = CoreClient::new(core.clone());
+        for _ in 0..16 {
+            let future =
+                ExtensionTransport::send(&client, ExtensionRequest::Copy("fixture".into()));
+            drop(future);
+        }
+        assert!(
+            ExtensionTransport::send(&client, ExtensionRequest::Copy("excess".into()))
+                .await
+                .is_err()
+        );
+        let disposal =
+            ExtensionTransport::send(&client, ExtensionRequest::Dispose("missing-session".into()));
+        drop(disposal);
+        core.start_with_options(tezbar_core::StartupOptions::ISOLATED_PREVIEW)
+            .await
+            .unwrap();
+        ExtensionTransport::drain(&client).await.unwrap();
+        assert!(
+            !host
+                .events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(channel, _)| channel == "extension-worker-status")
+        );
+        assert_eq!(host.desktop_effects.lock().unwrap().len(), 16);
+        core.shutdown().await;
     }
 }

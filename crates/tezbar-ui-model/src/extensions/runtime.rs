@@ -214,6 +214,8 @@ pub struct Shortcut {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {
+    #[serde(default)]
+    pub section: Option<String>,
     pub id: String,
     pub title: String,
     pub style: Option<String>,
@@ -285,6 +287,7 @@ pub enum Notice {
     Error,
 }
 pub struct TreeReply {
+    pub view_revision: u64,
     pub key: SessionKey,
     pub generation: Option<String>,
     pub root: Node,
@@ -316,6 +319,7 @@ impl TreeReply {
         let actions =
             serde_json::from_value(value["actions"].clone()).map_err(|_| "Invalid actions")?;
         Ok(Self {
+            view_revision: value["viewRevision"].as_u64().unwrap_or(0),
             key: SessionKey {
                 extension_id: string("extensionId")?,
                 command_name: string("commandName")?,
@@ -349,6 +353,7 @@ pub enum UiEvent {
     PickFiles(String),
 }
 pub struct RuntimeSession {
+    pub view_revision: u64,
     pub key: SessionKey,
     pub generation: Option<String>,
     pub root: Arc<Node>,
@@ -380,6 +385,7 @@ impl RuntimeSession {
     pub fn new(reply: TreeReply, now: u64) -> Result<Self, &'static str> {
         reply.root.validate()?;
         let mut s = Self {
+            view_revision: reply.view_revision,
             key: reply.key,
             generation: reply.generation,
             root: Arc::new(reply.root),
@@ -565,6 +571,7 @@ impl RuntimeSession {
             }
             r.root.validate()?;
             self.records(r.effects, r.effect_sequence);
+            self.view_revision = r.view_revision;
             self.root = Arc::new(r.root);
             self.actions = r.actions;
             self.policy = r.refresh;
@@ -634,7 +641,8 @@ impl RuntimeSession {
             .root
             .props
             .get("pagination")
-            .is_some_and(|p| p["hasMore"] == true);
+            .is_some_and(|p| p["hasMore"] == true)
+            || self.root.props.get("__hasMore") == Some(&Value::Bool(true));
         if has_more && !self.page_pending && index + 3 >= rows.len() {
             self.page_pending = true;
             Some(Effect::LoadMore(self.token()))

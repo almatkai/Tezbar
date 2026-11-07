@@ -87,7 +87,80 @@ pub enum NotificationSpec {
         id: String,
     },
 }
+/// Finite desktop interception at the execution boundary. None preserves the
+/// production native routine; headless hosts always return Some, including denial.
+#[derive(Clone)]
+pub enum DesktopEffect {
+    ReadClipboard,
+    ClipboardSequence,
+    WriteText(String),
+    WriteHtml {
+        html: String,
+        text: Option<String>,
+    },
+    WriteImage {
+        bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+    },
+    WriteFiles(Vec<PathBuf>),
+    SelectedText,
+    SelectedFiles,
+    ReadImage,
+    OpenApp(String),
+    OpenWith {
+        path: String,
+        app: String,
+    },
+    Open(String),
+    Reveal(String),
+}
+impl std::fmt::Debug for DesktopEffect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DesktopEffect(<redacted>)")
+    }
+}
+#[derive(Clone)]
+pub enum ExtensionControl {
+    Close,
+    Preferences,
+    ClearSearch,
+    Hud(String),
+}
+impl std::fmt::Debug for ExtensionControl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ExtensionControl(<redacted>)")
+    }
+}
 pub trait Host: Send + Sync + 'static {
+    fn extension_control(
+        &self,
+        session: String,
+        source: u64,
+        control: ExtensionControl,
+    ) -> HostFuture<()> {
+        match control {
+            ExtensionControl::Close => self.surface(SurfaceOp::CloseCurrent),
+            ExtensionControl::Preferences => {
+                self.emit("app:open-surface", serde_json::json!("settings-extensions"));
+                self.surface(SurfaceOp::OpenSettings)
+            }
+            ExtensionControl::ClearSearch => {
+                self.emit(
+                    "extension:ui",
+                    serde_json::json!({"sessionId":session,"source":source,"kind":"clear-search"}),
+                );
+                Box::pin(async { Ok(()) })
+            }
+            ExtensionControl::Hud(message) => {
+                self.emit("extension:ui",serde_json::json!({"sessionId":session,"source":source,"kind":"hud","message":message}));
+                Box::pin(async { Ok(()) })
+            }
+        }
+    }
+    fn desktop_effect(&self, _effect: DesktopEffect) -> Option<Result<Value, String>> {
+        None
+    }
     fn emit(&self, channel: &str, payload: Value);
     fn surface(&self, op: SurfaceOp) -> HostFuture<()>;
     fn dialog(&self, request: DialogRequest) -> HostFuture<DialogReply>;
@@ -103,6 +176,8 @@ pub trait Host: Send + Sync + 'static {
 #[derive(Default)]
 pub struct TestHost {
     pub desktop: bool,
+    pub desktop_effects: Mutex<Vec<DesktopEffect>>,
+    pub clipboard_text: Mutex<String>,
     pub allow_interaction: bool,
     pub calls: Mutex<Vec<String>>,
     pub events: Mutex<Vec<(String, Value)>>,
@@ -110,6 +185,7 @@ pub struct TestHost {
     pub captures: Mutex<VecDeque<Result<Vec<u8>, String>>>,
     pub shortcut_results: Mutex<VecDeque<Result<(), String>>>,
     pub status: Mutex<HashMap<String, StatusCallback>>,
+    pub status_specs: Mutex<HashMap<String, StatusItem>>,
 }
 impl TestHost {
     fn record(&self, call: String) -> Result<(), String> {
@@ -122,6 +198,26 @@ impl TestHost {
     }
 }
 impl Host for TestHost {
+    fn desktop_effect(&self, effect: DesktopEffect) -> Option<Result<Value, String>> {
+        if !self.allow_interaction {
+            return Some(Err("Desktop effect denied".into()));
+        }
+        let result = match &effect {
+            DesktopEffect::ClipboardSequence => serde_json::json!(0),
+            DesktopEffect::ReadClipboard => {
+                serde_json::json!(self.clipboard_text.lock().unwrap().clone())
+            }
+            DesktopEffect::WriteText(text) => {
+                *self.clipboard_text.lock().unwrap() = text.clone();
+                serde_json::json!({"ok":true})
+            }
+            DesktopEffect::SelectedText => Value::String(String::new()),
+            _ => serde_json::json!({"ok":true}),
+        };
+        self.desktop_effects.lock().unwrap().push(effect);
+        Some(Ok(result))
+    }
+
     fn emit(&self, channel: &str, value: Value) {
         self.events.lock().unwrap().push((channel.into(), value));
     }
@@ -194,13 +290,15 @@ impl ShortcutRegistry for TestHost {
     }
 }
 impl StatusItems for TestHost {
-    fn set(&self, id: &str, _: StatusItem, callback: StatusCallback) -> Result<(), String> {
+    fn set(&self, id: &str, spec: StatusItem, callback: StatusCallback) -> Result<(), String> {
         self.record(format!("status:set:{id}"))?;
+        self.status_specs.lock().unwrap().insert(id.into(), spec);
         self.status.lock().unwrap().insert(id.into(), callback);
         Ok(())
     }
     fn remove(&self, id: &str) -> Result<(), String> {
         self.record(format!("status:remove:{id}"))?;
+        self.status_specs.lock().unwrap().remove(id);
         self.status.lock().unwrap().remove(id);
         Ok(())
     }

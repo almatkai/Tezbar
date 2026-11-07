@@ -1,11 +1,11 @@
 pub mod ai;
 pub mod assets;
-#[cfg(feature = "native-ui-instant")]
-pub mod instant;
 pub mod common;
 pub mod extension_worker;
 pub mod extensions;
 mod fts_rank;
+#[cfg(feature = "native-ui-instant")]
+pub mod instant;
 pub mod knowledge;
 pub mod launcher;
 pub mod platform;
@@ -74,14 +74,23 @@ pub struct NativeCore {
 
 impl NativeCore {
     pub fn new(ctx: CoreContext) -> Result<Arc<Self>, String> {
-        Self::configured(ctx,None)
+        Self::configured(ctx, None)
     }
     /// Construct the same routed core with a host-selected isolated worker bundle.
-    pub fn new_with_extension_worker(ctx: CoreContext, launch: extension_worker::WorkerLaunch) -> Result<Arc<Self>,String> {
-        Self::configured(ctx,Some(launch))
+    pub fn new_with_extension_worker(
+        ctx: CoreContext,
+        launch: extension_worker::WorkerLaunch,
+    ) -> Result<Arc<Self>, String> {
+        Self::configured(ctx, Some(launch))
     }
-    fn configured(ctx: CoreContext, launch: Option<extension_worker::WorkerLaunch>) -> Result<Arc<Self>,String> {
-        let extensions=match launch {Some(launch)=>extensions::ExtensionsCore::with_worker_launch(ctx.clone(),launch),None=>extensions::ExtensionsCore::new(ctx.clone())};
+    fn configured(
+        ctx: CoreContext,
+        launch: Option<extension_worker::WorkerLaunch>,
+    ) -> Result<Arc<Self>, String> {
+        let extensions = match launch {
+            Some(launch) => extensions::ExtensionsCore::with_worker_launch(ctx.clone(), launch),
+            None => extensions::ExtensionsCore::new(ctx.clone()),
+        };
         let core = Arc::new(Self {
             assets: assets::AssetService::default(),
             ai: ai::AiCore::new(ctx.clone()),
@@ -186,9 +195,16 @@ impl NativeCore {
             self.ctx
                 .request("core:platform:visibility", vec![json!(true)])
                 .await?;
-            let extension_id = extension["extensionId"].as_str().map(str::to_owned)
-                .unwrap_or_else(|| format!("raycast.{}", extension["extName"].as_str().unwrap_or("")));
-            self.ctx.emit("run-extension-command-from-hotkey",json!({"extensionId":extension_id,"commandName":extension["cmdName"]}));
+            let extension_id = extension["extensionId"]
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| {
+                    format!("raycast.{}", extension["extName"].as_str().unwrap_or(""))
+                });
+            self.ctx.emit(
+                "run-extension-command-from-hotkey",
+                json!({"extensionId":extension_id,"commandName":extension["cmdName"]}),
+            );
             return Ok(json!({"ok":true}));
         }
         let id = command
@@ -242,6 +258,12 @@ impl NativeCore {
         if self.closing.load(Ordering::Acquire) && channel != "core:terminal:exit" {
             return Err("Tezbar is shutting down".into());
         }
+        if channel == "core:extension-status-refresh" {
+            return self
+                .extensions
+                .refresh_sdk_status(args.first().cloned().unwrap_or(Value::Null))
+                .await;
+        }
         if channel == "search:all" || channel == "search:candidates" {
             self.ctx.note_foreground();
         }
@@ -269,6 +291,14 @@ impl NativeCore {
             return result;
         }
         if let Some(result) = self.launcher.handle(channel, args).await {
+            if result.is_ok()
+                && channel == "toggle-command-enabled"
+                && args.get(1) == Some(&Value::Bool(false))
+            {
+                if let Some(id) = args.first().and_then(Value::as_str) {
+                    self.extensions.command_disabled(id).await;
+                }
+            }
             return result;
         }
         if let Some(result) = self.extensions.handle(channel, args).await {
@@ -283,7 +313,10 @@ impl NativeCore {
         if let Some(result) = self.vault.handle(channel, args).await {
             // Keep vault names in global search in step with the vault.
             if result.is_ok()
-                && matches!(channel, "vault:unlock" | "vault:save" | "vault:delete" | "vault:reset")
+                && matches!(
+                    channel,
+                    "vault:unlock" | "vault:save" | "vault:delete" | "vault:reset"
+                )
             {
                 if let Err(error) = self.launcher.local_refresh().await {
                     log::warn!("vault search refresh failed: {error}");
@@ -356,13 +389,16 @@ pub fn trim_os_process_memory() {
 #[cfg(test)]
 mod tests;
 
-pub mod host;
-pub mod terminal;
+pub mod bun;
 pub mod child_supervisor;
+pub mod host;
+#[cfg(feature = "native-launcher-facade")]
+pub mod launcher_facade;
+pub mod native_v2_cli;
+pub mod resource_directory;
+pub mod terminal;
 #[cfg(windows)]
 pub mod windows_job;
-pub mod resource_directory;
-pub mod native_v2_cli;
-#[cfg(feature="native-launcher-facade")]
-pub mod launcher_facade;
-pub mod bun;
+
+#[cfg(test)]
+mod desktop_effect_tests;

@@ -1,0 +1,247 @@
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `validate_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:16:8
+   |
+16 | pub fn validate_images(
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+
+warning: function `save` is never used
+  --> crates/tezbar-core/src/ai/runtime/store.rs:52:8
+   |
+52 | pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
+   |        ^^^^
+
+warning: methods `gemma_pending`, `gemma_save`, `gemma_clear`, `gemma_has`, `gemma_counts`, and `vector_backfill` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1219:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1219 |     pub fn gemma_pending(&self, roots: &[String], limit: usize) -> Result<Vec<Value>, String> {
+     |            ^^^^^^^^^^^^^
+...
+1246 |     pub fn gemma_save(&mut self, chunks: &[Value], vectors: &[Vec<f64>]) -> Result<usize, String> {
+     |            ^^^^^^^^^^
+...
+1301 |     pub fn gemma_clear(&self) -> Result<(), String> {
+     |            ^^^^^^^^^^^
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+...
+1354 |     pub fn vector_backfill(&self) -> Result<bool, String> {
+     |            ^^^^^^^^^^^^^^^
+
+warning: constant `REVISION` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:32:7
+   |
+32 | const REVISION: &str = runtime_models::Q8.revision;
+   |       ^^^^^^^^
+
+warning: constant `MODEL_FILE` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:33:7
+   |
+33 | const MODEL_FILE: &str = runtime_models::Q8.file;
+   |       ^^^^^^^^^^
+
+warning: constant `MODEL_SHA` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:34:7
+   |
+34 | const MODEL_SHA: &str = runtime_models::Q8.sha256;
+   |       ^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/tezbar-core/src/knowledge/runtime.rs:217:12
+    |
+216 | impl Runtime {
+    | ------------ associated function in this implementation
+217 |     pub fn new(ctx: CoreContext) -> Self {
+    |            ^^^
+
+warning: function `output` is never used
+  --> crates/tezbar-core/src/launcher/providers.rs:17:14
+   |
+17 | pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+   |              ^^^^^^
+
+warning: `tezbar-core` (lib) generated 12 warnings (run `cargo fix --lib -p tezbar-core` to apply 3 suggestions)
+   Compiling tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+warning: unused import: `json`
+  --> apps/tezbar/src/surfaces/extensions_store/mod.rs:10:18
+   |
+10 | use serde_json::{json, Value};
+   |                  ^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: type `extension_runtime::view::Row` is more private than the item `extension_runtime::RuntimeView::rows`
+  --> apps/tezbar/src/surfaces/extension_runtime/mod.rs:73:5
+   |
+73 |     pub(super) rows: Vec<view::Row>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `extension_runtime::RuntimeView::rows` is reachable at visibility `pub(in crate::surfaces)`
+   |
+note: but type `extension_runtime::view::Row` is only usable at visibility `pub(in crate::surfaces::extension_runtime)`
+  --> apps/tezbar/src/surfaces/extension_runtime/view.rs:7:1
+   |
+ 7 | pub(super) struct Row {
+   | ^^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: method `owns_chat` is never used
+  --> apps/tezbar/src/surfaces/command_bar/chat_integration.rs:52:19
+   |
+33 | impl Launcher {
+   | ------------- method in this implementation
+...
+52 |     pub(crate) fn owns_chat(&self, id: EntityId) -> bool {
+   |                   ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variant `Open` is never constructed
+  --> apps/tezbar/src/surfaces/ai_chat/mod.rs:85:5
+   |
+49 | pub(crate) enum Action {
+   |                 ------ variant in this enum
+...
+85 |     Open(String),
+   |     ^^^^
+   |
+   = note: `Action` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: field `scroll` is never read
+   --> apps/tezbar/src/surfaces/ai_chat/mod.rs:165:5
+    |
+ 97 | pub struct ChatView {
+    |            -------- field in this struct
+...
+165 |     scroll: ScrollHandle,
+    |     ^^^^^^
+
+warning: method `snapshot_summary` is never used
+    --> apps/tezbar/src/surfaces/terminal/state.rs:1065:12
+     |
+ 108 | impl State {
+     | ---------- method in this implementation
+...
+1065 |     pub fn snapshot_summary(&self) -> Value {
+     |            ^^^^^^^^^^^^^^^^
+
+warning: fields `window` and `subscriptions` are never read
+  --> apps/tezbar/src/surfaces/extensions_store/mod.rs:41:5
+   |
+35 | pub struct StoreView {
+   |            --------- fields in this struct
+...
+41 |     window: AnyWindowHandle,
+   |     ^^^^^^
+42 |     subscriptions: Vec<Subscription>,
+   |     ^^^^^^^^^^^^^
+
+warning: field `subscriptions` is never read
+  --> apps/tezbar/src/surfaces/extension_runtime/mod.rs:69:5
+   |
+57 | pub struct RuntimeView {
+   |            ----------- field in this struct
+...
+69 |     subscriptions: Vec<Subscription>,
+   |     ^^^^^^^^^^^^^
+
+warning: variant `Open` is never constructed
+  --> apps/tezbar/src/surfaces/ai_chat/mod.rs:85:5
+   |
+49 | pub(crate) enum Action {
+   |                 ------ variant in this enum
+...
+85 |     Open(String),
+   |     ^^^^
+   |
+   = note: `Action` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `tezbar-native` (lib) generated 8 warnings (run `cargo fix --lib -p tezbar-native` to apply 1 suggestion)
+warning: linker stderr: ld: __eh_frame section too large (max 16MB) to encode dwarf unwind offsets in compact unwind table, performance of exception handling might be affected
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `tezbar-native` (lib test) generated 7 warnings (5 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.40s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_native-109c7411ff74945f)
+
+running 24 tests
+test core_client::m9_admission_tests::extension_admission_precedes_poll_and_drain_owns_dropped_waiters ... ok
+test surfaces::extension_runtime::real_sdk::sdk_actions ... ok
+test surfaces::extension_runtime::real_sdk::sdk_detail ... ok
+test surfaces::extension_runtime::real_sdk::sdk_feedback ... ok
+test surfaces::extension_runtime::real_sdk::sdk_form ... ok
+test surfaces::extension_runtime::real_sdk::sdk_grid ... ok
+test surfaces::extension_runtime::real_sdk::sdk_invalidation ... ok
+test surfaces::extension_runtime::real_sdk::sdk_list ... ok
+test surfaces::extension_runtime::real_sdk::sdk_menubar ... ok
+test surfaces::extension_runtime::real_sdk::sdk_prompts ... ok
+test surfaces::extension_runtime::tests::actual_search_keys_filter_rows_and_actions_without_render_requests ... ok
+test surfaces::extension_runtime::tests::diagnostics_are_not_desktop_commands_through_sixty_sliding_records ... ok
+test surfaces::extension_runtime::tests::failed_activation_and_duplicate_nonce_preserve_live_screen ... ok
+test surfaces::extension_runtime::tests::form_password_local_values_validation_and_action_submit ... ok
+test surfaces::extension_runtime::tests::hidden_runtime_releases_owned_images_and_has_no_event_driven_timer ... ok
+test surfaces::extension_runtime::tests::native_wheel_and_file_results_use_actual_form_callback_and_visibility_tickets ... ok
+test surfaces::extension_runtime::tests::queued_native_controls_keep_emit_source_and_reject_prior_visibility ... ok
+test surfaces::extension_runtime::tests::row_projection_preserves_production_fallback_ids_and_section_values ... ok
+test surfaces::extensions_store::tests::construct_and_render_do_not_start_store_requests ... ok
+test surfaces::extensions_store::tests::installed_wire_normalizes_and_invalid_data_is_rejected ... ok
+test surfaces::extensions_store::tests::remove_confirmation_defaults_to_cancel_and_traps_tab ... ok
+test surfaces::extensions_store::tests::wire_payload_debug_is_redacted_without_truncating_copy ... ok
+test surfaces::settings::tests::ai_extension_import_review_and_command_edit_preserve_secret_refs ... ok
+test surfaces::command_bar::extension_integration_tests::retained_store_runtime_ack_source_fence_and_settings_route ... FAILED
+
+failures:
+
+---- surfaces::command_bar::extension_integration_tests::retained_store_runtime_ack_source_fence_and_settings_route stdout ----
+
+thread 'surfaces::command_bar::extension_integration_tests::retained_store_runtime_ack_source_fence_and_settings_route' (20768198) panicked at apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs:65:5:
+Reopened runtime must reattach its weak event subscription
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    surfaces::command_bar::extension_integration_tests::retained_store_runtime_ack_source_fence_and_settings_route
+
+test result: FAILED. 23 passed; 1 failed; 0 ignored; 0 measured; 335 filtered out; finished in 13.15s
+
+error: test failed, to rerun pass `-p tezbar-native --lib`

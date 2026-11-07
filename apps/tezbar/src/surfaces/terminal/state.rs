@@ -19,7 +19,8 @@ pub enum TerminalEffect {
     Copy(String),
     ReadPaste { generation: u64 },
     Zoom(input::Zoom),
-    Pins(Vec<String>),
+    TogglePin(String),
+    Unpin(String),
 }
 #[derive(Clone, Debug)]
 pub struct Boot {
@@ -95,6 +96,9 @@ pub struct State {
     replay_token: Option<String>,
     position: u64,
     watermark: u64,
+    own_create: Option<(String, String)>,
+    pending_input: VecDeque<(Vec<u8>, bool)>,
+    pending_input_bytes: usize,
     target: u64,
     final_exit: Option<(String, u64, u32)>,
     input: String,
@@ -138,6 +142,9 @@ impl State {
             replay_token: None,
             position: 0,
             watermark: 0,
+            own_create: None,
+            pending_input: VecDeque::new(),
+            pending_input_bytes: 0,
             target: 0,
             final_exit: None,
             input: String::new(),
@@ -209,6 +216,7 @@ impl State {
         true
     }
     pub fn next_work(&mut self) -> Option<Work> {
+        self.flush_pending_input();
         while let Some(w) = self.work.pop_front() {
             if w.cleanup() || w.generation == self.generation {
                 return Some(w);
@@ -216,13 +224,13 @@ impl State {
         }
         None
     }
-    fn detach_request(&mut self, id: String, generation: Option<String>) {
-        if let Some(generation) = generation {
+    fn detach_request(&mut self, id: String, generation: Option<String>) -> bool {
+        generation.is_some_and(|generation| {
             self.enqueue(
                 TerminalRequest::DetachGeneration { id, generation },
                 Purpose::Cleanup,
-            );
-        }
+            )
+        })
     }
     fn detach_active(&mut self) {
         if let Some(id) = self.active.take() {
@@ -239,6 +247,9 @@ impl State {
         self.replaying = false;
         self.visibility_detached = false;
         self.input.clear();
+        self.own_create = None;
+        self.pending_input.clear();
+        self.pending_input_bytes = 0;
     }
     /// Visibility changes core attachment policy, while retaining every local grid cell.
     /// Events remain owned, so a successful resume never replays/resets retained state.
@@ -267,8 +278,7 @@ impl State {
     fn detach_hidden(&mut self) {
         if !self.visible && !self.visibility_detached {
             if let Some(id) = self.active.clone() {
-                self.visibility_detached = true;
-                self.detach_request(id, self.stream_generation.clone());
+                self.visibility_detached = self.detach_request(id, self.stream_generation.clone());
             }
         }
     }
@@ -404,11 +414,15 @@ impl State {
             Err(e) => {
                 self.error = Some(e.chars().take(2048).collect());
                 self.replaying = false;
+                if matches!(w.purpose, Purpose::Write) {
+                    self.work.retain(|w| !matches!(w.purpose, Purpose::Write));
+                    self.discard_pending_input();
+                }
                 if matches!(w.purpose, Purpose::Replay) {
                     self.release_replay();
                     if e.contains("expired or released") {
                         if let Some(id) = self.active.clone() {
-                            self.enqueue(
+                            self.replaying = self.enqueue(
                                 TerminalRequest::Attach {
                                     id: id.clone(),
                                     cols: self.grid.size.cols,
@@ -417,6 +431,9 @@ impl State {
                                 Purpose::Resume(id),
                             );
                         }
+                    }
+                    if !self.replaying {
+                        self.discard_pending_input();
                     }
                 }
                 return;
@@ -459,6 +476,8 @@ impl State {
             }
             Purpose::Create => match serde_json::from_value::<Attached>(value.clone()) {
                 Ok(r) => {
+                    self.own_create = (!r.generation.is_empty())
+                        .then(|| (r.session_id.clone(), r.generation.clone()));
                     self.upsert(r.summary);
                     self.attach(r.session_id);
                 }
@@ -546,6 +565,8 @@ impl State {
                     "Terminal input was not accepted; the remaining input was cancelled.".into(),
                 );
                 self.work.retain(|w| !matches!(w.purpose, Purpose::Write));
+                self.pending_input.clear();
+                self.pending_input_bytes = 0;
             }
             Purpose::Mutation => self.refresh(),
             _ => {}
@@ -595,9 +616,31 @@ impl State {
         }
         self.release_replay();
         self.error = None;
+        if self
+            .stream_generation
+            .as_ref()
+            .is_some_and(|old| old != &r.generation)
+        {
+            self.error = Some("Terminal process changed.".into());
+            self.discard_pending_input();
+        }
         self.stream_generation = Some(r.generation);
         self.replay_token = Some(r.replay);
-        self.watermark = r.watermark;
+        // Only this owner's first attach to the process it just created can
+        // answer pre-watermark device queries. Restored prior-process bytes and
+        // all later attaches stay historical and side-effect-free.
+        self.watermark = if !resume
+            && self.own_create.take().as_ref()
+                == Some(&(
+                    r.session_id.clone(),
+                    self.stream_generation.clone().unwrap(),
+                )) {
+            r.origin
+                .filter(|origin| *origin <= r.watermark)
+                .unwrap_or(r.watermark)
+        } else {
+            r.watermark
+        };
         self.target = self.target.max(r.watermark);
         self.replaying = true;
         self.running = true;
@@ -628,6 +671,8 @@ impl State {
             || v["start"].as_u64() != Some(self.position)
         {
             self.error = Some("Terminal replay identity/position mismatch".into());
+            self.replaying = false;
+            self.discard_pending_input();
             self.release_replay();
             return;
         }
@@ -639,6 +684,8 @@ impl State {
             b.len() <= 65536 && v["end"].as_u64() == Some(self.position + b.len() as u64)
         }) else {
             self.error = Some("Invalid terminal replay chunk".into());
+            self.replaying = false;
+            self.discard_pending_input();
             self.release_replay();
             return;
         };
@@ -765,47 +812,92 @@ impl State {
         }
     }
     pub fn write_bytes(&mut self, bytes: Vec<u8>) {
-        if self.quit_preparing {
+        self.admit_input(bytes, false);
+    }
+    fn admit_input(&mut self, bytes: Vec<u8>, track: bool) {
+        if self.quit_preparing || self.disposed || bytes.is_empty() {
             return;
         }
-        if self.disposed || self.replaying || !self.running || bytes.is_empty() {
+        if self.replaying || !self.pending_input.is_empty() {
+            if self.pending_input.len() >= 60
+                || self.pending_input_bytes.saturating_add(bytes.len()) > WRITE_BUDGET
+            {
+                self.error = Some(
+                    "Terminal history is loading; input buffer is full. This input was not sent."
+                        .into(),
+                );
+            } else {
+                self.pending_input_bytes += bytes.len();
+                self.pending_input.push_back((bytes, track));
+            }
             return;
         }
+        if !self.running {
+            return;
+        }
+        self.enqueue_input(bytes, track);
+    }
+    fn enqueue_input(&mut self, bytes: Vec<u8>, track: bool) {
         let (Some(id), Some(generation)) = (self.active.clone(), self.stream_generation.clone())
         else {
             return;
         };
-        // One request is one atomic input admission, including both paste delimiters.
-        self.enqueue(
+        let tracked = track.then(|| String::from_utf8_lossy(&bytes).into_owned());
+        if self.enqueue(
             TerminalRequest::Input {
                 id,
                 generation,
                 bytes,
             },
             Purpose::Write,
-        );
+        ) {
+            if let Some(text) = tracked {
+                self.track_input(&text);
+            }
+        }
+    }
+    fn discard_pending_input(&mut self) {
+        if !self.pending_input.is_empty() {
+            self.pending_input.clear();
+            self.pending_input_bytes = 0;
+            self.error = Some(format!(
+                "{} Pending input was not sent.",
+                self.error.as_deref().unwrap_or("Terminal unavailable.")
+            ));
+        }
+    }
+    fn flush_pending_input(&mut self) {
+        if self.replaying || self.disposed || !self.running {
+            return;
+        }
+        while let Some((bytes, _)) = self.pending_input.front() {
+            let retained = self
+                .work
+                .iter()
+                .map(|w| w.request.retained_bytes())
+                .sum::<usize>();
+            if self.work.len() >= WORK_LIMIT - 4 || retained + bytes.len() > WRITE_BUDGET {
+                break;
+            }
+            let (bytes, track) = self.pending_input.pop_front().unwrap();
+            self.pending_input_bytes -= bytes.len();
+            self.enqueue_input(bytes, track);
+        }
     }
     pub fn write(&mut self, data: String, track: bool) {
         if self.quit_preparing {
             return;
         }
-        if self.disposed || self.replaying || !self.running {
-            return;
-        }
-        let Some(id) = self.active.clone() else {
-            return;
-        };
         if data.len() > WRITE_BUDGET {
             self.error = Some("Terminal input exceeds 1 MiB.".into());
             return;
         }
-        if data.is_empty() {
+        self.admit_input(data.into_bytes(), track);
+    }
+    fn track_input(&mut self, data: &str) {
+        let Some(id) = self.active.clone() else {
             return;
-        }
-        self.write_bytes(data.as_bytes().to_vec());
-        if !track {
-            return;
-        }
+        };
         self.grid.bottom();
         self.grid.clear_selection();
         self.dirty = true;
@@ -912,19 +1004,13 @@ impl State {
             self.generation += 1;
             self.cancel_queued();
             self.detach_active();
-            self.sessions.pins.remove(&id);
-            self.emit(TerminalEffect::Pins(
-                self.sessions.pins.iter().cloned().collect(),
-            ));
+            self.emit(TerminalEffect::Unpin(id.clone()));
             self.enqueue(TerminalRequest::Delete(id), Purpose::Mutation);
         }
     }
     pub fn pin(&mut self) {
         if let Some(id) = self.active.clone() {
-            let model::Effect::PersistPins(pins) = self.sessions.toggle_pin(id) else {
-                unreachable!()
-            };
-            self.emit(TerminalEffect::Pins(pins));
+            self.emit(TerminalEffect::TogglePin(id));
         }
     }
     pub fn emit(&mut self, e: TerminalEffect) {

@@ -6,7 +6,7 @@ mod command_list_tests;
 mod launcher;
 mod native;
 mod process;
-mod process_host;
+pub(crate) mod process_host;
 mod process_install;
 
 mod registry;
@@ -98,8 +98,14 @@ impl ExtensionsCore {
             hash_work: Arc::default(),
         }
     }
-    pub fn with_worker_launch(ctx: CoreContext, launch: super::extension_worker::WorkerLaunch) -> Self {
-        Self { worker:ExtensionWorker::with_launch(ctx.clone(),launch), ..Self::new(ctx) }
+    pub fn with_worker_launch(
+        ctx: CoreContext,
+        launch: super::extension_worker::WorkerLaunch,
+    ) -> Self {
+        Self {
+            worker: ExtensionWorker::with_launch(ctx.clone(), launch),
+            ..Self::new(ctx)
+        }
     }
 
     pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {
@@ -119,8 +125,11 @@ impl ExtensionsCore {
         // independently by the cheap input probe.
         let mut command_mutation = matches!(
             channel,
-            "extension:install" | "extensions:install" | "extensions:reinstall"
-                | "extension:uninstall" | "extensions:uninstall"
+            "extension:install"
+                | "extensions:install"
+                | "extensions:reinstall"
+                | "extension:uninstall"
+                | "extensions:uninstall"
         )
         .then(|| self.commands.mutation());
         if let Some(result) = self
@@ -207,6 +216,11 @@ impl ExtensionsCore {
         if let Some(slug) = &uninstall_slug {
             self.native.clear_slug(slug).await;
         }
+        let sdk_remove_id = if uninstall {
+            args.first().and_then(Value::as_str).map(str::to_owned)
+        } else {
+            None
+        };
         let blocking_mutation = command_mutation.take();
         let result = tokio::task::spawn_blocking(move || {
             // A cancelled async request must not release the uninstall fence
@@ -220,6 +234,10 @@ impl ExtensionsCore {
         .and_then(|v| v);
         drop(command_mutation.take());
         if uninstall && result.is_ok() {
+            if let Some(id) = sdk_remove_id {
+                self.worker.retire_sdk(&id, None).await;
+            }
+
             if let Some(slug) = uninstall_slug {
                 self.native.clear_slug(&slug).await;
             }
@@ -231,6 +249,19 @@ impl ExtensionsCore {
         Some(result)
     }
 
+    pub(crate) async fn refresh_sdk_status(&self, payload: Value) -> crate::common::CoreResult {
+        self.worker
+            .request("extension:refresh-session", vec![payload])
+            .await
+    }
+    pub(crate) async fn command_disabled(&self, id: &str) {
+        if let Some((extension, command)) = id
+            .strip_prefix("extcmd:")
+            .and_then(|id| id.rsplit_once(':'))
+        {
+            self.worker.retire_sdk(extension, Some(command)).await;
+        }
+    }
     pub async fn shutdown(&self) {
         self.commands.clear();
         self.native.clear().await;

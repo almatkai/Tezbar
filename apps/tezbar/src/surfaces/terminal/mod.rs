@@ -36,6 +36,8 @@ pub struct TerminalView {
     name: Entity<TextInput>,
     _subscriptions: Vec<Subscription>,
     wheel: f32,
+    scroll_wheel: input::WheelAccumulator,
+    motion: input::MotionReporter,
     frame: Option<tezbar_ui::terminal_grid::Frame>,
     task_indicator: Option<AnyView>,
 }
@@ -85,6 +87,8 @@ impl TerminalView {
             name,
             _subscriptions: vec![name_sub, focus_in, blur, active],
             wheel: 0.,
+            scroll_wheel: Default::default(),
+            motion: Default::default(),
             frame: None,
             task_indicator: None,
         }
@@ -140,6 +144,8 @@ impl TerminalView {
         } else {
             self.cwd_timer = None;
             self.selection_drag = false;
+            self.motion.reset();
+            self.scroll_wheel.reset();
         }
         self.pump(cx);
         self.sync_blink(cx);
@@ -150,8 +156,8 @@ impl TerminalView {
         self.state.dirty = true;
         self.changed(cx);
     }
-    /// Call on parent Bounds/font/UI-zoom events after measured layout. Prepaint only caches
-    /// cell geometry; it never schedules a request, a timer or a render notification.
+    /// Called after measured geometry changes. Prepaint schedules this bounded
+    /// follow-up; resizing and core requests happen here, outside render/paint.
     pub fn layout_changed(&mut self, cx: &mut Context<Self>) {
         if let Some((bounds, metrics)) = self.geometry {
             if let Some(size) =
@@ -248,6 +254,9 @@ impl TerminalView {
     }
     pub fn error(&self) -> Option<&str> {
         self.state.error.as_deref()
+    }
+    pub fn active_session(&self) -> Option<&str> {
+        self.state.active.as_deref()
     }
     pub fn session_rows(&self) -> &[tezbar_ui_model::terminal::Session] {
         &self.state.sessions.rows

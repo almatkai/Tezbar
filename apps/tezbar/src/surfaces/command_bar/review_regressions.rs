@@ -6,18 +6,22 @@ fn review_deep_search_row_retains_live_model_and_pin_activation(cx: &mut TestApp
     let (relay, _rx) = Relay::new();
     let (view, cx) =
         cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
-    cx.update(|w, cx| view.update(cx, |view, cx| {
-        let mut row = Row::command("deep-search:needle", "Deep Search needle");
-        row.action = Action::InvokeCommand {
-            command_id: "activate-deep-search".into(),
-            payload: json!({"query":"needle"}),
-        };
-        seed(view, vec![row]);
-        let mut pin = Row::command("deep-row-pin", "Saved action");
-        pin.action = Action::CopyText { text: "synthetic".into() };
-        ui_state::insert_pin(&mut view.state.pins, &pin, None);
-        view.input.focus_handle(cx).focus(w, cx);
-    }));
+    cx.update(|w, cx| {
+        view.update(cx, |view, cx| {
+            let mut row = Row::command("deep-search:needle", "Deep Search needle");
+            row.action = Action::InvokeCommand {
+                command_id: "activate-deep-search".into(),
+                payload: json!({"query":"needle"}),
+            };
+            seed(view, vec![row]);
+            let mut pin = Row::command("deep-row-pin", "Saved action");
+            pin.action = Action::CopyText {
+                text: "synthetic".into(),
+            };
+            ui_state::insert_pin(&mut view.state.pins, &pin, None);
+            view.input.focus_handle(cx).focus(w, cx);
+        })
+    });
     cx.simulate_keystrokes("enter");
     settle(&rt, cx);
     view.read_with(cx, |view, _| {
@@ -27,9 +31,19 @@ fn review_deep_search_row_retains_live_model_and_pin_activation(cx: &mut TestApp
     });
     cx.simulate_keystrokes("alt-1");
     settle(&rt, cx);
-    assert_eq!(adapter.calls.lock().unwrap().iter().filter(|(channel, args)| {
-        channel == "search:execute" && args[0]["context"]["resultId"] == "command:deep-row-pin"
-    }).count(), 1);
+    assert_eq!(
+        adapter
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(channel, args)| {
+                channel == "search:execute"
+                    && args[0]["context"]["resultId"] == "command:deep-row-pin"
+            })
+            .count(),
+        1
+    );
 }
 
 struct ReviewHeldQuit {
@@ -38,7 +52,10 @@ struct ReviewHeldQuit {
     fail: bool,
 }
 impl RequestAdapter for ReviewHeldQuit {
-    fn send(&self, request: Request) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send>> {
+    fn send(
+        &self,
+        request: Request,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, String>> + Send>> {
         if matches!(request, Request::ConfirmQuit) {
             let (channel, args) = request.wire();
             self.base.calls.lock().unwrap().push((channel.into(), args));
@@ -46,7 +63,11 @@ impl RequestAdapter for ReviewHeldQuit {
             let fail = self.fail;
             return Box::pin(async move {
                 gate.notified().await;
-                if fail { Err("Retired confirmation failed".into()) } else { Ok(json!(false)) }
+                if fail {
+                    Err("Retired confirmation failed".into())
+                } else {
+                    Ok(json!(false))
+                }
             });
         }
         self.base.send(request)
@@ -57,16 +78,25 @@ fn review_quit_completion_releases_its_ticket_after_results_refresh(cx: &mut Tes
     for fail in [false, true] {
         let rt = runtime(cx);
         let gate = Arc::new(tokio::sync::Notify::new());
-        let adapter = Arc::new(ReviewHeldQuit { base: Loopback::default(), gate: gate.clone(), fail });
+        let adapter = Arc::new(ReviewHeldQuit {
+            base: Loopback::default(),
+            gate: gate.clone(),
+            fail,
+        });
         let (relay, _rx) = Relay::new();
-        let (view, cx) = cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
-        cx.update(|w, cx| view.update(cx, |view, cx| {
-            seed(view, vec![Row::command("quit-tezbar", "Quit Tezbar")]);
-            let mut pin = Row::command("quit-race-pin", "Saved action");
-            pin.action = Action::CopyText { text: "synthetic".into() };
-            ui_state::insert_pin(&mut view.state.pins, &pin, None);
-            view.input.focus_handle(cx).focus(w, cx);
-        }));
+        let (view, cx) =
+            cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+        cx.update(|w, cx| {
+            view.update(cx, |view, cx| {
+                seed(view, vec![Row::command("quit-tezbar", "Quit Tezbar")]);
+                let mut pin = Row::command("quit-race-pin", "Saved action");
+                pin.action = Action::CopyText {
+                    text: "synthetic".into(),
+                };
+                ui_state::insert_pin(&mut view.state.pins, &pin, None);
+                view.input.focus_handle(cx).focus(w, cx);
+            })
+        });
         cx.simulate_keystrokes("enter");
         settle(&rt, cx);
         view.update(cx, |view, cx| {
@@ -84,9 +114,20 @@ fn review_quit_completion_releases_its_ticket_after_results_refresh(cx: &mut Tes
         });
         cx.simulate_keystrokes("alt-1");
         settle(&rt, cx);
-        assert_eq!(adapter.base.calls.lock().unwrap().iter().filter(|(channel, args)| {
-            channel == "search:execute" && args[0]["context"]["resultId"] == "command:quit-race-pin"
-        }).count(), 1);
+        assert_eq!(
+            adapter
+                .base
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(channel, args)| {
+                    channel == "search:execute"
+                        && args[0]["context"]["resultId"] == "command:quit-race-pin"
+                })
+                .count(),
+            1
+        );
     }
 }
 
@@ -159,6 +200,14 @@ fn review_delivered_settings_and_placeholder_routes_retire_admission(cx: &mut Te
                 origin,
                 "Direct Settings delivery preserves the retained main surface"
             );
+        } else if intent.surface == Surface::ExtensionRuntime {
+            // M9 is linked now: the former placeholder carries no actual view.
+            // Reject it while preserving the current usable owner and retiring admission.
+            assert_eq!(
+                view.read_with(cx, |view, _| view.navigation.clone()),
+                origin
+            );
+            assert!(view.read_with(cx, |view, _| view.error.is_some()));
         } else if intent.surface != Surface::Command {
             assert_eq!(
                 view.read_with(cx, |view, _| view.navigation.clone()),

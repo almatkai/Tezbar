@@ -23,6 +23,7 @@ impl TerminalView {
         if !self.state.visible || self.state.configure.is_some() {
             return;
         }
+        self.motion.reset();
         self.focus.focus(w, cx);
         let Some((col, row)) = self.mouse_cell(e.position) else {
             return;
@@ -68,6 +69,7 @@ impl TerminalView {
     }
     fn pointer_up(&mut self, e: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
         self.selection_drag = false;
+        self.motion.reset();
         if let Some((col, row)) = self.mouse_cell(e.position) {
             if let Some(b) = input::mouse(
                 MouseKind::Release(button(e.button)),
@@ -90,10 +92,11 @@ impl TerminalView {
             self.state.grid.extend_selection(col, row);
             self.state.dirty = true;
             self.changed(cx);
-        } else if let Some(b) = input::mouse(
-            MouseKind::Motion(e.pressed_button.map(button)),
+        } else if let Some(b) = self.motion.report(
+            self.state.generation,
             col,
             row,
+            e.pressed_button.map(button),
             modifiers(e.modifiers),
             self.state.grid.mode(),
         ) {
@@ -103,7 +106,8 @@ impl TerminalView {
     }
     fn wheel(&mut self, e: &ScrollEvent, w: &mut Window, cx: &mut Context<Self>) {
         let delta = f32::from(e.delta.pixel_delta(px(self.state.metrics.height)).y);
-        if e.modifiers.platform || e.modifiers.control {
+        if e.modifiers.platform || (cfg!(not(target_os = "macos")) && e.modifiers.control) {
+            self.scroll_wheel.reset();
             self.wheel += delta;
             if self.wheel.abs() >= 40. {
                 let z = if self.wheel > 0. { Zoom::In } else { Zoom::Out };
@@ -121,22 +125,25 @@ impl TerminalView {
         } else {
             self.wheel = 0.;
             let (col, row) = self.mouse_cell(e.position).unwrap_or((0, 0));
-            if let Some(b) = input::mouse(
-                MouseKind::Wheel(delta > 0.),
+            let lines = self.scroll_wheel.lines(delta, self.state.metrics.height);
+            match input::scroll(
+                lines,
                 col,
                 row,
                 modifiers(e.modifiers),
                 self.state.grid.mode(),
             ) {
-                self.state.write_bytes(b);
-                self.pump(cx);
-            } else {
-                self.state
-                    .grid
-                    .scroll((delta / self.state.metrics.height).round() as i32);
-                self.state.dirty = true;
-                self.sync_blink(cx);
-                self.changed(cx);
+                input::ScrollResult::Bytes(b) => {
+                    self.state.write_bytes(b);
+                    self.pump(cx);
+                }
+                input::ScrollResult::Rows(lines) => {
+                    self.state.grid.scroll(lines);
+                    self.state.dirty = true;
+                    self.sync_blink(cx);
+                    self.changed(cx);
+                }
+                input::ScrollResult::None => {}
             }
         }
         cx.stop_propagation();
@@ -320,7 +327,11 @@ impl Render for TerminalView {
                             cx.listener(|this, _, w, cx| this.act(KeyResult::Configure, w, cx)),
                         ),
                     )
-                    .child("⌘/Ctrl K   Switch sessions ⌘/Ctrl 1–9   Back Esc / ⌘["),
+                    .child(if cfg!(target_os = "macos") {
+                        "Configure ⌘K   Switch sessions ⌘1–9   Back Esc / ⌘["
+                    } else {
+                        "Configure Ctrl+Shift+K   Switch sessions Ctrl+1–9   Back Esc"
+                    }),
             );
         if let Some(error) = &self.state.error {
             sheet = sheet.child(

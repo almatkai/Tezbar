@@ -1,0 +1,538 @@
+{
+  "base": "db4d0df6d0d2313bec8c82429b32dd9ef607a401",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "unstaged": true,
+  "uncommitted": true,
+  "files": [
+    {
+      "path": "apps/tezbar/src/app.rs",
+      "origin": "M9 composed with root M10 hunks",
+      "sha256": "136ee1d8854d23bbfefdd7c52f408f6d50ecf7348b45fb491162a4bfa0141d2c",
+      "bytes": 70176,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/app/m10.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "b46dcfaf40c5feb555251feb793868aa44f4555bdb783acd49b14b5e9dea5e22",
+      "bytes": 3455,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/app/m9.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "34cdf4d18e68aa3a6f8e70d1762d203533a35be048f0716c7cac0a650aea2936",
+      "bytes": 3056,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/core_client.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "3720a03c2879e811f3245ced531aa30ebbcba9c37922fb2c473e8a87ac42dbcb",
+      "bytes": 21640,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/events.rs",
+      "origin": "M9 composed with root M10 hunks",
+      "sha256": "9fb6f568b48eed142daa86c4a76d63d42ab1010a817439e8a87ea449c04e18ce",
+      "bytes": 33467,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/host_adapter.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "4b9d641c251bea49aee7f4175c5dbd130b1de31f4ac94ec08559a392e33a4fe5",
+      "bytes": 9518,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/extension_integration.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "8d7f5a94488be0e29effce95773ddd8a41bf8c01a72617bf298632cac7f7d152",
+      "bytes": 10413,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "b83019e9438a9ef6c90cf52f8b2f53a6600e0cbe5d9518e61bfea8ddca034e3b",
+      "bytes": 7693,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/mod.rs",
+      "origin": "M9 composed with root M10 hunks",
+      "sha256": "a4b69b1fec7a20bd83430fb31e865bc088403f45e8d514b35eb51c3f416e3d26",
+      "bytes": 80501,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "2fca1c9151a85fcdf7c4adb96ff879d1588dcdbd6c720abb47ce823f78b6cd95",
+      "bytes": 19072,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "257c41c5039241366a566332fc5b149a7b60274b54ce9e8fb03d32873f734a35",
+      "bytes": 11065,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "d78a25b7d5307a3bb099b0c92ead8d12b4acc12d8e449230ff763e5c5b277ce1",
+      "bytes": 9168,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/view.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "4e5826bbdf9c91791b9a93042ca1841eba9040bbe64e26b548cb74f1a37b990f",
+      "bytes": 67879,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/assets.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "fe33523eecc29791fb6d980e1de9ff318404ac164a0f21271764f95337b3dd7a",
+      "bytes": 166,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/color_wheel.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "096b4b837ca2069ef7746a67311447ab91799d2742cea9bb03417f675ca8ecd1",
+      "bytes": 10743,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/images.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "902329a3b4d159ca36de96ffd72867b9cea78fb3bd3aa94aed0012f49c4bf075",
+      "bytes": 13829,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/mod.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "82fed733ba43a30cc42a526a644e692a21b05506426ecc3911e5f5c6feac36df",
+      "bytes": 35778,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/preferences.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "40eb253240c9d8e8a6f45901e7fc0eac2f3750ef07fa6bb943887c4c0c2226cf",
+      "bytes": 7993,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "4d13b1919813786701fa0dc66a4f881788f430a7d3d01592236661d6f7cbf237",
+      "bytes": 23053,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/tests.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "e714599bc22c4ca94d96f4c44882e98da264b982197709cf6165ec10d31cb6cd",
+      "bytes": 13758,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/view.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "4a6a9d23b3113843435f5eafac00d742c01c3d89959e34c849c9655855bbfc22",
+      "bytes": 55748,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/artwork.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "89bdce652c0c9bdb00d8281ee19ceebfba3c769305907b1ae2c009a284be69b0",
+      "bytes": 4681,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/mod.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "a59167f521a197eebc4dd0e917c999d3bcefcec2b7431a82332e669cbeeee8f6",
+      "bytes": 18343,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/request.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "e04bf6ce51c7363fe482efab998819c2eb5c51944e3e0ce9093a90a6a7db8721",
+      "bytes": 5311,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/tests.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "261df868fa70cd9a40f28c1eed3062ba6126fc961906ad0fa20644648ca3955f",
+      "bytes": 3248,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/view.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "33d28c3dc2771bc6d83c3204f9749ccb12f388ed72d70e1a2388e6c64e062ae3",
+      "bytes": 17809,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/mod.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "208c23823e2e80ea3ff4d111d7663c936a537d47d48b61a16e04b3de6a1c3a8f",
+      "bytes": 264,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/input.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "e9f855c63b16494535c578e3f3a36d3ab1259cca4eb0e0c6d078cd1eadf24e93",
+      "bytes": 10335,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/mod.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "44d69ce34ca075175b92eda98192b6465edb46bfcb02d2f142ee0fa327def92b",
+      "bytes": 15234,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/request.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "35d77c8aea617b2bdf59f233686a8d2234020a608c870eeeb3855f7e11d93848",
+      "bytes": 6122,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/state.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "176c6be5ca72ebb8dfca89424a437f47e570b188418fb2833fe1a9cb6c80d7d2",
+      "bytes": 36367,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "8e04bae1adc5a036792a7ebb1b2ec1fbc90b84e904dc6957181109b2396fd7ae",
+      "bytes": 41880,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/view.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "80eebcaaa1b114aaf723fa1d1b899f59ba5e891824416c76686fa2eabd60a984",
+      "bytes": 17831,
+      "compiled_input": true
+    },
+    {
+      "path": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "a2c122375720d72a1b2e7f544b5ed0bdebb3b47873e21a794decd865fa4bbb0e",
+      "bytes": 9762,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/desktop_effect_tests.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "88d15ad9052724a5a23a624743f4770eb185ed7e439b9e6f91773cb2de711937",
+      "bytes": 3804,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/extension_worker.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "d5e92739aae6cb0a9e1cc1416748b864287c710d392e9aea5cb289a589f4a5f4",
+      "bytes": 38207,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/extension_worker_tests.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "7b68c8eaf0be22928496d05092b06e857b89095d3329aefd331e1e763c5287fd",
+      "bytes": 13324,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/mod.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "3858db35b5f77b0d9638d4a686cf9545d0a2546401da9ea814c295671bca5635",
+      "bytes": 10005,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/process_host.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "81b69c361a16ea097fbe38d59d209fb409d415b1441f75dc7d3b0d8121fcf6ac",
+      "bytes": 42772,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/host.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "88dbc7b9b8f54a4ca33a760ab5d2b619be945fe103bf6710095e3be2e233be80",
+      "bytes": 9587,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/launcher/clipboard.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "da03cf4219e62beea403efbc824ab1d03e28d51bd3dcc67ea6b2cde954c73e6f",
+      "bytes": 35742,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/lib.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "040c1273583052087d5daa8b50cb0dd964c24afe98f1534b7d4b0f2386939048",
+      "bytes": 14696,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/platform.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "ee7b19372f7b1d369fa210b0f26dec941f44f55b85800b52c25013d571498f40",
+      "bytes": 31209,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-core/src/terminal/stream.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "be2faaf8952d8fbaa2d866dfc3031be3a717364baa76f147973b056287e4a1d5",
+      "bytes": 10783,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-host/src/desktop.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "bc2e6763a3f0a6cd26a870956ca0f5930d8a83290805d51cd5705c91512ebd12",
+      "bytes": 12948,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/forms.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "c896e57b87f5c76936e8a3fc0fcc6842837f0ca50cf44496d2f05378e6dd8f5c",
+      "bytes": 9715,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/forms/tests.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "0fbd950260fece5616289dca059f42cfd1be6df09d964bb4e24910f77ab68ad2",
+      "bytes": 8019,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/runtime.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "c76f4e1bde13696f7d4b2c3e23193c0ce550c98954635227befa3f4c0caa731c",
+      "bytes": 30426,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/runtime/tests.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "229293517b28600306a4a343593da64544362686d42e63da767d841322fd12da",
+      "bytes": 12908,
+      "compiled_input": true
+    },
+    {
+      "path": "crates/tezbar-ui/src/terminal_grid.rs",
+      "origin": "root-authored M10 patch/corrections, rustfmt applied",
+      "sha256": "b0090cc1fce63b81325a013d3230afe46f0e114b46c04ec42a2466686f9650ae",
+      "bytes": 35036,
+      "compiled_input": true
+    },
+    {
+      "path": "scripts/test-extension-worker.ts",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "e39e7afe99c8a59b5d5d85ce4b682fcc652d06f6812eee7ccc28c6b068a8cd8d",
+      "bytes": 13790,
+      "compiled_input": true
+    },
+    {
+      "path": "src/main/desktop-runtime.ts",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "87308f00b31fde574842e4015bbcca448e745b2f97ae64f7da4840e1fa8869cc",
+      "bytes": 24825,
+      "compiled_input": true
+    },
+    {
+      "path": "src/main/extension-runner-effects.test.ts",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "14e2236a9647c1a227d41fd6338c5663f04aa47b31a66048f16e78aa62d0bc72",
+      "bytes": 3172,
+      "compiled_input": true
+    },
+    {
+      "path": "src/main/extension-runner.ts",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "0d28376512d503fedfa4313bb453c6041c226ee6805dbe3f993e3d401919bd22",
+      "bytes": 164872,
+      "compiled_input": true
+    },
+    {
+      "path": "src/main/extensionWorker/desktop.ts",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "2e74f56e991a349f09ab2ec9c22d6bb93043dc7d541e883009209a9ed9d7ad10",
+      "bytes": 4348,
+      "compiled_input": true
+    },
+    {
+      "path": "src/main/extensionWorker/main.ts",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "d3c43e071b5dfc5263e69661556b2d47a89ae0c9924b3d4618640add5358f490",
+      "bytes": 6320,
+      "compiled_input": true
+    },
+    {
+      "path": "src/shared/extensionRuntime.ts",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "d005a5c0b977be2e675fe45bd45a10a4862d3b9696953936af428131e2b21348",
+      "bytes": 5563,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/native_harness.rs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "293e3059f088ab48ac6d07a60badc1fed36526eda931f793f77343d95063b4f2",
+      "bytes": 9078,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/package.json",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "f77c2f0820be6096b5dba043116d06ff8150bf20817e21e9911ed488b179f7d5",
+      "bytes": 1238,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/prepare.mjs",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "3bf80470a9505fc7d847c867cd9af22addb536e89bf53b013f0ab2469ac8aa9a",
+      "bytes": 3679,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/actions.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "135c57048e46b915f4261162be27499bd8859bd946d0bd9d4ec447deeabd3ef6",
+      "bytes": 1374,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/detail.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "77ea511378f8fed47c8e06678203912b9fc07daaeea4efcde1833193f09db61a",
+      "bytes": 920,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/feedback.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "a6a53cd96fb0fe3fc8d3e0de4b92046184e99c192a6f81371f855a5587a94876",
+      "bytes": 746,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/form.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "ebbe0f71c136f2601c2b844bb648365325ba21c97202c7b6f8c030a1ca457780",
+      "bytes": 1696,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/grid.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "6166ef4c94474e418533370c2113044e5b75a4f716c0e17df0920d586671687a",
+      "bytes": 886,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/invalidation.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "3d9be49bd26da595e50f76151e075c141ea888780b6282a845b30306f1c9c0d7",
+      "bytes": 564,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/list.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "adae7fc47912a0311fc1441edde970b6e5bf2b8292cfe62d967d83aa213b87a6",
+      "bytes": 2431,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/menubar.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "5166702c49877303aeaae13c34e5690f66bf96dd376c45c13b68344b7b9ba8cf",
+      "bytes": 843,
+      "compiled_input": true
+    },
+    {
+      "path": "tests/fixtures/extensions/src/prompts.tsx",
+      "origin": "M9 implementation/fixtures",
+      "sha256": "9e76ab79a2891c2274e0c44e38c40fbf8d12df3838176cdadef649bef31dea67",
+      "bytes": 612,
+      "compiled_input": true
+    }
+  ],
+  "held_compiled_input_guards": [
+    {
+      "path": "apps/tezbar/src/app/production_launch.rs",
+      "sha256": "5f044e8821a25f84b832ceb587d3857a57285084aaab24d9ed4559647ab1cae4",
+      "unchanged_since_first_gate": true
+    },
+    {
+      "path": "apps/tezbar/src/app/update_integration.rs",
+      "sha256": "4d6f8729d0999d780c1803b978b333268f6fe11dc06fdb233eca5c95d0fa5b42",
+      "unchanged_since_first_gate": true
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "sha256": "8355bc895925386b34494b9c2ea1a13a13a82f43f8ed777ef3a3c46a1b0e724f",
+      "unchanged_since_first_gate": true
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/webkit.rs",
+      "sha256": "0b934c40266fa546be79f0aca623084764a1591462a95227602bca66ed1fb7c0",
+      "unchanged_since_first_gate": true
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/mod.rs",
+      "sha256": "d755264f4570ff5f2acdd46e5f158babd94cfa410ee12c70df25a418743590ad",
+      "unchanged_since_first_gate": true
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/leveldb.rs",
+      "sha256": "46a6268cf3416194a9ecdf50262b11e0eede893caab293e6c033a735a94f35b8",
+      "unchanged_since_first_gate": true
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/tests.rs",
+      "sha256": "eecdde55c67cd61de416893a9a6ecf637d7dedd7a571b2baa25ecd4dc1e2e5ab",
+      "unchanged_since_first_gate": true
+    }
+  ],
+  "other_held_paths": [
+    "docs/native-m11/",
+    "packaging/",
+    "scripts/native/nsis-template.test.mjs",
+    "scripts/native/package-macos.mjs",
+    "scripts/native/package-macos.test.mjs",
+    "scripts/native/windows-rehearsal-plan.mjs"
+  ],
+  "note": "Asset shim is enumerated as a surface dependency but is byte-identical to base; original docs and all held M11 files remain outside the change ownership set."
+}

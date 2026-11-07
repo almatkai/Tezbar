@@ -1,0 +1,17 @@
+{
+  "patch_sha256": "a5f277ddb0c88d2d51c79ec33419e0813b4e6b35a3008b5f13fea9dff0a52aba",
+  "files": [
+    {
+      "path": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "before_sha256": "7b9f2a5c840335f47d7ddc0e067302a776ca1037d28695d81ada0d2a9fabfaf2",
+      "after_sha256": "a2c122375720d72a1b2e7f544b5ed0bdebb3b47873e21a794decd865fa4bbb0e"
+    },
+    {
+      "path": "apps/tezbar/src/app.rs",
+      "before_sha256": "97487942c1a835beaf540081d10dd85ff6ffd185e0cdfbb57f3352ccd86edecb",
+      "after_sha256": "136ee1d8854d23bbfefdd7c52f408f6d50ecf7348b45fb491162a4bfa0141d2c"
+    }
+  ],
+  "root_shared_edits": false,
+  "cargo_run": false
+}

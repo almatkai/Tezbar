@@ -30,10 +30,21 @@ impl CoreEvent {
     }
 }
 pub enum Event {
-    TerminalEffect(crate::surfaces::command_bar::TerminalSource,crate::surfaces::terminal::TerminalEffect),
-    TerminalRows(Vec<(String,String)>),
+    ExtensionEffect(
+        gpui::EntityId,
+        u64,
+        crate::surfaces::extension_runtime::ExtensionEffect,
+    ),
+    TerminalEffect(
+        crate::surfaces::command_bar::TerminalSource,
+        crate::surfaces::terminal::TerminalEffect,
+    ),
+    TerminalRows(Vec<crate::windows::terminal_sessions::SessionRow>),
     TerminalPanelAction(Option<String>),
-    ChatEffect(crate::surfaces::command_bar::ChatSource, crate::surfaces::ai_chat::ChatEffect),
+    ChatEffect(
+        crate::surfaces::command_bar::ChatSource,
+        crate::surfaces::ai_chat::ChatEffect,
+    ),
     SettingsEffect(gpui::EntityId, crate::surfaces::settings::SettingsEffect),
     OnboardingFinished(gpui::EntityId),
     Navigate(crate::surfaces::command_bar::navigation::Navigation),
@@ -69,7 +80,7 @@ pub enum Event {
     SnapEnd,
     SnapDwell(u64),
     Zoom(f32),
-    PanelShow(Vec<(String, String)>),
+    PanelShow(Vec<crate::windows::terminal_sessions::SessionRow>),
     PanelHide,
     PanelFocused(bool),
     Menu(String),
@@ -245,8 +256,15 @@ impl Relay {
         }
         if matches!(
             &event,
-            Event::Dialog(..) | Event::Capture(_) | Event::SavePng { .. }
-            | Event::ChatEffect(_, crate::surfaces::ai_chat::ChatEffect::ChooseImages { .. })
+            Event::Dialog(..)
+                | Event::Capture(_)
+                | Event::SavePng { .. }
+                | Event::ExtensionEffect(
+                    _,
+                    _,
+                    crate::surfaces::extension_runtime::ExtensionEffect::PickFiles { .. }
+                )
+                | Event::ChatEffect(_, crate::surfaces::ai_chat::ChatEffect::ChooseImages { .. })
         ) {
             if q.leases >= 128 {
                 return Err("Native interaction ownership limit reached".into());
@@ -313,7 +331,7 @@ impl Relay {
     }
     fn own_channel(&self, channel: &str, listening: bool) -> Result<ChannelOwner, String> {
         let mut q = self.0.queues.lock().unwrap();
-        if !q.open || (!q.channels.contains_key(channel) && q.channels.len() >= 32) {
+        if !q.open || (!q.channels.contains_key(channel) && q.channels.len() >= 96) {
             return Err("Core channel ownership limit reached or closed".into());
         }
         let entry = q.channels.entry(channel.into()).or_default();
@@ -529,7 +547,7 @@ impl CoreEvents {
             .map(|channel| {
                 self.relay
                     .own_channel(channel, true)
-                    .expect("subscribe before producer start; at most 32 owned channels")
+                    .expect("subscribe before producer start; at most 96 owned channels")
             })
             .collect();
         let owner = owner.downgrade();
@@ -873,5 +891,78 @@ mod lease_admission_repair_tests {
             assert!(matches!(receiver.recv().await, Some(Event::DialogClosed)));
         }
         assert_eq!(relay.0.queues.lock().unwrap().leases, 0);
+    }
+}
+
+#[cfg(test)]
+mod m9_channel_audit {
+    use super::*;
+    #[test]
+    fn all_production_surface_channels_fit_and_one_hundred_reopens_release_allocations() {
+        let sources = [
+            include_str!("surfaces/command_bar/mod.rs"),
+            include_str!("surfaces/command_bar/chat_integration.rs"),
+            include_str!("surfaces/command_bar/terminal_integration.rs"),
+            include_str!("surfaces/command_bar/task_indicator.rs"),
+            include_str!("surfaces/settings/mod.rs"),
+            include_str!("surfaces/utilities/mod.rs"),
+            include_str!("surfaces/extensions_store/mod.rs"),
+            include_str!("surfaces/extension_runtime/mod.rs"),
+        ];
+        let mut channels = std::collections::BTreeSet::new();
+        for source in sources {
+            for marker in ["hub.subscribe(", "events.subscribe("] {
+                for (index, _) in source.match_indices(marker) {
+                    let after = &source[index..];
+                    let Some(a) = after.find('[') else {
+                        continue;
+                    };
+                    let Some(b) = after[a..].find(']') else {
+                        continue;
+                    };
+                    for (i, channel) in after[a..a + b].split('"').enumerate() {
+                        if i % 2 == 1 {
+                            channels.insert(channel.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+        for required in [
+            "agent:event",
+            "core:terminal:data",
+            "extension:session-invalidated",
+            "extension:session-disposed",
+            "extension:ui",
+        ] {
+            assert!(channels.contains(required));
+        }
+        assert!(!channels.is_empty());
+        assert!(
+            channels.len() < 96,
+            "Source subscription set exceeds finite ownership budget"
+        );
+        let (relay, _receiver) = Relay::new();
+        for _ in 0..100 {
+            let owners = channels
+                .iter()
+                .map(|c| relay.own_channel(c, true).unwrap())
+                .collect::<Vec<_>>();
+            let duplicate = channels
+                .iter()
+                .map(|c| relay.own_channel(c, true).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                relay.0.queues.lock().unwrap().channels.len(),
+                channels.len()
+            );
+            drop(owners);
+            drop(duplicate);
+            let q = relay.0.queues.lock().unwrap();
+            assert!(q.channels.is_empty());
+            assert!(q.core.is_empty());
+            assert_eq!(q.bytes, 0);
+        }
+        eprintln!("M9 production surface channel union: {}", channels.len());
     }
 }

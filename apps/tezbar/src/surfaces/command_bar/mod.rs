@@ -1,9 +1,12 @@
 //! Native command bar. All I/O starts in event/effect methods; Render only constructs elements.
 mod arguments;
 pub(crate) mod chat_integration;
+mod extension_integration;
+#[cfg(test)]
+mod extension_integration_tests;
 mod terminal_integration;
-pub use terminal_integration::TerminalSource;
 pub use chat_integration::ChatSource;
+pub use terminal_integration::TerminalSource;
 mod interactions;
 pub(crate) mod locale;
 mod model_picker;
@@ -87,6 +90,7 @@ struct PinDrag {
     target: Option<usize>,
 }
 pub struct Launcher {
+    extensions: extension_integration::Extensions,
     terminal: terminal_integration::TerminalIntegration,
     chat: chat_integration::ChatIntegration,
     pub(crate) settings_store: Option<super::settings::SettingsStore>,
@@ -212,6 +216,8 @@ impl Launcher {
         let mut launcher =
             Self::with_adapter_and_settings(core.clone(), relay, Some(path), Some(store), w, cx);
         launcher.configure_chat((*core).clone());
+        core.bind_extension_runtime(gpui_tokio::Tokio::handle(cx));
+        launcher.configure_extensions((*core).clone());
         launcher.utility_transport = Some(core);
         launcher.utility_save_directory = directory;
         launcher
@@ -400,6 +406,7 @@ impl Launcher {
         Self {
             settings_store: store,
             terminal: Default::default(),
+            extensions: Default::default(),
             chat: chat_integration::ChatIntegration::default(),
             settings_owner,
             onboarding: None,
@@ -601,7 +608,8 @@ impl Launcher {
         }
         let was_visible = self.visible;
         self.visible = true;
-        let chat_active = self.show_chat(cx) || self.show_terminal(w,cx);
+        let chat_active =
+            self.show_extensions(w, cx) || self.show_chat(cx) || self.show_terminal(w, cx);
         self.visible = was_visible;
         let utility_active = chat_active || self.show_utilities(w, cx);
         if !self.visible {
@@ -626,7 +634,8 @@ impl Launcher {
     pub fn hide(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.hide_onboarding(cx);
         self.hide_chat(cx);
-        self.hide_terminal(w,cx);
+        self.hide_terminal(w, cx);
+        self.hide_extensions(w, cx);
         self.acknowledge_navigation(cx);
         self.hide_utilities(w, cx);
         self.visible = false;
@@ -1018,6 +1027,7 @@ impl Launcher {
         }));
     }
     fn persist(&mut self, cx: &mut Context<Self>) {
+        self.sync_terminal_pins(cx);
         let Some(path) = self.state_path.clone() else {
             return;
         };
@@ -1484,10 +1494,31 @@ impl Launcher {
             }
             return;
         }
+        if matches!(
+            intent.surface,
+            Surface::Extensions | Surface::ExtensionRuntime
+        ) {
+            let valid = self.extensions.core.is_some()
+                && (intent.surface == Surface::Extensions
+                    || matches!(&intent.payload, Payload::Extension{result} if tezbar_ui_model::extensions::runtime::TreeReply::from_wire(result.clone()).is_ok()));
+            if !valid {
+                if cx.has_global::<navigation::NavigationInbox>() {
+                    cx.global_mut::<navigation::NavigationInbox>()
+                        .acknowledge(&intent);
+                }
+                self.error = Some("Extension view is unavailable. Run the command again.".into());
+                cx.notify();
+                return;
+            }
+        }
         self.route_utility_navigation(intent.clone(), cx);
         // This retained owner now has the intent. Deferred child delivery keeps its own clone;
         // the admission inbox must not retain a second copy for the whole app session.
-        if cx.has_global::<navigation::NavigationInbox>() {
+        if !matches!(
+            intent.surface,
+            Surface::Extensions | Surface::ExtensionRuntime
+        ) && cx.has_global::<navigation::NavigationInbox>()
+        {
             cx.global_mut::<navigation::NavigationInbox>()
                 .acknowledge(&intent);
         }
@@ -1502,13 +1533,20 @@ impl Launcher {
             return;
         }
         self.navigation = Some(intent.clone());
-        self.route_terminal_navigation(intent.clone(),cx);
-        self.route_chat_navigation(intent, cx);
+        self.route_terminal_navigation(intent.clone(), cx);
+        self.route_chat_navigation(intent.clone(), cx);
+        self.route_extension(intent, cx);
         self.sync_task_indicator(cx);
         cx.notify();
     }
     fn acknowledge_navigation(&self, cx: &mut Context<Self>) {
         if let Some(intent) = &self.navigation {
+            if matches!(
+                intent.surface,
+                Surface::Extensions | Surface::ExtensionRuntime
+            ) {
+                return;
+            }
             if cx.has_global::<navigation::NavigationInbox>() {
                 cx.global_mut::<navigation::NavigationInbox>()
                     .acknowledge(intent);
@@ -1693,12 +1731,7 @@ impl Launcher {
                             cx,
                         ),
                         Ok(result) if result["ok"] == false => {
-                            this.error = Some(
-                                result["message"]
-                                    .as_str()
-                                    .unwrap_or("Extension command failed")
-                                    .to_owned(),
-                            );
+                            this.error = Some("Extension command failed. Run it again.".into());
                             cx.notify();
                         }
                         Ok(result) => {

@@ -1,0 +1,16 @@
+{
+  "phase": "pre-compile source review only",
+  "source_case_hashes": 115,
+  "ledger_rows": 45,
+  "real_fixture_sources": 9,
+  "source_tests_registered_uncompiled": 10,
+  "real_sdk_tests_registered": 0,
+  "whitespace_findings": [],
+  "cargo_bun_esbuild_executions": 0,
+  "variant_callsite_audit": "passed source inspection only",
+  "navigation_nonce_audit": "no synthetic inline nonce",
+  "held_excluded": [
+    "apps/tezbar/src/surfaces/extension_runtime/assets.rs",
+    "docs/native-m09/parent-contracts.md"
+  ]
+}

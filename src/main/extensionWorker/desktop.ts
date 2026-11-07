@@ -120,3 +120,5 @@ export const dialog = {
   showMessageBox: (options: MessageBoxOptions): Promise<{ response: number }> =>
     request('core:platform:confirm', options),
 }
+
+export async function extensionControl(sessionId: string, kind: 'close' | 'preferences' | 'clear-search' | 'hud', message?: string, source = 0): Promise<void> { await request('core:extension-ui', {sessionId,kind,message,source}) }

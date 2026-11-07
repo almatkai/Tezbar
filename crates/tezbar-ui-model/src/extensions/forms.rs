@@ -86,7 +86,12 @@ impl FormState {
                 None
             }
             .or_else(|| field.server_value.clone())
+            .or_else(|| n.props.get("defaultValue").cloned())
             .unwrap_or_else(|| match field.kind {
+                NodeKind::Dropdown => field
+                    .options
+                    .first()
+                    .map_or_else(|| json!(""), |v| json!(v)),
                 NodeKind::Checkbox => json!(false),
                 NodeKind::FilePicker | NodeKind::TagPicker => json!([]),
                 _ => json!(""),
@@ -156,9 +161,8 @@ impl FormState {
     }
     pub fn validate(&self) -> Result<(), &'static str> {
         for f in self.fields.values() {
-            if f.error.is_some() {
-                return Err("Correct the highlighted fields");
-            }
+            // Worker errors are displayed, as in the SDK form, and must not
+            // lock a submit-only field out of retrying after local edits.
             let v = self.values.get(&f.id);
             if f.required
                 && v.is_none_or(|v| {

@@ -99,7 +99,7 @@ async function main(): Promise<void> {
   `)
   const child = spawn(
     process.env.TEZBAR_TEST_BUN || 'bun',
-    [resolve('dist-backend/extension-worker.js')],
+    [resolve(process.env.TEZBAR_TEST_WORKER_BUNDLE || 'dist-backend/extension-worker.js')],
     {
       env: {
         ...process.env,
@@ -157,6 +157,7 @@ async function main(): Promise<void> {
       let result: unknown
       if (frame.channel === 'core:apps:list') result = applications
       else if (frame.channel === 'core:platform:selected-text') result = selected
+      else if (frame.channel === 'core:extension-ui') { assert.equal(frame.payload[0]?.kind,'hud'); assert.equal(typeof frame.payload[0]?.sessionId,'string'); result = {ok:true} }
       else if (frame.channel === 'clipboard:read') result = clipboard
       else if (frame.channel === 'clipboard:write') {
         if (frame.payload[0] === 'reject this write') {
@@ -306,7 +307,7 @@ async function main(): Promise<void> {
       assert.equal(reply.effects.length, Math.min(50, i * 3))
       assert.equal(reply.effects.at(-1).message, 'identical notice')
       assert.equal(clipboard.length, 10010) // Host receives complete text, record is truncated.
-      assert.deepEqual(requests, ['clipboard:write', 'core:platform:clipboard-write'])
+      assert.deepEqual(requests, ['clipboard:write', 'core:platform:clipboard-write', 'core:extension-ui'])
       requests.length = 0
       for (let poll = 0; poll < 2; poll++) {
         const refreshed = await invoke('extension:refresh-session', { sessionId: wave.sessionId })

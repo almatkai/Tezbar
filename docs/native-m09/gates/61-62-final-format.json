@@ -1,0 +1,375 @@
+{
+  "freeze": "docs/native-m09/final-source-freeze-05.json",
+  "before": {
+    "changed_inputs": []
+  },
+  "after": {
+    "changed_inputs": []
+  },
+  "owned": [
+    {
+      "path": "apps/tezbar/src/app.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "136ee1d8854d23bbfefdd7c52f408f6d50ecf7348b45fb491162a4bfa0141d2c"
+    },
+    {
+      "path": "apps/tezbar/src/app/m10.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "b46dcfaf40c5feb555251feb793868aa44f4555bdb783acd49b14b5e9dea5e22"
+    },
+    {
+      "path": "apps/tezbar/src/app/m9.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "34cdf4d18e68aa3a6f8e70d1762d203533a35be048f0716c7cac0a650aea2936"
+    },
+    {
+      "path": "apps/tezbar/src/core_client.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "3720a03c2879e811f3245ced531aa30ebbcba9c37922fb2c473e8a87ac42dbcb"
+    },
+    {
+      "path": "apps/tezbar/src/events.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "9fb6f568b48eed142daa86c4a76d63d42ab1010a817439e8a87ea449c04e18ce"
+    },
+    {
+      "path": "apps/tezbar/src/host_adapter.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "4b9d641c251bea49aee7f4175c5dbd130b1de31f4ac94ec08559a392e33a4fe5"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/extension_integration.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "8d7f5a94488be0e29effce95773ddd8a41bf8c01a72617bf298632cac7f7d152"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "b83019e9438a9ef6c90cf52f8b2f53a6600e0cbe5d9518e61bfea8ddca034e3b"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/mod.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "a4b69b1fec7a20bd83430fb31e865bc088403f45e8d514b35eb51c3f416e3d26"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "2fca1c9151a85fcdf7c4adb96ff879d1588dcdbd6c720abb47ce823f78b6cd95"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "257c41c5039241366a566332fc5b149a7b60274b54ce9e8fb03d32873f734a35"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "d78a25b7d5307a3bb099b0c92ead8d12b4acc12d8e449230ff763e5c5b277ce1"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/view.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "4e5826bbdf9c91791b9a93042ca1841eba9040bbe64e26b548cb74f1a37b990f"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/assets.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "fe33523eecc29791fb6d980e1de9ff318404ac164a0f21271764f95337b3dd7a"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/color_wheel.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "096b4b837ca2069ef7746a67311447ab91799d2742cea9bb03417f675ca8ecd1"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/images.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "902329a3b4d159ca36de96ffd72867b9cea78fb3bd3aa94aed0012f49c4bf075"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/mod.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "82fed733ba43a30cc42a526a644e692a21b05506426ecc3911e5f5c6feac36df"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/preferences.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "40eb253240c9d8e8a6f45901e7fc0eac2f3750ef07fa6bb943887c4c0c2226cf"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "4d13b1919813786701fa0dc66a4f881788f430a7d3d01592236661d6f7cbf237"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/tests.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "e714599bc22c4ca94d96f4c44882e98da264b982197709cf6165ec10d31cb6cd"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/view.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "4a6a9d23b3113843435f5eafac00d742c01c3d89959e34c849c9655855bbfc22"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/artwork.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "89bdce652c0c9bdb00d8281ee19ceebfba3c769305907b1ae2c009a284be69b0"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/mod.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "a59167f521a197eebc4dd0e917c999d3bcefcec2b7431a82332e669cbeeee8f6"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/request.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "e04bf6ce51c7363fe482efab998819c2eb5c51944e3e0ce9093a90a6a7db8721"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/tests.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "261df868fa70cd9a40f28c1eed3062ba6126fc961906ad0fa20644648ca3955f"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/view.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "33d28c3dc2771bc6d83c3204f9749ccb12f388ed72d70e1a2388e6c64e062ae3"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/mod.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "208c23823e2e80ea3ff4d111d7663c936a537d47d48b61a16e04b3de6a1c3a8f"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/input.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "e9f855c63b16494535c578e3f3a36d3ab1259cca4eb0e0c6d078cd1eadf24e93"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/mod.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "44d69ce34ca075175b92eda98192b6465edb46bfcb02d2f142ee0fa327def92b"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/request.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "35d77c8aea617b2bdf59f233686a8d2234020a608c870eeeb3855f7e11d93848"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/state.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "176c6be5ca72ebb8dfca89424a437f47e570b188418fb2833fe1a9cb6c80d7d2"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "8e04bae1adc5a036792a7ebb1b2ec1fbc90b84e904dc6957181109b2396fd7ae"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/view.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "80eebcaaa1b114aaf723fa1d1b899f59ba5e891824416c76686fa2eabd60a984"
+    },
+    {
+      "path": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "edition": "2024",
+      "exit_code": 0,
+      "sha256": "a2c122375720d72a1b2e7f544b5ed0bdebb3b47873e21a794decd865fa4bbb0e"
+    },
+    {
+      "path": "crates/tezbar-core/src/desktop_effect_tests.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "88d15ad9052724a5a23a624743f4770eb185ed7e439b9e6f91773cb2de711937"
+    },
+    {
+      "path": "crates/tezbar-core/src/extension_worker.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "d5e92739aae6cb0a9e1cc1416748b864287c710d392e9aea5cb289a589f4a5f4"
+    },
+    {
+      "path": "crates/tezbar-core/src/extension_worker_tests.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "7b68c8eaf0be22928496d05092b06e857b89095d3329aefd331e1e763c5287fd"
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/mod.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "3858db35b5f77b0d9638d4a686cf9545d0a2546401da9ea814c295671bca5635"
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/process_host.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "81b69c361a16ea097fbe38d59d209fb409d415b1441f75dc7d3b0d8121fcf6ac"
+    },
+    {
+      "path": "crates/tezbar-core/src/host.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "88dbc7b9b8f54a4ca33a760ab5d2b619be945fe103bf6710095e3be2e233be80"
+    },
+    {
+      "path": "crates/tezbar-core/src/launcher/clipboard.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "da03cf4219e62beea403efbc824ab1d03e28d51bd3dcc67ea6b2cde954c73e6f"
+    },
+    {
+      "path": "crates/tezbar-core/src/lib.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "040c1273583052087d5daa8b50cb0dd964c24afe98f1534b7d4b0f2386939048"
+    },
+    {
+      "path": "crates/tezbar-core/src/platform.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "ee7b19372f7b1d369fa210b0f26dec941f44f55b85800b52c25013d571498f40"
+    },
+    {
+      "path": "crates/tezbar-core/src/terminal/stream.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "be2faaf8952d8fbaa2d866dfc3031be3a717364baa76f147973b056287e4a1d5"
+    },
+    {
+      "path": "crates/tezbar-host/src/desktop.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "bc2e6763a3f0a6cd26a870956ca0f5930d8a83290805d51cd5705c91512ebd12"
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/forms.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "c896e57b87f5c76936e8a3fc0fcc6842837f0ca50cf44496d2f05378e6dd8f5c"
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/forms/tests.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "0fbd950260fece5616289dca059f42cfd1be6df09d964bb4e24910f77ab68ad2"
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/runtime.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "c76f4e1bde13696f7d4b2c3e23193c0ce550c98954635227befa3f4c0caa731c"
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/extensions/runtime/tests.rs",
+      "edition": "2021",
+      "exit_code": 0,
+      "sha256": "229293517b28600306a4a343593da64544362686d42e63da767d841322fd12da"
+    },
+    {
+      "path": "crates/tezbar-ui/src/terminal_grid.rs",
+      "edition": "2024",
+      "exit_code": 1,
+      "sha256": "13127c9ca1dd4a74945b6f9663254f3d748a470ab0ec425cb8991583946cba51"
+    },
+    {
+      "path": "tests/fixtures/extensions/native_harness.rs",
+      "edition": "2024",
+      "exit_code": 1,
+      "sha256": "8402f9538c4597b3d51c1156fcb3a911e96762a3621dfab2abdcb20802ce4304"
+    }
+  ],
+  "global_fmt_exit_code": 1,
+  "global_fmt_affected_files": [
+    "apps/tezbar/src/app/m8_tests.rs",
+    "apps/tezbar/src/lib.rs",
+    "apps/tezbar/src/surfaces/command_bar/task_indicator.rs",
+    "apps/tezbar/src/surfaces/extension_runtime/../../../../../tests/fixtures/extensions/native_harness.rs",
+    "crates/tezbar-core/build.rs",
+    "crates/tezbar-core/src/ai/canonical_tests.rs",
+    "crates/tezbar-core/src/ai/chat.rs",
+    "crates/tezbar-core/src/ai/ext/project.rs",
+    "crates/tezbar-core/src/ai/ext/secrets.rs",
+    "crates/tezbar-core/src/ai/legacy.rs",
+    "crates/tezbar-core/src/ai/mod.rs",
+    "crates/tezbar-core/src/ai/native_tests.rs",
+    "crates/tezbar-core/src/ai/native_tools.rs",
+    "crates/tezbar-core/src/ai/process.rs",
+    "crates/tezbar-core/src/ai/providers/antigravity.rs",
+    "crates/tezbar-core/src/ai/providers/copilot.rs",
+    "crates/tezbar-core/src/ai/runtime/agent.rs",
+    "crates/tezbar-core/src/ai/runtime/store.rs",
+    "crates/tezbar-core/src/ai/runtime/transcript.rs",
+    "crates/tezbar-core/src/ai/tests.rs",
+    "crates/tezbar-core/src/bun.rs",
+    "crates/tezbar-core/src/extensions/catalog.rs",
+    "crates/tezbar-core/src/extensions/command_inputs.rs",
+    "crates/tezbar-core/src/extensions/command_list.rs",
+    "crates/tezbar-core/src/extensions/command_list_tests.rs",
+    "crates/tezbar-core/src/extensions/process.rs",
+    "crates/tezbar-core/src/extensions/process_install.rs",
+    "crates/tezbar-core/src/extensions/registry.rs",
+    "crates/tezbar-core/src/knowledge/db.rs",
+    "crates/tezbar-core/src/knowledge/mod.rs",
+    "crates/tezbar-core/src/knowledge/performance_tests.rs",
+    "crates/tezbar-core/src/knowledge/runtime_bundle.rs",
+    "crates/tezbar-core/src/knowledge/search_cache.rs",
+    "crates/tezbar-core/src/knowledge/semantic_work.rs",
+    "crates/tezbar-core/src/knowledge/semantic_work_tests.rs",
+    "crates/tezbar-core/src/knowledge/tests.rs",
+    "crates/tezbar-core/src/knowledge/text.rs",
+    "crates/tezbar-core/src/launcher/clipboard_native.rs",
+    "crates/tezbar-core/src/launcher/db.rs",
+    "crates/tezbar-core/src/launcher/mod.rs",
+    "crates/tezbar-core/src/launcher/tests.rs",
+    "crates/tezbar-core/src/native_v2_cli.rs",
+    "crates/tezbar-core/src/performance.rs",
+    "crates/tezbar-core/src/terminal_bridge.rs",
+    "crates/tezbar-core/src/tests.rs",
+    "crates/tezbar-core/src/vault/crypto.rs",
+    "crates/tezbar-core/src/vault/mod.rs",
+    "crates/tezbar-core/src/vault/storage.rs",
+    "crates/tezbar-host/src/lib.rs",
+    "crates/tezbar-ui-model/src/chat/tests.rs",
+    "crates/tezbar-ui/src/terminal_grid.rs"
+  ],
+  "global_fmt_owned_overlap": [
+    "crates/tezbar-ui/src/terminal_grid.rs"
+  ],
+  "global_fmt_diff_headers": 130
+}

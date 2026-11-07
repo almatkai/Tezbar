@@ -1,0 +1,32 @@
+[
+  {
+    "path": "docs/native-m09/failed-experiments.txt",
+    "sha256": "2d3e68404f3abb0ccba363b54496d2dd708e1d1d418b9ef32b079ff055bfbad1",
+    "unchanged": true
+  },
+  {
+    "path": "docs/native-m09/integration.md",
+    "sha256": "42f72000e22e0fc4f2a673a91ba638db5e9042b06b43dd4cb22de228941e8fdb",
+    "unchanged": true
+  },
+  {
+    "path": "docs/native-m09/source-audit.json",
+    "sha256": "0474d05dc85a3cc3fcc6927fd79149b6f6e376ef5204046556fcb1c894d8ddb0",
+    "unchanged": true
+  },
+  {
+    "path": "docs/native-m09/source-case-map.json",
+    "sha256": "b1ea1a8752d00a321af6dc9c5d60f5bbccb5ab731837d82e7d47d941b8b9ed48",
+    "unchanged": true
+  },
+  {
+    "path": "docs/native-m09/verification.md",
+    "sha256": "fb653437bab12cf99dfdd13074d646b4a62312ffd713548697f78204eac1f0b2",
+    "unchanged": true
+  },
+  {
+    "path": "docs/native-m10/reviews/tezbar-gpui-m10-opus-b739b4e.md",
+    "sha256": "3e358161ce8d033d4170a8e57378d47ca36f3ddd72af132b6a93af92b3f7fb5a",
+    "unchanged": true
+  }
+]

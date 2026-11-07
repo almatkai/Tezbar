@@ -1,0 +1,1006 @@
+{
+  "status": "M9 linked implementation and headless gates complete; independent/platform parity acceptance pending",
+  "utc": "2026-11-07T02:46:51.225079+00:00",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "head": "db4d0df6d0d2313bec8c82429b32dd9ef607a401",
+  "branch": "feat/native-gpui-app",
+  "final_source_freeze": "docs/native-m09/final-source-freeze-06.json",
+  "aggregate_sha256": "185165ded66563538834c524d72dbf0cf04bd966486997a6010004ec9b0dcfa4",
+  "compiled_inputs": 473,
+  "native": 360,
+  "bench_native": 362,
+  "ui": 57,
+  "model": 380,
+  "msrv_model": 380,
+  "real_sdk_passed": [
+    "sdk_actions",
+    "sdk_detail",
+    "sdk_feedback",
+    "sdk_form",
+    "sdk_grid",
+    "sdk_invalidation",
+    "sdk_list",
+    "sdk_menubar",
+    "sdk_prompts"
+  ],
+  "typescript": {
+    "passed": 745,
+    "existing_skipped": 7,
+    "collected": 752,
+    "files": 82,
+    "worker_collected": 97,
+    "worker_passed": 90,
+    "worker_existing_skipped": 7
+  },
+  "owned_rust_fmt": {
+    "passed": 51,
+    "report": "docs/native-m09/gates/65-final-owned-fmt.json"
+  },
+  "global_fmt": {
+    "exit_code": 1,
+    "baseline_byte_identical_files": 49,
+    "owned_overlap": 0,
+    "report": "docs/native-m09/gates/68-final-global-fmt.json"
+  },
+  "case_map": {
+    "retained": 115,
+    "mapped_model_filters_found": 97,
+    "no_matching_filter": 18,
+    "unaccepted_E_rows": 45,
+    "native_one_to_one_closure": "partial"
+  },
+  "gates": [
+    {
+      "gate": "normal-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-normal-native.log",
+      "exit_code": 0,
+      "seconds": 46.5,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test surfaces::command_bar::settings_integration_tests::failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error ... ok",
+        "test surfaces::command_bar::tests::failed_start_retry_keeps_editable_input_and_emits_only_retry_intent ... ok",
+        "test surfaces::command_bar::tests::review_hotkey_failed_result_does_not_open_runtime ... ok",
+        "test surfaces::extension_runtime::tests::failed_activation_and_duplicate_nonce_preserve_live_screen ... ok",
+        "test surfaces::settings::tests::failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_auth ... ok",
+        "test surfaces::settings::tests::review_failed_operational_delete_is_retryable_but_never_dischargeable ... ok",
+        "test surfaces::settings::tests::review_repeated_failed_operations_exhaust_admission ... ok",
+        "test surfaces::settings::tests::review_successful_toggle_reports_failure_after_unrelated_operation_failed ... ok",
+        "test surfaces::settings::tests::review_unrelated_failed_operation_blocks_copilot_signin ... ok",
+        "test surfaces::settings::tests::settings_window_acknowledges_before_failed_drain_and_keeps_same_content ... ok",
+        "test surfaces::utilities::tests::explicit_drain_retries_failed_note_once_and_reports_new_failure ... ok",
+        "test result: ok. 360 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.32s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-06.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+      "test_results": [
+        "test result: ok. 360 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.32s"
+      ]
+    },
+    {
+      "gate": "bench-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders,bench-control",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-bench-native.log",
+      "exit_code": 0,
+      "seconds": 41.46,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test surfaces::command_bar::settings_integration_tests::failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error ... ok",
+        "test surfaces::command_bar::tests::failed_start_retry_keeps_editable_input_and_emits_only_retry_intent ... ok",
+        "test surfaces::command_bar::tests::review_hotkey_failed_result_does_not_open_runtime ... ok",
+        "test surfaces::extension_runtime::tests::failed_activation_and_duplicate_nonce_preserve_live_screen ... ok",
+        "test surfaces::settings::tests::failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_auth ... ok",
+        "test surfaces::settings::tests::review_failed_operational_delete_is_retryable_but_never_dischargeable ... ok",
+        "test surfaces::settings::tests::review_repeated_failed_operations_exhaust_admission ... ok",
+        "test surfaces::settings::tests::review_successful_toggle_reports_failure_after_unrelated_operation_failed ... ok",
+        "test surfaces::settings::tests::review_unrelated_failed_operation_blocks_copilot_signin ... ok",
+        "test surfaces::settings::tests::settings_window_acknowledges_before_failed_drain_and_keeps_same_content ... ok",
+        "test surfaces::utilities::tests::explicit_drain_retries_failed_note_once_and_reports_new_failure ... ok",
+        "test result: ok. 362 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.33s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-06.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+      "test_results": [
+        "test result: ok. 362 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.33s"
+      ]
+    },
+    {
+      "gate": "ui",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-ui.log",
+      "exit_code": 0,
+      "seconds": 4.01,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.61s",
+        "test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-06.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+      "test_results": [
+        "test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "gate": "normal-check",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-normal-check.log",
+      "exit_code": 0,
+      "seconds": 3.27,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.21s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-06.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+      "test_results": []
+    },
+    {
+      "gate": "debug-build",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-debug-build.log",
+      "exit_code": 0,
+      "seconds": 7.68,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.62s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-06.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+      "test_results": []
+    },
+    {
+      "gate": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-diff.log",
+      "exit_code": 0,
+      "seconds": 0.03,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [],
+      "report": "docs/native-m09/gates/frozen-gates-06.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+      "test_results": []
+    },
+    {
+      "gate": "root-bench-panel",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders,bench-control",
+        "windows::terminal_sessions",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-05-root-bench-panel.log",
+      "exit_code": 0,
+      "seconds": 20.9,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.62s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 360 filtered out; finished in 0.01s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-05.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-05.json",
+      "test_results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 360 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "gate": "lock-drift",
+      "command": [
+        "/opt/homebrew/bin/python3",
+        "scripts/native/lock-drift.py"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-05-lock-drift.log",
+      "exit_code": 0,
+      "seconds": 0.22,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [],
+      "report": "docs/native-m09/gates/frozen-gates-05.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-05.json",
+      "test_results": []
+    },
+    {
+      "gate": "msrv-check",
+      "command": [
+        "cargo",
+        "+1.85.0",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "-p",
+        "tezbar-ui-model",
+        "--all-features"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/msrv-m09"
+      },
+      "log": "docs/native-m09/gates/frozen-05-msrv-check.log",
+      "exit_code": 0,
+      "seconds": 57.92,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 57.82s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-05.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-05.json",
+      "test_results": []
+    },
+    {
+      "gate": "msrv-model",
+      "command": [
+        "cargo",
+        "+1.85.0",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--all-features",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/msrv-m09"
+      },
+      "log": "docs/native-m09/gates/frozen-05-msrv-model.log",
+      "exit_code": 0,
+      "seconds": 97.91,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test extensions::images::tests::failed_or_oversize_image_has_placeholder_and_retries_with_new_token ... ok",
+        "test extensions::images::tests::missing_failed_catalog_icon_recovers_on_different_selection ... ok",
+        "test knowledge_settings::tests::failed_reconcile_keeps_lock_until_explicit_refresh ... ok",
+        "test knowledge_settings::tests::failed_refresh_preserves_snapshot_controls_and_downloads ... ok",
+        "test knowledge_settings::tests::failed_tab_read_cannot_replace_cancel_mutation_owner ... ok",
+        "test knowledge_settings::tests::missing_failed_and_unattributed_errors_never_claim_healthy_semantics ... ok",
+        "test notes::selection_tests::failed_and_selection_only_changes_never_create_content_history ... ok",
+        "test settings::tests::failed_creation_preserves_a_later_api_key_edit ... ok",
+        "test settings::tests::failed_definition_retries_before_its_dependent_field_write ... ok",
+        "test settings::tests::t_r2_failed_removal_preserves_peer_credentials_on_retry ... ok",
+        "test settings::tests::t_r4_retries_are_deduplicated_and_keep_newer_failed_removal ... ok",
+        "test result: ok. 380 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-05.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-05.json",
+      "test_results": [
+        "test result: ok. 380 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s"
+      ]
+    },
+    {
+      "gate": "msrv-core-stream",
+      "command": [
+        "cargo",
+        "+1.85.0",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "terminal::pty::stream",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/msrv-m09"
+      },
+      "log": "docs/native-m09/gates/frozen-05-msrv-core-stream.log",
+      "exit_code": 0,
+      "seconds": 89.25,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 28s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.06s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-05.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-05.json",
+      "test_results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.06s"
+      ]
+    },
+    {
+      "gate": "model-extension-regressions",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--lib",
+        "--features",
+        "launcher-models,agent-models",
+        "extensions",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-model-extension-regressions.log",
+      "exit_code": 0,
+      "seconds": 0.28,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s",
+        "test extensions::images::tests::failed_empty_unavailable_app_lookups_keep_current_catalog_fallback ... ok",
+        "test extensions::images::tests::failed_or_oversize_image_has_placeholder_and_retries_with_new_token ... ok",
+        "test extensions::images::tests::missing_failed_catalog_icon_recovers_on_different_selection ... ok",
+        "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 327 filtered out; finished in 0.02s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 327 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "gate": "model-all",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--lib",
+        "--features",
+        "launcher-models,agent-models",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-model-all.log",
+      "exit_code": 0,
+      "seconds": 0.92,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test extensions::images::tests::failed_or_oversize_image_has_placeholder_and_retries_with_new_token ... ok",
+        "test extensions::images::tests::missing_failed_catalog_icon_recovers_on_different_selection ... ok",
+        "test knowledge_settings::tests::failed_reconcile_keeps_lock_until_explicit_refresh ... ok",
+        "test knowledge_settings::tests::failed_refresh_preserves_snapshot_controls_and_downloads ... ok",
+        "test knowledge_settings::tests::failed_tab_read_cannot_replace_cancel_mutation_owner ... ok",
+        "test knowledge_settings::tests::missing_failed_and_unattributed_errors_never_claim_healthy_semantics ... ok",
+        "test notes::selection_tests::failed_and_selection_only_changes_never_create_content_history ... ok",
+        "test settings::tests::failed_creation_preserves_a_later_api_key_edit ... ok",
+        "test settings::tests::failed_definition_retries_before_its_dependent_field_write ... ok",
+        "test settings::tests::t_r2_failed_removal_preserves_peer_credentials_on_retry ... ok",
+        "test settings::tests::t_r4_retries_are_deduplicated_and_keep_newer_failed_removal ... ok",
+        "test result: ok. 380 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 380 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s"
+      ]
+    },
+    {
+      "gate": "core-assets",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "assets::",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-core-assets.log",
+      "exit_code": 0,
+      "seconds": 0.33,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 595 filtered out; finished in 0.04s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 595 filtered out; finished in 0.04s"
+      ]
+    },
+    {
+      "gate": "core-registry-scopes",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extensions::registry::asset_scope",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-core-registry-scopes.log",
+      "exit_code": 0,
+      "seconds": 0.31,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.01s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "gate": "core-desktop",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "desktop_effect_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-core-desktop.log",
+      "exit_code": 0,
+      "seconds": 3.36,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 3.05s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 3.05s"
+      ]
+    },
+    {
+      "gate": "core-worker-unit",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extension_worker::tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-core-worker-unit.log",
+      "exit_code": 0,
+      "seconds": 0.36,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.04s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.04s"
+      ]
+    },
+    {
+      "gate": "core-root-stream",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "terminal::pty::stream",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-core-root-stream.log",
+      "exit_code": 0,
+      "seconds": 0.33,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.04s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.04s"
+      ]
+    },
+    {
+      "gate": "core-status-shapes",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extensions::process_host::shape_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-core-status-shapes.log",
+      "exit_code": 0,
+      "seconds": 0.33,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.03s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.03s"
+      ]
+    },
+    {
+      "gate": "rust-bun-smoke",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-rust-bun-smoke.log",
+      "exit_code": 0,
+      "seconds": 1.32,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 1.00s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 1.00s"
+      ]
+    },
+    {
+      "gate": "channel-audit",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--lib",
+        "m9_channel_audit",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-channel-audit.log",
+      "exit_code": 0,
+      "seconds": 9.96,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.37s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 358 filtered out; finished in 0.01s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 358 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "gate": "typecheck",
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-typecheck.log",
+      "exit_code": 0,
+      "seconds": 4.67,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": []
+    },
+    {
+      "gate": "typescript",
+      "command": [
+        "pnpm",
+        "test",
+        "--maxWorkers=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-typescript.log",
+      "exit_code": 0,
+      "seconds": 16.63,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "[usePromise] Finished hook=1 fn=\"(value) => async ({ page }) => { await new Promise((resolve) => setTimeout(resolve, 15)) r\" args=[\"first\"] after 19ms",
+        "[usePromise] Finished hook=1 fn=\"(value) => async ({ page }) => { await new Promise((resolve) => setTimeout(resolve, 15)) r\" args=[\"second\"] after 19ms",
+        "[usePromise] Finished hook=3 fn=\"async function executeExtensionSQL(databasePath, query) { const database = new __vite_ssr_\" args=[\"/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/raymes-utils-extension-NTG2xV/fixture.sqlite\",\"select name from items\"] after 1ms",
+        "[usePromise] Finished hook=1 fn=\"(value) => async ({ page }) => { await new Promise((resolve) => setTimeout(resolve, 15)) r\" args=[\"\"] after 19ms",
+        "[usePromise] Finished hook=1 fn=\"(value) => async ({ page }) => { await new Promise((resolve) => setTimeout(resolve, 15)) r\" args=[\"halland\"] after 17ms",
+        "[ExtensionRuntime] Component render failed: Error: fixture exploded",
+        "[usePromise] Finished hook=0 fn=\"() => (0,__vite_ssr_import_21__.askExtensionAI)(String(prompt ?? \"\"))\" args=[\"hook prompt\"] after 2ms",
+        "[usePromise] Finished hook=0 fn=\"async (storageKey) => { const raw = await storage.getItem(storageKey); return raw === void\" args=[\"shared\"] after 1ms",
+        "   \u2713 agent conversation ownership > successful retry replaces the failed persisted assistant id  356ms",
+        "   \u2713 failed delete recovery during preparation > invalidates the old preparation and allows a fresh send after failed deletion  473ms",
+        " Test Files  81 passed | 1 skipped (82)",
+        "      Tests  745 passed | 7 skipped (752)"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": []
+    },
+    {
+      "gate": "worker-smoke",
+      "command": [
+        "pnpm",
+        "exec",
+        "tsx",
+        "scripts/test-extension-worker.ts"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-worker-smoke.log",
+      "exit_code": 0,
+      "seconds": 3.59,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "Extension Worker: actual Bun process, source compilation, readonly SQL, application/selection host services, ASCII/Unicode, clipboard/AI, image/HTML, paste, host errors, boundary rejection and EOF cleanup passed."
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": []
+    },
+    {
+      "gate": "tree",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "tree",
+        "--locked",
+        "--offline",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--edges",
+        "normal"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-tree.log",
+      "exit_code": 0,
+      "seconds": 0.62,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": []
+    },
+    {
+      "gate": "metadata",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "metadata",
+        "--locked",
+        "--offline",
+        "--format-version",
+        "1",
+        "--filter-platform",
+        "aarch64-apple-darwin",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-04-metadata.log",
+      "exit_code": 0,
+      "seconds": 0.32,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [],
+      "report": "docs/native-m09/gates/frozen-gates-04.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-04.json",
+      "test_results": []
+    },
+    {
+      "gate": "core-host-port",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "platform::tests::host_",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-05-host-core-host-port.log",
+      "exit_code": 0,
+      "seconds": 0.57,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 593 filtered out; finished in 0.13s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-05-host.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-05.json",
+      "test_results": [
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 593 filtered out; finished in 0.13s"
+      ]
+    },
+    {
+      "gate": "core-status-port",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extensions::process_host::status_port_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-05-host-core-status-port.log",
+      "exit_code": 0,
+      "seconds": 0.32,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.03s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-05-host.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-05.json",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.03s"
+      ]
+    },
+    {
+      "gate": "core-color-formats",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--features",
+        "native-ui-instant",
+        "--lib",
+        "instant::color::",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-color-core-color-formats.log",
+      "exit_code": 0,
+      "seconds": 45.3,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 43.60s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 697 filtered out; finished in 0.01s"
+      ],
+      "report": "docs/native-m09/gates/frozen-gates-06-color.json",
+      "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 697 filtered out; finished in 0.01s"
+      ]
+    }
+  ],
+  "binary": {
+    "path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/tezbar",
+    "bytes": 217320936,
+    "sha256": "e3bb9e913f80890497996c88bdf4132698c623bb91f861839646dda812043aa7",
+    "file": {
+      "command": [
+        "file",
+        "target/debug/tezbar"
+      ],
+      "exit_code": 0,
+      "output": "target/debug/tezbar: Mach-O 64-bit executable arm64\n"
+    },
+    "dylibs": {
+      "command": [
+        "otool",
+        "-L",
+        "target/debug/tezbar"
+      ],
+      "exit_code": 0,
+      "output": "target/debug/tezbar:\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n\t/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices (compatibility version 1.0.0, current version 66.0.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5026.5.4)\n\t/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo (compatibility version 1.2.0, current version 734.4.0)\n\t/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon (compatibility version 2.0.0, current version 170.0.0)\n\t/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit (compatibility version 45.0.0, current version 2685.60.104)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5026.5.4)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n\t/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText (compatibility version 1.0.0, current version 877.4.0)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1195.14.4)\n\t/System/Library/Frameworks/Security.framework/Versions/A/Security (compatibility version 1.0.0, current version 61901.120.67)\n\t/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics (compatibility version 64.0.0, current version 1965.5.1)\n\t/System/Library/Frameworks/UserNotifications.framework/Versions/A/UserNotifications (compatibility version 1.0.0, current version 1.0.0)\n\t/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation (compatibility version 1.0.0, current version 3075.0.8)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 373.2.0)\n\t/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation (compatibility version 1.0.0, current version 2.0.0)\n\t/System/Library/Frameworks/EventKit.framework/Versions/A/EventKit (compatibility version 1.0.0, current version 1934.4.9)\n\t/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices (compatibility version 1.0.0, current version 1226.0.0)\n\t/System/Library/Frameworks/UniformTypeIdentifiers.framework/Versions/A/UniformTypeIdentifiers (compatibility version 1.0.0, current version 709.0.0)\n\t/System/Library/Frameworks/LocalAuthentication.framework/Versions/A/LocalAuthentication (compatibility version 1.0.0, current version 2005.121.1)\n\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)\n\t/System/Library/Frameworks/ColorSync.framework/Versions/A/ColorSync (compatibility version 1.0.0, current version 3813.5.1)\n"
+    },
+    "uuid": {
+      "command": [
+        "dwarfdump",
+        "--uuid",
+        "target/debug/tezbar"
+      ],
+      "exit_code": 0,
+      "output": "UUID: B2CA0BF6-2833-3D3F-AF49-F0A5968D814F (arm64) target/debug/tezbar\n"
+    }
+  },
+  "windows": "UNRUN: both remote attempts failed before tests; no inferred platform pass",
+  "remaining_parent_gates": [
+    "fresh Opus 5.5 design review",
+    "M3 final closure",
+    "Windows/ConPTY",
+    "physical IME/accessibility/GPU",
+    "RAM and performance",
+    "M11 default activation"
+  ],
+  "source_reuse": [
+    "docs/native-m09/gates/58-reused-component-inputs.json",
+    "docs/native-m09/gates/64-final-format-boundary.json"
+  ]
+}

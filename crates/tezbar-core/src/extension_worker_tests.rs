@@ -68,6 +68,7 @@ async fn real_rust_host_bun_roundtrip_and_termination() {
         "Build the extension worker before explicitly running this test"
     );
 
+    let launch = WorkerLaunch::new(runtime.clone(), resources.join("dist-backend")).unwrap();
     let root = tempfile::tempdir().unwrap();
     let paths = CorePaths {
         data_dir: root.path().join("data"),
@@ -160,7 +161,7 @@ async fn real_rust_host_bun_roundtrip_and_termination() {
         }
     }))
     .unwrap();
-    let worker = ExtensionWorker::new(ctx);
+    let worker = ExtensionWorker::with_launch(ctx, launch);
     let invoke = |command: &str| {
         vec![json!({"extensionId":"raycast.protocol-fixture", "commandName":command})]
     };

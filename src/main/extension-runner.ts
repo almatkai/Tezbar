@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, shell } from '@tezbar/desktop-runtime'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { app, BrowserWindow, clipboard, shell, extensionControl } from '@tezbar/desktop-runtime'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { open as openFile, rm as removePath, writeFile } from 'node:fs/promises'
 import { execFile, execFileSync } from 'node:child_process'
@@ -51,6 +52,10 @@ import {
   shouldShowExtensionPreferenceSetup,
 } from './extension-registry'
 
+const nativeControlSource = new AsyncLocalStorage<number>()
+function sessionControl(session: RuntimeSession, kind: 'close'|'preferences'|'clear-search'|'hud', message?: string): Promise<void> {
+  return extensionControl(session.id,kind,message,nativeControlSource.getStore() ?? 0)
+}
 type PackagePreference = {
   name?: string
   default?: unknown
@@ -132,6 +137,10 @@ function stripTimerNotificationMarkers(value: string | Buffer): string | Buffer 
 }
 
 type RuntimeSession = {
+  refreshRequest?: Promise<ExtensionRefreshSessionResult>
+  viewDelivered?: boolean
+  revision?: number
+  invalidationQueued?: boolean
   id: string
   extensionId: string
   commandName: string
@@ -177,6 +186,7 @@ type RuntimeSession = {
   >
   serverLoadMoreHandler: (() => Promise<void>) | null
   serverHasMore: boolean
+  clientHasMore: boolean
   serverLoadMoreRequest: Promise<ExtensionRefreshSessionResult> | null
   cacheRecoveryKeys: Set<string>
   abortControllers: Set<AbortController>
@@ -270,6 +280,7 @@ let applicationsCache: {
 } | null = null
 
 type WalkRuntimeOptions = {
+  actionSection?: string
   listItemsSeen?: { count: number }
   listItemLimit?: number
   listItemsTruncated?: { value: boolean }
@@ -878,6 +889,7 @@ function attachRuntimeRootMetadata(root: ExtensionRuntimeNode, session: RuntimeS
   root.props = {
     ...(root.props ?? {}),
     assetsPath: join(session.packageRoot, 'assets'),
+    argumentValues: session.commandArgs,
   }
   if (typeof root.props.markdown === 'string') {
     root.props.markdown = resolveExtensionMarkdownAssets(root.props.markdown, session.packageRoot)
@@ -1041,6 +1053,18 @@ function createJsxRuntimeShim(): Record<string, unknown> {
   }
 }
 
+function markSessionDirty(session: RuntimeSession): void {
+  if (session.disposed) return
+  session.hasStateUpdates = true
+  if (session.invalidationQueued) return
+  session.invalidationQueued = true
+  queueMicrotask(() => {
+    session.invalidationQueued = false
+    if (session.disposed) return
+    session.revision = (session.revision ?? 0) + 1
+    BrowserWindow.getAllWindows()[0]?.webContents.send('extension:session-invalidated', { sessionId: session.id, generation: session.id, revision: session.revision })
+  })
+}
 function createReactShim(session: RuntimeSession): Record<string, unknown> {
   const jsxRuntime = createJsxRuntimeShim()
   const jsx = jsxRuntime.jsx as (
@@ -1079,11 +1103,11 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
         ...(this.state && typeof this.state === 'object' ? this.state : {}),
         ...(resolved && typeof resolved === 'object' ? resolved : {}),
       } as S
-      session.hasStateUpdates = true
+      markSessionDirty(session)
     }
 
     forceUpdate(): void {
-      session.hasStateUpdates = true
+      markSessionDirty(session)
     }
   }
 
@@ -1131,7 +1155,7 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       const setState = (next: T | ((prev: T) => T)): void => {
         value = typeof next === 'function' ? (next as (prev: T) => T)(value) : next
         session.hookStates[idx] = [value, setState]
-        session.hasStateUpdates = true
+        markSessionDirty(session)
       }
       const tuple: [T, (next: T | ((prev: T) => T)) => void] = [value, setState]
       session.hookStates[idx] = tuple
@@ -1209,7 +1233,7 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
             const nextSnapshot = getSnapshot()
             if (Object.is(state.snapshot, nextSnapshot)) return
             state.snapshot = nextSnapshot
-            session.hasStateUpdates = true
+            markSessionDirty(session)
           }),
         [subscribe, getSnapshot],
         'useSyncExternalStore'
@@ -1228,7 +1252,7 @@ function createReactShim(session: RuntimeSession): Record<string, unknown> {
       const dispatch = (action: A): void => {
         current = reducer(current, action)
         session.hookStates[idx] = [current, dispatch]
-        session.hasStateUpdates = true
+        markSessionDirty(session)
       }
       const tuple: [S, (action: A) => void] = [current, dispatch]
       session.hookStates[idx] = tuple
@@ -1935,6 +1959,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       const message = String(title || '')
       pushFeedback(session, { kind: 'hud', message })
       pushEffect(session, { kind: 'hud', message })
+      if (session.effectMode !== 'record' && session.viewDelivered) await sessionControl(session,'hud',message)
     },
     open: async (target: unknown): Promise<void> => {
       if (typeof target !== 'string') return
@@ -2083,18 +2108,18 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
       return confirmExtensionAlert(options)
     },
     openExtensionPreferences: async (): Promise<void> => {
-      // Preferences editing is handled by Tezbar settings.
+      await sessionControl(session, 'preferences')
     },
     openCommandPreferences: async (): Promise<void> => {
-      // Preferences editing is handled by Tezbar settings.
+      await sessionControl(session, 'preferences')
     },
     updateCommandMetadata: async (): Promise<void> => {
       // Tezbar does not currently surface dynamic command subtitles, but
       // extensions call this after dependency checks and expect it to exist.
     },
-    closeMainWindow: async (): Promise<void> => {},
-    popToRoot: async (): Promise<void> => {},
-    clearSearchBar: async (): Promise<void> => {},
+    closeMainWindow: async (): Promise<void> => { if(session.effectMode !== 'record') await sessionControl(session, 'close') },
+    popToRoot: async (): Promise<void> => {session.stack = session.stack.slice(0,1); markSessionDirty(session); },
+    clearSearchBar: async (): Promise<void> => { if(session.effectMode !== 'record') await sessionControl(session, 'clear-search'); session.searchText = ''; await session.searchTextChangeHandler?.(''); markSessionDirty(session) },
   }
 }
 
@@ -2177,7 +2202,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
       current = typeof next === 'function' ? (next as (prev: T) => T)(current) : next
       cache.set(String(key), JSON.stringify(current))
       session.hookStates[hookIdx] = [current, setValue]
-      session.hasStateUpdates = true
+      markSessionDirty(session)
     }
     const tuple: [T, (next: T | ((prev: T) => T)) => void] = [current, setValue]
     session.hookStates[hookIdx] = tuple
@@ -2275,7 +2300,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
             session.promiseCache.set(key, { data, error: undefined, label })
             if (persistent) writePromiseResultCache(session, key, data)
             await Promise.resolve(opts.onData?.(data))
-            if (!session.disposed) session.hasStateUpdates = true
+            if (!session.disposed) markSessionDirty(session)
             return data
           })
           .catch(async (error: unknown) => {
@@ -2289,7 +2314,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
                 `[usePromise] Recovered ${label} after ${elapsedMs(startedAt)}; retrying on refresh.`
               )
               session.promiseCache.delete(key)
-              if (!session.disposed) session.hasStateUpdates = true
+              if (!session.disposed) markSessionDirty(session)
               return undefined
             }
 
@@ -2308,7 +2333,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
               `[usePromise] Rejected ${label} after ${elapsedMs(startedAt)}:`,
               error instanceof Error ? error.message : String(error)
             )
-            if (!session.disposed) session.hasStateUpdates = true
+            if (!session.disposed) markSessionDirty(session)
             if (typeof opts.onError === 'function') {
               try {
                 await Promise.resolve(opts.onError(error))
@@ -2371,7 +2396,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
                 paginationState.hasMore = pageResult.hasMore === true
                 session.promiseCache.set(key, { data: mergedData, error: undefined, label })
                 await Promise.resolve(opts.onData?.(mergedData))
-                if (!session.disposed) session.hasStateUpdates = true
+                if (!session.disposed) markSessionDirty(session)
               })
               .catch(async (error: unknown) => {
                 session.promiseCache.set(key, {
@@ -2383,7 +2408,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
                 if (typeof opts.onError === 'function') {
                   await Promise.resolve(opts.onError(error))
                 }
-                if (!session.disposed) session.hasStateUpdates = true
+                if (!session.disposed) markSessionDirty(session)
                 throw error
               })
               .finally(() => {
@@ -2411,7 +2436,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
                   ? (next as (current: unknown) => unknown)(cached?.data)
                   : next
               session.promiseCache.set(key, { data: value, error: undefined })
-              if (!session.disposed) session.hasStateUpdates = true
+              if (!session.disposed) markSessionDirty(session)
               return value
             },
             pagination: pagination(),
@@ -2430,7 +2455,7 @@ function createRaycastUtilsShim(session: RuntimeSession): Record<string, unknown
                 ? (next as (current: unknown) => unknown)(cached?.data)
                 : next
             session.promiseCache.set(key, { data: value, error: undefined })
-            if (!session.disposed) session.hasStateUpdates = true
+            if (!session.disposed) markSessionDirty(session)
             return value
           },
           pagination: pagination(),
@@ -3156,6 +3181,10 @@ function isJsxNode(value: unknown): value is JsxNode {
 }
 
 function sanitizeValue(value: unknown): unknown {
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    const date = value as Date
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null
+  }
   if (value == null) return value
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value
@@ -3231,7 +3260,8 @@ function resolveExtensionMarkdownAssets(markdown: string, packageRoot: string): 
 function registerAction(
   typeName: string,
   props: Record<string, unknown>,
-  session: RuntimeSession
+  session: RuntimeSession,
+  section?: string
 ): void {
   const index = session.currentActions.length
   const title = normalizeActionTitle(typeName, props)
@@ -3258,6 +3288,7 @@ function registerAction(
       : 'default'
 
   const action: ExtensionRuntimeAction = {
+    section,
     id,
     title,
     style,
@@ -3409,9 +3440,9 @@ function walkRuntimeNodes(
 
   if (typeName.startsWith('Action')) {
     if (typeName === 'ActionPanel' || typeName.startsWith('ActionPanel.')) {
-      return walkRuntimeNodes(props.children, session, depth + 1, budget, options)
+      return walkRuntimeNodes(props.children, session, depth + 1, budget, { ...options, actionSection: typeName === 'ActionPanel.Section' ? String(props.title ?? '') : options.actionSection })
     }
-    registerAction(typeName, props, session)
+    registerAction(typeName, props, session, options.actionSection)
     return []
   }
 
@@ -3485,6 +3516,9 @@ function walkRuntimeNodes(
       )
     })
   }
+  if (typeName === 'Form.DatePicker' && sanitizedProps) {
+    for (const key of ['value','defaultValue']) if (typeof sanitizedProps[key] === 'string') sanitizedProps[key] = String(sanitizedProps[key]).slice(0,10)
+  }
   if (typeName.startsWith('Form.') && typeof props.onChange === 'function' && sanitizedProps) {
     const actionId = makeId('form-change')
     sanitizedProps.actionId = actionId
@@ -3540,9 +3574,8 @@ function walkRuntimeNodes(
       : options
   const children = walkRuntimeNodes(props.children, session, depth + 1, budget, childOptions)
   if (isSearchCollection && sanitizedProps && listItemsTruncated) {
-    sanitizedProps.__hasMore =
-      session.serverHasMore ||
-      (listItemsTruncated.value && session.listItemLimit < RUNTIME_COMPONENT_LIMIT)
+    session.clientHasMore ||= listItemsTruncated.value && session.listItemLimit < RUNTIME_COMPONENT_LIMIT
+    sanitizedProps.__hasMore = session.serverHasMore || session.clientHasMore
     sanitizedProps.__pageSize = session.listItemLimit
   }
   const node: ExtensionRuntimeNode = {
@@ -3575,10 +3608,7 @@ function renderCurrentView(
   )
   const top = session.stack.at(-1)
   if (!top) {
-    return {
-      ok: false,
-      message: 'No view is available for this extension session.',
-    }
+    return { ok: true, mode: 'no-view', sessionId: session.id, message: '', effects: [...session.effects], effectSequence:session.effectSequence }
   }
 
   session.actionHandlers.clear()
@@ -3586,6 +3616,7 @@ function renderCurrentView(
   session.renderErrors = []
   session.serverLoadMoreHandler = null
   session.serverHasMore = false
+  session.clientHasMore = false
 
   const budget = { remaining: RUNTIME_COMPONENT_LIMIT }
   const internalTop = top as Partial<ExtensionRuntimeNode>
@@ -3612,14 +3643,22 @@ function renderCurrentView(
     props: { markdown: 'This extension returned an empty view.' },
     children: [],
   }
+  if (session.stack.length > 1) {
+    root.props = { ...(root.props ?? {}), backActionId: '__nav_pop__' }
+    session.currentActions.push({ id: '__nav_pop__', title: 'Back', kind: 'pop' })
+  }
   attachRuntimeRootMetadata(root, session)
   console.log(
     `[Runner] renderCurrentView complete after ${elapsedMs(startedAt)}; root=${root.type}, children=${root.children?.length ?? 0}`
   )
 
+  session.viewDelivered = true
   return {
     ok: true,
     mode: 'view',
+    generation: session.id,
+    viewRevision: session.revision ?? 0,
+    refreshMs: null,
     message: formatFeedback(session.feedback.at(-1)),
     sessionId: session.id,
     extensionId: session.extensionId,
@@ -3660,7 +3699,15 @@ async function rerenderSessionCommand(
   return view
 }
 
-export async function refreshExtensionSession(
+export async function refreshExtensionSession(request: ExtensionRefreshSessionRequest): Promise<ExtensionRefreshSessionResult> {
+  const session=sessions.get(String(request.sessionId || '').trim())
+  if (!session) return {ok:false,message:'Extension session not found.'}
+  if (session.refreshRequest) return session.refreshRequest
+  const pending=refreshExtensionSessionOwned(request).finally(()=>{if(session.refreshRequest===pending)session.refreshRequest=undefined})
+  session.refreshRequest=pending
+  return pending
+}
+async function refreshExtensionSessionOwned(
   request: ExtensionRefreshSessionRequest
 ): Promise<ExtensionRefreshSessionResult> {
   const sessionId = String(request.sessionId || '').trim()
@@ -3684,7 +3731,7 @@ export async function refreshExtensionSession(
       inFlight.length ? `\n  ${inFlight.join('\n  ')}` : ''
     }`
   )
-  if (!session.hasStateUpdates) return { ok: true, mode: 'unchanged' }
+  if (!session.hasStateUpdates) return typeof request.viewRevision === 'number' && request.viewRevision < (session.revision ?? 0) ? renderCurrentView(session) : { ok: true, mode: 'unchanged' }
 
   return rerenderSessionCommand(session, 'Refresh')
 }
@@ -3696,12 +3743,12 @@ export async function loadMoreExtensionSession(
   const session = sessions.get(sessionId)
   if (!session) return { ok: false, message: 'Extension session not found.' }
 
-  if (session.serverLoadMoreHandler) {
-    if (!session.serverHasMore) return { ok: true, mode: 'unchanged' }
+  if (session.serverLoadMoreHandler && session.serverHasMore) {
     if (session.serverLoadMoreRequest) return session.serverLoadMoreRequest
     const request = (async (): Promise<ExtensionRefreshSessionResult> => {
       try {
         await session.serverLoadMoreHandler?.()
+        session.listItemLimit = Math.min(session.listItemLimit + LIST_ITEM_PAGE_SIZE, RUNTIME_COMPONENT_LIMIT)
         return await rerenderSessionCommand(session, 'Load more')
       } catch (error) {
         return {
@@ -3716,6 +3763,7 @@ export async function loadMoreExtensionSession(
     return request
   }
 
+  if (!session.clientHasMore) return { ok: true, mode: 'unchanged' }
   const nextLimit = Math.min(session.listItemLimit + LIST_ITEM_PAGE_SIZE, RUNTIME_COMPONENT_LIMIT)
   if (nextLimit === session.listItemLimit) return { ok: true, mode: 'unchanged' }
 
@@ -4427,6 +4475,7 @@ async function runCommandFromPackagePath(
     promisePaginationByHook: new Map(),
     serverLoadMoreHandler: null,
     serverHasMore: false,
+    clientHasMore: false,
     serverLoadMoreRequest: null,
     cacheRecoveryKeys: new Set(),
     abortControllers: new Set(),
@@ -4596,7 +4645,10 @@ export async function runExtensionCommandFromPackageJson(
   }
 }
 
-export async function invokeExtensionAction(
+export async function invokeExtensionAction(request: ExtensionInvokeActionRequest & {hostSource?: number}): Promise<ExtensionInvokeActionResult> {
+  return nativeControlSource.run(request.hostSource ?? 0, () => invokeExtensionActionOwned(request))
+}
+async function invokeExtensionActionOwned(
   request: ExtensionInvokeActionRequest
 ): Promise<ExtensionInvokeActionResult> {
   const sessionId = String(request.sessionId || '').trim()
@@ -4660,3 +4712,5 @@ export function clearAllExtensionSessions(): void {
   }
   sessions.clear()
 }
+
+export function invalidateExtensionSession(id: string): void { const session=sessions.get(id); if(session) markSessionDirty(session) }

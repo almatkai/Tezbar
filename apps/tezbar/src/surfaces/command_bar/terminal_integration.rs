@@ -131,6 +131,7 @@ impl Launcher {
             view
         };
         view.update(cx, |v, cx| {
+            v.update_pins(self.state.terminal_pinned_sessions.clone());
             v.activate(intent.payload, intent.nonce, w, cx);
             if !self.visible {
                 v.set_visible(false, w, cx);
@@ -162,23 +163,23 @@ impl Launcher {
             view.update(cx, |v, cx| v.layout_changed(cx));
         }
     }
-    pub(crate) fn terminal_panel_rows(&self, cx: &App) -> Vec<(String, String)> {
+    pub(crate) fn terminal_panel_rows(
+        &self,
+        cx: &App,
+    ) -> Vec<crate::windows::terminal_sessions::SessionRow> {
         self.terminal
             .view
             .as_ref()
             .map(|v| {
-                v.read(cx)
-                    .session_rows()
+                let view = v.read(cx);
+                view.session_rows()
                     .iter()
-                    .map(|s| {
-                        (
-                            s.session_id.clone(),
-                            format!(
-                                "{} · {}",
-                                s.name,
-                                if s.running { "running" } else { "saved" }
-                            ),
-                        )
+                    .map(|s| crate::windows::terminal_sessions::SessionRow {
+                        id: s.session_id.clone(),
+                        title: s.name.clone(),
+                        cwd: s.cwd.clone(),
+                        running: s.running,
+                        active: view.active_session() == Some(s.session_id.as_str()),
                     })
                     .collect()
             })
@@ -215,8 +216,25 @@ impl Launcher {
             self.edit(">", w, cx);
         }
     }
-    pub(crate) fn terminal_pins(&mut self, pins: Vec<String>, cx: &mut Context<Self>) {
-        self.state.terminal_pinned_sessions = pins;
+    pub(super) fn sync_terminal_pins(&mut self, cx: &mut Context<Self>) {
+        if let Some(view) = &self.terminal.view {
+            view.update(cx, |v, cx| {
+                v.update_pins(self.state.terminal_pinned_sessions.clone());
+                cx.notify();
+            });
+        }
+    }
+    pub(crate) fn apply_terminal_pin_change(
+        &mut self,
+        id: String,
+        toggle: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let present = self.state.terminal_pinned_sessions.contains(&id);
+        self.state.terminal_pinned_sessions.retain(|p| p != &id);
+        if toggle && !present {
+            self.state.terminal_pinned_sessions.insert(0, id);
+        }
         self.persist(cx);
     }
     pub(crate) fn terminal_paste(

@@ -161,6 +161,8 @@ pub struct Attached {
     pub replay: String,
     #[serde(default)]
     pub watermark: u64,
+    #[serde(default)]
+    pub origin: Option<u64>,
 }
 pub type Reply = Result<Value, String>;
 pub trait TerminalTransport: Send + Sync + 'static {

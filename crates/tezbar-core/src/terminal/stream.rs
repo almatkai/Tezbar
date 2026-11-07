@@ -17,6 +17,7 @@ pub(super) struct Stream {
     file: File,
     path: PathBuf,
     pub position: u64,
+    origin: u64,
     durable: bool,
 }
 impl Stream {
@@ -27,6 +28,7 @@ impl Stream {
             file,
             path,
             position,
+            origin: position,
             durable: true,
         })
     }
@@ -107,7 +109,7 @@ impl ReplayRegistry {
         let s = stream.lock().unwrap();
         s.validate()?;
         let token = uuid::Uuid::new_v4().to_string();
-        let result = json!({"generation":s.generation,"replay":token,"watermark":s.position});
+        let result = json!({"generation":s.generation,"replay":token,"watermark":s.position,"origin":s.origin});
         drop(s);
         self.cursors.insert(
             token,
@@ -193,6 +195,27 @@ mod tests {
             .open(&p)
             .unwrap();
         (d, Arc::new(Mutex::new(Stream::new(f, p).unwrap())))
+    }
+    #[test]
+    fn review_m10_f6_origin_distinguishes_prior_history_from_this_process() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history");
+        std::fs::write(&path, b"old\x1b[6n").unwrap();
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .append(true)
+            .open(&path)
+            .unwrap();
+        let stream = Arc::new(Mutex::new(Stream::new(file, path).unwrap()));
+        stream.lock().unwrap().append(b"\x1b[6nnew");
+        let mut registry = ReplayRegistry::default();
+        let attached = registry.open(stream.clone()).unwrap();
+        assert_eq!(attached["origin"], 7);
+        assert_eq!(attached["watermark"], 14);
+        stream.lock().unwrap().append(b"later");
+        let again = registry.open(stream).unwrap();
+        assert_eq!(again["origin"], 7);
+        assert_eq!(again["watermark"], 19);
     }
     #[test]
     fn bounded_history_repeated_bytes_watermark_release_expiry_and_truncation() {

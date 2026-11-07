@@ -3,6 +3,7 @@ mod m7;
 #[cfg(test)]
 mod m7_tests;
 mod m8;
+mod m9;
 gpui::actions!(
     native_app,
     [RequestQuit, OpenSettings, ZoomIn, ZoomOut, ZoomReset]
@@ -500,11 +501,12 @@ impl Owner {
                 }
                 owner.launcher.update(cx, |view, w, cx| {
                     view.dispose_chat(w, cx);
-                    (view.drain_chat(w, cx), view.drain_terminal(w, cx))
+                    (view.drain_chat(w, cx), view.drain_terminal(w, cx), view.drain_extensions(cx))
                 }).map_err(|e| e.to_string())
             }).map_err(|e| e.to_string())??;
             final_drains.0.await?;
             final_drains.1.await?;
+            gpui_tokio::Tokio::spawn(cx,final_drains.2).await.map_err(|_|"Extension drain interrupted")??;
             Ok::<(), String>(())
             };
             use std::{future::Future, task::Poll};
@@ -667,8 +669,7 @@ impl Owner {
                 Ok(serde_json::Value::Null)
             }
             "panel" => {
-                let rows = serde_json::from_value(request["sessions"].clone())
-                    .map_err(|e| e.to_string())?;
+                let rows = windows::terminal_sessions::fixture_rows(request["sessions"].clone())?;
                 self.panel(rows, cx);
                 Ok(serde_json::Value::Null)
             }
@@ -728,7 +729,7 @@ impl Owner {
             });
         }
     }
-    fn panel(&mut self, rows: Vec<(String, String)>, cx: &mut Context<Self>) {
+    fn panel(&mut self, rows: Vec<windows::terminal_sessions::SessionRow>, cx: &mut Context<Self>) {
         if !self.lifecycle.visible {
             return;
         }
@@ -765,6 +766,7 @@ impl Owner {
                     ..Default::default()
                 },
                 move |w, cx| {
+                    w.set_window_title("Terminal Sessions");
                     let _ = native::no_shadow(w);
                     let close = relay.clone();
                     w.on_window_should_close(cx, move |_, _| {
@@ -961,6 +963,7 @@ impl Owner {
     fn event(&mut self, event: Event, cx: &mut Context<Self>) {
         self.tasks.retain(|task| !task.is_ready());
         match event {
+            Event::ExtensionEffect(id, mount, e) => self.m9_effect(id, mount, e, cx),
             Event::Navigate(intent) => {
                 use crate::surfaces::command_bar::navigation::NavigationInbox;
                 if !cx.has_global::<NavigationInbox>() {

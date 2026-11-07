@@ -231,20 +231,23 @@ impl Host {
                 }Ok(json!(true))
             },
             "host.notifications.remove"=>{let id=string(&params,"id")?;self.ctx.host.notify(crate::host::NotificationSpec::Remove { id: self.scoped(id)? }).await?;self.resources.lock().map_err(|e|e.to_string())?.notifications.remove(id);p.changed.notify_one();Ok(json!(true))},
-            "host.clipboard.read"=>match params["format"].as_str(){None|Some("text")=>self.ctx.request("clipboard:read",vec![]).await,Some("image")=>read_clipboard_image().await,_=>Err("Unsupported clipboard format".into())},
+            "host.clipboard.read"=>match params["format"].as_str(){None|Some("text")=>self.ctx.request("clipboard:read",vec![]).await,Some("image")=>{if let Some(r)=self.ctx.host.desktop_effect(crate::host::DesktopEffect::ReadImage){r}else{read_clipboard_image().await}},_=>Err("Unsupported clipboard format".into())},
             "host.clipboard.write"=>{
                 let text=string(&params,"text")?;
                 if let Some(html)=params.get("html"){if !html.is_string(){return Err("Clipboard HTML must be text".into());}self.ctx.request("core:platform:clipboard-write",vec![json!({"text":text,"html":html})]).await}
                 else{self.ctx.request("clipboard:write",vec![json!(text)]).await}
             },
             "host.clipboard.writeImage"=>self.ctx.request("core:platform:clipboard-write",vec![json!({"file":params["file"].as_str().or_else(||params["path"].as_str()).ok_or("Missing image file")?})]).await,
-            "host.clipboard.writeFiles"=>write_files(&params).await,
+            "host.clipboard.writeFiles"=>{
+                let paths=clipboard_file_paths(&params)?;
+                if let Some(r)=self.ctx.host.desktop_effect(crate::host::DesktopEffect::WriteFiles(paths.into_iter().map(PathBuf::from).collect())){r}else{write_files(&params).await}
+            },
             "host.clipboard.paste"=>self.ctx.request("core:platform:paste",vec![]).await,
             "host.clipboard.pasteText"=>self.ctx.request("core:platform:paste-text",vec![json!(string(&params,"text")?)]).await,
             "host.shell.open"=>self.ctx.request("shell:open",vec![json!(string(&params,"target")?)]).await,
             "host.shell.openWithApp"=>self.ctx.request("core:platform:open-with-app",vec![json!({"path":string(&params,"path")?,"appPath":string(&params,"appPath")?})]).await,
             "host.shell.reveal"=>self.ctx.request("core:platform:reveal-file",vec![json!(string(&params,"path")?)]).await,
-            "host.selection.read"=>match params["kind"].as_str(){None|Some("text")=>self.ctx.request("core:platform:selected-text",vec![]).await,Some("files")=>selected_files().await,_=>Err("Unsupported selection kind".into())},
+            "host.selection.read"=>match params["kind"].as_str(){None|Some("text")=>self.ctx.request("core:platform:selected-text",vec![]).await,Some("files")=>{if let Some(r)=self.ctx.host.desktop_effect(crate::host::DesktopEffect::SelectedFiles){r}else{selected_files().await}},_=>Err("Unsupported selection kind".into())},
             "host.window.visibility"=>self.ctx.request("core:platform:visibility",vec![json!(params["visible"].as_bool().ok_or("Missing visible boolean")?)]).await,
             "host.dialog.confirm"=>self.ctx.request("core:platform:confirm",vec![params]).await,
             "host.screen.capture"=>{
@@ -299,40 +302,7 @@ impl Host {
             }
         }
         let scoped = self.scoped(resource)?;
-        let items = params["items"].as_array().ok_or("Tray items required")?;
-        if items.len() > 128 {
-            return Err("Too many tray items".into());
-        }
-        let mut actions = HashMap::new();
-        for item in items {
-            let id = string(item, "id")?;
-            process_install::component(id)?;
-            let os_id = format!("{scoped}-{id}");
-            if actions.insert(os_id.clone(), id.to_string()).is_some() {
-                return Err("Duplicate tray action".into());
-            }
-            let _title = string(item, "title")?;
-        }
-        let mut icon = None;
-        if let Some(path) = params["icon"].as_str() {
-            let path = package.join(process_install::relative(path)?);
-            let image = image::open(path).map_err(|e| e.to_string())?.into_rgba8();
-            let (w, h) = image.dimensions();
-            if w > 512 || h > 512 {
-                return Err("Tray image too large".into());
-            }
-            icon = Some((image.into_raw(), w, h));
-        }
-        self.ctx.host.status_items().set(
-            &scoped,
-            crate::host::StatusItem {
-                title: params["title"].as_str().unwrap_or("").into(),
-                tooltip: params["tooltip"].as_str().unwrap_or("").into(),
-                items: items.clone(),
-                icon,
-            },
-            callback,
-        )?;
+        set_status_item(&self.ctx, &scoped, package, &params, callback)?;
         self.resources
             .lock()
             .map_err(|e| e.to_string())?
@@ -354,7 +324,10 @@ impl Host {
             let result = (
                 r.blur,
                 r.notifications.drain().collect::<Vec<_>>(),
-                r.trays.drain().map(|(_, scoped)| scoped).collect::<Vec<_>>(),
+                r.trays
+                    .drain()
+                    .map(|(_, scoped)| scoped)
+                    .collect::<Vec<_>>(),
             );
             r.leases.clear();
             result
@@ -938,4 +911,74 @@ mod status_port_tests {
         host.cleanup().await;
         assert!(desktop.status.lock().unwrap().is_empty());
     }
+}
+
+/// Shared native-V2 and SDK status execution boundary. The caller supplies its
+/// already authenticated scope; wire payloads never choose foreign identity.
+pub(crate) fn set_status_item(
+    ctx: &CoreContext,
+    scoped: &str,
+    package: &std::path::Path,
+    params: &Value,
+    callback: crate::host::StatusCallback,
+) -> Result<(), String> {
+    let items = params["items"].as_array().ok_or("Tray items required")?;
+    if items.len() > 128 {
+        return Err("Too many tray items".into());
+    }
+    fn validate(
+        items: &[Value],
+        depth: usize,
+        count: &mut usize,
+        ids: &mut HashSet<String>,
+    ) -> Result<(), String> {
+        if depth > 8 {
+            return Err("Tray nesting limit".into());
+        }
+        for item in items {
+            *count += 1;
+            if *count > 128 {
+                return Err("Too many tray items".into());
+            }
+            let id = string(item, "id")?;
+            process_install::component(id)?;
+            if !ids.insert(id.into()) {
+                return Err("Duplicate tray action".into());
+            }
+            let _ = string(item, "title")?;
+            match item["kind"].as_str() {
+                None | Some("section" | "separator") => {}
+                Some("submenu") => validate(
+                    item["items"].as_array().ok_or("Submenu items required")?,
+                    depth + 1,
+                    count,
+                    ids,
+                )?,
+                _ => return Err("Unknown tray item kind".into()),
+            }
+        }
+        Ok(())
+    }
+    validate(items, 0, &mut 0, &mut HashSet::new())?;
+    let mut icon = None;
+    if let Some(path) = params["icon"].as_str() {
+        let path = package.join(process_install::relative(path)?);
+        let image = image::open(path).map_err(|e| e.to_string())?.into_rgba8();
+        let (w, h) = image.dimensions();
+        if w > 512 || h > 512 {
+            return Err("Tray image too large".into());
+        }
+        icon = Some((image.into_raw(), w, h));
+    }
+    ctx.host.status_items().set(
+        scoped,
+        crate::host::StatusItem {
+            title: params["title"].as_str().unwrap_or("").into(),
+            tooltip: params["tooltip"].as_str().unwrap_or("").into(),
+            items: items.clone(),
+            icon,
+        },
+        callback,
+    )?;
+    Ok(())
 }

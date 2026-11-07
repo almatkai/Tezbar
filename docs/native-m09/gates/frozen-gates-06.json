@@ -1,0 +1,171 @@
+{
+  "freeze": "docs/native-m09/final-source-freeze-06.json",
+  "aggregate_sha256": "185165ded66563538834c524d72dbf0cf04bd966486997a6010004ec9b0dcfa4",
+  "gates": [
+    {
+      "gate": "normal-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-normal-native.log",
+      "exit_code": 0,
+      "seconds": 46.5,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test surfaces::command_bar::settings_integration_tests::failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error ... ok",
+        "test surfaces::command_bar::tests::failed_start_retry_keeps_editable_input_and_emits_only_retry_intent ... ok",
+        "test surfaces::command_bar::tests::review_hotkey_failed_result_does_not_open_runtime ... ok",
+        "test surfaces::extension_runtime::tests::failed_activation_and_duplicate_nonce_preserve_live_screen ... ok",
+        "test surfaces::settings::tests::failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_auth ... ok",
+        "test surfaces::settings::tests::review_failed_operational_delete_is_retryable_but_never_dischargeable ... ok",
+        "test surfaces::settings::tests::review_repeated_failed_operations_exhaust_admission ... ok",
+        "test surfaces::settings::tests::review_successful_toggle_reports_failure_after_unrelated_operation_failed ... ok",
+        "test surfaces::settings::tests::review_unrelated_failed_operation_blocks_copilot_signin ... ok",
+        "test surfaces::settings::tests::settings_window_acknowledges_before_failed_drain_and_keeps_same_content ... ok",
+        "test surfaces::utilities::tests::explicit_drain_retries_failed_note_once_and_reports_new_failure ... ok",
+        "test result: ok. 360 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.32s"
+      ]
+    },
+    {
+      "gate": "bench-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders,bench-control",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-bench-native.log",
+      "exit_code": 0,
+      "seconds": 41.46,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test surfaces::command_bar::settings_integration_tests::failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error ... ok",
+        "test surfaces::command_bar::tests::failed_start_retry_keeps_editable_input_and_emits_only_retry_intent ... ok",
+        "test surfaces::command_bar::tests::review_hotkey_failed_result_does_not_open_runtime ... ok",
+        "test surfaces::extension_runtime::tests::failed_activation_and_duplicate_nonce_preserve_live_screen ... ok",
+        "test surfaces::settings::tests::failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_auth ... ok",
+        "test surfaces::settings::tests::review_failed_operational_delete_is_retryable_but_never_dischargeable ... ok",
+        "test surfaces::settings::tests::review_repeated_failed_operations_exhaust_admission ... ok",
+        "test surfaces::settings::tests::review_successful_toggle_reports_failure_after_unrelated_operation_failed ... ok",
+        "test surfaces::settings::tests::review_unrelated_failed_operation_blocks_copilot_signin ... ok",
+        "test surfaces::settings::tests::settings_window_acknowledges_before_failed_drain_and_keeps_same_content ... ok",
+        "test surfaces::utilities::tests::explicit_drain_retries_failed_note_once_and_reports_new_failure ... ok",
+        "test result: ok. 362 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.33s"
+      ]
+    },
+    {
+      "gate": "ui",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-ui.log",
+      "exit_code": 0,
+      "seconds": 4.01,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.61s",
+        "test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s"
+      ]
+    },
+    {
+      "gate": "normal-check",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-normal-check.log",
+      "exit_code": 0,
+      "seconds": 3.27,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.21s"
+      ]
+    },
+    {
+      "gate": "debug-build",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-debug-build.log",
+      "exit_code": 0,
+      "seconds": 7.68,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.62s"
+      ]
+    },
+    {
+      "gate": "diff",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-06-diff.log",
+      "exit_code": 0,
+      "seconds": 0.03,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": []
+    }
+  ]
+}

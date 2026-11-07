@@ -363,7 +363,16 @@ impl PlatformCore {
                 crate::trim_os_process_memory();
                 Ok(json!({ "ok": true }))
             }
-            "core:platform:selected-text" => selected_text().await.map(Value::String),
+            "core:platform:selected-text" => {
+                if let Some(result) = self
+                    .ctx
+                    .host
+                    .desktop_effect(crate::host::DesktopEffect::SelectedText)
+                {
+                    return result;
+                }
+                selected_text().await.map(Value::String)
+            }
             "core:platform:ocr-images" => {
                 let images = value.as_array().ok_or("Invalid OCR images")?.clone();
                 super::ai::ocr_images_local(&self.ctx.paths, &images)
@@ -401,30 +410,65 @@ impl PlatformCore {
                     .await?;
                 Ok(json!({"ok":true,"message":"Pasted text"}))
             }
-            "core:platform:clipboard-write" => tokio::task::spawn_blocking(move || {
-                let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-                if let Some(file) = value["file"].as_str() {
-                    let image = image::open(file).map_err(|e| e.to_string())?.into_rgba8();
-                    clipboard
-                        .set_image(arboard::ImageData {
-                            width: image.width() as usize,
-                            height: image.height() as usize,
-                            bytes: std::borrow::Cow::Owned(image.into_raw()),
-                        })
-                        .map_err(|e| e.to_string())?;
-                } else if let Some(html) = value["html"].as_str() {
-                    clipboard
-                        .set_html(html, value["text"].as_str())
-                        .map_err(|e| e.to_string())?;
-                } else {
-                    clipboard
-                        .set_text(value["text"].as_str().unwrap_or(""))
-                        .map_err(|e| e.to_string())?;
+            "core:platform:clipboard-write" => {
+                if !value.is_object()
+                    || ["text", "html", "file"]
+                        .iter()
+                        .any(|k| value.get(*k).is_some_and(|v| !v.is_string()))
+                {
+                    return Err("Invalid clipboard data".into());
                 }
-                Ok(json!({"ok":true}))
-            })
-            .await
-            .map_err(|e| e.to_string())?,
+                let host = self.ctx.host.clone();
+                tokio::task::spawn_blocking(move || {
+                    if let Some(file) = value["file"].as_str() {
+                        let image = image::open(file).map_err(|e| e.to_string())?.into_rgba8();
+                        if let Some(result) =
+                            host.desktop_effect(crate::host::DesktopEffect::WriteImage {
+                                bytes: image.as_raw().clone(),
+                                width: image.width(),
+                                height: image.height(),
+                            })
+                        {
+                            return result;
+                        }
+                        arboard::Clipboard::new()
+                            .map_err(|e| e.to_string())?
+                            .set_image(arboard::ImageData {
+                                width: image.width() as usize,
+                                height: image.height() as usize,
+                                bytes: std::borrow::Cow::Owned(image.into_raw()),
+                            })
+                            .map_err(|e| e.to_string())?;
+                    } else if let Some(html) = value["html"].as_str() {
+                        if let Some(result) =
+                            host.desktop_effect(crate::host::DesktopEffect::WriteHtml {
+                                html: html.into(),
+                                text: value["text"].as_str().map(str::to_owned),
+                            })
+                        {
+                            return result;
+                        }
+                        arboard::Clipboard::new()
+                            .map_err(|e| e.to_string())?
+                            .set_html(html, value["text"].as_str())
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        let text = value["text"].as_str().ok_or("Clipboard text required")?;
+                        if let Some(result) =
+                            host.desktop_effect(crate::host::DesktopEffect::WriteText(text.into()))
+                        {
+                            return result;
+                        }
+                        arboard::Clipboard::new()
+                            .map_err(|e| e.to_string())?
+                            .set_text(value["text"].as_str().unwrap_or(""))
+                            .map_err(|e| e.to_string())?;
+                    }
+                    Ok(json!({"ok":true}))
+                })
+                .await
+                .map_err(|e| e.to_string())?
+            }
             "open-external-url" => {
                 let url = reqwest::Url::parse(text).map_err(|e| e.to_string())?;
                 let host = url.host_str().unwrap_or("");
@@ -433,13 +477,40 @@ impl PlatformCore {
                 {
                     return Err("Only GitHub HTTPS URLs are supported here".into());
                 }
+                if text.trim().is_empty() || text.contains('\0') {
+                    return Err("An open target is required".into());
+                }
+                if let Some(result) = self
+                    .ctx
+                    .host
+                    .desktop_effect(crate::host::DesktopEffect::Open(text.into()))
+                {
+                    return result;
+                }
                 open_target(text).await
             }
             "shell:open" | "core:platform:open-file" | "core:platform:open-url" => {
+                if text.trim().is_empty() || text.contains('\0') {
+                    return Err("An open target is required".into());
+                }
+                if let Some(result) = self
+                    .ctx
+                    .host
+                    .desktop_effect(crate::host::DesktopEffect::Open(text.into()))
+                {
+                    return result;
+                }
                 open_target(text).await
             }
             "core:platform:open-app" => {
                 let target = application_target(&value)?;
+                if let Some(r) = self
+                    .ctx
+                    .host
+                    .desktop_effect(crate::host::DesktopEffect::OpenApp(target.into()))
+                {
+                    return r;
+                }
                 #[cfg(target_os = "macos")]
                 output("/usr/bin/open", &["-a", target], 10).await?;
                 #[cfg(target_os = "windows")]
@@ -461,6 +532,23 @@ impl PlatformCore {
                 let app = value["appPath"]
                     .as_str()
                     .ok_or("Application path required")?;
+                if path.trim().is_empty()
+                    || app.trim().is_empty()
+                    || path.contains('\0')
+                    || app.contains('\0')
+                {
+                    return Err("Invalid application/file target".into());
+                }
+                if let Some(r) =
+                    self.ctx
+                        .host
+                        .desktop_effect(crate::host::DesktopEffect::OpenWith {
+                            path: path.into(),
+                            app: app.into(),
+                        })
+                {
+                    return r;
+                }
                 #[cfg(target_os = "macos")]
                 output("/usr/bin/open", &["-a", app, path], 10).await?;
                 #[cfg(target_os = "windows")]
@@ -484,6 +572,17 @@ impl PlatformCore {
                 Ok(json!({"ok":true,"message":"Opened file"}))
             }
             "core:platform:reveal-file" => {
+                if text.is_empty() || text.contains('\0') {
+                    return Err("Invalid reveal path".into());
+                }
+                if let Some(result) = self
+                    .ctx
+                    .host
+                    .desktop_effect(crate::host::DesktopEffect::Reveal(text.into()))
+                {
+                    return result;
+                }
+
                 #[cfg(target_os = "macos")]
                 output("/usr/bin/open", &["-R", text], 10).await?;
                 #[cfg(target_os = "windows")]

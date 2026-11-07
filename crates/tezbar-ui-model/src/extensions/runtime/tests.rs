@@ -20,6 +20,7 @@ fn root(ids: &[&str]) -> Node {
 }
 fn reply(root: Node) -> TreeReply {
     TreeReply {
+        view_revision: 0,
         key: SessionKey {
             extension_id: "ext".into(),
             command_name: "cmd".into(),
@@ -28,6 +29,7 @@ fn reply(root: Node) -> TreeReply {
         generation: Some("generation".into()),
         root,
         actions: vec![Action {
+            section: None,
             id: "open".into(),
             title: "Open".into(),
             style: None,
@@ -258,6 +260,7 @@ fn submit_guard_releases_on_view_no_view_failure_and_ignores_replaced_session() 
     );
     let mut r = reply(form);
     r.actions = vec![Action {
+        section: None,
         id: "submit".into(),
         title: "Submit".into(),
         kind: Some("submit-form".into()),

@@ -1,0 +1,103 @@
+{
+  "freeze": "docs/native-m09/final-source-freeze-03.json",
+  "aggregate_sha256": "a6799811293c4d14975985700a95b88bc74fd501aa3c289928c0413375ddaf0e",
+  "gates": [
+    {
+      "gate": "model-extension-regressions",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--lib",
+        "--features",
+        "launcher-models,agent-models",
+        "extensions",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-model-extension-regressions.log",
+      "exit_code": 0,
+      "seconds": 0.28,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s",
+        "test extensions::images::tests::failed_empty_unavailable_app_lookups_keep_current_catalog_fallback ... ok",
+        "test extensions::images::tests::failed_or_oversize_image_has_placeholder_and_retries_with_new_token ... ok",
+        "test extensions::images::tests::missing_failed_catalog_icon_recovers_on_different_selection ... ok",
+        "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 327 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "gate": "normal-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-normal-native.log",
+      "exit_code": 0,
+      "seconds": 47.3,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test surfaces::command_bar::settings_integration_tests::failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error ... ok",
+        "test surfaces::command_bar::tests::failed_start_retry_keeps_editable_input_and_emits_only_retry_intent ... ok",
+        "test surfaces::command_bar::tests::review_hotkey_failed_result_does_not_open_runtime ... ok",
+        "test surfaces::extension_runtime::tests::failed_activation_and_duplicate_nonce_preserve_live_screen ... ok",
+        "test surfaces::settings::tests::failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_auth ... ok",
+        "test surfaces::settings::tests::review_failed_operational_delete_is_retryable_but_never_dischargeable ... ok",
+        "test surfaces::settings::tests::review_repeated_failed_operations_exhaust_admission ... ok",
+        "test surfaces::settings::tests::review_successful_toggle_reports_failure_after_unrelated_operation_failed ... ok",
+        "test surfaces::settings::tests::review_unrelated_failed_operation_blocks_copilot_signin ... ok",
+        "test surfaces::settings::tests::settings_window_acknowledges_before_failed_drain_and_keeps_same_content ... ok",
+        "test surfaces::utilities::tests::explicit_drain_retries_failed_note_once_and_reports_new_failure ... ok",
+        "test result: ok. 359 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.86s"
+      ]
+    },
+    {
+      "gate": "bench-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders,bench-control",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-bench-native.log",
+      "exit_code": 101,
+      "seconds": 5.01,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "error[E0277]: the trait bound `SessionRow: serde::Deserialize<'de>` is not satisfied"
+      ]
+    }
+  ]
+}

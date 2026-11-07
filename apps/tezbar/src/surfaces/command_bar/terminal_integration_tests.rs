@@ -177,3 +177,63 @@ fn quit_refusal_retains_exact_entity_and_cleanup_can_retry(cx: &mut TestAppConte
     settle(&rt, cx);
     assert!(rt.block_on(drain).is_ok());
 }
+
+#[gpui::test]
+fn review_m10_f4_pins_merge_from_live_ui_owner_without_loss_or_resurrection(
+    cx: &mut TestAppContext,
+) {
+    let rt = crate::surfaces::settings::tests::runtime(cx);
+    let f = Arc::new(Fixture::default());
+    let (relay, _rx) = Relay::new();
+    cx.update(|cx| cx.set_global(CoreEvents::new(relay.clone())));
+    let (launcher, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(f.clone(), relay, None, w, cx));
+    launcher.update(cx, |v, cx| {
+        v.visible = true;
+        v.ready = true;
+        v.receive_navigation(intent(1), cx);
+    });
+    settle(&rt, cx);
+    launcher.update(cx, |v, cx| {
+        v.state.terminal_pinned_sessions = vec!["b".into(), "saved".into()];
+        v.persist(cx);
+        v.apply_terminal_pin_change("a".into(), true, cx);
+        assert_eq!(v.state.terminal_pinned_sessions, vec!["a", "b", "saved"]);
+        // A second surface removes b; a later terminal toggle must preserve it.
+        v.state.terminal_pinned_sessions.retain(|p| p != "b");
+        v.persist(cx);
+        v.apply_terminal_pin_change("a".into(), true, cx);
+        assert_eq!(v.state.terminal_pinned_sessions, vec!["saved"]);
+        v.apply_terminal_pin_change("new".into(), true, cx);
+        v.apply_terminal_pin_change("a".into(), false, cx);
+        assert_eq!(v.state.terminal_pinned_sessions, vec!["new", "saved"]);
+    });
+}
+
+#[gpui::test]
+fn review_m10_panel_projects_active_session_and_cwd(cx: &mut TestAppContext) {
+    let rt = crate::surfaces::settings::tests::runtime(cx);
+    let f = Arc::new(Fixture::default());
+    let (relay, _rx) = Relay::new();
+    cx.update(|cx| cx.set_global(CoreEvents::new(relay.clone())));
+    let (launcher, cx) = cx.add_window_view(|w, cx| Launcher::with_adapter(f, relay, None, w, cx));
+    launcher.update(cx, |v, cx| {
+        v.visible = true;
+        v.ready = true;
+        v.receive_navigation(intent(1), cx);
+    });
+    settle(&rt, cx);
+    let rows = launcher.read_with(cx, |v, cx| v.terminal_panel_rows(cx));
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].active);
+    assert_eq!(rows[0].cwd, "/fixture");
+    assert!(rows[0].running);
+    assert!(!rows[1].active);
+    cx.update(|w, cx| {
+        launcher.update(cx, |v, cx| v.terminal_panel_action(Some("b".into()), w, cx))
+    });
+    settle(&rt, cx);
+    let rows = launcher.read_with(cx, |v, cx| v.terminal_panel_rows(cx));
+    assert!(!rows[0].active);
+    assert!(rows[1].active);
+}

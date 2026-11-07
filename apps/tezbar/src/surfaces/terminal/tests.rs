@@ -83,16 +83,47 @@ fn replay_preserves_unrelated() {
     );
 }
 fn replay(snapshot: &str, data: &str, expected: &str) {
+    let expected = if expected.ends_with(data) {
+        expected.to_owned()
+    } else {
+        format!("{expected}\n")
+    };
+    assert!(expected.starts_with(snapshot));
+    assert!(expected.ends_with(data));
     let mut s = state();
     s.listeners_ready(true, true);
     s.activate(boot(), 1);
-    let w = s.next_work().unwrap();
-    s.complete(w, Ok(json!([summary("a", true)])));
-    let w = s.next_work().unwrap();
-    s.stream_data("a", "gen-a", snapshot.len() as u64, data.as_bytes(), true);
-    // Full durable stream carries the ordered bytes; no text-overlap heuristic.
-    complete_attach(&mut s, w, "a", expected);
-    assert!(s.grid.frame().text.starts_with(expected));
+    let list = s.next_work().unwrap();
+    s.complete(list, Ok(json!([summary("a", true)])));
+    let attach = s.next_work().unwrap();
+    s.complete(attach, Ok(attached("a", snapshot)));
+    // This event is admitted after attach, while the durable snapshot is replaying.
+    let start = (expected.len() - data.len()) as u64;
+    s.stream_data("a", "gen-a", start, data.as_bytes(), true);
+    let replay = s.next_work().unwrap();
+    s.complete(
+        replay,
+        Ok(replay_value(0, snapshot.as_bytes(), expected.len() as u64)),
+    );
+    if snapshot.len() < expected.len() {
+        let replay = s.next_work().unwrap();
+        s.complete(
+            replay,
+            Ok(replay_value(
+                snapshot.len() as u64,
+                &expected.as_bytes()[snapshot.len()..],
+                expected.len() as u64,
+            )),
+        );
+    }
+    assert!(s.grid.frame().text.starts_with(&expected));
+    let before = s.grid.frame().text;
+    s.stream_data("a", "gen-a", start, data.as_bytes(), true);
+    assert_eq!(
+        s.grid.frame().text,
+        before,
+        "same positioned bytes must not replay twice"
+    );
 }
 #[test]
 fn explicit_selection_no_implicit_first() {
@@ -141,7 +172,8 @@ fn command_control_numbers_select_through_controller() {
             "Numpad9",
             "9",
             input::Modifiers {
-                control: true,
+                command: cfg!(target_os = "macos"),
+                control: cfg!(not(target_os = "macos")),
                 ..Default::default()
             },
             8,
@@ -325,7 +357,7 @@ fn stale_attach_cwd_and_config_cannot_transfer_selection() {
 fn detach_is_not_delete_and_pin_persistence_is_typed() {
     let mut s = live();
     s.pin();
-    assert!(matches!(s.effects.pop_front(),Some((_,TerminalEffect::Pins(p))) if p==vec!["a"]));
+    assert!(matches!(s.effects.pop_front(),Some((_,TerminalEffect::TogglePin(id))) if id=="a"));
     s.select("b");
     assert!(matches!(
         s.next_work().unwrap().request,
@@ -368,10 +400,15 @@ fn key_sequences_app_interception_and_bracketed_paste() {
             input::KeyResult::Bytes(expected.into())
         );
     }
-    for command in [true, false] {
+    for command in if cfg!(target_os = "macos") {
+        vec![true]
+    } else {
+        vec![true, false]
+    } {
         let m = input::Modifiers {
             command,
             control: !command,
+            shift: !command,
             ..Default::default()
         };
         for (k, want) in [
@@ -936,4 +973,299 @@ fn repair_quit_preparation_preserves_terminal_and_resumes_binary_input() {
     assert!(
         matches!(s.next_work().unwrap().request,TerminalRequest::Input{bytes,..} if bytes==[0x1b,0x5b,0x4d,0xff])
     );
+}
+
+#[test]
+fn review_m10_f1_control_letters_reach_shell_and_app_modifier_is_explicit() {
+    let mut s = live();
+    for (key, byte) in [("k", 11u8), ("x", 24), ("p", 16), ("d", 4)] {
+        let result = input::key(
+            key,
+            "",
+            input::Modifiers {
+                control: true,
+                ..Default::default()
+            },
+            TermMode::empty(),
+            false,
+        );
+        assert_eq!(result, input::KeyResult::Bytes((byte as char).to_string()));
+        s.handle_key(result);
+    }
+    assert!(s.effects.is_empty());
+    assert!(s.configure.is_none());
+    assert_eq!(s.active.as_deref(), Some("a"));
+    assert!(
+        s.work
+            .iter()
+            .all(|w| matches!(w.request, TerminalRequest::Input { .. }))
+    );
+    for (key, action) in [
+        ("k", input::KeyResult::Configure),
+        ("x", input::KeyResult::Stop),
+        ("p", input::KeyResult::Pin),
+        ("d", input::KeyResult::Delete),
+    ] {
+        let modifier = input::Modifiers {
+            command: cfg!(target_os = "macos"),
+            control: cfg!(not(target_os = "macos")),
+            shift: cfg!(not(target_os = "macos")),
+            ..Default::default()
+        };
+        assert_eq!(
+            input::key(key, "", modifier, TermMode::empty(), false),
+            action
+        );
+    }
+}
+#[cfg(target_os = "macos")]
+#[gpui::test]
+fn review_m10_f2_real_option_base_key_and_native_commit(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| TerminalView::new(fixture.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.listeners_ready(true, true, cx);
+            v.activate(payload(), 1, w, cx);
+        })
+    });
+    settle(&rt, cx);
+    fixture.calls.lock().unwrap().clear();
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            // Exact GPUI event shape: ignoring-modifier key l, produced character @.
+            v.key(
+                &KeyDownEvent {
+                    keystroke: Keystroke {
+                        key: "l".into(),
+                        key_char: Some("@".into()),
+                        modifiers: gpui::Modifiers {
+                            alt: true,
+                            ..Default::default()
+                        },
+                    },
+                    is_held: false,
+                    prefer_character_input: false,
+                },
+                w,
+                cx,
+            );
+            v.replace_and_mark_text_in_range(None, "´", Some(1..1), w, cx);
+            assert!(!v.preedit.text.is_empty());
+            v.replace_text_in_range(None, "@é", w, cx);
+        })
+    });
+    settle(&rt, cx);
+    let input: Vec<Vec<u8>> = fixture
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(c, _)| *c == "core:terminal:input")
+        .map(|(_, a)| STANDARD.decode(a[0]["bytes"].as_str().unwrap()).unwrap())
+        .collect();
+    assert_eq!(input, vec!["@é".as_bytes().to_vec()]);
+}
+#[test]
+fn review_m10_f3_wheel_pixels_modes_and_horizontal_swipes() {
+    let mut wheel = input::WheelAccumulator::default();
+    for d in [3., 4., 6.] {
+        assert_eq!(wheel.lines(d, 14.), 0);
+    }
+    assert_eq!(wheel.lines(1., 14.), 1);
+    assert_eq!(wheel.lines(-42., 14.), -3);
+    let m = Default::default();
+    let alternate = TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL;
+    assert_eq!(
+        input::scroll(2, 0, 0, m, alternate),
+        input::ScrollResult::Bytes(b"\x1b[A\x1b[A".to_vec())
+    );
+    assert_eq!(
+        input::scroll(-2, 0, 0, m, alternate | TermMode::APP_CURSOR),
+        input::ScrollResult::Bytes(b"\x1bOB\x1bOB".to_vec())
+    );
+    let mouse = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+    assert_eq!(input::scroll(0, 0, 0, m, mouse), input::ScrollResult::None);
+    assert_eq!(
+        input::scroll(3, 0, 0, m, mouse),
+        input::ScrollResult::Bytes(b"\x1b[<64;1;1M".repeat(3))
+    );
+    assert_eq!(
+        input::scroll(-2, 0, 0, m, TermMode::empty()),
+        input::ScrollResult::Rows(-2)
+    );
+}
+#[test]
+fn review_m10_f5_hide_during_attach_detaches_exactly_once() {
+    for create_first in [false, true] {
+        let mut s = state();
+        s.listeners_ready(true, true);
+        s.activate(boot(), 1);
+        let list = s.next_work().unwrap();
+        s.complete(
+            list,
+            Ok(if create_first {
+                json!([])
+            } else {
+                json!([summary("a", true)])
+            }),
+        );
+        let mut attach = s.next_work().unwrap();
+        s.set_visible(false);
+        if create_first {
+            s.complete(
+                attach,
+                Ok(json!({"sessionId":"a","summary":summary("a",true),"generation":"gen-a"})),
+            );
+            attach = s.next_work().unwrap();
+        }
+        s.complete(attach, Ok(attached("a", "")));
+        assert_eq!(s.work.iter().filter(|w|matches!(&w.request,TerminalRequest::DetachGeneration{id,generation} if id=="a" && generation=="gen-a")).count(),1);
+        s.dispose();
+        assert_eq!(
+            s.work
+                .iter()
+                .filter(|w| matches!(w.request, TerminalRequest::DetachGeneration { .. }))
+                .count(),
+            1
+        );
+    }
+}
+#[test]
+fn review_m10_f6_own_create_replies_from_process_origin_only() {
+    let old = b"old\x1b[6n";
+    let current = b"\x1b[6n";
+    let mut s = state();
+    s.listeners_ready(true, true);
+    s.activate(boot(), 1);
+    let list = s.next_work().unwrap();
+    s.complete(list, Ok(json!([])));
+    let create = s.next_work().unwrap();
+    s.complete(
+        create,
+        Ok(json!({"sessionId":"fresh","summary":summary("fresh",true),"generation":"gen-a"})),
+    );
+    let attach = s.next_work().unwrap();
+    let data = [old.as_slice(), current.as_slice()].concat();
+    let mut reply = attached("fresh", std::str::from_utf8(&data).unwrap());
+    reply["origin"] = json!(old.len());
+    s.complete(attach, Ok(reply));
+    let replay = s.next_work().unwrap();
+    s.complete(replay, Ok(replay_value(0, &data, data.len() as u64)));
+    assert_eq!(
+        s.work
+            .iter()
+            .filter(|w| matches!(w.request, TerminalRequest::Input { .. }))
+            .count(),
+        1
+    );
+    let mut restored = state();
+    restored.listeners_ready(true, true);
+    restored.activate(boot(), 1);
+    let list = restored.next_work().unwrap();
+    restored.complete(list, Ok(json!([summary("fresh", true)])));
+    let attach = restored.next_work().unwrap();
+    let mut reply = attached("fresh", std::str::from_utf8(&data).unwrap());
+    reply["origin"] = json!(old.len());
+    restored.complete(attach, Ok(reply));
+    let replay = restored.next_work().unwrap();
+    restored.complete(replay, Ok(replay_value(0, &data, data.len() as u64)));
+    assert!(
+        !restored
+            .work
+            .iter()
+            .any(|w| matches!(w.request, TerminalRequest::Input { .. }))
+    );
+}
+#[test]
+fn review_m10_f7_motion_reports_only_on_cell_or_button_change() {
+    let mut motion = input::MotionReporter::default();
+    let m = Default::default();
+    let mode = TermMode::MOUSE_MOTION | TermMode::SGR_MOUSE;
+    assert!(motion.report(1, 2, 3, None, m, mode).is_some());
+    for _ in 0..1000 {
+        assert!(motion.report(1, 2, 3, None, m, mode).is_none());
+    }
+    assert!(motion.report(1, 3, 3, None, m, mode).is_some());
+    assert!(motion.report(1, 3, 3, Some(0), m, mode).is_some());
+    assert!(motion.report(2, 3, 3, Some(0), m, mode).is_some());
+}
+#[test]
+fn review_m10_f8_replay_preserves_ordered_input_and_retires_old_generation() {
+    let mut s = state();
+    s.listeners_ready(true, true);
+    s.activate(boot(), 1);
+    let list = s.next_work().unwrap();
+    s.complete(list, Ok(json!([summary("a", true), summary("b", true)])));
+    let attach = s.next_work().unwrap();
+    s.write("echo ".into(), true);
+    s.complete(attach, Ok(attached("a", "abcdef")));
+    let replay = s.next_work().unwrap();
+    s.write("é".into(), true);
+    s.paste(s.generation, "z");
+    s.complete(replay, Ok(replay_value(0, b"abc", 6)));
+    let replay = s.next_work().unwrap();
+    s.complete(replay, Ok(replay_value(3, b"def", 6)));
+    let mut input = vec![];
+    while let Some(w) = s.next_work() {
+        if let TerminalRequest::Input { bytes, .. } = w.request {
+            input.push(bytes);
+        }
+    }
+    assert_eq!(
+        input,
+        vec![b"echo ".to_vec(), "é".as_bytes().to_vec(), b"z".to_vec()]
+    );
+    s.stream_data("a", "gen-a", 10, b"gap", true);
+    s.write("old".into(), true);
+    s.select("b");
+    let next = loop {
+        let w = s.next_work().unwrap();
+        if matches!(w.purpose, Purpose::Attach(_)) {
+            break w;
+        }
+        s.complete(w, Ok(json!(true)));
+    };
+    complete_attach(&mut s, next, "b", "");
+    assert!(
+        !s.work
+            .iter()
+            .any(|w| matches!(&w.request,TerminalRequest::Input{bytes,..} if bytes==b"old"))
+    );
+}
+#[test]
+fn review_m10_f8_loading_input_is_bounded_and_overload_visible() {
+    let mut s = state();
+    s.listeners_ready(true, true);
+    s.activate(boot(), 1);
+    let list = s.next_work().unwrap();
+    s.complete(list, Ok(json!([summary("a", true)])));
+    s.write_bytes(vec![b'x'; 1024 * 1024]);
+    s.write_bytes(b"overload".to_vec());
+    assert!(s.error.as_deref().unwrap().contains("buffer is full"));
+}
+
+#[test]
+fn review_m10_f8_replay_failure_refuses_queued_input_visibly() {
+    let mut s = state();
+    s.listeners_ready(true, true);
+    s.activate(boot(), 1);
+    let list = s.next_work().unwrap();
+    s.complete(list, Ok(json!([summary("a", true)])));
+    let attach = s.next_work().unwrap();
+    s.complete(attach, Ok(attached("a", "abcdef")));
+    let replay = s.next_work().unwrap();
+    s.write("never send".into(), true);
+    s.complete(replay, Err("history unavailable".into()));
+    assert!(
+        s.error
+            .as_deref()
+            .unwrap()
+            .contains("Pending input was not sent")
+    );
+    while let Some(work) = s.next_work() {
+        assert!(!matches!(work.request, TerminalRequest::Input { .. }));
+    }
 }

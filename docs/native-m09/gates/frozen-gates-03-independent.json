@@ -1,0 +1,306 @@
+{
+  "freeze": "docs/native-m09/final-source-freeze-03.json",
+  "aggregate_sha256": "a6799811293c4d14975985700a95b88bc74fd501aa3c289928c0413375ddaf0e",
+  "gates": [
+    {
+      "gate": "ui",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-ui.log",
+      "exit_code": 0,
+      "seconds": 21.19,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.48s",
+        "test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s"
+      ]
+    },
+    {
+      "gate": "model-all",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--lib",
+        "--features",
+        "launcher-models,agent-models",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-model-all.log",
+      "exit_code": 0,
+      "seconds": 0.8,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "test extensions::images::tests::failed_or_oversize_image_has_placeholder_and_retries_with_new_token ... ok",
+        "test extensions::images::tests::missing_failed_catalog_icon_recovers_on_different_selection ... ok",
+        "test knowledge_settings::tests::failed_reconcile_keeps_lock_until_explicit_refresh ... ok",
+        "test knowledge_settings::tests::failed_refresh_preserves_snapshot_controls_and_downloads ... ok",
+        "test knowledge_settings::tests::failed_tab_read_cannot_replace_cancel_mutation_owner ... ok",
+        "test knowledge_settings::tests::missing_failed_and_unattributed_errors_never_claim_healthy_semantics ... ok",
+        "test notes::selection_tests::failed_and_selection_only_changes_never_create_content_history ... ok",
+        "test settings::tests::failed_creation_preserves_a_later_api_key_edit ... ok",
+        "test settings::tests::failed_definition_retries_before_its_dependent_field_write ... ok",
+        "test settings::tests::t_r2_failed_removal_preserves_peer_credentials_on_retry ... ok",
+        "test settings::tests::t_r4_retries_are_deduplicated_and_keep_newer_failed_removal ... ok",
+        "test result: ok. 380 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s"
+      ]
+    },
+    {
+      "gate": "core-assets",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "assets::tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-core-assets.log",
+      "exit_code": 0,
+      "seconds": 26.89,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 25.31s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 599 filtered out; finished in 0.03s"
+      ]
+    },
+    {
+      "gate": "core-registry-scopes",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extensions::registry::asset_scope",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-core-registry-scopes.log",
+      "exit_code": 0,
+      "seconds": 0.29,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "gate": "core-desktop",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "desktop_effect_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-core-desktop.log",
+      "exit_code": 0,
+      "seconds": 3.33,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 3.03s"
+      ]
+    },
+    {
+      "gate": "core-worker-unit",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extension_worker::tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-core-worker-unit.log",
+      "exit_code": 0,
+      "seconds": 0.3,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.04s"
+      ]
+    },
+    {
+      "gate": "core-status-shapes",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extensions::process_host::shape_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-core-status-shapes.log",
+      "exit_code": 0,
+      "seconds": 0.27,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "gate": "rust-bun-smoke",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination",
+        "--",
+        "--ignored",
+        "--exact",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-rust-bun-smoke.log",
+      "exit_code": 0,
+      "seconds": 1.21,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.95s"
+      ]
+    },
+    {
+      "gate": "channel-audit",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--lib",
+        "m9_channel_audit",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-channel-audit.log",
+      "exit_code": 0,
+      "seconds": 6.61,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.47s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 358 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "gate": "typecheck",
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-typecheck.log",
+      "exit_code": 0,
+      "seconds": 5.04,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": []
+    },
+    {
+      "gate": "typescript",
+      "command": [
+        "pnpm",
+        "test",
+        "--maxWorkers=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-03-typescript.log",
+      "exit_code": 1,
+      "seconds": 14.38,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "[usePromise] Finished hook=1 fn=\"(value) => async ({ page }) => { await new Promise((resolve) => setTimeout(resolve, 15)) r\" args=[\"\"] after 17ms",
+        "[usePromise] Finished hook=1 fn=\"(value) => async ({ page }) => { await new Promise((resolve) => setTimeout(resolve, 15)) r\" args=[\"halland\"] after 19ms",
+        "[ExtensionRuntime] Component render failed: Error: fixture exploded",
+        "[usePromise] Finished hook=0 fn=\"() => (0,__vite_ssr_import_21__.askExtensionAI)(String(prompt ?? \"\"))\" args=[\"hook prompt\"] after 0ms",
+        " \u276f src/main/extension-runner.test.ts (31 tests | 1 failed | 2 skipped) 1209ms",
+        "[usePromise] Finished hook=0 fn=\"async (storageKey) => { const raw = await storage.getItem(storageKey); return raw === void\" args=[\"shared\"] after 1ms",
+        " \u276f src/main/extension-runner-effects.test.ts (1 test | 1 failed) 19ms",
+        "   \u2713 agent conversation ownership > successful retry replaces the failed persisted assistant id  357ms",
+        "   \u2713 failed delete recovery during preparation > invalidates the old preparation and allows a fresh send after failed deletion  472ms",
+        " Test Files  2 failed | 79 passed | 1 skipped (82)",
+        "      Tests  2 failed | 743 passed | 7 skipped (752)",
+        "[ELIFECYCLE] Test failed. See above for more details."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+START ui
+END ui: 0
+START model-all
+END model-all: 0
+START core-assets
+END core-assets: 0
+START core-registry-scopes
+END core-registry-scopes: 0
+START core-desktop
+END core-desktop: 0
+START core-worker-unit
+END core-worker-unit: 0
+START core-status-shapes
+END core-status-shapes: 0
+START rust-bun-smoke
+END rust-bun-smoke: 0
+START channel-audit
+END channel-audit: 0
+START typecheck
+END typecheck: 0
+START typescript
+END typescript: 1

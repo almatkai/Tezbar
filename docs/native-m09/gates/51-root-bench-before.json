@@ -1,0 +1,12 @@
+[
+  {
+    "path": "apps/tezbar/src/windows/terminal_sessions.rs",
+    "before": "7b9f2a5c840335f47d7ddc0e067302a776ca1037d28695d81ada0d2a9fabfaf2",
+    "root_before": "7b9f2a5c840335f47d7ddc0e067302a776ca1037d28695d81ada0d2a9fabfaf2"
+  },
+  {
+    "path": "apps/tezbar/src/app.rs",
+    "before": "97487942c1a835beaf540081d10dd85ff6ffd185e0cdfbb57f3352ccd86edecb",
+    "root_before": "97487942c1a835beaf540081d10dd85ff6ffd185e0cdfbb57f3352ccd86edecb"
+  }
+]

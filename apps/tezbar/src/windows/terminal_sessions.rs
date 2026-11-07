@@ -14,15 +14,53 @@ pub fn bounds(parent: Bounds<Pixels>) -> Bounds<Pixels> {
         ),
     )
 }
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct SessionRow {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub cwd: String,
+    #[serde(default)]
+    pub running: bool,
+    #[serde(default)]
+    pub active: bool,
+}
+/// The authenticated fixture channel predates typed production rows. Preserve
+/// its [id, title] wire while also accepting the richer native row objects.
+#[cfg(feature = "bench-control")]
+pub fn fixture_rows(value: serde_json::Value) -> Result<Vec<SessionRow>, String> {
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum Row {
+        Native(SessionRow),
+        Legacy((String, String)),
+    }
+    serde_json::from_value::<Vec<Row>>(value)
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| match row {
+                    Row::Native(row) => row,
+                    Row::Legacy((id, title)) => SessionRow {
+                        id,
+                        title,
+                        cwd: String::new(),
+                        running: false,
+                        active: false,
+                    },
+                })
+                .collect()
+        })
+        .map_err(|error| error.to_string())
+}
 pub struct SessionsPanel {
-    pub sessions: Vec<(String, String)>,
+    pub sessions: Vec<SessionRow>,
     relay: crate::events::Relay,
     focus: FocusHandle,
     _focus: Subscription,
 }
 impl SessionsPanel {
     pub fn new(
-        sessions: Vec<(String, String)>,
+        sessions: Vec<SessionRow>,
         relay: crate::events::Relay,
         w: &mut Window,
         cx: &mut Context<Self>,
@@ -52,6 +90,17 @@ impl Render for SessionsPanel {
                     let _ = this.relay.send(crate::events::Event::PanelHide);
                     cx.stop_propagation();
                 }
+                let m = e.keystroke.modifiers;
+                if e.keystroke.key == "n"
+                    && (m.platform || (cfg!(not(target_os = "macos")) && m.control))
+                    && !m.alt
+                    && !m.shift
+                {
+                    let _ = this
+                        .relay
+                        .send(crate::events::Event::TerminalPanelAction(None));
+                    cx.stop_propagation();
+                }
                 if let Some(i) = tezbar_ui_model::terminal::shortcut_index(
                     "",
                     &e.keystroke.key,
@@ -60,10 +109,12 @@ impl Render for SessionsPanel {
                     e.keystroke.modifiers.alt,
                     e.keystroke.modifiers.shift,
                 ) {
-                    if let Some((id, _)) = this.sessions.get(i) {
+                    if let Some(row) = this.sessions.get(i) {
                         let _ = this
                             .relay
-                            .send(crate::events::Event::TerminalPanelAction(Some(id.clone())));
+                            .send(crate::events::Event::TerminalPanelAction(Some(
+                                row.id.clone(),
+                            )));
                         cx.stop_propagation();
                     }
                 }
@@ -71,7 +122,11 @@ impl Render for SessionsPanel {
             .child(
                 tezbar_ui::controls::button(
                     "terminal-new",
-                    "New session",
+                    if cfg!(target_os = "macos") {
+                        "New session · ⌘N"
+                    } else {
+                        "New session · Ctrl+N"
+                    },
                     tezbar_ui::controls::ButtonTone::Quiet,
                     false,
                     t,
@@ -80,7 +135,10 @@ impl Render for SessionsPanel {
                     let _ = relay.send(crate::events::Event::TerminalPanelAction(None));
                 }),
             )
-            .child(tezbar_ui::controls::header(t).child("Terminal sessions"))
+            .child(tezbar_ui::controls::header(t).child(format!(
+                "Terminal sessions · {} running",
+                self.sessions.iter().filter(|s| s.running).count()
+            )))
             .when(self.sessions.is_empty(), |d| d.child("Starting shell…"))
             .child(
                 uniform_list(
@@ -89,15 +147,15 @@ impl Render for SessionsPanel {
                     cx.processor(move |this, range: std::ops::Range<usize>, _, _| {
                         range
                             .map(|i| {
-                                let (id, title) = &this.sessions[i];
+                                let row = &this.sessions[i];
                                 let relay = this.relay.clone();
-                                let selected = id.clone();
+                                let selected = row.id.clone();
                                 tezbar_ui::virtual_list::row(
-                                    id.clone().into(),
-                                    title.clone().into(),
+                                    row.id.clone().into(),
+                                    format!("{}, {}", row.title, row.cwd).into(),
                                     i,
                                     this.sessions.len(),
-                                    false,
+                                    row.active,
                                     t,
                                 )
                                 .on_click(move |_, _, _| {
@@ -105,7 +163,38 @@ impl Render for SessionsPanel {
                                         Some(selected.clone()),
                                     ));
                                 })
-                                .child(title.clone())
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .flex()
+                                        .flex_col()
+                                        .child(div().truncate().child(row.title.clone()))
+                                        .child(
+                                            div()
+                                                .text_size(px(11. * t.zoom))
+                                                .text_color(if row.active {
+                                                    rgb(0xffffff).into()
+                                                } else {
+                                                    t.text3
+                                                })
+                                                .truncate()
+                                                .child(tezbar_ui_model::terminal::compact_path(
+                                                    &row.cwd,
+                                                )),
+                                        ),
+                                )
+                                .when(i < 9, |d| {
+                                    d.child(div().text_size(px(11. * t.zoom)).child(format!(
+                                        "{}{}",
+                                        if cfg!(target_os = "macos") {
+                                            "⌘"
+                                        } else {
+                                            "Ctrl+"
+                                        },
+                                        i + 1
+                                    )))
+                                })
                                 .into_any_element()
                             })
                             .collect()
@@ -118,6 +207,32 @@ impl Render for SessionsPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "bench-control")]
+    #[::core::prelude::v1::test]
+    fn bench_wire_preserves_legacy_rows_and_native_metadata() {
+        let rows = fixture_rows(serde_json::json!([
+            ["legacy", "Shell"],
+            {"id":"current", "title":"Project", "cwd":"/fixture", "running":true, "active":true},
+            {"id":"minimal", "title":"Saved"}
+        ]))
+        .unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(
+            (rows[0].id.as_str(), rows[0].title.as_str()),
+            ("legacy", "Shell")
+        );
+        assert!(rows[0].cwd.is_empty() && !rows[0].running && !rows[0].active);
+        assert_eq!(rows[1].cwd, "/fixture");
+        assert!(rows[1].running && rows[1].active);
+        assert!(rows[2].cwd.is_empty() && !rows[2].running && !rows[2].active);
+        for invalid in [
+            serde_json::json!([["missing-title"]]),
+            serde_json::json!([{"id":"missing-title"}]),
+            serde_json::json!([{"id":"bad", "title":"bad", "active":"yes"}]),
+        ] {
+            assert!(fixture_rows(invalid).is_err());
+        }
+    }
     #[::core::prelude::v1::test]
     fn panel_tracks_parent_and_minimum() {
         let b = bounds(Bounds::new(

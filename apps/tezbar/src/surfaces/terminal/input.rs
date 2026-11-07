@@ -1,7 +1,7 @@
 //! Xterm input encoding and app interception; no VT output parsing lives here.
 use alacritty_terminal::term::TermMode;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Modifiers {
     pub command: bool,
     pub control: bool,
@@ -35,7 +35,10 @@ pub fn key(key: &str, code: &str, m: Modifiers, mode: TermMode, composing: bool)
         return KeyResult::PlatformText;
     }
     let lower = key.to_lowercase();
-    let primary = m.command || m.control;
+    // Shell control characters are never app actions on macOS. Windows app
+    // actions use Ctrl+Shift so Ctrl+D/X/K/P remain available to the shell.
+    let primary = m.command || (cfg!(not(target_os = "macos")) && m.control);
+    let app_action = m.command || (cfg!(not(target_os = "macos")) && m.control && m.shift);
     if primary {
         let z = match (key, code) {
             ("+" | "=", _) | (_, "NumpadAdd") => Some(Zoom::In),
@@ -50,7 +53,7 @@ pub fn key(key: &str, code: &str, m: Modifiers, mode: TermMode, composing: bool)
                 KeyResult::TextZoom(z)
             };
         }
-        if !m.alt {
+        if !m.alt && app_action {
             match lower.as_str() {
                 "k" => return KeyResult::Configure,
                 "x" => return KeyResult::Stop,
@@ -70,6 +73,11 @@ pub fn key(key: &str, code: &str, m: Modifiers, mode: TermMode, composing: bool)
     }
     if key == "escape" || key == "Escape" {
         return KeyResult::Back;
+    }
+    // macOptionIsMeta was false in the old terminal. Let AppKit insert the
+    // produced character (or start a dead-key composition), not ESC+base key.
+    if cfg!(target_os = "macos") && m.alt && !m.command && !m.control && key.chars().count() == 1 {
+        return KeyResult::PlatformText;
     }
     let modifier = 1 + u8::from(m.shift) + 2 * u8::from(m.alt) + 4 * u8::from(m.control);
     let final_char = match lower.as_str() {
@@ -230,5 +238,86 @@ pub fn font_size(current: u8, zoom: Zoom) -> u8 {
         Zoom::In => current.saturating_add(1).min(24),
         Zoom::Out => current.saturating_sub(1).max(8),
         Zoom::Reset => 12,
+    }
+}
+
+/// Fractional trackpad pixels survive event boundaries. Pathological single
+/// deltas are bounded to 128 rows/reports rather than creating unbounded input.
+#[derive(Default)]
+pub struct WheelAccumulator {
+    pixels: f32,
+}
+impl WheelAccumulator {
+    pub fn reset(&mut self) {
+        self.pixels = 0.;
+    }
+    pub fn lines(&mut self, delta: f32, height: f32) -> i32 {
+        if !delta.is_finite() || !height.is_finite() || height <= 0. {
+            return 0;
+        }
+        self.pixels += delta.clamp(-128. * height, 128. * height);
+        let rows = (self.pixels / height).trunc() as i32;
+        self.pixels -= rows as f32 * height;
+        rows
+    }
+}
+#[derive(Debug, PartialEq, Eq)]
+pub enum ScrollResult {
+    None,
+    Rows(i32),
+    Bytes(Vec<u8>),
+}
+pub fn scroll(lines: i32, col: usize, row: usize, m: Modifiers, mode: TermMode) -> ScrollResult {
+    if lines == 0 {
+        return ScrollResult::None;
+    }
+    let lines = lines.clamp(-128, 128);
+    if !m.shift && mode.intersects(TermMode::MOUSE_MODE) {
+        return mouse(MouseKind::Wheel(lines > 0), col, row, m, mode)
+            .map(|b| ScrollResult::Bytes(b.repeat(lines.unsigned_abs() as usize)))
+            .unwrap_or(ScrollResult::None);
+    }
+    if mode.contains(TermMode::ALT_SCREEN | TermMode::ALTERNATE_SCROLL)
+        && !mode.intersects(TermMode::MOUSE_MODE)
+    {
+        let seq = match (lines > 0, mode.contains(TermMode::APP_CURSOR)) {
+            (true, false) => b"\x1b[A",
+            (false, false) => b"\x1b[B",
+            (true, true) => b"\x1bOA",
+            (false, true) => b"\x1bOB",
+        };
+        ScrollResult::Bytes(seq.repeat(lines.unsigned_abs() as usize))
+    } else {
+        ScrollResult::Rows(lines)
+    }
+}
+#[derive(Default)]
+pub struct MotionReporter {
+    last: Option<(u64, usize, usize, Option<u8>, Modifiers, TermMode)>,
+}
+impl MotionReporter {
+    pub fn reset(&mut self) {
+        self.last = None;
+    }
+    pub fn report(
+        &mut self,
+        owner: u64,
+        col: usize,
+        row: usize,
+        button: Option<u8>,
+        modifiers: Modifiers,
+        mode: TermMode,
+    ) -> Option<Vec<u8>> {
+        let key = (owner, col, row, button, modifiers, mode);
+        let result = mouse(MouseKind::Motion(button), col, row, modifiers, mode);
+        if result.is_none() {
+            self.reset();
+            return None;
+        }
+        if self.last == Some(key) {
+            return None;
+        }
+        self.last = Some(key);
+        result
     }
 }

@@ -1,0 +1,28 @@
+{
+  "patch_sha256": "3a5de7d82be74ed60393646914b3d42d41b9be1f37c5e096ec07c04d7fd6eff1",
+  "files": [
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration.rs",
+      "before_sha256": "860efe59db9ab44510fc5ed75f06c44f707b3a111a9603400a56f4d7424f7150",
+      "after_sha256": "3b2af1cd32ef0ee240a467890db6bc2d3dfff7c545cd2659ea59388ebcd08eb8"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs",
+      "before_sha256": "4b227345b92230bbe060960b25c3c58e754002d6ed1f80efc16ee78fd78d3434",
+      "after_sha256": "d78a25b7d5307a3bb099b0c92ead8d12b4acc12d8e449230ff763e5c5b277ce1"
+    },
+    {
+      "path": "apps/tezbar/src/app/m10.rs",
+      "before_sha256": "69526ebade12170caa1629c7c118e9e309cbc2809270c1dc525207e61c42796c",
+      "after_sha256": "b46dcfaf40c5feb555251feb793868aa44f4555bdb783acd49b14b5e9dea5e22"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+      "before_sha256": "4c18feed5b8cf9bc0340fa9246241d4d0190925f7c5d50f75609dccccaffa592",
+      "after_sha256": "8e04bae1adc5a036792a7ebb1b2ec1fbc90b84e904dc6957181109b2396fd7ae"
+    }
+  ],
+  "root_shared_edits": false,
+  "cargo_run": false,
+  "purpose": "Only compiler errors in root M10 patch; preserve command-bar selected-row terminal_pin(cx)"
+}

@@ -185,7 +185,7 @@ impl TerminalGrid {
             size,
             palette: Palette::new(light),
         };
-        this.feed(b"\x1b[20h"); // xterm convertEol:true; programs can disable LNM.
+        this.feed(b"\x1b[20h"); // Match xterm convertEol:true (LF is normalized during feed).
         this
     }
     pub fn feed(&mut self, data: &[u8]) {

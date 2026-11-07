@@ -44,6 +44,7 @@ export type InstalledRegistryExtension = {
 }
 
 export type ExtensionRuntimeAction = {
+  section?: string
   id: string
   title: string
   style?: 'default' | 'destructive'
@@ -86,6 +87,7 @@ export type ExtensionRunCommandResult =
   | {
       ok: true
       mode: 'no-view'
+      sessionId?: string
       message: string
       /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
       effectSequence?: number
@@ -94,6 +96,7 @@ export type ExtensionRunCommandResult =
   | {
       ok: true
       mode: 'view'
+      viewRevision?: number
       message?: string
       /** Absent for legacy V1; null means event-driven/static (no polling). */
       refreshMs?: number | null
@@ -123,6 +126,7 @@ export type ExtensionInvokeActionResult =
   | {
       ok: true
       mode: 'no-view'
+      sessionId?: string
       message: string
       /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
       effectSequence?: number
@@ -131,6 +135,7 @@ export type ExtensionInvokeActionResult =
   | {
       ok: true
       mode: 'view'
+      viewRevision?: number
       message?: string
       /** Absent for legacy V1; null means event-driven/static (no polling). */
       refreshMs?: number | null
@@ -156,6 +161,7 @@ export type ExtensionSearchTextChangedRequest = {
 }
 
 export type ExtensionRefreshSessionRequest = {
+  viewRevision?: number
   sessionId: string
 }
 
@@ -178,6 +184,7 @@ export type ExtensionSearchTextChangedResult =
   | {
       ok: true
       mode: 'no-view'
+      sessionId?: string
       message: string
       /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
       effectSequence?: number
@@ -186,6 +193,7 @@ export type ExtensionSearchTextChangedResult =
   | {
       ok: true
       mode: 'view'
+      viewRevision?: number
       message?: string
       /** Absent for legacy V1; null means event-driven/static (no polling). */
       refreshMs?: number | null

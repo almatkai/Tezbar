@@ -163,26 +163,69 @@ impl StatusItems for NativeDesktop {
                 let mut state = state.borrow_mut();
                 let menu = muda::Menu::new();
                 let mut actions = HashMap::new();
-                if spec.items.len() > 128 {
-                    return Err("Too many tray items".into());
+                if state.items.len() >= 128 && !state.items.contains_key(&id) {
+                    return Err("Too many status items".into());
                 }
-                for item in spec.items {
-                    let action = item["id"].as_str().ok_or("Tray action id required")?;
-                    let os_id = format!("{id}-{action}");
-                    if actions.insert(os_id.clone(), action.to_owned()).is_some() {
-                        return Err("Duplicate tray action".into());
+                fn build(
+                    items: &[serde_json::Value],
+                    scope: &str,
+                    actions: &mut HashMap<String, String>,
+                    depth: usize,
+                    count: &mut usize,
+                ) -> Result<Vec<Box<dyn muda::IsMenuItem>>, String> {
+                    if depth > 8 {
+                        return Err("Tray nesting limit".into());
                     }
-                    let title = item["title"].as_str().ok_or("Tray title required")?;
-                    let enabled = item["enabled"].as_bool().unwrap_or(true);
-                    if let Some(checked) = item["checked"].as_bool() {
-                        menu.append(&muda::CheckMenuItem::with_id(
-                            os_id, title, enabled, checked, None,
-                        ))
-                        .map_err(|e| e.to_string())?
-                    } else {
-                        menu.append(&muda::MenuItem::with_id(os_id, title, enabled, None))
-                            .map_err(|e| e.to_string())?
+                    let mut out: Vec<Box<dyn muda::IsMenuItem>> = Vec::new();
+                    for item in items {
+                        *count += 1;
+                        if *count > 128 {
+                            return Err("Too many tray items".into());
+                        }
+                        let action = item["id"].as_str().ok_or("Tray action id required")?;
+                        let os_id = format!("{scope}-{action}");
+                        let title = item["title"].as_str().ok_or("Tray title required")?;
+                        let enabled = item["enabled"].as_bool().unwrap_or(true);
+                        match item["kind"].as_str() {
+                            Some("separator") => {
+                                out.push(Box::new(muda::PredefinedMenuItem::separator()))
+                            }
+                            Some("section") => out
+                                .push(Box::new(muda::MenuItem::with_id(os_id, title, false, None))),
+                            Some("submenu") => {
+                                let sub = muda::Submenu::with_id(os_id, title, enabled);
+                                for child in build(
+                                    item["items"].as_array().ok_or("Submenu items required")?,
+                                    scope,
+                                    actions,
+                                    depth + 1,
+                                    count,
+                                )? {
+                                    sub.append(child.as_ref()).map_err(|e| e.to_string())?;
+                                }
+                                out.push(Box::new(sub));
+                            }
+                            None => {
+                                if actions.insert(os_id.clone(), action.into()).is_some() {
+                                    return Err("Duplicate tray action".into());
+                                }
+                                if let Some(checked) = item["checked"].as_bool() {
+                                    out.push(Box::new(muda::CheckMenuItem::with_id(
+                                        os_id, title, enabled, checked, None,
+                                    )));
+                                } else {
+                                    out.push(Box::new(muda::MenuItem::with_id(
+                                        os_id, title, enabled, None,
+                                    )));
+                                }
+                            }
+                            _ => return Err("Unknown tray item kind".into()),
+                        }
                     }
+                    Ok(out)
+                }
+                for item in build(&spec.items, &id, &mut actions, 0, &mut 0)? {
+                    menu.append(item.as_ref()).map_err(|e| e.to_string())?;
                 }
                 let mut builder = tray_icon::TrayIconBuilder::new()
                     .with_id(&id)

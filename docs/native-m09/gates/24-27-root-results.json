@@ -1,0 +1,84 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.98.1",
+      "test",
+      "--locked",
+      "--offline",
+      "-j2",
+      "-p",
+      "tezbar-native",
+      "--features",
+      "runtime-shaders",
+      "--lib",
+      "command_bar::terminal_integration",
+      "--",
+      "--test-threads=2"
+    ],
+    "log": "docs/native-m09/gates/24-root-focused.log",
+    "exit_code": 0,
+    "seconds": 7.076378708
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.98.1",
+      "test",
+      "--locked",
+      "--offline",
+      "-j2",
+      "-p",
+      "tezbar-native",
+      "--features",
+      "runtime-shaders",
+      "--lib",
+      "app::m10",
+      "--",
+      "--test-threads=2"
+    ],
+    "log": "docs/native-m09/gates/25-root-focused.log",
+    "exit_code": 0,
+    "seconds": 5.79556075
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.98.1",
+      "test",
+      "--locked",
+      "--offline",
+      "-j2",
+      "-p",
+      "tezbar-native",
+      "--features",
+      "runtime-shaders",
+      "--lib",
+      "windows::terminal_sessions",
+      "--",
+      "--test-threads=2"
+    ],
+    "log": "docs/native-m09/gates/26-root-focused.log",
+    "exit_code": 0,
+    "seconds": 5.611239749999999
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.98.1",
+      "test",
+      "--locked",
+      "--offline",
+      "-j2",
+      "-p",
+      "tezbar-core",
+      "--lib",
+      "terminal::pty::stream",
+      "--",
+      "--test-threads=2"
+    ],
+    "log": "docs/native-m09/gates/27-root-core-stream.log",
+    "exit_code": 0,
+    "seconds": 0.32403666600000136
+  }
+]

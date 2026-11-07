@@ -657,3 +657,5 @@ export const systemPreferences = {
     return false
   },
 }
+
+export async function extensionControl(_sessionId: string, _kind: 'close' | 'preferences' | 'clear-search' | 'hud', _message?: string, _source = 0): Promise<void> { throw new Error('Extension control requires the native worker host') }
