@@ -6,7 +6,13 @@ fn main() -> anyhow::Result<()> {
     if let Some(code) = tezbar_core::native_v2_cli::dispatch() {
         std::process::exit(code);
     }
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    let args: Vec<_> = std::env::args_os()
+        .skip(1)
+        .map(|arg| {
+            arg.into_string()
+                .map_err(|_| anyhow::anyhow!("Native preview arguments must be Unicode"))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
     if args == ["--version"] {
         println!(
             "{}",

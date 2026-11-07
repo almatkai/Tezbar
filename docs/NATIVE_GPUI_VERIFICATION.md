@@ -27,6 +27,17 @@ open. No native default switch, production release/install or RAM reduction is
 claimed. Earlier reports and failed experiments are preserved below as historical
 checkpoints; their old outstanding-work descriptions are not the current status.
 
+M11 root review repairs now pass **427 normal / 429 bench native tests**, **42 updater
+tests on each Rust 1.98.1 and 1.85** (one unchanged live-network ignore), and **9 Node
+build/packaging tests**. Native check/debug build and cutover `git apply --check`
+passed. See the [M11 root dispositions](native-m11/root-review-repairs/dispositions.md)
+and [receipt](native-m11/root-review-repairs/receipt.json). The preserved binary is
+again explicitly a dirty debug preview, not a signed release. Seven concrete M11
+findings and several Low findings have implementation fixes; M6's signed-startup
+latency measurement and the non-gating crash-orphan cleanup observation remain open.
+Fresh independent closure and all platform/physical/migration/RAM gates are still
+required. No cutover patch has been applied.
+
 ## Historical checkpoints
 
 M0–M2 checkpoint: runtime implementation `80a2aa1286ac8b4517452594a4779bc33c724b6b`;

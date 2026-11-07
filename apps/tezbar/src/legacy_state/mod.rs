@@ -19,6 +19,8 @@ pub enum Diagnostic {
     AmbiguousOrigin,
     InvalidValue,
     CacheRebuilt,
+    RecoveredLogTail,
+    RepairedEncoding,
 }
 /// Diagnostics contain only allowlisted key names and reason codes, never raw values/paths.
 #[derive(Default)]
@@ -53,6 +55,21 @@ pub fn utf16le(bytes: &[u8]) -> Result<String, Diagnostic> {
         .map(|p| u16::from_le_bytes([p[0], p[1]]))
         .collect();
     String::from_utf16(&words).map_err(|_| Diagnostic::UnsupportedEncoding)
+}
+pub fn utf16_value(bytes: &[u8]) -> Result<(String, bool), Diagnostic> {
+    match utf16le(bytes) {
+        Ok(s) => Ok((s, false)),
+        Err(Diagnostic::UnsupportedEncoding)
+            if bytes.len() <= ITEM_LIMIT && bytes.len() % 2 == 0 =>
+        {
+            let words = bytes
+                .chunks_exact(2)
+                .map(|p| u16::from_le_bytes([p[0], p[1]]))
+                .collect::<Vec<_>>();
+            Ok((String::from_utf16_lossy(&words), true))
+        }
+        Err(e) => Err(e),
+    }
 }
 /// Chromium CachedStorageArea::StorageFormat: 0 = UTF16, 1 = Latin1 (NOT UTF8).
 pub fn chromium_string(bytes: &[u8]) -> Result<String, Diagnostic> {
@@ -120,13 +137,31 @@ mod tests;
 /// Explicit discovery inputs. Missing/ambiguous stores never mean an empty profile.
 #[derive(Clone)]
 pub enum Source {
+    /// Captured before this process creates any profile/instance directories.
+    FirstInstall(Box<Source>),
     WebKit(std::path::PathBuf),
     /// The locked direct Default path is tried only if no alternate candidate exists.
     WebView2(std::path::PathBuf),
 }
 impl Source {
+    pub fn for_install(self, config: &std::path::Path, data: &std::path::Path) -> Self {
+        fn absent(path: &std::path::Path) -> bool {
+            matches!(std::fs::symlink_metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+        }
+        let container_absent = match &self {
+            Self::WebKit(root) => root.ancestors().nth(2).is_some_and(absent),
+            Self::WebView2(root) => absent(root),
+            Self::FirstInstall(_) => false,
+        };
+        if container_absent && absent(config) && absent(data) {
+            Self::FirstInstall(Box::new(self))
+        } else {
+            self
+        }
+    }
     pub fn read(&self) -> ReadReport {
         match self {
+            Self::FirstInstall(source) => source.read(),
             Self::WebKit(root) => match webkit::discover_modern(root) {
                 Ok(path) => webkit::read_consistent(&path, &webkit::ModernOrigin),
                 Err(e) => ReadReport::unavailable(e),
@@ -134,13 +169,13 @@ impl Source {
             Self::WebView2(root) => {
                 let direct = root.join("Default/Local Storage/leveldb");
                 let alternate = root.join("EBWebView/Default/Local Storage/leveldb");
-                if alternate.exists() {
-                    return ReadReport::unavailable(Diagnostic::AmbiguousOrigin);
+                match (direct.try_exists(), alternate.try_exists()) {
+                    (Ok(true), Ok(false)) => leveldb::read(&direct),
+                    (Ok(false), Ok(true)) => leveldb::read(&alternate),
+                    (Ok(true), Ok(true)) => ReadReport::unavailable(Diagnostic::AmbiguousOrigin),
+                    (Ok(false), Ok(false)) => ReadReport::unavailable(Diagnostic::Missing),
+                    _ => ReadReport::unavailable(Diagnostic::Corrupt),
                 }
-                if !direct.exists() {
-                    return ReadReport::unavailable(Diagnostic::Missing);
-                }
-                leveldb::read(&direct)
             }
         }
     }
@@ -175,9 +210,18 @@ pub fn bootstrap(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Err("Native preferences unavailable; original preserved".into()),
     }
-    let plan = prepare(None, revision, source.read()).map_err(str::to_owned)?;
+    let report = source.read();
+    if matches!(source, Source::FirstInstall(_))
+        && report.values.is_empty()
+        && report.diagnostics == [(None, Diagnostic::Missing)]
+    {
+        let state = UiState::default();
+        state.write_atomic_if_absent(path)?;
+        return Ok(state);
+    }
+    let plan = prepare(None, revision, report).map_err(str::to_owned)?;
     let state = commit_candidate(&plan, revision, path.try_exists().map_err(|_| "Cannot inspect native preferences")?)
-        .ok_or("Legacy preferences unavailable. Close the previous app, then Retry saved changes. Originals preserved.")?;
+        .ok_or("Previous preferences could not be read. If this is your first installation, choose Start with defaults. If upgrading, close the previous app and Retry. Originals preserved.")?;
     state.write_atomic_if_absent(path)?;
     Ok(state.clone())
 }

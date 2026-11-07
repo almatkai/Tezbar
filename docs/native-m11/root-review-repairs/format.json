@@ -1,0 +1,28 @@
+[
+  {
+    "files": [
+      "apps/tezbar/build.rs",
+      "apps/tezbar/src/app.rs",
+      "apps/tezbar/src/app/m11.rs",
+      "apps/tezbar/src/app/m7.rs",
+      "apps/tezbar/src/app/production_launch.rs",
+      "apps/tezbar/src/legacy_state/leveldb.rs",
+      "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "apps/tezbar/src/legacy_state/mod.rs",
+      "apps/tezbar/src/legacy_state/tests.rs",
+      "apps/tezbar/src/legacy_state/webkit.rs",
+      "apps/tezbar/src/main.rs"
+    ],
+    "edition": "2024",
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "files": [
+      "crates/tezbar-update/src/native.rs"
+    ],
+    "edition": "2021",
+    "exit": 0,
+    "output": ""
+  }
+]

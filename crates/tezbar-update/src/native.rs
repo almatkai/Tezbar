@@ -577,6 +577,18 @@ fn pinned_team(detail: &str, team: &str) -> bool {
         .collect();
     teams == [team] && !detail.lines().any(|l| l == "Signature=adhoc")
 }
+/// Refuse an unwritable installation before the application quiesces or quits.
+/// The probe owns and removes only a newly created private directory.
+#[cfg(unix)]
+pub fn preflight_macos_install(installed: &Path) -> Result<(), String> {
+    if installed.file_name().and_then(|v| v.to_str()) != Some("Tezbar.app") || !installed.is_dir() {
+        return Err("The installed Tezbar bundle is unavailable".into());
+    }
+    tempfile::Builder::new().prefix(".tezbar-install-check-")
+        .tempdir_in(installed.parent().ok_or("Missing installation directory")?)
+        .and_then(|probe| probe.close())
+        .map_err(|_| "Tezbar cannot update in this folder. Move it to a writable Applications folder, then retry. The verified download has been kept.".into())
+}
 #[cfg(unix)]
 fn swap_bundle(staged: &Path, installed: &Path) -> Result<InstalledMac, String> {
     let backup = tempfile::Builder::new()
@@ -586,13 +598,33 @@ fn swap_bundle(staged: &Path, installed: &Path) -> Result<InstalledMac, String> 
     let previous = backup.path().join("Tezbar.app");
     std::fs::rename(installed, &previous).map_err(|e| e.to_string())?;
     if let Err(e) = std::fs::rename(staged, installed) {
-        std::fs::rename(&previous, installed)
-            .map_err(|restore| format!("{e}; rollback failed: {restore}"))?;
+        if let Err(restore) = std::fs::rename(&previous, installed) {
+            let retained = backup.keep();
+            return Err(format!(
+                "{e}; rollback failed: {restore}; backup retained at {}",
+                retained.display()
+            ));
+        }
         return Err(e.to_string());
     }
+    if let Err(error) = std::fs::File::open(installed)
+        .and_then(|file| file.set_modified(std::time::SystemTime::now()))
+    {
+        let restore =
+            std::fs::rename(installed, staged).and_then(|_| std::fs::rename(&previous, installed));
+        if let Err(restore) = restore {
+            let path = backup.keep();
+            return Err(format!(
+                "{error}; rollback failed: {restore}; backup retained at {}",
+                path.display()
+            ));
+        }
+        return Err(error.to_string());
+    }
     Ok(InstalledMac {
-        backup: backup.keep(),
+        backup: backup.path().into(),
         installed: installed.into(),
+        directory: backup,
     })
 }
 /// Keep the previous bundle until the relaunch coordinator explicitly confirms success.
@@ -600,13 +632,28 @@ fn swap_bundle(staged: &Path, installed: &Path) -> Result<InstalledMac, String> 
 pub struct InstalledMac {
     pub backup: PathBuf,
     pub installed: PathBuf,
+    directory: tempfile::TempDir,
 }
 #[cfg(unix)]
 impl InstalledMac {
+    /// End rollback ownership after the coordinator successfully spawned the new
+    /// executable (the same success boundary as the legacy updater). This is not
+    /// a claim that the new GUI has reached readiness.
+    pub fn confirm_relaunch(self) -> Result<(), String> {
+        self.directory.close().map_err(|e| e.to_string())
+    }
     pub fn rollback(self) -> Result<(), String> {
         let failed = self.backup.join("failed.app");
-        std::fs::rename(&self.installed, &failed).map_err(|e| e.to_string())?;
-        std::fs::rename(self.backup.join("Tezbar.app"), self.installed).map_err(|e| e.to_string())
+        let result = std::fs::rename(&self.installed, &failed)
+            .and_then(|_| std::fs::rename(self.backup.join("Tezbar.app"), &self.installed));
+        if let Err(error) = result {
+            let path = self.directory.keep();
+            return Err(format!(
+                "{error}; rollback files preserved at {}",
+                path.display()
+            ));
+        }
+        Ok(())
     }
 }
 pub struct StagedWindows {
@@ -625,19 +672,32 @@ impl StagedWindows {
     }
     #[cfg(windows)]
     pub fn launch(self, current_args: &[String]) -> Result<(), String> {
+        self.launch_os(
+            &current_args
+                .iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>(),
+        )
+    }
+    #[cfg(windows)]
+    pub fn launch_os(self, current_args: &[std::ffi::OsString]) -> Result<(), String> {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOW};
-        let parameters = Self::arguments(current_args).join(" ");
+        let args = current_args
+            .iter()
+            .map(|s| s.encode_wide().collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+        let parameters = nsis_parameters_wide(&args)?;
         let file: Vec<u16> = self
             .installer
             .as_os_str()
             .encode_wide()
             .chain(Some(0))
             .collect();
-        if file[..file.len() - 1].contains(&0) || parameters.contains('\0') {
+        if file[..file.len() - 1].contains(&0) || parameters.contains(&0) {
             return Err("Installer arguments contain a null character".into());
         }
-        let parameters: Vec<u16> = parameters.encode_utf16().chain(Some(0)).collect();
+        let parameters: Vec<u16> = parameters.into_iter().chain(Some(0)).collect();
         let verb: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
         // ShellExecute preserves the installer's elevation behavior and consumes
         // the already-escaped NSIS command line without a second quoting pass.
@@ -680,29 +740,48 @@ fn mac_verification_arguments(requirement: &str) -> [Vec<String>; 2] {
 /// Port of the locked updater's NSIS escaping. In addition to Windows quoting,
 /// slash-containing arguments must be quoted for NSIS GetOptions.
 fn escape_nsis_argument(argument: &str) -> String {
-    let quote = argument.is_empty() || argument.chars().any(|c| matches!(c, ' ' | '\t' | '/'));
-    let mut escaped = String::new();
+    String::from_utf16(&escape_nsis_wide(
+        &argument.encode_utf16().collect::<Vec<_>>(),
+    ))
+    .expect("valid Unicode remains valid")
+}
+fn escape_nsis_wide(argument: &[u16]) -> Vec<u16> {
+    let quote = argument.is_empty() || argument.iter().any(|c| matches!(*c, 32 | 9 | 47));
+    let mut escaped = Vec::new();
     if quote {
-        escaped.push('"');
+        escaped.push(34);
     }
     let mut backslashes = 0;
-    for character in argument.chars() {
-        if character == '\\' {
+    for &c in argument {
+        if c == 92 {
             backslashes += 1;
         } else {
-            if character == '"' {
-                escaped.extend(std::iter::repeat('\\').take(backslashes + 1));
+            if c == 34 {
+                escaped.extend(std::iter::repeat(92).take(backslashes + 1));
             }
             backslashes = 0;
         }
-        escaped.push(character);
+        escaped.push(c);
     }
     if quote {
-        escaped.extend(std::iter::repeat('\\').take(backslashes));
-        escaped.push('"');
+        escaped.extend(std::iter::repeat(92).take(backslashes));
+        escaped.push(34);
     }
     escaped
 }
+#[cfg(any(windows, test))]
+fn nsis_parameters_wide(args: &[Vec<u16>]) -> Result<Vec<u16>, String> {
+    let mut result = "/P /R /UPDATE /ARGS".encode_utf16().collect::<Vec<_>>();
+    for arg in args {
+        result.push(32);
+        result.extend(escape_nsis_wide(arg));
+    }
+    if result.contains(&0) || result.len() > 32767 {
+        return Err("Installer arguments contain null or exceed the Windows limit".into());
+    }
+    Ok(result)
+}
+
 #[cfg(unix)]
 fn verify_legacy(
     file: &std::fs::File,
@@ -1022,6 +1101,36 @@ mod lifecycle_tests {
             armed: true,
         });
         assert!(matches!(updater.status(), AppUpdateStatus::Error { .. }));
+    }
+    #[test]
+    fn review_m11_nsis_wide_arguments_preserve_unpaired_surrogates() {
+        let arg = vec![0xd800, 32, 92];
+        let escaped = escape_nsis_wide(&arg);
+        assert_eq!(escaped, vec![34, 0xd800, 32, 92, 92, 34]);
+        let line = nsis_parameters_wide(&[arg]).unwrap();
+        assert!(line.contains(&0xd800));
+        assert!(nsis_parameters_wide(&[vec![0]]).is_err());
+        assert!(nsis_parameters_wide(&[vec![1; 32768]]).is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn review_m11_successful_relaunch_removes_old_signed_bundle_directory() {
+        let d = tempfile::tempdir().unwrap();
+        let old = d.path().join("Tezbar.app");
+        let new = d.path().join("staged.app");
+        std::fs::create_dir(&old).unwrap();
+        std::fs::create_dir(&new).unwrap();
+        std::fs::write(old.join("identity"), b"old").unwrap();
+        std::fs::write(new.join("identity"), b"new").unwrap();
+        preflight_macos_install(&old).unwrap();
+        assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 2);
+        let result = swap_bundle(&new, &old).unwrap();
+        let backup = result.backup.clone();
+        result.confirm_relaunch().unwrap();
+        assert!(!backup.exists());
+        assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
+        assert_eq!(std::fs::read(old.join("identity")).unwrap(), b"new");
+        assert!(preflight_macos_install(&d.path().join("missing/Tezbar.app")).is_err());
     }
     #[cfg(unix)]
     #[test]

@@ -174,7 +174,13 @@ fn checksum_torn_log_missing_live_table_and_unknown_compression_fail_closed() {
     assert!(!read(d.path()).complete);
     bytes.truncate(8);
     std::fs::write(&p, &bytes).unwrap();
-    assert!(!read(d.path()).complete);
+    let recovered = read(d.path());
+    assert!(recovered.complete);
+    assert!(
+        recovered
+            .diagnostics
+            .contains(&(None, Diagnostic::RecoveredLogTail))
+    );
     seed(d.path(), Some(&sst(&[], false)), b"");
     std::fs::remove_file(d.path().join("000002.ldb")).unwrap();
     assert!(!read(d.path()).complete);
@@ -252,4 +258,70 @@ fn logical_key_encoding_variants_cannot_resurrect_a_newer_tombstone() {
     values.insert(&utf16, None, 9).unwrap();
     values.insert(&latin, Some(b"\x01dark"), 2).unwrap();
     assert!(!values.report().unwrap().values.contains_key("tezbar:theme"));
+}
+
+#[test]
+fn review_m11_torn_newest_tail_preserves_committed_values_not_corruption() {
+    let d = tempfile::tempdir().unwrap();
+    seed(
+        d.path(),
+        None,
+        &batch(1, &[(1, user("tezbar:theme"), b"\x01dark".to_vec())]),
+    );
+    let file = d.path().join("000003.log");
+    let committed = std::fs::read(&file).unwrap();
+    for tail in [vec![1, 2, 3], vec![0, 0, 0, 0, 50, 0, 1, 2]] {
+        let mut bytes = committed.clone();
+        bytes.extend(tail);
+        std::fs::write(&file, &bytes).unwrap();
+        let report = read(d.path());
+        assert!(report.complete);
+        assert_eq!(report.values["tezbar:theme"], "dark");
+        assert!(
+            report
+                .diagnostics
+                .contains(&(None, Diagnostic::RecoveredLogTail))
+        );
+        // The same truncated record is fatal if a newer live log exists.
+        std::fs::write(d.path().join("000004.log"), b"").unwrap();
+        assert!(!read(d.path()).complete);
+        std::fs::remove_file(d.path().join("000004.log")).unwrap();
+    }
+    let mut invalid_block = committed;
+    invalid_block.extend([0, 0, 0, 0, 255, 255, 1]);
+    invalid_block.resize(32768, 0);
+    std::fs::write(&file, invalid_block).unwrap();
+    assert!(
+        !read(d.path()).complete,
+        "a record cannot cross a complete physical block; this is corruption, not EOF truncation"
+    );
+}
+
+#[test]
+fn review_m11_webview_unique_nested_profile_and_ambiguous_pair() {
+    let d = tempfile::tempdir().unwrap();
+    let nested = d.path().join("EBWebView/Default/Local Storage/leveldb");
+    std::fs::create_dir_all(&nested).unwrap();
+    seed(
+        &nested,
+        None,
+        &batch(1, &[(1, user("tezbar:theme"), b"\x01dark".to_vec())]),
+    );
+    let source = Source::WebView2(d.path().into());
+    let report = source.read();
+    assert!(report.complete);
+    assert_eq!(report.values["tezbar:theme"], "dark");
+    std::fs::create_dir_all(d.path().join("Default/Local Storage/leveldb")).unwrap();
+    assert!(
+        source
+            .read()
+            .diagnostics
+            .contains(&(None, Diagnostic::AmbiguousOrigin))
+    );
+}
+#[test]
+fn review_m11_value_surrogate_is_diagnosed_but_identity_stays_strict() {
+    let raw = [0, 0xd8];
+    assert!(utf16le(&raw).is_err());
+    assert_eq!(super::super::utf16_value(&raw).unwrap(), ("�".into(), true));
 }

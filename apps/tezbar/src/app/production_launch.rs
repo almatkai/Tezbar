@@ -63,8 +63,8 @@ pub fn plan(environment: Environment, executable: &Path) -> Result<LaunchPlan, &
     });
     let profile = paths::resolve(environment, IDENTITY).map_err(|_| "Profile resolution failed")?;
     // Tauri manager/webview.rs supplies app_local_data_dir as WebView2 user data folder.
-    // In that case Default lives directly under data; EBWebView is only a fallback candidate,
-    // never silently preferred. Stage O-LS must prove the old installed app's actual layout.
+    // Accept a unique direct or EBWebView Default profile, never prefer one when
+    // both exist. Stage O-LS must still prove the installed app's actual layout.
     let legacy_webview2_root = matches!(platform, Platform::Windows).then(|| profile.data.clone());
     let core = CorePaths {
         data_dir: profile.data.clone(),

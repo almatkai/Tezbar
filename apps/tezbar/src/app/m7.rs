@@ -13,6 +13,21 @@ pub(super) enum Boot {
     Ready,
     Onboarding,
 }
+#[derive(Default)]
+struct AutoUpdateCommit {
+    saved: Option<(u64, bool)>,
+    issued: u64,
+}
+impl AutoUpdateCommit {
+    fn record(&mut self, ticket: u64, value: bool) {
+        if self.saved.is_none_or(|(old, _)| ticket > old) {
+            self.saved = Some((ticket, value));
+        }
+    }
+    fn pending(&self) -> Option<(u64, bool)> {
+        self.saved.filter(|(ticket, _)| *ticket > self.issued)
+    }
+}
 pub(super) struct State {
     pub store: SettingsStore,
     pub barrier: EffectBarrier,
@@ -31,6 +46,7 @@ pub(super) struct State {
     pub failed_layout: Option<SettingsEffect>,
     pub failed_channel: Option<String>,
     pub updater_channel: Option<(EntityId, u64)>,
+    auto_update: AutoUpdateCommit,
 }
 impl State {
     pub(super) fn schedule_layout(
@@ -75,6 +91,7 @@ impl State {
             failed_layout: None,
             failed_channel: None,
             updater_channel: None,
+            auto_update: AutoUpdateCommit::default(),
         }
     }
 }
@@ -270,19 +287,7 @@ impl Owner {
             }
             effect @ (SettingsEffect::RememberTab(_)
             | SettingsEffect::Currency(_)
-            | SettingsEffect::AutoUpdate(_)) => {
-                if let SettingsEffect::AutoUpdate(value) = &effect {
-                    if let Some(client) = &self.updater {
-                        if let Err(e) =
-                            client.send(super::update_integration::Command::AutoUpdate(*value))
-                        {
-                            self.m7_notice(id, e, true, cx);
-                            return;
-                        }
-                    }
-                }
-                self.m7_save_ui(id, effect, cx)
-            }
+            | SettingsEffect::AutoUpdate(_)) => self.m7_save_ui(id, effect, cx),
             SettingsEffect::RetryPersistence => {
                 self.m7_save_ui(id, SettingsEffect::RetryPersistence, cx);
                 if let Some(effect) = self.m7.failed_layout.clone() {
@@ -353,6 +358,20 @@ impl Owner {
                 Err(_) => Err("Preference owner is unavailable".into()),
             };
             let _ = this.update(cx, |owner, cx| {
+                let mut result = result;
+                if result.is_ok() {
+                    if let SettingsEffect::AutoUpdate(value) = &effect {
+                        owner.m7.auto_update.record(ticket, *value);
+                    }
+                    if let (Some(client), Some((saved, value))) =
+                        (&owner.updater, owner.m7.auto_update.pending())
+                    {
+                        match client.send(super::update_integration::Command::AutoUpdate(value)) {
+                            Ok(()) => owner.m7.auto_update.issued = saved,
+                            Err(e) => result = Err(e.into()),
+                        }
+                    }
+                }
                 owner.m7_finish_effect(id, "ui-state", ticket, result, cx);
                 owner.m7_refresh_content(cx);
             });
@@ -595,5 +614,24 @@ pub(super) fn merge_layout(previous: SettingsEffect, next: SettingsEffect) -> Se
             reset: false,
         },
         (_, next) => next,
+    }
+}
+
+#[cfg(test)]
+mod m11_commit_tests {
+    use super::*;
+    use ::core::prelude::v1::test;
+    #[test]
+    fn review_m11_auto_update_acks_cannot_reverse_newer_durable_choices() {
+        let mut state = AutoUpdateCommit::default();
+        state.record(2, false);
+        state.record(1, true);
+        assert_eq!(state.pending(), Some((2, false)));
+        // A failed actor send keeps the exact saved choice pending for Retry.
+        assert_eq!(state.pending(), Some((2, false)));
+        state.issued = 2;
+        assert!(state.pending().is_none());
+        state.record(3, true);
+        assert_eq!(state.pending(), Some((3, true)));
     }
 }

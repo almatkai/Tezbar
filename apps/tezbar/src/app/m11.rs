@@ -149,6 +149,21 @@ impl Owner {
                 if self.lifecycle.quitting {
                     self.defer_update(cx);
                 } else {
+                    #[cfg(target_os = "macos")]
+                    if let Err(error) = self
+                        .installed_executable
+                        .as_ref()
+                        .and_then(|exe| exe.parent()?.parent()?.parent())
+                        .ok_or_else(|| "Installed bundle is unavailable".to_string())
+                        .and_then(tezbar_update::native::preflight_macos_install)
+                    {
+                        self.defer_update(cx);
+                        let _ = self.launcher.update(cx, |view, _, cx| {
+                            view.error = Some(error);
+                            cx.notify();
+                        });
+                        return;
+                    }
                     self.quit(cx);
                 }
             }
@@ -233,7 +248,11 @@ fn install(
             installed.rollback()?;
             return Err("Update relaunch failed; previous version restored".into());
         }
-        // Deliberately retain backup; process spawn is not proof the new app reached readiness.
+        // No unbounded sibling copies in /Applications. A successful spawn ends
+        // the legacy updater's rollback window; GUI readiness is a separate gate.
+        if let Err(error) = installed.confirm_relaunch() {
+            log::warn!("Update launched, but old-bundle cleanup failed: {error}");
+        }
         Ok(())
     }
     #[cfg(windows)]
@@ -241,7 +260,7 @@ fn install(
         let _ = executable;
         artifact
             .stage_windows(&std::env::temp_dir())?
-            .launch(&std::env::args().skip(1).collect::<Vec<_>>())
+            .launch_os(&std::env::args_os().skip(1).collect::<Vec<_>>())
     }
     #[cfg(not(any(windows, target_os = "macos")))]
     {

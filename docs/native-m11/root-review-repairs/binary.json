@@ -1,0 +1,18 @@
+{
+  "path": "/tmp/tezbar-m11-root-repair-20261107/tezbar-debug-preview",
+  "bytes": 220512680,
+  "sha256": "1457899c5fdf93ad0b358c03e236070e560b51d15a5898ecfb4a52bbae1c9c54",
+  "metadata": {
+    "version": "0.3.0-beta.7",
+    "source": "fec32571c4046f83823e1ca0fcee9548a85e65f2",
+    "dirty": "true",
+    "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+    "preview": true,
+    "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+    "runtime_shaders": true,
+    "bench_control": false
+  },
+  "only_execution": "--version",
+  "GUI": false,
+  "no_WebKit_JavaScriptCore": true
+}

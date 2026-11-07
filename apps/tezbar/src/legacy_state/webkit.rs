@@ -211,8 +211,12 @@ fn read_inner(path: &Path, origin: &dyn OriginVerifier) -> Result<ReadReport, Di
                 _ => Err(rusqlite::Error::InvalidQuery),
             })
             .map_err(|_| Diagnostic::Corrupt)?;
-        match utf16le(&value) {
-            Ok(v) => {
+        match super::utf16_value(&value) {
+            Ok((v, repaired)) => {
+                if repaired {
+                    out.diagnostics
+                        .push((Some(key), Diagnostic::RepairedEncoding));
+                }
                 out.values.insert(key.into(), v);
             }
             Err(e) => {

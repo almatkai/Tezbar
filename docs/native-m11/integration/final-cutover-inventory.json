@@ -1965,9 +1965,9 @@
   ],
   "consumer_edits": [
     "apps/tezbar/src/app/m11.rs",
+    "crates/tezbar-update/src/native.rs",
     "crates/tezbar-core/src/knowledge/runtime_bundle.rs",
     "crates/tezbar-core/src/ai/tests.rs",
-    "crates/tezbar-update/src/native.rs",
     "scripts/verify-updater-signature.mjs",
     "scripts/sign-macos-resources.mjs",
     "scripts/release-policy.test.mjs",
@@ -1989,5 +1989,6 @@
     "package.json"
   ],
   "oracle_note": "Preserves all old renderer tests/source and prototype evidence outside first-party runtime. Exact remaining dynamic and root test-config references require the recorded acceptance gates. This patch is reviewable but deliberately not represented as release-ready.",
-  "patch_sha256": "e6fe3a55d1e633b13013618631eb6de3181cba8654eaf1ccf4a9d5bd2d5822c7"
+  "build_usage": "pnpm build --resources <reviewed staged resources> --output <fresh OS-temp child>; requires explicit inputs and builds release + private assembly, never signs a public release",
+  "patch_sha256": "159dc2fb402b008214e8241f869f69eb24a006d4413c099ceb0aeea4088c94a2"
 }

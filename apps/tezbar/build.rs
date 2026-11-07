@@ -35,6 +35,12 @@ fn main() {
         .expect("compiler commit");
     println!("cargo:rustc-env=TEZBAR_NATIVE_RUSTC={commit}");
     println!("cargo:rerun-if-env-changed=TEZBAR_NATIVE_SOURCE_SHA");
+    // Cargo's ordinary dependency rebuild does not rerun this package's build
+    // script. Re-evaluate Git provenance for EVERY Cargo invocation, including
+    // edits or new files in any workspace member. This sentinel never exists.
+    let sentinel = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
+        .join("provenance-must-be-rechecked");
+    println!("cargo:rerun-if-changed={}", sentinel.display());
     for path in [
         "src",
         "Cargo.toml",
@@ -51,9 +57,10 @@ fn main() {
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
     };
+    let observed_sha = git(&["rev-parse", "HEAD"]);
     let sha = std::env::var("TEZBAR_NATIVE_SOURCE_SHA")
         .ok()
-        .or_else(|| git(&["rev-parse", "HEAD"]))
+        .or_else(|| observed_sha.clone())
         .expect("Git SHA or TEZBAR_NATIVE_SOURCE_SHA required");
     assert!(
         sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit()),
@@ -72,6 +79,7 @@ fn main() {
         "cargo:rustc-env=TEZBAR_NATIVE_DIRTY={}",
         git(&["status", "--porcelain"])
             .map(|v| !v.is_empty())
-            .unwrap_or(false)
+            .unwrap_or(true)
+            || observed_sha.as_deref() != Some(sha.as_str())
     );
 }

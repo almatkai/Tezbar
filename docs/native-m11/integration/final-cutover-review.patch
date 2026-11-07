@@ -11054,31 +11054,49 @@
 --- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/app.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1h5v5H1zM9 1h5v5H9zM1 9h5v5H1zM9 9h5v5H9z"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1h5v5H1zM9 1h5v5H9zM1 9h5v5H1zM9 9h5v5H9z"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/command.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 5 5-5 5m6 0h5"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 5 5-5 5m6 0h5"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/file.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1h6l4 4v10H3zM9 1v4h4M5 8h6M5 11h6"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1h6l4 4v10H3zM9 1v4h4M5 8h6M5 11h6"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/key.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 5 5m-2-2 2-2"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 5 5m-2-2 2-2"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/link.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 5 2-2c4-4 8 0 4 4l-2 2M6 7l4 2M6 7 4 9c-4 4 0 8 4 4l2-2"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 5 2-2c4-4 8 0 4 4l-2 2M6 7l4 2M6 7 4 9c-4 4 0 8 4 4l2-2"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/note.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/puzzle.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h4V1h4v2h4v4h-2v4h2v3H2v-4h2V6H2z"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h4V1h4v2h4v4h-2v4h2v3H2v-4h2V6H2z"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/search.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 4 4"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 4 4"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/assets/snippet.svg
 @@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2H4v4L2 8l2 2v4h2M10 2h2v4l2 2-2 2v4h-2"/></svg>--- /dev/null
++<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2H4v4L2 8l2 2v4h2M10 2h2v4l2 2-2 2v4h-2"/></svg>
+\ No newline at end of file
+--- /dev/null
 +++ b/docs/native-m11/legacy-prototype-archive/build.rs
 @@ -0,0 +1,49 @@
 +use std::process::Command;
@@ -25828,7 +25846,7 @@
    "scripts": {
      "dev": "tauri dev",
 -    "build": "pnpm build:native && tauri build",
-+    "build": "node scripts/native/build.mjs",
++    "build": "node scripts/native/build.mjs --release --local-preview",
      "native:check": "node scripts/native/build.mjs --check",
      "native:build": "node scripts/native/build.mjs",
      "native:preview:package": "node scripts/native/build.mjs --local-preview",
@@ -25839,13 +25857,17 @@
 +<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
 +  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
 +  <background android:drawable="@color/ic_launcher_background"/>
-+</adaptive-icon>--- /dev/null
++</adaptive-icon>
+\ No newline at end of file
+--- /dev/null
 +++ b/packaging/icons/android/values/ic_launcher_background.xml
 @@ -0,0 +1,4 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +  <color name="ic_launcher_background">transparent</color>
-+</resources>--- /dev/null
++</resources>
+\ No newline at end of file
+--- /dev/null
 +++ b/packaging/legacy-app-policy.json
 @@ -0,0 +1,74 @@
 +{
@@ -36888,31 +36910,49 @@
 --- a/prototypes/native-launcher/assets/app.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1h5v5H1zM9 1h5v5H9zM1 9h5v5H1zM9 9h5v5H9z"/></svg>--- a/prototypes/native-launcher/assets/command.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1h5v5H1zM9 1h5v5H9zM1 9h5v5H1zM9 9h5v5H9z"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/command.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 5 5-5 5m6 0h5"/></svg>--- a/prototypes/native-launcher/assets/file.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 5 5-5 5m6 0h5"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/file.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1h6l4 4v10H3zM9 1v4h4M5 8h6M5 11h6"/></svg>--- a/prototypes/native-launcher/assets/key.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1h6l4 4v10H3zM9 1v4h4M5 8h6M5 11h6"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/key.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 5 5m-2-2 2-2"/></svg>--- a/prototypes/native-launcher/assets/link.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 5 5m-2-2 2-2"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/link.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 5 2-2c4-4 8 0 4 4l-2 2M6 7l4 2M6 7 4 9c-4 4 0 8 4 4l2-2"/></svg>--- a/prototypes/native-launcher/assets/note.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 5 2-2c4-4 8 0 4 4l-2 2M6 7l4 2M6 7 4 9c-4 4 0 8 4 4l2-2"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/note.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>--- a/prototypes/native-launcher/assets/puzzle.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="1"/><path d="M5 6h6M5 9h6M5 12h3"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/puzzle.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h4V1h4v2h4v4h-2v4h2v3H2v-4h2V6H2z"/></svg>--- a/prototypes/native-launcher/assets/search.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h4V1h4v2h4v4h-2v4h2v3H2v-4h2V6H2z"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/search.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 4 4"/></svg>--- a/prototypes/native-launcher/assets/snippet.svg
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="4"/><path d="m9 9 4 4"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/assets/snippet.svg
 +++ /dev/null
 @@ -1 +0,0 @@
--<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2H4v4L2 8l2 2v4h2M10 2h2v4l2 2-2 2v4h-2"/></svg>--- a/prototypes/native-launcher/build.rs
+-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2H4v4L2 8l2 2v4h2M10 2h2v4l2 2-2 2v4h-2"/></svg>
+\ No newline at end of file
+--- a/prototypes/native-launcher/build.rs
 +++ /dev/null
 @@ -1,49 +0,0 @@
 -use std::process::Command;
@@ -40279,10 +40319,10 @@
  Authority=Apple Development: fixture
 --- a/scripts/native/build.mjs
 +++ b/scripts/native/build.mjs
-@@ -35,8 +35,8 @@
-   const sourceDirty=Boolean(get(['status','--porcelain']).stdout.trim())
+@@ -69,8 +69,8 @@
+   if(embedded.source!==sourceCommit || String(embedded.dirty)!==String(sourceDirty) || embedded.bench_control || embedded.gpui_rev!==GPUI_REV) throw Error('Built native executable provenance does not match source')
    const files=await inventoryResources(options.resources)
-   const [binary]=await inventoryResources(root,[['target/debug/tezbar','tezbar']])
+   const [binary]=await inventoryResources(dirname(executable),[[basename(executable),'tezbar']])
 -  const policy=JSON.parse(readFileSync(join(root,'src-tauri/macos-signing.json')))
 -  const catalog=JSON.parse(readFileSync(join(root,'src-tauri/runtime/embedding-macos-arm64.json')))
 +  const policy=JSON.parse(readFileSync(join(root,'packaging/macos-signing.json')))
@@ -47676,13 +47716,17 @@
 -<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
 -  <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
 -  <background android:drawable="@color/ic_launcher_background"/>
--</adaptive-icon>--- a/src-tauri/icons/android/values/ic_launcher_background.xml
+-</adaptive-icon>
+\ No newline at end of file
+--- a/src-tauri/icons/android/values/ic_launcher_background.xml
 +++ /dev/null
 @@ -1,4 +0,0 @@
 -<?xml version="1.0" encoding="utf-8"?>
 -<resources>
 -  <color name="ic_launcher_background">transparent</color>
--</resources>--- a/src-tauri/macos-signing.json
+-</resources>
+\ No newline at end of file
+--- a/src-tauri/macos-signing.json
 +++ /dev/null
 @@ -1,11 +0,0 @@
 -{
@@ -94684,7 +94728,9 @@
 -      </div>
 -    </div>
 -  )
--}--- a/src/renderer/src/raycast-api/action-runtime-registry.tsx
+-}
+\ No newline at end of file
+--- a/src/renderer/src/raycast-api/action-runtime-registry.tsx
 +++ /dev/null
 @@ -1,23 +0,0 @@
 -import { createContext, useContext } from 'react'
@@ -146997,7 +147043,9 @@
 +      </div>
 +    </div>
 +  )
-+}--- /dev/null
++}
+\ No newline at end of file
+--- /dev/null
 +++ b/tests/oracles/legacy-renderer/src/raycast-api/action-runtime-registry.tsx
 @@ -0,0 +1,23 @@
 +import { createContext, useContext } from 'react'

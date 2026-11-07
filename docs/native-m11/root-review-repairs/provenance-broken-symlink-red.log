@@ -1,0 +1,29 @@
+✖ real native build script rechecks dependency edits and refuses unattested archives (2791.986166ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2827.006125
+
+✖ failing tests:
+
+test at scripts/native/provenance.test.mjs:8:1
+✖ real native build script rechecks dependency edits and refuses unattested archives (2791.986166ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to:
+  
+  '9d18c8600fdeb9af46b3a746084e7cb77ed469d1ce247b740cd20b2b1d35f0ec'
+      at TestContext.<anonymous> (file:///Users/almat/Desktop/code/Tezbar%20APP/Tezbar-native-rust-agent/scripts/native/provenance.test.mjs:32:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.start (node:internal/test_runner/test:1257:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '9d18c8600fdeb9af46b3a746084e7cb77ed469d1ce247b740cd20b2b1d35f0ec',
+    expected: '9d18c8600fdeb9af46b3a746084e7cb77ed469d1ce247b740cd20b2b1d35f0ec',
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }

@@ -16,6 +16,7 @@ type Result<T> = std::result::Result<T, Diagnostic>;
 struct Budget {
     bytes: usize,
     records: usize,
+    recovered_tail: bool,
 }
 impl Budget {
     fn bytes(&mut self, n: usize) -> Result<()> {
@@ -157,7 +158,12 @@ fn checksum(expected: u32, bytes: impl IntoIterator<Item = u8>) -> Result<()> {
     }
 }
 /// Physical log block size 32768; fragmented logical records are capped before append.
-fn log(path: &Path, budget: &mut Budget, mut visit: impl FnMut(&[u8]) -> Result<()>) -> Result<()> {
+fn log(
+    path: &Path,
+    budget: &mut Budget,
+    allow_torn_tail: bool,
+    mut visit: impl FnMut(&[u8]) -> Result<()>,
+) -> Result<()> {
     let mut f = open(path)?;
     let len = f.metadata().map_err(|_| Diagnostic::Corrupt)?.len();
     if len > TOTAL_LIMIT as u64 {
@@ -176,6 +182,10 @@ fn log(path: &Path, budget: &mut Budget, mut visit: impl FnMut(&[u8]) -> Result<
             let h = take(&mut s, 7)?;
             let size = usize::from(u16::from_le_bytes([h[4], h[5]]));
             let kind = h[6];
+            if size > s.len() && offset == len && data.len() < 32768 && allow_torn_tail {
+                budget.recovered_tail = true;
+                return Ok(()); // incomplete last logical record was never committed
+            }
             let payload = take(&mut s, size)?;
             checksum(
                 u32le(&h[..4])?,
@@ -202,11 +212,19 @@ fn log(path: &Path, budget: &mut Budget, mut visit: impl FnMut(&[u8]) -> Result<
             }
         }
         if s.len() < 7 && s.iter().any(|b| *b != 0) {
+            if offset == len && data.len() < 32768 && allow_torn_tail {
+                budget.recovered_tail = true;
+                return Ok(());
+            }
             return Err(Diagnostic::Corrupt);
         }
     }
     if pending.is_some() {
-        return Err(Diagnostic::Corrupt);
+        if allow_torn_tail {
+            budget.recovered_tail = true;
+        } else {
+            return Err(Diagnostic::Corrupt);
+        }
     }
     Ok(())
 }
@@ -473,8 +491,16 @@ impl Values {
                 continue;
             }
             let Some(raw) = value else { continue }; // Tombstones never fall back to older values.
-            match chromium_string(&raw) {
-                Ok(v) => {
+            let decoded = match raw.split_first() {
+                Some((0, rest)) => super::utf16_value(rest),
+                _ => chromium_string(&raw).map(|v| (v, false)),
+            };
+            match decoded {
+                Ok((v, repaired)) => {
+                    if repaired {
+                        out.diagnostics
+                            .push((Some(key), Diagnostic::RepairedEncoding));
+                    }
                     out.values.insert(key.into(), v);
                 }
                 Err(e) => {
@@ -559,7 +585,7 @@ fn read_inner(root: &Path) -> Result<ReadReport> {
         return Err(Diagnostic::Corrupt);
     }
     let mut manifest = Manifest::default();
-    log(&root.join(name), &mut budget, |r| manifest.edit(r))?;
+    log(&root.join(name), &mut budget, false, |r| manifest.edit(r))?;
     if !manifest.comparator || !manifest.has_log {
         return Err(Diagnostic::UnsupportedEncoding);
     }
@@ -589,13 +615,22 @@ fn read_inner(root: &Path) -> Result<ReadReport> {
         .filter(|(n, _)| *n >= manifest.log || *n == manifest.prev)
         .collect();
     logs.sort_by_key(|(n, _)| *n);
-    for (_, path) in logs {
-        log(&path, &mut budget, |r| values.batch(r))?;
+    let newest = logs.last().map(|(n, _)| *n);
+    for (number, path) in logs {
+        log(&path, &mut budget, Some(number) == newest, |r| {
+            values.batch(r)
+        })?;
     }
     if before != inventory(root)? {
         return Err(Diagnostic::Changed);
     }
-    values.report()
+    let mut report = values.report()?;
+    if budget.recovered_tail {
+        report
+            .diagnostics
+            .push((None, Diagnostic::RecoveredLogTail));
+    }
+    Ok(report)
 }
 #[cfg(test)]
 #[path = "leveldb_tests.rs"]

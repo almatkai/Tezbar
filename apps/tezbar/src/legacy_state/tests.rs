@@ -280,3 +280,22 @@ fn first_launch_discovers_attested_modern_store_commits_marker_and_existing_nati
         UiState::default()
     );
 }
+
+#[test]
+fn review_m11_fresh_install_defaults_but_missing_upgrade_profile_still_refuses() {
+    let d = tempfile::tempdir().unwrap();
+    let config = d.path().join("config");
+    let data = d.path().join("data");
+    let store = d.path().join("WebKit/com.tezbar.app/WebsiteData/Default");
+    let source = Source::WebKit(store.clone()).for_install(&config, &data);
+    std::fs::create_dir_all(&config).unwrap(); // this launch may now create its own directories
+    std::fs::create_dir_all(&data).unwrap();
+    let path = config.join("ui-state.json");
+    let state = bootstrap(&path, 0, &source).unwrap();
+    assert!(!state.imported_legacy);
+    assert!(path.is_file());
+    let upgrade = Source::WebKit(store).for_install(&config, &data);
+    let untouched = config.join("upgrade.json");
+    assert!(bootstrap(&untouched, 0, &upgrade).is_err());
+    assert!(!untouched.exists());
+}

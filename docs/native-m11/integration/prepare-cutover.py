@@ -53,28 +53,29 @@ replacements={
 for top in ['apps','crates','scripts']:
  for p in Path(top).rglob('*'):
   if not p.is_file() or p.suffix not in ['.rs','.mjs','.py','.ts','.json'] or 'target' in p.parts:continue
-  old=p.read_text();new=old
+  old=p.read_bytes().decode('utf-8');new=old
   for a,b in replacements.items():new=new.replace(a,b)
   if new!=old:changes[str(p)]=new
 # Exact external oracle references, including root test/typecheck configuration.
 for n in tracked:
  p=Path(n)
  if n in move or not p.is_file() or p.suffix not in ['.ts','.tsx','.json','.mjs','.py'] or n.startswith(('docs/','prototypes/')):continue
- old=p.read_text();new=changes.get(n,old).replace('src/renderer/','tests/oracles/legacy-renderer/')
+ old=p.read_bytes().decode('utf-8');new=changes.get(n,old).replace('src/renderer/','tests/oracles/legacy-renderer/')
  if new!=old:changes[n]=new
 # Archive frontend-only root inputs, retaining their bytes for historical reconstruction.
 for n in ['index.html','vite.config.ts','postcss.config.js','tailwind.config.js']:
  p=Path(n)
  if p.exists():
   new='docs/native-m11/legacy-frontend-archive/'+n
-  changes[new]=p.read_text();changes[n]='';rows.append(dict(path=n,action='relocate',destination=new,sha256=hashlib.sha256(p.read_bytes()).hexdigest()))
+  changes[new]=p.read_bytes().decode('utf-8');changes[n]='';rows.append(dict(path=n,action='relocate',destination=new,sha256=hashlib.sha256(p.read_bytes()).hexdigest()))
 # Default change is explicit, held behind all acceptance gates; no public version or feed edit.
-p=Path('package.json');s=p.read_text().replace('"build": "pnpm build:native && tauri build"','"build": "node scripts/native/build.mjs"')
+p=Path('package.json');s=p.read_bytes().decode('utf-8').replace('"build": "pnpm build:native && tauri build"','"build": "node scripts/native/build.mjs --release --local-preview"')
 changes[str(p)]=s
 patch=[]
 for n,new in sorted(changes.items()):
- old=Path(n).read_text() if Path(n).exists() else ''
- patch.extend(difflib.unified_diff(old.splitlines(True),new.splitlines(True),fromfile='a/'+n if old else '/dev/null',tofile='b/'+n if new else '/dev/null'))
+ old=Path(n).read_bytes().decode('utf-8') if Path(n).exists() else ''
+ for line in difflib.unified_diff(old.splitlines(True),new.splitlines(True),fromfile='a/'+n if old else '/dev/null',tofile='b/'+n if new else '/dev/null'):
+  patch.append(line if line.endswith('\n') else line+'\n\\ No newline at end of file\n')
 (out/'final-cutover-review.patch').write_text(''.join(patch))
-(out/'final-cutover-inventory.json').write_text(json.dumps(dict(state='REVIEW_ONLY_NOT_APPLIED',gates=['fresh Opus full integration review','independent Windows compile/tests and disposable installer/storage rehearsal','macOS disposable OS-profile/signing/updater acceptance','manual GUI/IME/AX/GPU and matched RAM','explicit final source cutover authorization'],relocations=rows,binary_copies=binary,consumer_edits=[n for n in changes if n not in move and n not in move.values()],oracle_note='Preserves all old renderer tests/source and prototype evidence outside first-party runtime. Exact remaining dynamic and root test-config references require the recorded acceptance gates. This patch is reviewable but deliberately not represented as release-ready.',patch_sha256=hashlib.sha256((out/'final-cutover-review.patch').read_bytes()).hexdigest()),indent=2)+'\n')
+(out/'final-cutover-inventory.json').write_text(json.dumps(dict(state='REVIEW_ONLY_NOT_APPLIED',gates=['fresh Opus full integration review','independent Windows compile/tests and disposable installer/storage rehearsal','macOS disposable OS-profile/signing/updater acceptance','manual GUI/IME/AX/GPU and matched RAM','explicit final source cutover authorization'],relocations=rows,binary_copies=binary,consumer_edits=[n for n in changes if n not in move and n not in move.values()],oracle_note='Preserves all old renderer tests/source and prototype evidence outside first-party runtime. Exact remaining dynamic and root test-config references require the recorded acceptance gates. This patch is reviewable but deliberately not represented as release-ready.',build_usage='pnpm build --resources <reviewed staged resources> --output <fresh OS-temp child>; requires explicit inputs and builds release + private assembly, never signs a public release',patch_sha256=hashlib.sha256((out/'final-cutover-review.patch').read_bytes()).hexdigest()),indent=2)+'\n')
 print(len(rows),'exact relocations;',len(binary),'binary copies pinned;',len(patch),'patch lines')

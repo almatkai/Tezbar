@@ -508,6 +508,7 @@ impl Owner {
             gate.wait().await;
             let quit_started = std::time::Instant::now();
             let timer = cx.background_executor().timer(Duration::from_secs(8));
+            let committed = std::cell::Cell::new(false);
             let prepared = {
             let prepare = async {
             for write in launcher_writes {
@@ -557,6 +558,7 @@ impl Owner {
                 if owner.m7.store.pending() || !owner.m7.barrier.is_clean() || owner.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true) {
                     return Err("Settings changed while quitting; retry quit.".to_string());
                 }
+                committed.set(true);
                 owner.launcher.update(cx, |view, w, cx| {
                     view.dispose_chat(w, cx);
                     (view.drain_chat(w, cx), view.drain_terminal(w, cx))
@@ -566,21 +568,14 @@ impl Owner {
             final_drains.1.await?;
             Ok::<(), String>(())
             };
-            use std::{future::Future, task::Poll};
-            let mut prepare = std::pin::pin!(prepare);
-            let mut timer = std::pin::pin!(timer);
-            std::future::poll_fn(|cx| {
-                if let Poll::Ready(r) = prepare.as_mut().poll(cx) { return Poll::Ready(r); }
-                if timer.as_mut().poll(cx).is_ready() { return Poll::Ready(Err("Quit save/drain exceeded eight seconds".into())); }
-                Poll::Pending
-            }).await
+            quit_preparation(prepare, timer, &committed).await
             };
             let core = this.update(cx, |this, cx| {
-                let prepared = if matches!(prepared, Ok(()))
+                let prepared = if matches!(prepared, QuitPreparation::Saved)
                     && (this.m7.store.pending() || !this.m7.barrier.is_clean() || this.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true)) {
-                    Err("Settings changed while quitting; retry quit.".to_string())
+                    QuitPreparation::Refused("Settings changed while quitting; retry quit.".to_string())
                 } else { prepared };
-                if !matches!(prepared, Ok(())) {
+                if let QuitPreparation::Refused(error) = &prepared {
                     this.lifecycle.quitting = false;
                     this.core.resume_extensions();
                     this.defer_update(cx);
@@ -588,7 +583,7 @@ impl Owner {
                     if let Some(client)=this.updater.clone() {this.tasks.push(cx.spawn(async move |_,cx|{let _=gpui_tokio::Tokio::spawn(cx,async move {client.control(update_integration::Command::Resume).await}).await;}));}
                     let _ = this.launcher.update(cx, |view, _, cx| view.resume_cancelled_quit(cx));
                     this.save_error = Some(format!(
-                        "Could not save changes; quit cancelled: {prepared:?}"
+                        "Could not save changes; quit cancelled: {error}"
                     ));
                     this.writer = windows::persistence::Writer::new(
                         this.core.0.ctx.config.clone(),
@@ -598,7 +593,7 @@ impl Owner {
                     this.flush();
                     let _ = this.log.write(
                         format!(
-                            "Could not drain Settings/window layout; quit cancelled: {prepared:?}\n"
+                            "Could not drain Settings/window layout; quit cancelled: {error}\n"
                         )
                         .as_bytes(),
                     );
@@ -606,14 +601,14 @@ impl Owner {
                     if let Some(settings) = this.settings {
                         let _ = settings.update(cx, |view, _, cx| {
                             view.error = Some(format!(
-                                "Couldn't save changes; quit cancelled. Retry: {prepared:?}"
+                                "Couldn't save changes; quit cancelled. Retry: {error}"
                             ));
                             cx.notify();
                         });
                     }
                     let _ = this.launcher.update(cx, |view, _, cx| {
                         view.error = Some(format!(
-                            "Could not save changes; quit cancelled: {prepared:?}"
+                            "Could not save changes; quit cancelled: {error}"
                         ));
                         if view.onboarding_active {if let Some(onboarding)=&view.onboarding {onboarding.update(cx,|view,cx|{view.error=Some("Could not save changes; quit cancelled. Retry saved changes.".into());cx.notify();});}}
                         cx.notify();
@@ -624,6 +619,9 @@ impl Owner {
                     return None;
                 }
                 this.events.dispose();
+                if matches!(prepared, QuitPreparation::ForcedAfterCommit) {
+                    let _ = this.log.write(b"Quit deadline reached after cancellation began; final writes may be incomplete. Exiting without claiming them saved.\n");
+                }
                 let _ = this.launcher.update(cx, |view, _, cx| {
                     view.dispose_extensions(cx);
                     view.ready = false;
@@ -1159,6 +1157,23 @@ impl Owner {
                     .update(cx, |view, _, cx| view.confirm_fresh_state(cx))
                     .unwrap_or(false)
                 {
+                    if let Ok(theme) = self
+                        .launcher
+                        .update(cx, |view, _, _| view.state.theme.clone())
+                    {
+                        use tezbar_ui_model::ui_state::Theme;
+                        let _ = tezbar_ui::tokens::set(match theme {
+                            Theme::White => "white",
+                            Theme::Dark => "dark",
+                            Theme::System => "system",
+                        });
+                        cx.set_window_appearance(match theme {
+                            Theme::White => Some(WindowAppearance::Light),
+                            Theme::Dark => Some(WindowAppearance::Dark),
+                            Theme::System => None,
+                        });
+                        cx.refresh_windows();
+                    }
                     self.m7 = m7::State::new(self.m7.store.clone());
                     self.start_core(cx);
                     self.mount_updater_after_recovery(cx);
@@ -1170,6 +1185,23 @@ impl Owner {
                     .update(cx, |view, _, cx| view.retry_migration(cx))
                     .unwrap_or(false)
                 {
+                    if let Ok(theme) = self
+                        .launcher
+                        .update(cx, |view, _, _| view.state.theme.clone())
+                    {
+                        use tezbar_ui_model::ui_state::Theme;
+                        let _ = tezbar_ui::tokens::set(match theme {
+                            Theme::White => "white",
+                            Theme::Dark => "dark",
+                            Theme::System => "system",
+                        });
+                        cx.set_window_appearance(match theme {
+                            Theme::White => Some(WindowAppearance::Light),
+                            Theme::Dark => Some(WindowAppearance::Dark),
+                            Theme::System => None,
+                        });
+                        cx.refresh_windows();
+                    }
                     self.m7 = m7::State::new(self.m7.store.clone());
                     self.start_core(cx);
                     self.mount_updater_after_recovery(cx);
@@ -1577,6 +1609,7 @@ fn run_app(
                     .clone()
                     .map(crate::legacy_state::Source::WebView2)
             })
+            .map(|source| source.for_install(&p.profile.config, &p.profile.data))
     });
     let installed_executable = production
         .as_ref()
@@ -1591,6 +1624,10 @@ fn run_app(
     let _entered = handle.enter();
     let (relay, mut rx) = Relay::new();
     let activate = relay.clone();
+    // Snapshot first-install evidence above before creating our own data folder.
+    if production.is_some() {
+        std::fs::create_dir_all(&instance_dir)?;
+    }
     let instance = match runtime
         .block_on(Instance::claim(
             &instance_dir,
@@ -1855,3 +1892,68 @@ fn run_app(
 
 #[cfg(test)]
 mod m9_review_tests;
+
+#[derive(Debug)]
+enum QuitPreparation {
+    Saved,
+    Refused(String),
+    ForcedAfterCommit,
+}
+async fn quit_preparation<P, T>(
+    prepare: P,
+    timer: T,
+    committed: &std::cell::Cell<bool>,
+) -> QuitPreparation
+where
+    P: std::future::Future<Output = Result<(), String>>,
+    T: std::future::Future,
+{
+    use std::task::Poll;
+    let mut prepare = std::pin::pin!(prepare);
+    let mut timer = std::pin::pin!(timer);
+    std::future::poll_fn(|cx| {
+        if let Poll::Ready(result) = prepare.as_mut().poll(cx) {
+            return Poll::Ready(match result {
+                Ok(()) => QuitPreparation::Saved,
+                Err(e) => QuitPreparation::Refused(e),
+            });
+        }
+        if timer.as_mut().poll(cx).is_ready() {
+            return Poll::Ready(if committed.get() {
+                QuitPreparation::ForcedAfterCommit
+            } else {
+                QuitPreparation::Refused("Quit save/drain exceeded eight seconds".into())
+            });
+        }
+        Poll::Pending
+    })
+    .await
+}
+#[cfg(test)]
+mod m11_deadline_tests {
+    use super::*;
+    #[tokio::test]
+    async fn review_m11_timeout_after_commit_cannot_resume_cancelled_runs() {
+        let committed = std::cell::Cell::new(false);
+        let prepare = async {
+            committed.set(true);
+            std::future::pending::<Result<(), String>>().await
+        };
+        assert!(matches!(
+            quit_preparation(prepare, std::future::ready(()), &committed).await,
+            QuitPreparation::ForcedAfterCommit
+        ));
+    }
+    #[tokio::test]
+    async fn review_m11_save_timeout_before_commit_still_refuses_quit() {
+        assert!(matches!(
+            quit_preparation(
+                std::future::pending(),
+                std::future::ready(()),
+                &std::cell::Cell::new(false)
+            )
+            .await,
+            QuitPreparation::Refused(_)
+        ));
+    }
+}
