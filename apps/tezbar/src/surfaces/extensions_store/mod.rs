@@ -100,7 +100,6 @@ impl StoreView {
         });
         cx.on_release(|v, cx| {
             v.dispose(cx);
-            gpui_tokio::Tokio::spawn(cx, v.transport.drain()).detach();
         })
         .detach();
         Self {
@@ -421,9 +420,20 @@ impl StoreView {
                 v.catalog.installed(
                     &id,
                     if matches!(result, Ok(Ok(()))) {
-                        "Extension updated.".into()
+                        if remove {
+                            "Extension removed.".into()
+                        } else {
+                            "Extension installed.".into()
+                        }
                     } else {
-                        "Extension operation failed. Retry.".into()
+                        match &result {
+                            Ok(Err(e)) => format!(
+                                "Could not {} extension: {}",
+                                if remove { "remove" } else { "install" },
+                                e.chars().take(300).collect::<String>()
+                            ),
+                            _ => "Extension operation interrupted. Try again.".into(),
+                        }
                     },
                 );
                 if v.epoch == epoch {
@@ -442,6 +452,7 @@ impl StoreView {
             return;
         }
         let t = self.transport.clone();
+        let cleanup = t.clone();
         let epoch = self.epoch;
         self.next += 1;
         let ticket = self.next;
@@ -458,6 +469,17 @@ impl StoreView {
             let _ = this.update(cx, |v, cx| {
                 v.jobs.remove(&ticket);
                 if v.epoch != epoch || !v.visible {
+                    if let Ok(Ok(reply)) = &result {
+                        if reply["mode"] == "view" && reply["root"]["type"] != "MenuBarExtra" {
+                            if let Some(id) = reply["sessionId"].as_str() {
+                                gpui_tokio::Tokio::spawn(
+                                    cx,
+                                    cleanup.send(ExtensionRequest::Dispose(id.into())),
+                                )
+                                .detach();
+                            }
+                        }
+                    }
                     return;
                 }
                 match result {
@@ -472,9 +494,13 @@ impl StoreView {
                             v.error = Some("Extension returned an invalid view.");
                         }
                     }
-                    Ok(Ok(result)) if result["ok"] == true => {
-                        v.emit_effect(StoreEffect::Notice("Command completed.".into()), cx)
-                    }
+                    Ok(Ok(result)) if result["ok"] == true => v.emit_effect(
+                        StoreEffect::Notice(
+                            super::command_bar::presentation::extension_notice(&result)
+                                .unwrap_or_else(|| "Command completed.".into()),
+                        ),
+                        cx,
+                    ),
                     _ => v.error = Some("Command failed. Try again."),
                 };
                 cx.notify();

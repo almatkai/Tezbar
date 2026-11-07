@@ -658,4 +658,4 @@ export const systemPreferences = {
   },
 }
 
-export async function extensionControl(_sessionId: string, _kind: 'close' | 'preferences' | 'clear-search' | 'hud', _message?: string, _source = 0): Promise<void> { throw new Error('Extension control requires the native worker host') }
+export async function extensionControl(_sessionId: string, _kind: 'close' | 'preferences' | 'clear-search' | 'hud', _message?: string, _source = 0, _run?: { request: string; extensionId: string }): Promise<void> { throw new Error('Extension control requires the native worker host') }

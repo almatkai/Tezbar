@@ -922,6 +922,33 @@ pub(crate) fn set_status_item(
     params: &Value,
     callback: crate::host::StatusCallback,
 ) -> Result<(), String> {
+    set_status_item_impl(ctx, scoped, package, params, callback, false)
+}
+/// SDK menu roots always need a portable icon: Windows does not display a tray
+/// title. This built-in glyph has no file, network or SDK-path authority.
+pub(crate) fn set_sdk_status_item(
+    ctx: &CoreContext,
+    scoped: &str,
+    params: &Value,
+    callback: crate::host::StatusCallback,
+) -> Result<(), String> {
+    set_status_item_impl(
+        ctx,
+        scoped,
+        std::path::Path::new(""),
+        params,
+        callback,
+        true,
+    )
+}
+fn set_status_item_impl(
+    ctx: &CoreContext,
+    scoped: &str,
+    package: &std::path::Path,
+    params: &Value,
+    callback: crate::host::StatusCallback,
+    builtin: bool,
+) -> Result<(), String> {
     let items = params["items"].as_array().ok_or("Tray items required")?;
     if items.len() > 128 {
         return Err("Too many tray items".into());
@@ -960,7 +987,22 @@ pub(crate) fn set_status_item(
         Ok(())
     }
     validate(items, 0, &mut 0, &mut HashSet::new())?;
-    let mut icon = None;
+    let mut icon = builtin.then(|| {
+        let mut rgba = vec![0; 16 * 16 * 4];
+        // Neutral grey has visible contrast on both light and dark system bars.
+        for y in 0..16 {
+            for x in 0..16 {
+                let dx = x as f32 - 7.5;
+                let dy = y as f32 - 7.5;
+                let r = (dx * dx + dy * dy).sqrt();
+                if r >= 3. && (r <= 5.8 || (r <= 7.3 && (8. * dy.atan2(dx)).cos() > 0.25)) {
+                    let i = (y * 16 + x) * 4;
+                    rgba[i..i + 4].copy_from_slice(&[128, 128, 128, 255]);
+                }
+            }
+        }
+        (rgba, 16, 16)
+    });
     if let Some(path) = params["icon"].as_str() {
         let path = package.join(process_install::relative(path)?);
         let image = image::open(path).map_err(|e| e.to_string())?.into_rgba8();

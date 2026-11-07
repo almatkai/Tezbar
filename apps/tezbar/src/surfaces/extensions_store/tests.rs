@@ -86,3 +86,52 @@ fn remove_confirmation_defaults_to_cancel_and_traps_tab(cx: &mut TestAppContext)
     cx.simulate_keystrokes("escape");
     assert!(fake.0.lock().unwrap().is_empty());
 }
+
+struct RunReply(std::sync::Mutex<Vec<(&'static str, Vec<Value>)>>);
+impl ExtensionTransport for RunReply {
+    fn send(&self, r: ExtensionRequest) -> ExtensionFuture {
+        let (channel, args) = r.wire();
+        self.0.lock().unwrap().push((channel, args));
+        Box::pin(async move {
+            Ok(if channel == "extension:run-command" {
+                json!({"ok":true,"mode":"view","sessionId":"late-store-session","root":{"type":"List"}})
+            } else {
+                json!(true)
+            })
+        })
+    }
+    fn drain(&self) -> ExtensionFuture {
+        Box::pin(async { Ok(json!(true)) })
+    }
+}
+#[gpui::test]
+fn review_m9_store_disposes_run_reply_after_hiding(cx: &mut TestAppContext) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    cx.update(|cx| gpui_tokio::init_from_handle(cx, rt.handle().clone()));
+    let fake = Arc::new(RunReply(Default::default()));
+    let (view, cx) = cx.add_window_view(|w, cx| StoreView::new(fake.clone(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.visible = true;
+            v.run("fixture".into(), "run".into(), cx);
+            v.set_visible(false, w, cx);
+        })
+    });
+    rt.block_on(async {
+        for _ in 0..128 {
+            cx.run_until_parked();
+            tokio::task::yield_now().await;
+        }
+    });
+    assert!(
+        fake.0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(channel, args)| *channel == "extension:dispose-session"
+                && args[0]["sessionId"] == "late-store-session")
+    );
+}

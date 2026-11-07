@@ -343,30 +343,28 @@ impl RuntimeView {
                     .session
                     .as_ref()
                     .is_some_and(|s| s.root.kind == NodeKind::Grid);
-                let columns = if grid {
-                    v.session
-                        .as_ref()
-                        .and_then(|s| s.root.props.get("columns"))
-                        .and_then(Value::as_u64)
-                        .unwrap_or(5)
-                        .clamp(1, 12) as usize
-                } else {
-                    1
-                };
-                let row = if grid { 148. } else { tezbar_ui::tokens::ROW } * t.zoom;
+                let row = if grid { 166. } else { tezbar_ui::tokens::ROW } * t.zoom;
                 let scroll = v.list_scroll.0.borrow();
                 let top = ((-f32::from(scroll.base_handle.offset().y) / row)
                     .max(0.)
                     .floor() as usize)
-                    * columns;
-                let count = ((f32::from(scroll.base_handle.bounds().size.height) / row)
+                    .saturating_sub(1);
+                let count = (f32::from(scroll.base_handle.bounds().size.height) / row)
                     .ceil()
                     .max(1.) as usize
-                    + 2)
-                    * columns;
+                    + 3;
                 drop(scroll);
-                v.viewport = top.saturating_sub(columns)
-                    ..top.saturating_add(count.min(108)).min(v.rows.len());
+                if grid {
+                    let ranges = v.grid_ranges();
+                    let start = ranges.get(top).map(|r| r.start).unwrap_or(v.rows.len());
+                    let end = ranges
+                        .get((top + count).min(ranges.len()).saturating_sub(1))
+                        .map(|r| r.end)
+                        .unwrap_or(start);
+                    v.viewport = start..end.min(start + 108);
+                } else {
+                    v.viewport = top.min(v.rows.len())..(top + count.min(108)).min(v.rows.len());
+                }
                 v.prepare_images(cx);
                 cx.notify();
             });

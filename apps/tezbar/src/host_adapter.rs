@@ -72,6 +72,9 @@ impl GpuiHost {
     }
 }
 impl Host for GpuiHost {
+    fn sdk_status_items(&self) -> bool {
+        true
+    }
     fn extension_control(
         &self,
         session: String,

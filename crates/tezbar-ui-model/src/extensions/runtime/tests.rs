@@ -112,16 +112,24 @@ fn client_filter_and_server_search_are_distinct() {
 fn callback_ids_are_session_owned_and_latest_reply_wins() {
     let mut s = session();
     assert!(s.invoke("foreign", None).is_err());
+    Arc::make_mut(&mut s.root)
+        .props
+        .insert("__hasServerSearch".into(), json!(true));
     let Effect::Invoke { token, .. } = s.invoke("open", None).unwrap() else {
         panic!()
     };
-    s.search("b".into());
+    let Some(Effect::Search { token: newer, .. }) = s.search("b".into()) else {
+        panic!()
+    };
+    s.refresh_finished(&newer, Some(reply(root(&["b"]))), 1)
+        .unwrap();
     assert!(s
-        .refresh_finished(&token, Some(reply(root(&["wrong"]))), 1)
+        .refresh_finished(&token, Some(reply(root(&["wrong"]))), 2)
         .unwrap()
         .is_none());
     assert_eq!(s.filtered_ids(), vec!["b"]);
 }
+
 #[test]
 fn navigation_push_pop_and_back_callback() {
     let mut s = session();
@@ -384,4 +392,19 @@ fn no_view_and_legacy_records_never_replay_long_clipboard_file_open_or_scripts()
     s.no_view(&t, "copied".into(), records(), Some(7), 3);
     assert!(s.notice_message.is_none());
     assert_eq!(s.drain_effects().count(), 0);
+}
+
+#[test]
+fn review_m9_client_filter_keeps_pending_action_token_and_server_search_retires_it() {
+    let mut s = session();
+    let Effect::Invoke { token, .. } = s.invoke("open", None).unwrap() else {
+        panic!()
+    };
+    assert!(s.search("b".into()).is_none());
+    assert!(s.accepts(&token));
+    Arc::make_mut(&mut s.root)
+        .props
+        .insert("__hasServerSearch".into(), json!(true));
+    assert!(matches!(s.search("c".into()), Some(Effect::Search { .. })));
+    assert!(!s.accepts(&token));
 }

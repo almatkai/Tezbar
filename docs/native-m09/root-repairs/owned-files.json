@@ -1,0 +1,158 @@
+{
+  "apps/tezbar/src/app.rs": {
+    "sha256": "5567394e08e67c2b4aa2e4722fe88e165cc42ab9909aca94d1b9198168e03665",
+    "bytes": 76238
+  },
+  "apps/tezbar/src/app/m8.rs": {
+    "sha256": "a8d01a97b189dd46459ab5f6aeafeabebaf1165a5216726e2857dba546737d6d",
+    "bytes": 5639
+  },
+  "apps/tezbar/src/app/m8_tests.rs": {
+    "sha256": "2716a14588d067a0d36d898048cafd0d3dbd823821e51f38e6024b133176d200",
+    "bytes": 23509
+  },
+  "apps/tezbar/src/app/m9_review_tests.rs": {
+    "sha256": "00a26bc1733912c8bb5e293f71329168d6bfd68a12466558d0e7badb3c8fd132",
+    "bytes": 6919
+  },
+  "apps/tezbar/src/core_client.rs": {
+    "sha256": "f784159ff55e3d9cb109ab2e938110a24b98a2161a5317e71ebb00d6474705b7",
+    "bytes": 24894
+  },
+  "apps/tezbar/src/host_adapter.rs": {
+    "sha256": "75028df5b12c63db70aad75af829734c03d3cc375195a44b5888cf53b6f2c8ee",
+    "bytes": 10601
+  },
+  "apps/tezbar/src/surfaces/command_bar/extension_integration.rs": {
+    "sha256": "938324161259f8e96895ee7b42c8bafbaf332ccf4fbf2feec40a528b38d8186b",
+    "bytes": 10957
+  },
+  "apps/tezbar/src/surfaces/command_bar/mod.rs": {
+    "sha256": "0b7bc5fa7c10583d267a8e4e5690f04c97a1fa0640966e18ff518b580f2401f4",
+    "bytes": 83771
+  },
+  "apps/tezbar/src/surfaces/command_bar/presentation.rs": {
+    "sha256": "b73d1f3c1bfb37988b35228537dc540877f717ea07bdfba2a50a09a6ad90dfc0",
+    "bytes": 15222
+  },
+  "apps/tezbar/src/surfaces/command_bar/review_extension_access.rs": {
+    "sha256": "b8cdb8a041e1825bb8e25464ce1fafa7e14e726ed54306f1740bbe75bfa0c5ab",
+    "bytes": 1404
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/images.rs": {
+    "sha256": "94447f12336da1c207566615f387a513f4f3d93869a03def6a611d2d8b219b72",
+    "bytes": 13871
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/mod.rs": {
+    "sha256": "9deb69d066ad18c0ec63ba64060353658c41ec8c8ab99193d27d0ce1efcb55e2",
+    "bytes": 36829
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/preferences.rs": {
+    "sha256": "e6cc3ae1e10fd0e7cd2ed42c6a1077395c20cfd2fc833a697773f88dbdc161b9",
+    "bytes": 9343
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs": {
+    "sha256": "73cd3a1e8cafa159df5209f02e277fbc1fb6458172f00ae0e222670999bef809",
+    "bytes": 23577
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/review_regressions.rs": {
+    "sha256": "c1799a7f56de978759f6a97171e3be8673230013791655da73a4e4c4848401eb",
+    "bytes": 15433
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/tests.rs": {
+    "sha256": "7d8e03076b3272cf81f4adc0d9051af802375650919f44ebe8a6b31ef2fd5e8b",
+    "bytes": 19227
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/view.rs": {
+    "sha256": "2017729dd33b9c8281f27fc851d91a0e00987b5a6f5726f285424410a32d3699",
+    "bytes": 68099
+  },
+  "apps/tezbar/src/surfaces/extensions_store/mod.rs": {
+    "sha256": "4da279dbaa176cb099cdb8f5f5132dc7db6b5f6932bd7d47b6080a7ddf48651c",
+    "bytes": 19594
+  },
+  "apps/tezbar/src/surfaces/extensions_store/tests.rs": {
+    "sha256": "a44d328c7a718028c17d8995703166356b15ea982c36674f84d3956eedb53d2c",
+    "bytes": 4889
+  },
+  "apps/tezbar/src/surfaces/extensions_store/view.rs": {
+    "sha256": "aa0e13204adf2a4e5d0571813e740c231ac6002b14c0b7e2cef2f86836c45b1f",
+    "bytes": 18092
+  },
+  "crates/tezbar-core/src/extension_worker.rs": {
+    "sha256": "acd0a46fdd4fdc5a207f120a1b245cce84578382e565d4f27a2b773907a81d46",
+    "bytes": 41053
+  },
+  "crates/tezbar-core/src/extensions/process_host.rs": {
+    "sha256": "6eb2c729f0a702439611dbe733d374e5f8a6a4f03a5a635776f9482bf1700c1f",
+    "bytes": 44129
+  },
+  "crates/tezbar-core/src/host.rs": {
+    "sha256": "e4e5375ab235e7ec72e1f6ad7334b297c592dda5727c024a48d3122c87dbbfc7",
+    "bytes": 10003
+  },
+  "crates/tezbar-ui-model/src/extensions/runtime.rs": {
+    "sha256": "be4b5816910402a524c1b69309386a35fd400d1ad5558114becdf542d6435423",
+    "bytes": 31015
+  },
+  "crates/tezbar-ui-model/src/extensions/runtime/tests.rs": {
+    "sha256": "41913281388f76b142a2899aa3d3fe9c2bdd345d4615ebce4383179e3f79592b",
+    "bytes": 13686
+  },
+  "src/main/desktop-runtime.ts": {
+    "sha256": "08624e8f84e190b2e5f345b228156ddcb027311a7e43a2a342f3f01fbca71165",
+    "bytes": 24874
+  },
+  "src/main/extension-runner-effects.test.ts": {
+    "sha256": "22202cebfa640ee1336306bbf6a714f9cf436e114f072baba25e8957e4bfdd2c",
+    "bytes": 4206
+  },
+  "src/main/extension-runner.ts": {
+    "sha256": "281930b84b6677c172257c31076ef018a76d44b36187bcb88e4dce19f10aa46c",
+    "bytes": 166295
+  },
+  "src/main/extensionWorker/desktop.ts": {
+    "sha256": "3d9142c2f358a9d13677d9580d6c6975f18e42c9260af4fd4565899f4f77f8c2",
+    "bytes": 4449
+  },
+  "src/main/extensionWorker/main.ts": {
+    "sha256": "20f0fbd84c739081858c5bde725d8698e4fffc2f56e636fe8f8e9e1bca1b905b",
+    "bytes": 6370
+  },
+  "tests/fixtures/extensions/package.json": {
+    "sha256": "68563491caaaa52df79b9d873e265a8196cf5f5bfdda7a9a33a515a860d16401",
+    "bytes": 2906
+  },
+  "tests/fixtures/extensions/src/probe-date.tsx": {
+    "sha256": "54d71d55fdec4e555c4679e1f0cbda9c9ddbaef1088668bfa020a846501d09c9",
+    "bytes": 496
+  },
+  "tests/fixtures/extensions/src/probe-menubar-info.tsx": {
+    "sha256": "f2ab1f703d9963b4e57cb04af377c35b14666f53418d0f228cf8c2ab494706b2",
+    "bytes": 307
+  },
+  "tests/fixtures/extensions/src/probe-noview-clear.tsx": {
+    "sha256": "0b38cb059512b35179616cf5f551a63d8161806ff7ed181962c82b1a2272cf99",
+    "bytes": 154
+  },
+  "tests/fixtures/extensions/src/probe-noview-close.tsx": {
+    "sha256": "7f62685587343ccd972128ab2f9acc84214e60dc869376d5baf7c4392963b940",
+    "bytes": 155
+  },
+  "tests/fixtures/extensions/src/probe-noview-plain.tsx": {
+    "sha256": "a07eb0333b4b6dd9995e6537caa1ad311f6cfcc92e29b1ea36cf6491a7df3624",
+    "bytes": 112
+  },
+  "tests/fixtures/extensions/src/probe-noview-pref.tsx": {
+    "sha256": "7125588d0d2262dd7a2acfce11db1ad73a7e08d0bed6c59dcfb0933370ed9756",
+    "bytes": 127
+  },
+  "tests/fixtures/extensions/src/probe-noview-prefs.tsx": {
+    "sha256": "c2a2d08ec20ff68df2b16127fa05282c0ed7d327abaed694a90b1c2d26d9af34",
+    "bytes": 133
+  },
+  "tests/fixtures/extensions/src/probe-push.tsx": {
+    "sha256": "b1c3904ec68410957f16c8179491761da36d365253833dafde7c8a623df01611",
+    "bytes": 604
+  }
+}

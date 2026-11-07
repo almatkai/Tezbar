@@ -133,30 +133,20 @@ impl std::fmt::Debug for ExtensionControl {
     }
 }
 pub trait Host: Send + Sync + 'static {
+    /// SDK status sync requires the native session-aware status host. Legacy
+    /// hosts preserve their existing in-list behavior until their own cutover.
+    fn sdk_status_items(&self) -> bool {
+        false
+    }
     fn extension_control(
         &self,
-        session: String,
-        source: u64,
-        control: ExtensionControl,
+        _session: String,
+        _source: u64,
+        _control: ExtensionControl,
     ) -> HostFuture<()> {
-        match control {
-            ExtensionControl::Close => self.surface(SurfaceOp::CloseCurrent),
-            ExtensionControl::Preferences => {
-                self.emit("app:open-surface", serde_json::json!("settings-extensions"));
-                self.surface(SurfaceOp::OpenSettings)
-            }
-            ExtensionControl::ClearSearch => {
-                self.emit(
-                    "extension:ui",
-                    serde_json::json!({"sessionId":session,"source":source,"kind":"clear-search"}),
-                );
-                Box::pin(async { Ok(()) })
-            }
-            ExtensionControl::Hud(message) => {
-                self.emit("extension:ui",serde_json::json!({"sessionId":session,"source":source,"kind":"hud","message":message}));
-                Box::pin(async { Ok(()) })
-            }
-        }
+        // Legacy Tauri controls were no-ops. Only an explicit fenced native
+        // adapter may turn them into window or Settings effects.
+        Box::pin(async { Ok(()) })
     }
     fn desktop_effect(&self, _effect: DesktopEffect) -> Option<Result<Value, String>> {
         None
@@ -198,6 +188,30 @@ impl TestHost {
     }
 }
 impl Host for TestHost {
+    fn sdk_status_items(&self) -> bool {
+        true
+    }
+    fn extension_control(
+        &self,
+        session: String,
+        source: u64,
+        control: ExtensionControl,
+    ) -> HostFuture<()> {
+        if let Err(e) = self.record("ExtensionControl".into()) {
+            return Box::pin(async move { Err(e) });
+        }
+        let (kind, message) = match control {
+            ExtensionControl::Close => ("close", None),
+            ExtensionControl::Preferences => ("preferences", None),
+            ExtensionControl::ClearSearch => ("clear-search", None),
+            ExtensionControl::Hud(message) => ("hud", Some(message)),
+        };
+        self.emit(
+            "extension:ui",
+            serde_json::json!({"sessionId":session,"source":source,"kind":kind,"message":message}),
+        );
+        Box::pin(async { Ok(()) })
+    }
     fn desktop_effect(&self, effect: DesktopEffect) -> Option<Result<Value, String>> {
         if !self.allow_interaction {
             return Some(Err("Desktop effect denied".into()));

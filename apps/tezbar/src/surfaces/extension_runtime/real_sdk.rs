@@ -137,6 +137,13 @@ pub fn verify(
             assert_eq!(root.kind, NodeKind::Grid);
             assert_eq!(root.props["columns"], 3);
             assert_eq!(node_count(&root, NodeKind::GridItem), 7);
+            // Grid arrows navigate tiles only when the search input is not focused.
+            // This scenario tests the native grid owner, while the caret regression
+            // separately exercises the search field's real dispatch path.
+            cx.update(|w, cx| {
+                let focus = view.read(cx).focus.clone();
+                focus.focus(w, cx);
+            });
             cx.simulate_keystrokes("right down");
             assert_eq!(
                 view.read(&cx.app.borrow())
@@ -360,11 +367,13 @@ pub fn verify(
             assert!(
                 fixture
                     .host
-                    .calls
+                    .events
                     .lock()
                     .unwrap()
                     .iter()
-                    .any(|c| c.contains("CloseCurrent"))
+                    .any(|(channel, payload)| channel == "extension:ui"
+                        && payload["kind"] == "close"
+                        && payload["sessionId"].as_str().is_some())
             );
         }
         "menubar" => {

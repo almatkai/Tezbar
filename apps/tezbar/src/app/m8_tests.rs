@@ -54,7 +54,7 @@ use crate::surfaces::command_bar::chat_integration::tests::{
 };
 use gpui::EntityInputHandler;
 use std::sync::atomic::Ordering;
-fn owner(
+pub(in crate::app) fn owner(
     cx: &mut VisualTestContext,
     rt: &tokio::runtime::Runtime,
     root: &tempfile::TempDir,
@@ -459,7 +459,6 @@ fn actual_launcher_input_actions_focus_and_ime_do_not_fall_through_search(cx: &m
     );
     assert_eq!(f.count("agent:run"), 1);
 }
-
 
 fn repair_failed_quit_continue(cx: &mut TestAppContext, failure: &str) {
     let (rt, root, f, view, cx) = mount(cx);

@@ -362,8 +362,18 @@ impl RuntimeView {
             let label = accessory
                 .get("text")
                 .or_else(|| accessory.get("tag"))
-                .or_else(|| accessory.get("date"))
                 .map(scalar)
+                .or_else(|| {
+                    accessory.get("date").and_then(Value::as_str).map(|raw| {
+                        use tezbar_core::instant::transform::PresentationFormatter;
+                        tezbar_core::instant::transform::parse_timestamp_data(raw, 0)
+                            .map(|stamp| {
+                                super::super::command_bar::locale::NativeLocale
+                                    .local_timestamp(stamp.ms)
+                            })
+                            .unwrap_or_else(|_| raw.to_owned())
+                    })
+                })
                 .unwrap_or_default();
             d = d.child(div().text_color(t.text3).child(label));
         }
@@ -410,14 +420,6 @@ impl RuntimeView {
                 .on_click(move |_, w, cx| {
                     let _ = owner.update(cx, |v, cx| v.event(UiEvent::Select(id.clone()), w, cx));
                 });
-            if let Some(section) = &row.section {
-                tile = tile.child(
-                    div()
-                        .text_size(px(11.))
-                        .text_color(t.text3)
-                        .child(section.clone()),
-                );
-            }
             if let Some(color) = row
                 .node
                 .props
@@ -448,7 +450,27 @@ impl RuntimeView {
                 ),
             );
         }
-        d.into_any_element()
+        let heading = rows
+            .first()
+            .filter(|row| {
+                self.rows
+                    .iter()
+                    .position(|r| r.id == row.id)
+                    .is_some_and(|i| i == 0 || self.rows[i - 1].section != row.section)
+            })
+            .and_then(|r| r.section.clone());
+        div()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .h(px(18. * t.zoom))
+                    .text_color(t.text3)
+                    .text_size(px(11.))
+                    .child(heading.unwrap_or_default()),
+            )
+            .child(d)
+            .into_any_element()
     }
     fn metadata(&self, n: &Node, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
         let mut d = div().flex().flex_col().gap(px(8.));
@@ -707,12 +729,13 @@ impl RuntimeView {
                 )
             })
             .when(n.kind == NodeKind::DatePicker, |d| {
-                d.child(
-                    div()
-                        .text_color(t.text3)
-                        .text_size(px(11.))
-                        .child("Date (YYYY-MM-DD)"),
-                )
+                d.child(div().text_color(t.text3).text_size(px(11.)).child(
+                    if n.string("type") == Some("datetime") {
+                        "Date and time (YYYY-MM-DDTHH:MM)"
+                    } else {
+                        "Date (YYYY-MM-DD)"
+                    },
+                ))
             })
             .into_any_element()
     }
@@ -855,18 +878,29 @@ impl RuntimeView {
                     let owner = cx.entity().downgrade();
                     let key = key.clone();
                     let next = option.clone();
-                    row = row.child(controls::action_button(
-                        format!("preference-{key}-{option}"),
-                        option.clone(),
-                        ButtonTone::Quiet,
-                        self.preference.saving,
-                        t,
-                        move |_, cx| {
-                            let _ = owner.update(cx, |v, cx| {
-                                v.edit_preference(key.clone(), json!(next), cx)
-                            });
-                        },
-                    ));
+                    row = row.child(
+                        controls::action_button(
+                            format!("preference-{key}-{option}"),
+                            schema
+                                .and_then(|f| f["data"].as_array())
+                                .and_then(|a| a.iter().find(|x| x["value"] == *option))
+                                .and_then(|x| x["title"].as_str())
+                                .unwrap_or(option)
+                                .to_owned(),
+                            ButtonTone::Quiet,
+                            self.preference.saving,
+                            t,
+                            move |_, cx| {
+                                let _ = owner.update(cx, |v, cx| {
+                                    v.edit_preference(key.clone(), json!(next), cx)
+                                });
+                            },
+                        )
+                        .aria_selected(value.as_str() == Some(option.as_str()))
+                        .when(value.as_str() == Some(option.as_str()), |d| {
+                            d.bg(t.selected)
+                        }),
+                    );
                 }
             } else if let Some(field) = self.preference.fields.get(&key) {
                 row = row.child(field.input.clone());
@@ -923,9 +957,25 @@ impl RuntimeView {
         }
         out
     }
+    #[cfg(test)]
+    pub(super) fn action_rows_for_test_index(&self, cx: &App) -> usize {
+        let Some(action) = self
+            .active_actions(cx)
+            .get(self.action_index)
+            .map(|a| a.id.clone())
+        else {
+            return 0;
+        };
+        self.action_rows(cx)
+            .iter()
+            .position(|r| r.as_ref().is_ok_and(|a| a.id == action))
+            .unwrap()
+    }
     fn actions(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
         let count = self.action_rows(cx).len();
         controls::popover("extension-actions", "Extension actions", t)
+            .flex()
+            .flex_col()
             .w(px(330. * t.zoom))
             .child(self.action_search.clone())
             .when(count == 0, |d| d.child("No matching actions"))
@@ -946,6 +996,7 @@ impl RuntimeView {
                                         Ok(action) => action,
                                         Err(section) => {
                                             return div()
+                                                .h(px(tokens::ROW * t.zoom))
                                                 .px(px(10.))
                                                 .py(px(6.))
                                                 .text_size(px(11.))
@@ -984,6 +1035,7 @@ impl RuntimeView {
                             .collect()
                     }),
                 )
+                .track_scroll(&self.action_scroll)
                 .h(px((count.min(8) as f32 * tokens::ROW * t.zoom).max(1.))),
             )
             .into_any_element()
@@ -1012,6 +1064,20 @@ impl RuntimeView {
         } else {
             m.control
         };
+        // Focused native buttons own their keyboard click through GPUI's
+        // paired key-down/key-up path. Do not replace it with Primary/Submit.
+        if matches!(key, "enter" | "space")
+            && !self.dropdown_open
+            && !self.focus.is_focused(w)
+            && !self.search.focus_handle(cx).is_focused(w)
+            && !self.action_search.focus_handle(cx).is_focused(w)
+            && !self
+                .fields
+                .values()
+                .any(|f| f.input.focus_handle(cx).is_focused(w))
+        {
+            return;
+        }
         let field = self
             .fields
             .values()
@@ -1021,6 +1087,28 @@ impl RuntimeView {
             || self.search.read(cx).marked_range.is_some()
             || self.action_search.read(cx).marked_range.is_some();
         if composing {
+            return;
+        }
+        if self.dropdown_open && matches!(key, "escape" | "up" | "down" | "enter") {
+            if !e.is_held || key != "enter" {
+                if key == "escape" {
+                    self.dropdown_open = false;
+                    cx.notify();
+                } else if key == "enter" {
+                    self.choose_dropdown(w, cx);
+                } else if let Some((_, _, items)) = self.dropdown_choices() {
+                    if !items.is_empty() {
+                        self.dropdown_index = if key == "down" {
+                            (self.dropdown_index + 1) % items.len()
+                        } else {
+                            (self.dropdown_index + items.len() - 1) % items.len()
+                        };
+                        self.scroll_dropdown();
+                        cx.notify();
+                    }
+                }
+            }
+            cx.stop_propagation();
             return;
         }
         let textarea = field.is_some_and(|f| f.options.multiline);
@@ -1079,6 +1167,15 @@ impl RuntimeView {
                 } else {
                     (self.action_index + actions.len() - 1) % actions.len()
                 };
+                let id = &actions[self.action_index];
+                if let Some(row) = self
+                    .action_rows(cx)
+                    .iter()
+                    .position(|r| r.as_ref().is_ok_and(|a| &a.id == id))
+                {
+                    self.action_scroll
+                        .scroll_to_item(row, ScrollStrategy::Nearest);
+                }
                 cx.notify();
             }
             cx.stop_propagation();
@@ -1120,6 +1217,14 @@ impl RuntimeView {
             cx.stop_propagation();
             return;
         }
+        let horizontal = matches!(key, "left" | "right");
+        let grid = self
+            .session
+            .as_ref()
+            .is_some_and(|s| s.root.kind == NodeKind::Grid);
+        if horizontal && (!grid || self.search.focus_handle(cx).is_focused(w)) {
+            return;
+        }
         if !form && !primary && !m.alt && matches!(key, "up" | "down" | "left" | "right") {
             let step = if self
                 .session
@@ -1137,7 +1242,23 @@ impl RuntimeView {
                 .iter()
                 .position(|r| Some(&r.id) == selected)
                 .unwrap_or(0);
-            let next = if matches!(key, "up" | "left") {
+            let next = if grid && matches!(key, "up" | "down") {
+                let ranges = self.grid_ranges();
+                let row = ranges
+                    .iter()
+                    .position(|r| r.contains(&current))
+                    .unwrap_or(0);
+                let col = current.saturating_sub(ranges.get(row).map(|r| r.start).unwrap_or(0));
+                let next = if key == "up" {
+                    row.saturating_sub(1)
+                } else {
+                    (row + 1).min(ranges.len().saturating_sub(1))
+                };
+                ranges
+                    .get(next)
+                    .map(|r| r.start + col.min(r.len().saturating_sub(1)))
+                    .unwrap_or(current)
+            } else if matches!(key, "up" | "left") {
                 current.saturating_sub(step)
             } else {
                 (current + step).min(self.rows.len().saturating_sub(1))
@@ -1146,7 +1267,10 @@ impl RuntimeView {
                 self.event(UiEvent::Select(row.id.clone()), w, cx);
                 self.list_scroll.scroll_to_item(
                     if self.columns() > 1 {
-                        next / self.columns()
+                        self.grid_ranges()
+                            .iter()
+                            .position(|r| r.contains(&next))
+                            .unwrap_or(0)
                     } else {
                         next
                     },
@@ -1195,48 +1319,196 @@ impl RuntimeView {
     fn columns(&self) -> usize {
         self.session
             .as_ref()
-            .filter(|s| s.root.kind == NodeKind::Grid)
-            .and_then(|s| s.root.props.get("columns"))
-            .and_then(Value::as_u64)
-            .map(|v| v.clamp(1, 12) as usize)
+            .map(|s| grid_columns(&s.root))
             .unwrap_or(1)
     }
-    fn dropdown(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
-        let Some(root) = self.session.as_ref().map(|s| &s.root) else {
-            return div().into_any_element();
-        };
-        let Some(raw) = root.props.get("searchBarAccessory") else {
-            return div().into_any_element();
-        };
-        let Ok(node) = serde_json::from_value::<Node>(raw.clone()) else {
-            return div().into_any_element();
-        };
-        let Some(callback) = node.string("actionId") else {
-            return div().into_any_element();
-        };
-        let mut nodes = vec![];
-        node.visit(&mut nodes);
-        let mut d = div().flex().gap(px(4.));
-        for (i, n) in nodes.iter().enumerate() {
-            if n.kind != NodeKind::ListDropdownItem {
-                continue;
+    pub(super) fn dropdown_choices(
+        &self,
+    ) -> Option<(String, String, Vec<(Option<String>, String, String)>)> {
+        let root = &self.session.as_ref()?.root;
+        let node: Node =
+            serde_json::from_value(root.props.get("searchBarAccessory")?.clone()).ok()?;
+        let callback = node.string("actionId")?.to_owned();
+        let mut choices = Vec::new();
+        fn walk(
+            node: &Node,
+            section: Option<String>,
+            out: &mut Vec<(Option<String>, String, String)>,
+        ) {
+            let section = if node.kind == NodeKind::ListDropdownSection {
+                node.string("title").map(str::to_owned)
+            } else {
+                section
+            };
+            if node.kind == NodeKind::ListDropdownItem {
+                let value = node
+                    .string("value")
+                    .or_else(|| node.string("title"))
+                    .unwrap_or("")
+                    .to_owned();
+                out.push((
+                    section.clone(),
+                    node.string("title").unwrap_or(&value).to_owned(),
+                    value,
+                ));
             }
-            let value = n
-                .string("value")
-                .or_else(|| n.string("title"))
-                .unwrap_or("");
-            d = d.child(self.button(
-                format!("list-dropdown-{i}"),
-                n.string("title").unwrap_or(value).into(),
-                UiEvent::Dropdown {
-                    callback: callback.into(),
-                    value: value.into(),
-                },
-                t,
-                cx,
-            ));
+            for child in &node.children {
+                walk(child, section.clone(), out);
+            }
         }
-        d.into_any_element()
+        walk(&node, None, &mut choices);
+        let selected = node
+            .string("value")
+            .or_else(|| node.string("defaultValue"))
+            .map(str::to_owned)
+            .or_else(|| choices.first().map(|c| c.2.clone()))
+            .unwrap_or_default();
+        Some((callback, selected, choices))
+    }
+    fn choose_dropdown(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        if let Some((callback, _, items)) = self.dropdown_choices() {
+            if let Some((_, _, value)) = items.get(self.dropdown_index) {
+                let value = value.clone();
+                self.dropdown_open = false;
+                self.event(UiEvent::Dropdown { callback, value }, w, cx);
+                self.search.focus_handle(cx).focus(w, cx);
+            }
+        }
+    }
+    fn dropdown_rows(&self) -> Vec<Result<(usize, String, String), String>> {
+        let mut rows = Vec::new();
+        let mut previous = None;
+        if let Some((_, _, choices)) = self.dropdown_choices() {
+            for (i, (section, label, value)) in choices.into_iter().enumerate() {
+                if section != previous {
+                    if let Some(title) = &section {
+                        rows.push(Err(title.clone()));
+                    }
+                    previous = section;
+                }
+                rows.push(Ok((i, label, value)));
+            }
+        }
+        rows
+    }
+    fn scroll_dropdown(&self) {
+        if let Some(row) = self
+            .dropdown_rows()
+            .iter()
+            .position(|r| r.as_ref().is_ok_and(|(i, _, _)| *i == self.dropdown_index))
+        {
+            self.dropdown_scroll
+                .scroll_to_item(row, ScrollStrategy::Nearest);
+        }
+    }
+    fn dropdown(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+        let Some((_, selected, choices)) = self.dropdown_choices() else {
+            return div().into_any_element();
+        };
+        let label = choices
+            .iter()
+            .find(|c| c.2 == selected)
+            .map(|c| c.1.clone())
+            .unwrap_or_else(|| "Filter".into());
+        let owner = cx.entity().downgrade();
+        let mut container = div().relative().child(
+            controls::action_button(
+                "extension-dropdown",
+                format!("{label} ▾"),
+                ButtonTone::Quiet,
+                false,
+                t,
+                move |_, cx| {
+                    let _ = owner.update(cx, |v, cx| {
+                        v.dropdown_open = !v.dropdown_open;
+                        v.dropdown_index = v
+                            .dropdown_choices()
+                            .and_then(|(_, selected, items)| {
+                                items.iter().position(|c| c.2 == selected)
+                            })
+                            .unwrap_or(0);
+                        v.scroll_dropdown();
+                        cx.notify();
+                    });
+                },
+            )
+            .track_focus(&self.dropdown_focus)
+            .role(Role::ComboBox)
+            .aria_expanded(self.dropdown_open),
+        );
+        if self.dropdown_open {
+            let count = self.dropdown_rows().len();
+            let menu = controls::popover("extension-dropdown-options", "Filter extension", t)
+                .absolute()
+                .top(px(tokens::HEADER * t.zoom))
+                .right_0()
+                .w(px(260. * t.zoom))
+                .child(
+                    uniform_list(
+                        "extension-dropdown-rows",
+                        count,
+                        cx.processor(move |v, range: std::ops::Range<usize>, _, cx| {
+                            let rows = v.dropdown_rows();
+                            let selected =
+                                v.dropdown_choices().map(|(_, s, _)| s).unwrap_or_default();
+                            range
+                                .filter_map(|i| {
+                                    rows.get(i).map(|row| match row {
+                                        Err(section) => div()
+                                            .h(px(tokens::ROW * t.zoom))
+                                            .text_color(t.text3)
+                                            .px(px(10.))
+                                            .child(section.clone())
+                                            .into_any_element(),
+                                        Ok((index, label, value)) => {
+                                            let index = *index;
+                                            let owner = cx.entity().downgrade();
+                                            controls::action_button(
+                                                format!("extension-dropdown-option-{index}"),
+                                                label.clone(),
+                                                ButtonTone::Quiet,
+                                                false,
+                                                t,
+                                                move |w, cx| {
+                                                    let _ = owner.update(cx, |v, cx| {
+                                                        v.dropdown_index = index;
+                                                        v.choose_dropdown(w, cx)
+                                                    });
+                                                },
+                                            )
+                                            .h(px(tokens::ROW * t.zoom))
+                                            .role(Role::ListBoxOption)
+                                            .aria_selected(selected == *value)
+                                            .when(index == v.dropdown_index, |d| d.bg(t.selected))
+                                            .into_any_element()
+                                        }
+                                    })
+                                })
+                                .collect()
+                        }),
+                    )
+                    .track_scroll(&self.dropdown_scroll)
+                    .h(px(count.min(8).max(1) as f32 * tokens::ROW * t.zoom)),
+                );
+            container = container.child(menu);
+        }
+        container.into_any_element()
+    }
+    pub(super) fn grid_ranges(&self) -> Vec<std::ops::Range<usize>> {
+        let columns = self.columns();
+        let mut ranges = Vec::new();
+        let mut start = 0;
+        while start < self.rows.len() {
+            let section = &self.rows[start].section;
+            let end = (start + 1..self.rows.len())
+                .find(|&i| self.rows[i].section != *section)
+                .unwrap_or(self.rows.len());
+            for i in (start..end).step_by(columns) {
+                ranges.push(i..(i + columns).min(end));
+            }
+            start = end;
+        }
+        ranges
     }
 }
 fn parse_color(raw: &str) -> Option<Hsla> {
@@ -1296,8 +1568,11 @@ impl Render for RuntimeView {
                     .child(self.setup(t, cx))
                     .into_any_element(),
                 _ => {
-                    let columns = self.columns();
-                    let count = self.rows.len().div_ceil(columns);
+                    let count = if root.kind == NodeKind::Grid {
+                        self.grid_ranges().len()
+                    } else {
+                        self.rows.len()
+                    };
                     let mut body = div().flex().flex_1().min_h_0();
                     if count == 0 {
                         let mut all = vec![];
@@ -1335,8 +1610,7 @@ impl Render for RuntimeView {
                                                 .is_some_and(|s| s.root.kind == NodeKind::Grid)
                                             {
                                                 v.grid_row(
-                                                    &v.rows[i * columns
-                                                        ..((i + 1) * columns).min(v.rows.len())],
+                                                    &v.rows[v.grid_ranges()[i].clone()],
                                                     t,
                                                     cx,
                                                 )
@@ -1461,4 +1735,16 @@ impl Render for RuntimeView {
                 )
             })
     }
+}
+
+/// One layout policy for rendering, keyboard navigation and viewport leases.
+pub(super) fn grid_columns(root: &Node) -> usize {
+    if root.kind != NodeKind::Grid {
+        return 1;
+    }
+    root.props
+        .get("columns")
+        .and_then(Value::as_u64)
+        .unwrap_or(4)
+        .clamp(2, 8) as usize
 }

@@ -10,7 +10,21 @@ pub struct CoreClient(
     Arc<tokio::sync::Semaphore>,
     Arc<std::sync::Mutex<Option<tokio::runtime::Handle>>>,
     Arc<tokio::sync::Semaphore>,
+    Arc<ExtensionAdmission>,
 );
+struct ExtensionAdmission {
+    normal: Arc<tokio::sync::Semaphore>,
+    installs: std::sync::atomic::AtomicUsize,
+    closing: std::sync::atomic::AtomicBool,
+}
+struct InstallLease(Arc<ExtensionAdmission>);
+impl Drop for InstallLease {
+    fn drop(&mut self) {
+        self.0
+            .installs
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
 #[derive(Default)]
 struct ShutdownOwner {
     task: Option<tokio::task::JoinHandle<()>>,
@@ -232,6 +246,15 @@ impl CoreClient {
         let owner = &self.4;
         *owner.lock().unwrap() = Some(handle);
     }
+    pub(crate) fn resume_extensions(&self) {
+        #[cfg(feature = "bench-control")]
+        let admission = &self.7;
+        #[cfg(not(feature = "bench-control"))]
+        let admission = &self.6;
+        admission
+            .closing
+            .store(false, std::sync::atomic::Ordering::Release);
+    }
     pub fn new(core: Arc<tezbar_core::NativeCore>) -> Self {
         Self(
             core,
@@ -244,9 +267,20 @@ impl CoreClient {
                 tokio::runtime::Handle::try_current().ok(),
             )),
             Arc::new(tokio::sync::Semaphore::new(16)),
+            Arc::new(ExtensionAdmission {
+                normal: Arc::new(tokio::sync::Semaphore::new(16)),
+                installs: std::sync::atomic::AtomicUsize::new(0),
+                closing: std::sync::atomic::AtomicBool::new(false),
+            }),
         )
     }
     pub async fn request(&self, request: Request) -> Result<Value, String> {
+        if let Request::Extension(request) = request {
+            return crate::surfaces::extensions_store::request::ExtensionTransport::send(
+                self, request,
+            )
+            .await;
+        }
         let (channel, args) = request.wire();
         let core = self.0.clone();
         #[cfg(feature = "bench-control")]
@@ -478,16 +512,26 @@ impl crate::surfaces::extensions_store::request::ExtensionTransport for CoreClie
         request: crate::surfaces::extensions_store::request::ExtensionRequest,
     ) -> crate::surfaces::extensions_store::request::ExtensionFuture {
         #[cfg(feature = "bench-control")]
-        let (normal, runtime, disposal) = (&self.4, &self.5, &self.6);
+        let (admission, runtime, disposal) = (&self.7, &self.5, &self.6);
         #[cfg(not(feature = "bench-control"))]
-        let (normal, runtime, disposal) = (&self.3, &self.4, &self.5);
+        let (admission, runtime, disposal) = (&self.6, &self.4, &self.5);
+        if admission.closing.load(std::sync::atomic::Ordering::Acquire)
+            && !matches!(
+                request,
+                crate::surfaces::extensions_store::request::ExtensionRequest::Dispose(_)
+            )
+        {
+            return Box::pin(async {
+                Err("Tezbar is closing. Cancel quit before running an extension.".into())
+            });
+        }
         let slots = if matches!(
             request,
             crate::surfaces::extensions_store::request::ExtensionRequest::Dispose(_)
         ) {
             disposal
         } else {
-            normal
+            &admission.normal
         };
         let permit = match slots.clone().try_acquire_owned() {
             Ok(v) => v,
@@ -505,10 +549,22 @@ impl crate::surfaces::extensions_store::request::ExtensionTransport for CoreClie
         let Some(handle) = handle else {
             return Box::pin(async { Err("Core runtime unavailable".into()) });
         };
+        let install = if matches!(
+            request,
+            crate::surfaces::extensions_store::request::ExtensionRequest::Install(_)
+        ) {
+            admission
+                .installs
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            Some(InstallLease(admission.clone()))
+        } else {
+            None
+        };
         let (channel, args) = request.wire();
         let core = self.0.clone();
         let task = handle.spawn(async move {
             let _permit = permit;
+            let _install = install;
             core.request(channel, &args).await
         });
         Box::pin(async move {
@@ -518,11 +574,25 @@ impl crate::surfaces::extensions_store::request::ExtensionTransport for CoreClie
     }
     fn drain(&self) -> crate::surfaces::extensions_store::request::ExtensionFuture {
         #[cfg(feature = "bench-control")]
-        let (slots, disposal) = (self.4.clone(), self.6.clone());
+        let (admission, disposal) = (self.7.clone(), self.6.clone());
         #[cfg(not(feature = "bench-control"))]
-        let (slots, disposal) = (self.3.clone(), self.5.clone());
+        let (admission, disposal) = (self.6.clone(), self.5.clone());
         Box::pin(async move {
-            let _all = slots
+            admission
+                .closing
+                .store(true, std::sync::atomic::Ordering::Release);
+            if admission
+                .installs
+                .load(std::sync::atomic::Ordering::Acquire)
+                != 0
+            {
+                return Err(
+                    "Extension install in progress. Wait for it to finish, then quit.".into(),
+                );
+            }
+            let _all = admission
+                .normal
+                .clone()
                 .acquire_many_owned(16)
                 .await
                 .map_err(|_| "Core admission closed")?;
@@ -584,6 +654,26 @@ mod m9_admission_tests {
                 .any(|(channel, _)| channel == "extension-worker-status")
         );
         assert_eq!(host.desktop_effects.lock().unwrap().len(), 16);
+        assert!(
+            ExtensionTransport::send(
+                &client,
+                ExtensionRequest::Copy("blocked while closing".into())
+            )
+            .await
+            .is_err()
+        );
+        client.resume_extensions();
+        #[cfg(feature = "bench-control")]
+        let global = client.4.clone();
+        #[cfg(not(feature = "bench-control"))]
+        let global = client.3.clone();
+        let _unrelated = global.acquire_many_owned(16).await.unwrap();
+        ExtensionTransport::send(&client, ExtensionRequest::Copy("independent".into()))
+            .await
+            .unwrap();
+        ExtensionTransport::drain(&client).await.unwrap();
+        assert_eq!(host.desktop_effects.lock().unwrap().len(), 17);
+        client.resume_extensions();
         core.shutdown().await;
     }
 }

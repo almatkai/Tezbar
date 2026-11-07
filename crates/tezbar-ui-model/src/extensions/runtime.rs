@@ -426,6 +426,21 @@ impl RuntimeSession {
             .unwrap_or(0);
         self.rows.clear();
         self.callbacks = self.actions.iter().map(|a| a.id.clone()).collect();
+        // The worker serializes the search-bar accessory in props, not children.
+        // Admit only the callback of the rendered dropdown for this exact session.
+        if let Some(accessory) = self
+            .root
+            .props
+            .get("searchBarAccessory")
+            .filter(|n| n["type"] == "List.Dropdown")
+        {
+            if let Some(id) = accessory["props"]["actionId"]
+                .as_str()
+                .filter(|s| !s.is_empty() && s.len() <= 1024)
+            {
+                self.callbacks.insert(id.to_owned());
+            }
+        }
         let mut nodes = vec![];
         self.root.visit(&mut nodes);
         for (index, n) in nodes.iter().enumerate() {
@@ -610,10 +625,10 @@ impl RuntimeSession {
         }
     }
     pub fn search(&mut self, text: String) -> Option<Effect> {
-        self.sequence += 1;
         self.search_text = text;
         self.selection = None;
         if self.root.props.get("__hasServerSearch") == Some(&Value::Bool(true)) {
+            self.sequence += 1;
             Some(Effect::Search {
                 token: self.token(),
                 text: self.search_text.clone(),

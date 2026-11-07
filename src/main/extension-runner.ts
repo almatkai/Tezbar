@@ -53,8 +53,18 @@ import {
 } from './extension-registry'
 
 const nativeControlSource = new AsyncLocalStorage<number>()
-function sessionControl(session: RuntimeSession, kind: 'close'|'preferences'|'clear-search'|'hud', message?: string): Promise<void> {
-  return extensionControl(session.id,kind,message,nativeControlSource.getStore() ?? 0)
+const nativeRunRequest = new AsyncLocalStorage<string>()
+export function withExtensionHostRequest<T>(request: string, run: () => Promise<T>): Promise<T> {
+  return nativeRunRequest.run(request, run)
+}
+async function sessionControl(session: RuntimeSession, kind: 'close'|'preferences'|'clear-search'|'hud', message?: string): Promise<void> {
+  // A no-view command has no current window/search owner to close or reset.
+  if (!session.viewDelivered && (kind === 'close' || kind === 'clear-search')) return
+  const request = nativeRunRequest.getStore()
+  try {
+    if (request) await extensionControl(session.id, kind, message, nativeControlSource.getStore() ?? 0, { request, extensionId: session.extensionId })
+    else await extensionControl(session.id, kind, message, nativeControlSource.getStore() ?? 0)
+  } catch { /* SDK UI controls are best-effort, never abort the command's work. */ }
 }
 type PackagePreference = {
   name?: string
@@ -1621,7 +1631,7 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     Dropdown: FormDropdown,
     TagPicker: FormTagPicker,
     FilePicker: makeToken('Form.FilePicker'),
-    DatePicker: makeToken('Form.DatePicker'),
+    DatePicker: Object.assign(makeToken('Form.DatePicker'), { Type: { Date: 'date', DateTime: 'datetime' } }),
     PasswordField: makeToken('Form.PasswordField'),
     Separator: makeToken('Form.Separator'),
     Description: makeToken('Form.Description'),
@@ -1918,11 +1928,11 @@ function createRaycastApiShim(session: RuntimeSession): Record<string, unknown> 
     },
     useNavigation: () => ({
       push: (next: unknown): void => {
-        session.stack.push(next)
+        session.stack.push(next); markSessionDirty(session)
       },
       pop: (): void => {
         if (session.stack.length > 1) {
-          session.stack.pop()
+          session.stack.pop(); markSessionDirty(session)
         }
       },
     }),
@@ -3325,12 +3335,12 @@ function registerAction(
     }
 
     if (kind === 'push' && props.target !== undefined) {
-      session.stack.push(props.target)
+      session.stack.push(props.target); markSessionDirty(session)
     }
 
     if (kind === 'pop') {
       if (session.stack.length > 1) {
-        session.stack.pop()
+        session.stack.pop(); markSessionDirty(session)
       }
     }
 
@@ -3517,7 +3527,15 @@ function walkRuntimeNodes(
     })
   }
   if (typeName === 'Form.DatePicker' && sanitizedProps) {
-    for (const key of ['value','defaultValue']) if (typeof sanitizedProps[key] === 'string') sanitizedProps[key] = String(sanitizedProps[key]).slice(0,10)
+    const dateTime = props.type === 'datetime'
+    for (const key of ['value', 'defaultValue']) {
+      const date = props[key] as Date | undefined
+      if (Object.prototype.toString.call(date) === '[object Date]' && date && Number.isFinite(date.getTime())) {
+        const pad = (n: number): string => String(n).padStart(2, '0')
+        sanitizedProps[key] = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+          (dateTime ? `T${pad(date.getHours())}:${pad(date.getMinutes())}` : '')
+      }
+    }
   }
   if (typeName.startsWith('Form.') && typeof props.onChange === 'function' && sanitizedProps) {
     const actionId = makeId('form-change')
@@ -3533,7 +3551,7 @@ function walkRuntimeNodes(
               : []
             : typeName === 'Form.DatePicker'
               ? typeof rawValue === 'string' && rawValue
-                ? new Date(`${rawValue}T00:00:00`)
+                ? new Date(props.type === 'datetime' ? rawValue : `${rawValue}T00:00:00`)
                 : null
               : String(rawValue ?? '')
       await Promise.resolve((props.onChange as (nextValue: unknown) => unknown)(value))
@@ -3889,7 +3907,9 @@ function deleteRuntimeSession(sessionId: string): boolean {
   const session = sessions.get(sessionId)
   if (!session) return false
   cleanupRuntimeSession(session)
-  return sessions.delete(sessionId)
+  const removed = sessions.delete(sessionId)
+  if (removed) BrowserWindow.getAllWindows()[0]?.webContents.send('extension:session-disposed', { sessionId })
+  return removed
 }
 
 function pruneSessions(): void {
@@ -4664,7 +4684,7 @@ async function invokeExtensionActionOwned(
 
   if (actionId === '__nav_pop__') {
     if (session.stack.length > 1) {
-      session.stack.pop()
+      session.stack.pop(); markSessionDirty(session)
     }
     return renderCurrentView(session)
   }

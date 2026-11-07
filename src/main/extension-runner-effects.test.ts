@@ -44,3 +44,15 @@ it('sequences sliding execution records without replaying system effects on rere
   }
   expect(host.copy).toHaveBeenLastCalledWith('x'.repeat(10000))
 })
+
+
+it('no-view controls are best effort even when the native owner refuses them', async () => {
+  const isolated=join(root,'no-view');mkdirSync(join(isolated,'src'),{recursive:true});
+  writeFileSync(join(isolated,'package.json'),JSON.stringify({name:'no-view',commands:[{name:'index',title:'Index',mode:'no-view'}]}));
+  writeFileSync(join(isolated,'src/index.tsx'),`import { closeMainWindow, clearSearchBar, openExtensionPreferences, showHUD } from '@raycast/api';export default async function Command(){await closeMainWindow();await clearSearchBar();await openExtensionPreferences();await showHUD('finished');}`);
+  host.control.mockRejectedValue(new Error('Unknown SDK source'));
+  const result=await runExtensionCommandFromPackageJson(join(isolated,'package.json'),'index',undefined,{}, {effectMode:'system'});
+  expect(result.ok).toBe(true);if (!result.ok) throw new Error('command failed');
+  expect(result.effects?.some(e=>e.kind==='hud' && e.message==='finished')).toBe(true);
+  host.control.mockResolvedValue(undefined);
+});

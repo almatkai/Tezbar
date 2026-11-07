@@ -77,7 +77,13 @@ pub struct RuntimeView {
     pub(super) list_scroll: UniformListScrollHandle,
     viewport: std::ops::Range<usize>,
     viewport_pending: bool,
+    action_signature: Vec<String>,
     action_index: usize,
+    action_scroll: UniformListScrollHandle,
+    dropdown_open: bool,
+    dropdown_focus: FocusHandle,
+    dropdown_index: usize,
+    dropdown_scroll: UniformListScrollHandle,
     opened: Option<u64>,
     visible: bool,
     disposed: bool,
@@ -149,13 +155,13 @@ impl RuntimeView {
         });
         let action_sub = cx.subscribe(&action_search, |v, _, _: &Committed, cx| {
             v.action_index = 0;
+            v.action_scroll.scroll_to_item(0, ScrollStrategy::Top);
             cx.notify();
         });
         let list_scroll = UniformListScrollHandle::new();
 
         cx.on_release(|v, cx| {
             v.dispose(cx);
-            gpui_tokio::Tokio::spawn(cx, v.transport.drain()).detach();
         })
         .detach();
         Self {
@@ -178,7 +184,13 @@ impl RuntimeView {
             list_scroll,
             viewport: 0..48,
             viewport_pending: false,
+            action_signature: Vec::new(),
             action_index: 0,
+            action_scroll: UniformListScrollHandle::new(),
+            dropdown_open: false,
+            dropdown_focus: cx.focus_handle(),
+            dropdown_index: 0,
+            dropdown_scroll: UniformListScrollHandle::new(),
             opened: None,
             visible: false,
             disposed: false,
@@ -426,7 +438,8 @@ impl RuntimeView {
         self.rows.clear();
         self.preference = Default::default();
         if let Some(mut s) = self.session.take() {
-            if let Some(Effect::Dispose(key)) = s.dispose() {
+            let background = s.root.kind == NodeKind::MenuBarExtra;
+            if let Some(Effect::Dispose(key)) = s.dispose().filter(|_| !background) {
                 let future = self
                     .transport
                     .send(ExtensionRequest::Dispose(key.session_id));
@@ -505,6 +518,9 @@ impl RuntimeView {
             _ => {}
         }
         if open_actions {
+            self.action_index = 0;
+            self.action_scroll.scroll_to_item(0, ScrollStrategy::Top);
+            self.dropdown_open = false;
             self.action_search.focus_handle(cx).focus(w, cx);
         } else if close_actions {
             self.focus_content(w, cx);
@@ -853,6 +869,12 @@ impl RuntimeView {
         let Some(s) = self.session.as_ref() else {
             return;
         };
+        let signature = s.actions.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
+        if self.action_signature != signature {
+            self.action_signature = signature;
+            self.action_index = 0;
+            self.action_scroll.scroll_to_item(0, ScrollStrategy::Top);
+        }
         self.rows = view::rows(s);
         let root = s.root.clone();
         self.search.update(cx, |f, _| {
@@ -1008,3 +1030,6 @@ impl Focusable for RuntimeView {
         self.focus.clone()
     }
 }
+
+#[cfg(test)]
+mod review_regressions;

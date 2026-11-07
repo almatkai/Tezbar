@@ -137,4 +137,4 @@ fn clipboard_images(item: Option<ClipboardItem>) -> Result<Vec<serde_json::Value
 
 #[cfg(test)]
 #[path = "m8_tests.rs"]
-mod tests;
+pub(super) mod tests;

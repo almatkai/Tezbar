@@ -429,7 +429,7 @@ pub(super) fn extension_has_view(value: &Value) -> bool {
             || value["sessionId"].is_string()
             || value["preferenceSetup"].is_object())
 }
-pub(super) fn extension_notice(value: &Value) -> Option<String> {
+pub(crate) fn extension_notice(value: &Value) -> Option<String> {
     let effects: Vec<tezbar_ui_model::extensions::WireEffect> =
         serde_json::from_value(value["effects"].clone()).unwrap_or_default();
     let mut records = tezbar_ui_model::extensions::WorkerRecords::default();

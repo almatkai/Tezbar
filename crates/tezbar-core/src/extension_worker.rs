@@ -52,9 +52,13 @@ struct Process {
 struct PendingRequest {
     id: String,
     pending: Pending,
+    runs: Arc<Mutex<HashMap<String, String>>>,
 }
 impl Drop for PendingRequest {
     fn drop(&mut self) {
+        if let Ok(mut runs) = self.runs.lock() {
+            runs.remove(&self.id);
+        }
         if let Ok(mut pending) = self.pending.lock() {
             pending.remove(&self.id);
         }
@@ -90,6 +94,7 @@ pub struct ExtensionWorker {
     sessions: Arc<Mutex<HashMap<String, (String, String, String)>>>,
     status_signatures: Arc<Mutex<HashMap<String, u64>>>,
     status_refreshing: Arc<Mutex<HashSet<String>>>,
+    in_flight_runs: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl ExtensionWorker {
@@ -101,6 +106,7 @@ impl ExtensionWorker {
             sessions: Default::default(),
             status_signatures: Default::default(),
             status_refreshing: Default::default(),
+            in_flight_runs: Default::default(),
         }
     }
     pub fn with_launch(ctx: CoreContext, launch: WorkerLaunch) -> Self {
@@ -167,9 +173,18 @@ impl ExtensionWorker {
             }
             pending.insert(id.clone(), reply);
         }
+        if channel == "extension:run-command" {
+            if let Some(extension) = args.first().and_then(|a| a["extensionId"].as_str()) {
+                self.in_flight_runs
+                    .lock()
+                    .map_err(|_| "SDK run owner unavailable")?
+                    .insert(id.clone(), extension.into());
+            }
+        }
         let _request = PendingRequest {
             id: id.clone(),
             pending,
+            runs: self.in_flight_runs.clone(),
         };
         let timeout = if channel.ends_with("install") {
             Duration::from_secs(900)
@@ -352,6 +367,7 @@ impl ExtensionWorker {
         let ctx = self.ctx.clone();
         let (cancel_output, mut output_cancelled) = oneshot::channel::<()>();
         let ui_sessions = self.sessions.clone();
+        let in_flight_runs = self.in_flight_runs.clone();
         let status_signatures = self.status_signatures.clone();
         let status_refreshing = self.status_refreshing.clone();
         let mut output = tokio::spawn(async move {
@@ -396,6 +412,7 @@ impl ExtensionWorker {
                         let sender = output_sender.clone();
                         let ctx = ctx.clone();
                         let ui_sessions = ui_sessions.clone();
+                        let runs = in_flight_runs.clone();
                         if host_requests.len() >= 128 {
                             let _=sender.send(json!({"type":"core-reply","id":message["id"],"error":"Extension host capacity reached"})).await;
                             continue;
@@ -410,7 +427,18 @@ impl ExtensionWorker {
                                         sessions
                                             .contains_key(body["sessionId"].as_str().unwrap_or(""))
                                     })
-                                    .unwrap_or(false);
+                                    .unwrap_or(false)
+                                    || body["runRequest"]
+                                        .as_str()
+                                        .zip(body["extensionId"].as_str())
+                                        .is_some_and(|(request, extension)| {
+                                            runs.lock()
+                                                .map(|runs| {
+                                                    runs.get(request)
+                                                        .is_some_and(|owner| owner == extension)
+                                                })
+                                                .unwrap_or(false)
+                                        });
                                 if !valid {
                                     Err("Unknown SDK source".into())
                                 } else {
@@ -467,6 +495,21 @@ impl ExtensionWorker {
                         if let Some(channel) = message["channel"].as_str().filter(|c| {
                             c.starts_with("extension:") || *c == "extension-install-status"
                         }) {
+                            if channel == "extension:session-disposed" {
+                                if let Some(id) = message["payload"]["sessionId"].as_str() {
+                                    if let Some((_, _, scope)) =
+                                        ui_sessions.lock().ok().and_then(|mut s| s.remove(id))
+                                    {
+                                        let _ = ctx.host.status_items().remove(&scope);
+                                    }
+                                    if let Ok(mut s) = status_signatures.lock() {
+                                        s.remove(id);
+                                    }
+                                    if let Ok(mut s) = status_refreshing.lock() {
+                                        s.remove(id);
+                                    }
+                                }
+                            }
                             if channel == "extension:session-invalidated" {
                                 let id = message["payload"]["sessionId"]
                                     .as_str()
@@ -668,10 +711,13 @@ impl ExtensionWorker {
         }
     }
     fn sync_sdk_status(&self, reply: &Value) -> Result<(), String> {
+        if !self.ctx.host.sdk_status_items() {
+            return Ok(());
+        }
         let Some(id) = reply["sessionId"].as_str() else {
             return Ok(());
         };
-        let Some((extension, _, scope)) = self
+        let Some((extension, command, scope)) = self
             .sessions
             .lock()
             .map_err(|_| "SDK resources unavailable")?
@@ -696,6 +742,8 @@ impl ExtensionWorker {
                 Some("MenuBarExtra.Item") => {
                     if let Some(action) = node["props"]["actionIds"][0].as_str() {
                         out.push(json!({"id":action,"title":node["props"]["title"],"enabled":node["props"]["isEnabled"].as_bool().unwrap_or(true),"checked":node["props"]["isSelected"]}));
+                    } else if let Some(title) = node["props"]["title"].as_str() {
+                        out.push(json!({"id":group,"title":title,"enabled":false}));
                     }
                 }
                 Some("MenuBarExtra.Submenu") => {
@@ -752,8 +800,15 @@ impl ExtensionWorker {
                 .await;
             });
         });
-        let params =
-            json!({"items":menu,"title":root["props"]["title"],"tooltip":root["props"]["tooltip"]});
+        let title = root["props"]["title"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| match root["props"]["icon"].as_str() {
+                Some("gear" | "Gear") => "⚙".to_owned(),
+                _ => command.replace(['-', '_'], " "),
+            });
+        let params = json!({"items":menu,"title":title,"tooltip":root["props"]["tooltip"]});
         use std::hash::{Hash, Hasher};
         let mut hash = std::collections::hash_map::DefaultHasher::new();
         params.to_string().hash(&mut hash);
@@ -770,13 +825,7 @@ impl ExtensionWorker {
         // No SDK-provided icon paths are admitted into tray decode. Runtime images
         // retain canonical registry authority through the shared asset service.
         let _ = extension;
-        crate::extensions::process_host::set_status_item(
-            &self.ctx,
-            &scope,
-            std::path::Path::new(""),
-            &params,
-            callback,
-        )?;
+        crate::extensions::process_host::set_sdk_status_item(&self.ctx, &scope, &params, callback)?;
         self.status_signatures
             .lock()
             .map_err(|_| "Status owner unavailable")?

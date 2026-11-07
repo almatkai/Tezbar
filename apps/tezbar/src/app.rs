@@ -578,6 +578,7 @@ impl Owner {
                 } else { prepared };
                 if !matches!(prepared, Ok(())) {
                     this.lifecycle.quitting = false;
+                    this.core.resume_extensions();
                     this.defer_update(cx);
                     this.updater_paused=false;
                     if let Some(client)=this.updater.clone() {this.tasks.push(cx.spawn(async move |_,cx|{let _=gpui_tokio::Tokio::spawn(cx,async move {client.control(update_integration::Command::Resume).await}).await;}));}
@@ -620,6 +621,7 @@ impl Owner {
                 }
                 this.events.dispose();
                 let _ = this.launcher.update(cx, |view, _, cx| {
+                    view.dispose_extensions(cx);
                     view.ready = false;
                     cx.notify();
                 });
@@ -1846,3 +1848,6 @@ fn run_app(
     });
     Ok(())
 }
+
+#[cfg(test)]
+mod m9_review_tests;

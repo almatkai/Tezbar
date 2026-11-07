@@ -3,21 +3,140 @@
   "title": "Native SDK Fixtures",
   "description": "Isolated real SDK/reconciler fixtures; never install into a shipping profile",
   "author": "tezbar-fixture",
-  "platforms": ["macOS", "Windows", "Linux"],
+  "platforms": [
+    "macOS",
+    "Windows",
+    "Linux"
+  ],
   "commands": [
-    {"name":"list","title":"Fixture List","mode":"view"},
-    {"name":"grid","title":"Fixture Grid","mode":"view"},
-    {"name":"detail","title":"Fixture Detail","mode":"view"},
-    {"name":"form","title":"Fixture Form","mode":"view","preferences":[
-      {"name":"name","title":"Name","type":"textfield","required":true},
-      {"name":"password","title":"Password","type":"password","required":true},
-      {"name":"enabled","title":"Enabled","type":"checkbox","default":true},
-      {"name":"region","title":"Region","type":"dropdown","default":"kz","data":[{"title":"Kazakhstan","value":"kz"},{"title":"Japan","value":"jp"}]}
-    ]},
-    {"name":"actions","title":"Fixture Actions","mode":"view"},
-    {"name":"prompts","title":"Fixture Prompts","mode":"view"},
-    {"name":"feedback","title":"Fixture Feedback","mode":"view"},
-    {"name":"menubar","title":"Fixture MenuBarExtra","mode":"view"},
-    {"name":"invalidation","title":"Fixture Invalidation","mode":"view"}
+    {
+      "name": "list",
+      "title": "Fixture List",
+      "mode": "view"
+    },
+    {
+      "name": "grid",
+      "title": "Fixture Grid",
+      "mode": "view"
+    },
+    {
+      "name": "detail",
+      "title": "Fixture Detail",
+      "mode": "view"
+    },
+    {
+      "name": "form",
+      "title": "Fixture Form",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "name",
+          "title": "Name",
+          "type": "textfield",
+          "required": true
+        },
+        {
+          "name": "password",
+          "title": "Password",
+          "type": "password",
+          "required": true
+        },
+        {
+          "name": "enabled",
+          "title": "Enabled",
+          "type": "checkbox",
+          "default": true
+        },
+        {
+          "name": "region",
+          "title": "Region",
+          "type": "dropdown",
+          "default": "kz",
+          "data": [
+            {
+              "title": "Kazakhstan",
+              "value": "kz"
+            },
+            {
+              "title": "Japan",
+              "value": "jp"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "actions",
+      "title": "Fixture Actions",
+      "mode": "view"
+    },
+    {
+      "name": "prompts",
+      "title": "Fixture Prompts",
+      "mode": "view"
+    },
+    {
+      "name": "feedback",
+      "title": "Fixture Feedback",
+      "mode": "view"
+    },
+    {
+      "name": "menubar",
+      "title": "Fixture MenuBarExtra",
+      "mode": "view"
+    },
+    {
+      "name": "invalidation",
+      "title": "Fixture Invalidation",
+      "mode": "view"
+    },
+    {
+      "name": "probe-noview-plain",
+      "title": "probe-noview-plain",
+      "mode": "no-view"
+    },
+    {
+      "name": "probe-noview-close",
+      "title": "probe-noview-close",
+      "mode": "no-view"
+    },
+    {
+      "name": "probe-noview-prefs",
+      "title": "probe-noview-prefs",
+      "mode": "no-view"
+    },
+    {
+      "name": "probe-noview-clear",
+      "title": "probe-noview-clear",
+      "mode": "no-view"
+    },
+    {
+      "name": "probe-push",
+      "title": "probe-push",
+      "mode": "view"
+    },
+    {
+      "name": "probe-date",
+      "title": "probe-date",
+      "mode": "view"
+    },
+    {
+      "name": "probe-menubar-info",
+      "title": "probe-menubar-info",
+      "mode": "menu-bar"
+    },
+    {
+      "name": "probe-noview-pref",
+      "title": "probe-noview-pref",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "token",
+          "title": "Token",
+          "type": "textfield",
+          "required": true
+        }
+      ]
+    }
   ]
 }

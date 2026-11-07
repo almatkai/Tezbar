@@ -124,7 +124,8 @@ impl StoreView {
         for key in ["platforms", "resources"] {
             if let Some(value) = e.metadata.get(key) {
                 d = d.child(div().text_color(t.text3).child(format!(
-                        "{key}: {}",
+                        "{}: {}",
+                        if key=="platforms" {"Available on"} else {"Includes"},
                         value
                             .as_array()
                             .map(|a| a
@@ -214,7 +215,8 @@ impl StoreView {
         }
         if let Some(url) = e
             .metadata
-            .get("repository")
+            .get("readmeUrl")
+            .or_else(|| e.metadata.get("repository"))
             .and_then(Value::as_str)
             .map(str::to_owned)
             .or_else(|| {
@@ -231,14 +233,18 @@ impl StoreView {
                 cx,
             ));
         }
-        for key in ["readmeUrl", "sourceUrl", "website"] {
+        for key in ["sourceUrl", "website"] {
             if let Some(url) = e.metadata.get(key).and_then(Value::as_str) {
                 d = d.child(self.button(
                     format!("store-link-{key}"),
                     if key == "readmeUrl" {
                         "Open README".into()
                     } else {
-                        key.into()
+                        if key == "sourceUrl" {
+                            "Source code".into()
+                        } else {
+                            "Website".into()
+                        }
                     },
                     Action::Open(url.into()),
                     t,

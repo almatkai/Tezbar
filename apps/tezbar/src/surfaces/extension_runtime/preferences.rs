@@ -198,13 +198,34 @@ impl RuntimeView {
                     }
                     v.preference.saving = false;
                     match result {
-                        Ok(Ok(reply)) => {
+                        Ok(Ok(reply)) if reply["ok"] == true && reply["mode"] == "no-view" => {
+                            // The command already ran. Present its actual fresh feedback;
+                            // never ask the user to repeat its side effects.
+                            let effects: Vec<tezbar_ui_model::extensions::WireEffect> =
+                                serde_json::from_value(reply["effects"].clone())
+                                    .unwrap_or_default();
+                            let mut records =
+                                tezbar_ui_model::extensions::runtime::WorkerRecords::default();
+                            if let Some(message) = records
+                                .notice(&effects, reply["effectSequence"].as_u64())
+                                .or_else(|| {
+                                    reply["message"]
+                                        .as_str()
+                                        .filter(|s| !s.is_empty())
+                                        .map(str::to_owned)
+                                })
+                            {
+                                v.emit_effect(ExtensionEffect::Notice(message), cx);
+                            }
+                            v.emit_effect(ExtensionEffect::Back, cx);
+                        }
+                        Ok(Ok(reply)) if reply["ok"] == true => {
                             // This internal replacement consumes no parent route nonce.
                             let delivered = v.opened.take();
                             let replacement = v.activate(reply, delivered.unwrap_or(0), w, cx);
                             v.opened = delivered;
                             if replacement.is_err() {
-                                v.error = Some("Preferences saved. Run the command again.");
+                                v.error = Some("The extension returned an invalid view.");
                             }
                         }
                         _ => v.error = Some("Preferences could not be saved. Try again."),

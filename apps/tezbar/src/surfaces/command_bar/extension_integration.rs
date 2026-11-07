@@ -28,6 +28,17 @@ impl ExtensionTransport for Transport {
     }
 }
 impl Launcher {
+    pub(super) fn dispose_dropped_extension(&self, reply: &Value, cx: &mut Context<Self>) {
+        if reply["mode"] != "view" || reply["root"]["type"] == "MenuBarExtra" {
+            return;
+        }
+        if let Some(id) = reply["sessionId"].as_str() {
+            let future = self.adapter.send(Request::Extension(
+                crate::surfaces::extensions_store::request::ExtensionRequest::Dispose(id.into()),
+            ));
+            gpui_tokio::Tokio::spawn(cx, future).detach();
+        }
+    }
     pub(super) fn configure_extensions(&mut self, core: CoreClient) {
         self.extensions.core = Some(core);
     }
@@ -227,21 +238,21 @@ impl Launcher {
             });
         });
     }
-    pub(crate) fn drain_extensions(&mut self, cx: &mut Context<Self>) -> ExtensionFuture {
+    pub(crate) fn drain_extensions(&mut self, _cx: &mut Context<Self>) -> ExtensionFuture {
+        // Quiescence is non-destructive: a different surface may still refuse quit.
+        self.extensions
+            .core
+            .as_ref()
+            .map(ExtensionTransport::drain)
+            .unwrap_or_else(|| Box::pin(async { Ok(json!(true)) }))
+    }
+    pub(crate) fn dispose_extensions(&mut self, cx: &mut Context<Self>) {
         if let Some(v) = &self.extensions.runtime {
             v.update(cx, |v, cx| v.dispose(cx));
         }
         if let Some(v) = &self.extensions.store {
             v.update(cx, |v, cx| v.dispose(cx));
         }
-        self.extensions.subscriptions.clear();
-        self.extensions.runtime = None;
-        self.extensions.store = None;
-        self.extensions
-            .core
-            .as_ref()
-            .map(|c| ExtensionTransport::drain(c))
-            .unwrap_or_else(|| Box::pin(async { Ok(json!(true)) }))
     }
     pub(crate) fn extension_back(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if let Some(v) = &self.extensions.runtime {

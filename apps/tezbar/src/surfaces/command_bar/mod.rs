@@ -11,7 +11,7 @@ mod interactions;
 pub(crate) mod locale;
 mod model_picker;
 pub mod navigation;
-mod presentation;
+pub(crate) mod presentation;
 #[cfg(test)]
 mod review_tests;
 mod settings_integration;
@@ -1402,6 +1402,9 @@ impl Launcher {
                 .unwrap_or_else(|e| Err(e.to_string()));
             let _ = this.update(cx, |this, cx| {
                 if a.generation != this.model.session.generation || !this.visible {
+                    if let Ok(value) = &result {
+                        this.dispose_dropped_extension(value, cx);
+                    }
                     this.finish_local(&a);
                     return;
                 }
@@ -1817,7 +1820,10 @@ impl Launcher {
                             cx,
                         ),
                         Ok(result) if result["ok"] == false => {
-                            this.error = Some("Extension command failed. Run it again.".into());
+                            this.error =
+                                Some(presentation::extension_notice(&result).unwrap_or_else(
+                                    || "Extension command failed. Try again.".into(),
+                                ));
                             cx.notify();
                         }
                         Ok(result) => {
@@ -2090,3 +2096,6 @@ fn epoch_ms() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
+
+#[cfg(test)]
+mod review_extension_access;

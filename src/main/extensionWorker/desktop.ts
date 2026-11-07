@@ -121,4 +121,4 @@ export const dialog = {
     request('core:platform:confirm', options),
 }
 
-export async function extensionControl(sessionId: string, kind: 'close' | 'preferences' | 'clear-search' | 'hud', message?: string, source = 0): Promise<void> { await request('core:extension-ui', {sessionId,kind,message,source}) }
+export async function extensionControl(sessionId: string, kind: 'close' | 'preferences' | 'clear-search' | 'hud', message?: string, source = 0, run?: { request: string; extensionId: string }): Promise<void> { await request('core:extension-ui', {sessionId,kind,message,source,runRequest:run?.request,extensionId:run?.extensionId}) }

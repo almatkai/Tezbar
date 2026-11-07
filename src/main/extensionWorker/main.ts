@@ -128,7 +128,7 @@ async function main(): Promise<void> {
       typeof frame.channel !== 'string'
     )
       return
-    void invoke(frame.channel, Array.isArray(frame.payload) ? frame.payload : []).then(
+    void runner.withExtensionHostRequest(frame.id, () => invoke(frame.channel!, Array.isArray(frame.payload) ? frame.payload : [])).then(
       (result) => send({ type: 'reply', id: frame.id, result: result ?? null }),
       (error: unknown) =>
         send({
