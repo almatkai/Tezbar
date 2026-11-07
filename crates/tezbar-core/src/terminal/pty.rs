@@ -1563,3 +1563,113 @@ pub fn native_terminal_replay_reaper(state: &std::sync::Arc<NativeTerminalState>
         }
     }));
 }
+
+#[cfg(all(test, windows))]
+mod m10_windows_tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+
+    #[test]
+    fn private_conpty_raw_input_replay_and_owned_process_shutdown() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = CoreContext::headless(crate::common::CorePaths {
+            data_dir: dir.path().join("data"),
+            config_dir: dir.path().join("profile"),
+            resource_dir: dir.path().into(),
+            temp_dir: dir.path().into(),
+            home_dir: dir.path().into(),
+        });
+        let state = ctx.terminal.clone();
+        // /D prevents Command Processor AutoRun. No login shell or user profile,
+        // no child command other than cmd builtins; the second read holds the PTY.
+        let mut command = CommandBuilder::new("cmd.exe");
+        command.args(["/D", "/Q", "/V:ON", "/C", "echo M10_READY & set /p TEZBAR_M10_INPUT= & echo M10_ACCEPTED_!TEZBAR_M10_INPUT! & set /p TEZBAR_M10_HOLD="]);
+        command.cwd(dir.path());
+        let request =
+            serde_json::from_value(json!({"cwd":dir.path(),"cols":80,"rows":24})).unwrap();
+        let created =
+            native_terminal_create_inner(ctx.clone(), &state, request, Some(command)).unwrap();
+        struct Cleanup(std::sync::Arc<NativeTerminalState>);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                shutdown_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(state.clone());
+        let id = created.session_id;
+        let pid = state.sessions.lock().unwrap()[&id].pid.unwrap();
+        // Retain this exact process identity, rather than checking a possibly reused PID.
+        let process =
+            unsafe { windows_sys::Win32::System::Threading::OpenProcess(0x00100000, 0, pid) };
+        assert!(
+            !process.is_null(),
+            "Could not retain fixture process identity"
+        );
+        let process = unsafe { OwnedHandle::from_raw_handle(process) };
+        let attached = native_terminal_stream_attach(
+            ctx,
+            &state,
+            TerminalAttachRequest {
+                session_id: id.clone(),
+                cols: 80,
+                rows: 24,
+            },
+        )
+        .unwrap();
+        let generation = attached["generation"].as_str().unwrap();
+        assert!(!native_terminal_binary_input(
+            &state,
+            &id,
+            "stale",
+            &STANDARD.encode(b"WRONG\r\n")
+        )
+        .unwrap());
+        assert!(native_terminal_binary_input(
+            &state,
+            &id,
+            generation,
+            &STANDARD.encode(vec![b'x'; 1024 * 1024 + 1])
+        )
+        .is_err());
+        assert!(native_terminal_binary_input(
+            &state,
+            &id,
+            generation,
+            &STANDARD.encode(b"payload\r\n")
+        )
+        .unwrap());
+        let token = attached["replay"].as_str().unwrap();
+        let mut at = 0;
+        let mut bytes = Vec::new();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !String::from_utf8_lossy(&bytes).contains("M10_ACCEPTED_payload") {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "ConPTY fixture deadline"
+            );
+            let value = native_terminal_stream_read(&state, token, at, 65536).unwrap();
+            bytes.extend(STANDARD.decode(value["bytes"].as_str().unwrap()).unwrap());
+            assert!(bytes.len() <= 2 * 1024 * 1024, "Unexpected fixture output");
+            at = value["end"].as_u64().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(String::from_utf8_lossy(&bytes).contains("M10_READY"));
+        assert!(native_terminal_stream_release(&state, token));
+        let stopped = std::time::Instant::now();
+        native_terminal_kill_impl(&state, id.clone()).unwrap();
+        assert!(state.wait_stopped(&id));
+        assert!(stopped.elapsed() < std::time::Duration::from_secs(8));
+        assert_eq!(
+            unsafe {
+                windows_sys::Win32::System::Threading::WaitForSingleObject(
+                    process.as_raw_handle(),
+                    0,
+                )
+            },
+            0,
+            "Owned ConPTY process survived shutdown"
+        );
+        assert!(state.sessions.lock().unwrap().is_empty());
+    }
+}

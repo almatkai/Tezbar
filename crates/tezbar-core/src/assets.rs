@@ -43,11 +43,27 @@ impl AssetScope {
         if spelling != canonical {
             return Err(FAILURE.into());
         }
-        if canonical.starts_with(&root) || (self.legacy.contains(file) && canonical == file) {
+        if canonical.starts_with(&root)
+            || ((self.legacy.contains(file) || self.legacy.contains(&canonical))
+                && exact_file_spelling(file, &canonical))
+        {
             Ok(canonical)
         } else {
             Err("Image is outside the installed extension".into())
         }
+    }
+}
+
+/// A representation change to a verbatim disk prefix is not a filesystem alias.
+/// No canonicalization here: callers compare against an independently resolved path.
+pub(crate) fn exact_file_spelling(path: &Path, canonical: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        windows::canonical_spelling(path).is_ok_and(|spelling| spelling == canonical)
+    }
+    #[cfg(not(windows))]
+    {
+        path == canonical
     }
 }
 
@@ -310,6 +326,7 @@ fn check_limit(limit: usize) -> Result<(), String> {
 }
 fn read(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
     use std::io::Read;
+    #[cfg(not(windows))]
     let path = std::fs::canonicalize(path).map_err(|_| FAILURE)?;
     #[cfg(unix)]
     let file = {
@@ -321,7 +338,7 @@ fn read(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
             .map_err(|_| FAILURE)?
     };
     #[cfg(windows)]
-    let (file, _ancestors) = windows::open_locked(&path)?;
+    let file = windows::open_chosen(path)?;
     #[cfg(not(any(unix, windows)))]
     let file = std::fs::File::open(path).map_err(|_| FAILURE)?;
     let metadata = file.metadata().map_err(|_| FAILURE)?;

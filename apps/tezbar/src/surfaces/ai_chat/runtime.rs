@@ -56,6 +56,17 @@ pub(super) enum Completion {
     },
     Meta(String),
 }
+pub(super) struct PreparedRun {
+    session: String,
+    token: u64,
+    canonical: Result<Arc<Turn>, String>,
+    selection: Selection,
+}
+impl PreparedRun {
+    pub(super) fn durable(&self) -> bool {
+        self.canonical.is_ok()
+    }
+}
 pub(super) fn provider_title(config: &Value, provider: &str) -> String {
     config["customProviders"]
         .as_array()
@@ -451,6 +462,32 @@ impl ChatView {
             cx,
         );
     }
+    pub(super) fn finish_prepared(
+        &mut self,
+        prepared: PreparedRun,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.preparation_current(&prepared.session, prepared.token) {
+            return;
+        }
+        if self.quit_preparing {
+            // One entry per retained preparing owner. Only the canonical user turn
+            // and frozen selection survive; never retain a whole chat:get reply.
+            self.deferred_prepared
+                .insert(prepared.session.clone(), prepared);
+            cx.notify();
+            return;
+        }
+        let effects = self.controller.prepared_with_selection(
+            &prepared.session,
+            prepared.token,
+            prepared.canonical,
+            prepared.selection,
+            now(),
+        );
+        self.execute(effects, w, cx);
+    }
     fn preparation_current(&self, session: &str, token: u64) -> bool {
         !self.disposed
             && !self.clear_inflight
@@ -715,14 +752,16 @@ impl ChatView {
                 } else {
                     Err("Could not prepare message".into())
                 };
-                let e = self.controller.prepared_with_selection(
-                    &session,
-                    token,
-                    canonical,
-                    selection,
-                    now(),
+                self.finish_prepared(
+                    PreparedRun {
+                        session,
+                        token,
+                        canonical,
+                        selection,
+                    },
+                    w,
+                    cx,
                 );
-                self.execute(e, w, cx);
             }
             Completion::Start { run, payloads } => {
                 if ok(&result) {

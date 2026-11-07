@@ -71,6 +71,27 @@ pub(super) fn canonical_spelling(path: &Path) -> Result<PathBuf, String> {
         PathBuf::from(format!(r"\\?\{}", path.display()))
     })
 }
+/// User-selected files carry explicit host authority. Follow normal disk aliases
+/// (including cloud placeholders); extension scope traversal remains separate.
+pub(super) fn open_chosen(path: &Path) -> Result<File, String> {
+    let prefix = match path.components().next() {
+        Some(Component::Prefix(prefix)) if path.has_root() => prefix.kind(),
+        _ => return Err(FAILURE.into()),
+    };
+    match prefix {
+        Prefix::Disk(_) | Prefix::VerbatimDisk(_) => {}
+        Prefix::UNC(_, share) | Prefix::VerbatimUNC(_, share)
+            if !share.to_string_lossy().eq_ignore_ascii_case("pipe") => {}
+        _ => return Err(FAILURE.into()),
+    }
+    let file = File::open(path).map_err(|_| FAILURE)?;
+    if !file.metadata().map_err(|_| FAILURE)?.is_file()
+        || unsafe { GetFileType(file.as_raw_handle()) } != 1
+    {
+        return Err(FAILURE.into());
+    }
+    Ok(file)
+}
 /// Only canonical local disk paths are accepted. UNC/device namespaces fail closed.
 /// Each opened ancestor remains locked until the final read finishes. A conflicting
 /// writer/delete handle causes admission to fail rather than widening authority.
@@ -151,6 +172,26 @@ mod tests {
             canonical
         );
         assert!(!is_verbatim_disk(Path::new(r"\\.\pipe\fixture")));
+    }
+    #[tokio::test]
+    async fn windows_chosen_files_follow_user_aliases_without_scope_authority() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap();
+        let tilde = root.join("icon~dark.png");
+        std::fs::write(&tilde, b"chosen").unwrap();
+        let service = crate::assets::AssetService::default();
+        assert_eq!(service.chosen_image(&tilde).await.unwrap(), b"chosen");
+        assert!(open_locked(&tilde).is_err());
+        assert!(open_chosen(Path::new(r"\\.\pipe\fixture")).is_err());
+        assert!(open_chosen(Path::new(r"\\server\pipe\fixture")).is_err());
+        let target = root.join("target.png");
+        std::fs::write(&target, b"user alias").unwrap();
+        let link = root.join("chosen.png");
+        std::os::windows::fs::symlink_file(&target, &link)
+            .expect("Fixture requires Developer Mode or symlink privilege");
+        assert_eq!(service.chosen_image(&link).await.unwrap(), b"user alias");
+        assert!(open_locked(&link).is_err());
+        std::fs::remove_file(link).unwrap();
     }
     #[test]
     fn windows_scope_paths_aliases_links_legacy_and_removal() {

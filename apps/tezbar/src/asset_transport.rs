@@ -356,26 +356,46 @@ fn decode_svg(bytes: &[u8], width: u32) -> Result<image::RgbaImage, String> {
         ..Default::default()
     };
     let tree = resvg::usvg::Tree::from_data(bytes, &options).map_err(|_| "Invalid SVG image")?;
-    fn budget(g: &resvg::usvg::Group, left: &mut usize, depth: usize) -> Result<(), String> {
+    fn budget(
+        g: &resvg::usvg::Group,
+        left: &mut usize,
+        layers: &mut usize,
+        segments: &mut usize,
+        depth: usize,
+    ) -> Result<(), String> {
+        if !g.filters().is_empty() {
+            return Err("SVG filters are unsupported".into());
+        }
+        if g.should_isolate() {
+            *layers = layers
+                .checked_sub(1)
+                .ok_or("SVG exceeds isolated layer budget")?;
+        }
         if depth > 64 {
             return Err("SVG exceeds render depth".into());
         }
         for node in g.children() {
             *left = left.checked_sub(1).ok_or("SVG exceeds render budget")?;
+            if let resvg::usvg::Node::Path(path) = node {
+                let count = path.data().segments().take(*segments + 1).count();
+                *segments = segments
+                    .checked_sub(count)
+                    .ok_or("SVG exceeds geometry budget")?;
+            }
             if let resvg::usvg::Node::Group(g) = node {
-                budget(g, left, depth + 1)?;
+                budget(g, left, layers, segments, depth + 1)?;
             }
             let mut result = Ok(());
             node.subroots(|g| {
                 if result.is_ok() {
-                    result = budget(g, left, depth + 1);
+                    result = budget(g, left, layers, segments, depth + 1);
                 }
             });
             result?;
         }
         Ok(())
     }
-    budget(tree.root(), &mut 8192, 0)?;
+    budget(tree.root(), &mut 8192, &mut 64, &mut 16384, 0)?;
     let size = tree.size();
     let max = width as f32;
     let scale = (max / size.width()).min(max / size.height()).min(1.);
@@ -410,7 +430,18 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
     let text = std::str::from_utf8(bytes).map_err(|_| "Invalid SVG XML")?;
     let doc = Document::parse(text).map_err(|_| "Invalid SVG XML")?;
     let mut ids = std::collections::HashMap::new();
+    let mut geometry_bytes = 256 * 1024usize;
     for n in doc.descendants().filter(|n| n.is_element()) {
+        // Bound path allocation before usvg constructs geometry. Element count
+        // alone does not constrain a single d/points attribute with many vertices.
+        for attr in n
+            .attributes()
+            .filter(|a| matches!(a.name(), "d" | "points"))
+        {
+            geometry_bytes = geometry_bytes
+                .checked_sub(attr.value().len())
+                .ok_or("SVG exceeds geometry source budget")?;
+        }
         if let Some(id) = n.attribute("id") {
             if ids.insert(id, n).is_some() {
                 return Err("Duplicate SVG id".into());
@@ -418,7 +449,7 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
         }
         // Patterns/filters recursively amplify raster work beyond node count.
         // Fail closed for this preview subset; gradients and ordinary icons work.
-        if matches!(n.tag_name().name(), "filter" | "pattern") {
+        if matches!(n.tag_name().name(), "filter" | "pattern" | "marker") {
             return Err("SVG paint amplifier is unsupported".into());
         }
     }

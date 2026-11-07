@@ -1312,3 +1312,106 @@ fn repair_prepared_append_is_durable_work_and_attachment_queue_refusals_settle(
     }
     assert!(v.read_with(cx, |v, _| v.attachment_tickets.is_empty()));
 }
+
+#[gpui::test]
+fn review_n2_preparation_waits_for_cancelled_quit_before_starting_once(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "quit-preparing");
+    settle(&rt, cx);
+    let gate = f.hold("chat:append");
+    edit(&v, cx, "sent just before quit");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 0);
+    cx.update(|w, cx| v.update(cx, |v, cx| v.prepare_quit(w, cx)));
+    gate.send(()).unwrap();
+    settle(&rt, cx);
+    assert_eq!(
+        f.count("agent:run"),
+        0,
+        "quit preparation started a provider run"
+    );
+    assert_eq!(v.read_with(cx, |v, _| v.quit_settlement()), Ok(true));
+    v.update(cx, |v, cx| v.revive_after_quit(cx));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 1);
+    v.update(cx, |v, cx| v.revive_after_quit(cx));
+    settle(&rt, cx);
+    assert_eq!(
+        f.count("agent:run"),
+        1,
+        "revival replayed the prepared send"
+    );
+}
+#[gpui::test]
+fn review_n2_successful_quit_drops_prepared_run_without_provider_cost(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "quit-committed");
+    settle(&rt, cx);
+    let gate = f.hold("chat:append");
+    edit(&v, cx, "persist but do not run");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    cx.update(|w, cx| v.update(cx, |v, cx| v.prepare_quit(w, cx)));
+    gate.send(()).unwrap();
+    settle(&rt, cx);
+    cx.update(|w, cx| v.update(cx, |v, cx| v.dispose(w, cx)));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 0);
+    assert_eq!(f.count("agent:cancel"), 0);
+}
+
+#[gpui::test]
+fn review_n2_reentered_quit_refences_deferred_preparation(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "quit-reentry");
+    settle(&rt, cx);
+    let gate = f.hold("chat:append");
+    edit(&v, cx, "reenter");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    cx.update(|w, cx| v.update(cx, |v, cx| v.prepare_quit(w, cx)));
+    gate.send(()).unwrap();
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        v.update(cx, |v, cx| {
+            v.revive_after_quit(cx);
+            v.prepare_quit(w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 0);
+    v.update(cx, |v, cx| v.revive_after_quit(cx));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 1);
+}
+#[gpui::test]
+fn review_n2_failed_user_append_refuses_quit_and_restores_draft(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "quit-append-failure");
+    settle(&rt, cx);
+    let gate = f.hold("chat:append");
+    edit(&v, cx, "keep this draft");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    cx.update(|w, cx| v.update(cx, |v, cx| v.prepare_quit(w, cx)));
+    f.0.lock().unwrap().fail.insert("chat:append");
+    gate.send(()).unwrap();
+    settle(&rt, cx);
+    assert!(v.read_with(cx, |v, _| v.quit_settlement()).is_err());
+    v.update(cx, |v, cx| v.revive_after_quit(cx));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:run"), 0);
+    assert_eq!(
+        v.read_with(cx, |v, _| v.active().unwrap().draft.clone()),
+        "keep this draft"
+    );
+}

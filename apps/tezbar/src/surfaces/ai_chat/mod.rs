@@ -124,6 +124,7 @@ pub struct ChatView {
     owners: BTreeSet<String>,
     disposed: bool,
     quit_preparing: bool,
+    deferred_prepared: BTreeMap<String, runtime::PreparedRun>,
     decode_jobs: BTreeSet<u64>,
     decode_slots: Arc<tokio::sync::Semaphore>,
     thumbnail_attempts: BTreeSet<String>,
@@ -313,6 +314,7 @@ impl ChatView {
             owners: BTreeSet::new(),
             disposed: false,
             quit_preparing: false,
+            deferred_prepared: BTreeMap::new(),
             decode_jobs: BTreeSet::new(),
             decode_slots: Arc::new(tokio::sync::Semaphore::new(4)),
             thumbnail_attempts: BTreeSet::new(),
@@ -953,6 +955,13 @@ impl ChatView {
         if !self.mutation_jobs.is_empty() {
             return Ok(false);
         }
+        if self
+            .deferred_prepared
+            .values()
+            .any(|prepared| !prepared.durable())
+        {
+            return Err("Chat message could not be saved. Quit cancelled.".into());
+        }
         if self.owners.iter().any(|id| {
             self.controller
                 .conversation(id)
@@ -983,6 +992,20 @@ impl ChatView {
             self.disposed = false;
             self.owner = self.store.owner();
         }
+        let pending = std::mem::take(&mut self.deferred_prepared);
+        if !pending.is_empty() {
+            let view = cx.entity().downgrade();
+            let window = self.window;
+            cx.defer(move |cx| {
+                let _ = window.update(cx, |_, w, cx| {
+                    let _ = view.update(cx, |v, cx| {
+                        for prepared in pending.into_values() {
+                            v.finish_prepared(prepared, w, cx);
+                        }
+                    });
+                });
+            });
+        }
         cx.notify();
     }
     pub fn dispose(&mut self, w: &mut Window, cx: &mut Context<Self>) {
@@ -990,6 +1013,7 @@ impl ChatView {
             return;
         }
         self.disposed = true;
+        self.deferred_prepared.clear();
         self.jobs.retain(|id, _| self.mutation_jobs.contains(id));
         self.mount += 1;
         self.init_generation += 1;

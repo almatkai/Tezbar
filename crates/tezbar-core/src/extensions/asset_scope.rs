@@ -38,7 +38,13 @@ fn registered(extension: Installed) -> Result<AssetScope, String> {
             // Legacy grants name exact registry icon files only. A legacy symlink
             // cannot turn a registry icon into arbitrary filesystem authority.
             if let Ok(canonical) = candidate.canonicalize() {
-                if canonical == candidate && canonical.is_file() && !canonical.starts_with(&root) {
+                if crate::assets::exact_file_spelling(&candidate, &canonical)
+                    && canonical.is_file()
+                    && !canonical.starts_with(&root)
+                {
+                    // The wire may use the ordinary drive spelling while the locked
+                    // reader uses the verbatim path. Both name this exact file.
+                    legacy.insert(candidate);
                     legacy.insert(canonical);
                 }
             }

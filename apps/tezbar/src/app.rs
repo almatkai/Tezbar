@@ -1,8 +1,8 @@
-mod m7;
-mod m8;
 mod m10;
+mod m7;
 #[cfg(test)]
 mod m7_tests;
+mod m8;
 gpui::actions!(
     native_app,
     [RequestQuit, OpenSettings, ZoomIn, ZoomOut, ZoomReset]
@@ -1061,7 +1061,9 @@ impl Owner {
             Event::Settings => self.settings(cx),
             Event::SettingsFocused => self.hide(cx),
             Event::ThemeChanged(theme) => {
-                let _=self.launcher.update(cx,|v,w,cx|v.terminal_theme(tezbar_ui::tokens::tokens(w).light,cx));
+                let _ = self.launcher.update(cx, |v, w, cx| {
+                    v.terminal_theme(tezbar_ui::tokens::tokens(w).light, cx)
+                });
                 if let Some(settings) = self.settings {
                     let _ = settings.update(cx, |view, _, cx| {
                         view.theme = theme;
@@ -1070,16 +1072,24 @@ impl Owner {
                 }
             }
             Event::Quit => self.quit(cx),
-            Event::TerminalEffect(source,effect)=>self.m10_effect(source,effect,cx),
-            Event::TerminalRows(rows)=>{if self.panel_visible {self.panel(rows,cx);}},
-            Event::TerminalPanelAction(id)=>{let _=self.launcher.update(cx,|v,w,cx|v.terminal_panel_action(id,w,cx));},
+            Event::TerminalEffect(source, effect) => self.m10_effect(source, effect, cx),
+            Event::TerminalRows(rows) => {
+                if self.panel_visible {
+                    self.panel(rows, cx);
+                }
+            }
+            Event::TerminalPanelAction(id) => {
+                let _ = self
+                    .launcher
+                    .update(cx, |v, w, cx| v.terminal_panel_action(id, w, cx));
+            }
             Event::ChatEffect(source, effect) => self.m8_effect(source, effect, cx),
             Event::RetryCore => self.start_core(cx),
             Event::CloseSettings => {
                 let _ = self.surface(SurfaceOp::CloseCurrent, cx);
             }
             Event::Bounds => {
-                let _=self.launcher.update(cx,|v,_,cx|v.terminal_layout(cx));
+                let _ = self.launcher.update(cx, |v, _, cx| v.terminal_layout(cx));
                 self.snapshot(cx);
                 self.viewport_event(cx);
                 self.follow_panel(cx);
