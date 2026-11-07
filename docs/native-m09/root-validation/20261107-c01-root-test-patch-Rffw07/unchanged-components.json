@@ -1,0 +1,101 @@
+{
+  "updater": {
+    "files": {
+      "crates/tezbar-update/Cargo.toml": "fa30e0e4628b23146fb32f7c455cc1955568b7ca7e8abaf1765624aad96ca7af",
+      "crates/tezbar-update/src/lib.rs": "e32c7831fab69dc73a7bbec926f336f32ce2aecfa28ce9aa1bdf855adf8fdc96",
+      "crates/tezbar-update/src/manual_releases.rs": "efe75f10003a911c596954456cf43a6481efbd9be4363c0ffdd167f0ca852866",
+      "crates/tezbar-update/src/native.rs": "cbbe6b5caaa3ec7e34a4a615ade4b4b0979a24e71a29e8545d927d52c877c68f",
+      "crates/tezbar-update/src/notes.rs": "f9f5734de8a3af01a8a1fa903730fca07e68dceaa015d82c10d1f296d532aed1",
+      "crates/tezbar-update/src/notes/http.rs": "2b3072ffe2792edf1c6d8462b481779ac52cd1fa285339f7f7e5327c006135b3",
+      "crates/tezbar-update/src/release_channels.rs": "dfbf75d667384976d521387f4bdcca663837f3072bde97b63cfa42891896ab67",
+      "crates/tezbar-update/src/updater_temp.rs": "1f4e520e5ee1f2d255c0ecb6be9d45f4b9a8e30e90b6795dd6ad46719d6fd137",
+      "crates/tezbar-update/tests/fixtures/README.md": "e634f138315d6b6a8fef2b0e95c0e3b08602e3882f15b0ac073777fe9e84277e",
+      "crates/tezbar-update/tests/fixtures/fixture.pub": "cfc19d81d82a64fdd51f493cf526002ff1b772ff66924ed3b6348a0871328fe5",
+      "crates/tezbar-update/tests/fixtures/fixture.tar.gz": "556c7b84799ac5d78f9b673483639f1976f57872e1f9e46fe17919203dd50de7",
+      "crates/tezbar-update/tests/fixtures/fixture.tar.gz.minisig": "be44c28bb4794e83507b0d3393cb7302a7e17c53937a604bbf60c8cfddbcdb21"
+    },
+    "changed": [],
+    "count": 12
+  },
+  "packaging": {
+    "files": {
+      "packaging/macos/Info.plist.in": "64702c76f0e8b60446718a6b7fd527c137ec0e4e29bf6013cc9ec96513924b40",
+      "packaging/windows/FileAssociation.nsh": "85ce72519d5461b5777f95123176b5536de163abd9a4742f9235453c4ddf56d8",
+      "packaging/windows/LICENSE-APACHE": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "packaging/windows/LICENSE-MIT": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+      "packaging/windows/installer.nsi": "6b43fcc03cc61e8e4b203cf54111b90d3c4d3afd679835adde72cb019190f550",
+      "packaging/windows/utils.nsh": "b27b407f886cca738e44e774f15e6b556b43ce52557a7c8891ee4eca7dd8013d",
+      "scripts/native/build.mjs": "e7886f463431f628c89b1ce14073d867233b302a3555491a4206c68095c55720",
+      "scripts/native/build.test.mjs": "bf56cbb4c97195283b146973dd00c713b25e11c49d554678573e8f94fc12bd4a",
+      "scripts/native/lock-drift.py": "c1f529cc327106095d0adb1a3ac8b0fc8004d87aa2b1448b383d877bd4cb34a1",
+      "scripts/native/nsis-template.test.mjs": "528ce0bb0b48ca85fd45e13fb31e55ba72bab7f81a9edc843247d9ca6db9f569",
+      "scripts/native/package-macos.mjs": "597e237e1e8c08aeb7343078e12f66140da03c0cf483e9756bd8493f704f98dc",
+      "scripts/native/package-macos.test.mjs": "ca2316e9d83decb7b08fff3ebe71236200c085da53de88e2edbac23014b58eba",
+      "scripts/native/windows-rehearsal-plan.mjs": "7298d9d4e6047c7eb152db7fa98c1dddfbe11fe415f7f8089322a3d9718d1396"
+    },
+    "changed": [],
+    "count": 13
+  },
+  "core_assets": {
+    "files": {
+      "crates/tezbar-core/src/assets.rs": "34bd87b8248bc43ded79f1195cb24fa11542b76d020e4ff3b7ee5c586fa02f81",
+      "crates/tezbar-core/src/assets_windows.rs": "7c57db95f1698139d722662e2a2328bbd5f7f016d955318e5ea1545a8baeb80e",
+      "crates/tezbar-core/src/extensions/asset_scope.rs": "f7b57e88757e06f1bffa1c41470519abd794a243fc7010010c2c90dcd4e50a86"
+    },
+    "changed": [],
+    "count": 3
+  },
+  "core_protocol": {
+    "files": {},
+    "changed": [],
+    "count": 0
+  },
+  "core_history": {
+    "files": {},
+    "changed": [],
+    "count": 0
+  },
+  "actual_pty": {
+    "files": {
+      "crates/tezbar-core/src/terminal/mod.rs": "2182842b6e1f3a96934ac0c220a460c69c8bd1c16d26989df5b9c453eb4d28b4",
+      "crates/tezbar-core/src/terminal/pty.rs": "e58388273a44f9e7bec3d5c02fa1b2a32e962d658d118053e3d796c9e9a0a055",
+      "crates/tezbar-core/src/terminal/stream.rs": "be2faaf8952d8fbaa2d866dfc3031be3a717364baa76f147973b056287e4a1d5",
+      "crates/tezbar-core/src/terminal_bridge.rs": "e02063f583716604e88d047e3e54fcf692a62b881f9a90b76100d154c3f9734b"
+    },
+    "changed": [],
+    "count": 4
+  },
+  "m11_refs": {
+    "files": {
+      "docs/native-m11/upstream/FileAssociation.nsh": "85ce72519d5461b5777f95123176b5536de163abd9a4742f9235453c4ddf56d8",
+      "docs/native-m11/upstream/LICENSE-APACHE-tauri": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "docs/native-m11/upstream/LICENSE-MIT-tauri": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+      "docs/native-m11/upstream/chromium-local-storage-database.cc": "b147ca914185df05022cd00a86bc823ed3fca7a0bd6d15359bd39a30dc91da61",
+      "docs/native-m11/upstream/chromium-storage-area.cc": "dcabfa7b6ed038ce33fee81d9e3a868d4909db5684d7f2ba3a409e2e04e6584d",
+      "docs/native-m11/upstream/chromium-storage-key.cc": "78e3538d3bf8aee0aa3d5fac5339c5d0b5656dc06e7d35f55b0c5ea4f45475d3",
+      "docs/native-m11/upstream/fetch-failures.txt": "5e288549396997edf84ff57f7601047db52b15cd8b7e6f1177dd4fcfa44a8f27",
+      "docs/native-m11/upstream/installer.nsi": "ee84148e405adc4d736a46456dd8345a644751bd1f28a335dd7fd833a32d7c3e",
+      "docs/native-m11/upstream/leveldb-log-format.md": "1796ccc965e1ca2fe3479ce7b5bf7afd3afcd9e2c00c5950d6be3fe03b7ffefd",
+      "docs/native-m11/upstream/leveldb-table-format.md": "16f96b651b8ee0a20fbc81da0c76b0e65b7d0981333569e8940770e9a5bc4fc0",
+      "docs/native-m11/upstream/leveldb-version-edit.cc": "ccbf9b13750b2a6ce9ffbda5338c15aefac9aa19c9f01d1cbb1fb3e0563a2d06",
+      "docs/native-m11/upstream/leveldb-write-batch.cc": "426b141167be1929ac22e98fa8314c8a3b2d7733c3507a21781d8ae3875ab70c",
+      "docs/native-m11/upstream/nsis-mod.rs": "90f49793c93d80ab267c09188f40b94fd68542699fdbd278df99512db53e6d8b",
+      "docs/native-m11/upstream/snap-api.rs": "a7048da3a4b76b75e4b3d071ee9959dbf12c5b3a36dabb2f7878513507c80cb9",
+      "docs/native-m11/upstream/snap-metadata.json": "04e527e60b1325b8ceaf6ed1faf99d7e62c3e1f3b91ba32c05c7d02e5d808081",
+      "docs/native-m11/upstream/tauri-cli-v2.11.2-Cargo.lock": "045da6ee8370fc701e1d5196469c862c029fb5da47a22862749ea6a0757d67d5",
+      "docs/native-m11/upstream/urls.json": "afd3dceda4192b5183fc5c597b286caa5be794f40e42eea6d7339ff34a1fc1c2",
+      "docs/native-m11/upstream/utils.nsh": "b27b407f886cca738e44e774f15e6b556b43ce52557a7c8891ee4eca7dd8013d",
+      "docs/native-m11/upstream/webkit-core-persistent.cpp": "711d226b9f7bc76cb21480db242081ed5e92f6291ab3f024efc9aa2a28f4268d",
+      "docs/native-m11/upstream/webkit-network-storage.cpp": "e4ced927d0586fd6ea0ee12f4726c090df3b4d84de1fb2680e7c0bc7e7147195",
+      "docs/native-m11/upstream/webkit-origin.cpp": "35c2dbff7625ab81ddffaf219b7c90ddd6e9c1bac154dbf880dfd3946d5ecbc3",
+      "docs/native-m11/upstream/webkit-persistence-coders.cpp": "3cd3df60ae3c0c49fbb40c488c4d4c8f94a5c6894a19f17e6235e87cc24536e8",
+      "docs/native-m11/upstream/webkit-persistence-coders.h": "6a2ee62f489d73b531ea9112022df634ee33c43271bbae7fd7858d03b94bc9de",
+      "docs/native-m11/upstream/webkit-persistence-decoder.cpp": "e9ad28ccb331a261b6d009219dbc2bb77ad251be29bf747e6dae7210ad08a80a",
+      "docs/native-m11/upstream/webkit-sqlite-statement.cpp": "b42b5b620e675b2baaa8fe7c0c4fc7999cd50a476845b13c0efca3d44fa821b2",
+      "docs/native-m11/upstream/webkit-sqlite.cpp": "d07d7b1c30fd05ab474799db56aad46740a050873a03e58ccc843d70df62f247",
+      "docs/native-m11/upstream/webkit-storage-utilities.cpp": "5fec6366899e87c835b7456c21dee5525f3e11ca62daf4b3ddf380d818d90e55"
+    },
+    "changed": [],
+    "count": 27
+  }
+}

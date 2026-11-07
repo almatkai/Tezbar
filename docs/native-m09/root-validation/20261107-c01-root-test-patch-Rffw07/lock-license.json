@@ -1,0 +1,39 @@
+{
+  "locks": {
+    "Cargo.lock": {
+      "sha256": "5df4bda35ad5d947af65acc4c1f1e39be8a4449c5f433e68e6e7dbf17569b778",
+      "bytes": 211593,
+      "byteidentical_to_9230bcc": true
+    },
+    "src-tauri/Cargo.lock": {
+      "sha256": "ac240b768f3a04b49e4f0feb1380688fe004fa64fe4d55cc343285b9d0d2b53e",
+      "bytes": 170898,
+      "byteidentical_to_9230bcc": true
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "1268deb243e64b16bfee497812a77138fc5c3f7e5acae078ca0b9b6abefa2074",
+      "bytes": 167952,
+      "byteidentical_to_9230bcc": true
+    },
+    "rust-toolchain.toml": {
+      "sha256": "72da9f9e503464ba7393560f6f51a69fb06be72633d52ae7725fa0ba59dfda22",
+      "bytes": 51,
+      "byteidentical_to_9230bcc": true
+    },
+    "apps/tezbar/Cargo.toml": {
+      "sha256": "5fc17889555d100dba6c5be4d0d21357902031c09b63e0fc53412301aad22484",
+      "bytes": 2409,
+      "byteidentical_to_9230bcc": true
+    },
+    "src-tauri/Cargo.toml": {
+      "sha256": "d8555f81c5ad938212a2ee2dcb157f5ca08146198605351f5a1e4498db3db210",
+      "bytes": 2994,
+      "byteidentical_to_9230bcc": true
+    }
+  },
+  "license_delta_since_9230bcc": null,
+  "m11_license_receipt": "docs/native-m11/integration/lock-license.json",
+  "m11_license_receipt_sha256": "6a5ff748fd706387f340914a68ee58a58923653ee812d4fe729f4f4443066c33",
+  "GPUI": "c84af5b99cbc366d675064e52b23664a015b6e35",
+  "no_fetch_or_toolchain_install": true
+}

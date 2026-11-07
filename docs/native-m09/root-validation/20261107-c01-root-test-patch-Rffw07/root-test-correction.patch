@@ -1,0 +1,33 @@
+--- a/apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs
++++ b/apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs
+@@ -207,6 +207,30 @@
+             .lock()
+             .unwrap()
+             .iter()
++            .filter(|(channel, _)| *channel == "extension:dispose-session")
++            .count(),
++        2,
++        "quiescence must retain the current extension"
++    );
++    assert_eq!(
++        launcher.read_with(cx, |v, cx| v.extensions.runtime.as_ref().and_then(|r| r
++            .read(cx)
++            .session
++            .as_ref()
++            .map(|s| s.key.session_id.clone()))),
++        Some("session-104".into())
++    );
++    // Only the final successful App teardown owns destructive disposal.
++    cx.update(|_, cx| launcher.update(cx, |v, cx| v.dispose_extensions(cx)));
++    let drain = cx.update(|_, cx| launcher.update(cx, |v, cx| v.drain_extensions(cx)));
++    rt.block_on(drain).unwrap();
++    chat_integration_tests::settle(&rt, cx);
++    assert_eq!(
++        backend
++            .calls
++            .lock()
++            .unwrap()
++            .iter()
+             .filter(|(c, _)| *c == "extension:dispose-session")
+             .count(),
+         3

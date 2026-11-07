@@ -1,0 +1,8 @@
+{
+  "cargo_rustc_remaining": [],
+  "owned_worker_app_processes_remaining": [],
+  "worker_lifecycle_test": "explicit production worker reuse/crash/caller cancellation/shutdown test passed; fake Host only",
+  "workers_killed_outside_tests": false,
+  "installed_app_profile_accessed": false,
+  "private_bundle_retained_for_hash_audit": true
+}

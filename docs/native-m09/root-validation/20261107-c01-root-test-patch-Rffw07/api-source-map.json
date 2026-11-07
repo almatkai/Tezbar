@@ -1,0 +1,194 @@
+{
+  "queries": {
+    "CoreClient extension admission / reserved disposal / RAII / closing": [
+      "apps/tezbar/src/core_client.rs",
+      "closing|InstallLease|fn drain|resume_extensions|Semaphore::new|acquire_many_owned"
+    ],
+    "App fallible barriers / cancel resume / final disposal": [
+      "apps/tezbar/src/app.rs",
+      "extension_drain|final_drains|resume_extensions|dispose_extensions|ui_durability_pending|eight seconds"
+    ],
+    "Native Host source fences": [
+      "apps/tezbar/src/host_adapter.rs",
+      "sdk_status_items|extension_control|session|source"
+    ],
+    "Legacy Host defaults": [
+      "crates/tezbar-core/src/host.rs",
+      "fn sdk_status_items|fn extension_control|Legacy Tauri"
+    ],
+    "Tauri default trait methods": [
+      "src-tauri/src/tauri_host.rs",
+      "impl Host for TauriHost"
+    ],
+    "Worker request identity": [
+      "src/main/extension-runner.ts",
+      "AsyncLocalStorage|withExtensionHostRequest|hostRequest|extensionControl"
+    ],
+    "Worker request bridge": [
+      "src/main/extensionWorker/main.ts",
+      "withExtensionHostRequest"
+    ],
+    "Worker grants / retired ownership": [
+      "crates/tezbar-core/src/extension_worker.rs",
+      "RequestOwner|request_owners|provisional|session-retired|sdk_status_items|set_sdk_status_item"
+    ],
+    "Client filter and actual server supersession": [
+      "crates/tezbar-ui-model/src/extensions/runtime/tests.rs",
+      "filter|server|stale|token"
+    ],
+    "M11 retained modules": [
+      "apps/tezbar/src/app.rs",
+      "mod m11|mod production_launch|mod update_integration|quiesce|migration"
+    ],
+    "actual root regression and SDK registry": [
+      "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs",
+      "sdk_|focus"
+    ]
+  },
+  "matches": {
+    "CoreClient extension admission / reserved disposal / RAII / closing": [
+      "18:    closing: std::sync::atomic::AtomicBool,",
+      "20:struct InstallLease(Arc<ExtensionAdmission>);",
+      "21:impl Drop for InstallLease {",
+      "258:        InstallLease(admission.clone())",
+      "260:    pub(crate) fn resume_extensions(&self) {",
+      "266:            .closing",
+      "276:            Arc::new(tokio::sync::Semaphore::new(16)),",
+      "280:            Arc::new(tokio::sync::Semaphore::new(16)),",
+      "282:                normal: Arc::new(tokio::sync::Semaphore::new(16)),",
+      "284:                closing: std::sync::atomic::AtomicBool::new(false),",
+      "480:        let admissions = Arc::new(tokio::sync::Semaphore::new(1));",
+      "529:        if admission.closing.load(std::sync::atomic::Ordering::Acquire)",
+      "536:                Err(\"Tezbar is closing. Cancel quit before running an extension.\".into())",
+      "570:            Some(InstallLease(admission.clone()))",
+      "586:    fn drain(&self) -> crate::surfaces::extensions_store::request::ExtensionFuture {",
+      "593:                .closing",
+      "607:                .acquire_many_owned(16)",
+      "611:                .acquire_many_owned(16)",
+      "671:                ExtensionRequest::Copy(\"blocked while closing\".into())",
+      "676:        client.resume_extensions();",
+      "681:        let _unrelated = global.acquire_many_owned(16).await.unwrap();",
+      "687:        client.resume_extensions();"
+    ],
+    "App fallible barriers / cancel resume / final disposal": [
+      "552:            let extension_drain=this.update(cx,|owner,cx|owner.launcher.update(cx,|view,_,cx|view.drain_extensions(cx)))",
+      "554:            gpui_tokio::Tokio::spawn(cx,extension_drain).await.map_err(|_|\"Extension drain interrupted\")??;",
+      "556:            let final_drains = this.update(cx, |owner, cx| {",
+      "557:                if owner.m7.store.pending() || !owner.m7.barrier.is_clean() || owner.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true) {",
+      "565:            final_drains.0.await?;",
+      "566:            final_drains.1.await?;",
+      "574:                if timer.as_mut().poll(cx).is_ready() { return Poll::Ready(Err(\"Quit save/drain exceeded eight seconds\".into())); }",
+      "580:                    && (this.m7.store.pending() || !this.m7.barrier.is_clean() || this.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true)) {",
+      "585:                    this.core.resume_extensions();",
+      "628:                    view.dispose_extensions(cx);"
+    ],
+    "Native Host source fences": [
+      "75:    fn sdk_status_items(&self) -> bool {",
+      "78:    fn extension_control(",
+      "80:        session: String,",
+      "81:        source: u64,",
+      "90:        let result=self.relay.send_core(CoreEvent::Other{channel:\"extension:ui\".into(),payload:serde_json::json!({\"sessionId\":session,\"source\":source,\"kind\":kind,\"message\":message})});",
+      "173:    pub fn new(desktop: &NativeDesktop, resources: &std::path::Path) -> Result<Self, String> {",
+      "174:        Self::build(desktop, resources, false)",
+      "178:        resources: &std::path::Path,",
+      "180:        Self::build(desktop, resources, true)",
+      "184:        resources: &std::path::Path,",
+      "196:        let icon_path = resources.join(\"trayIconTemplate@2x.png\");"
+    ],
+    "Legacy Host defaults": [
+      "138:    fn sdk_status_items(&self) -> bool {",
+      "141:    fn extension_control(",
+      "147:        // Legacy Tauri controls were no-ops. Only an explicit fenced native",
+      "191:    fn sdk_status_items(&self) -> bool {",
+      "194:    fn extension_control("
+    ],
+    "Tauri default trait methods": [
+      "20:impl Host for TauriHost {"
+    ],
+    "Worker request identity": [
+      "1:import { AsyncLocalStorage } from 'node:async_hooks'",
+      "2:import { app, BrowserWindow, clipboard, shell, extensionControl } from '@tezbar/desktop-runtime'",
+      "55:const nativeControlSource = new AsyncLocalStorage<number>()",
+      "56:const nativeRunRequest = new AsyncLocalStorage<string>()",
+      "57:export function withExtensionHostRequest<T>(request: string, run: () => Promise<T>): Promise<T> {",
+      "65:    if (request) await extensionControl(session.id, kind, message, nativeControlSource.getStore() ?? 0, { request, extensionId: session.extensionId })",
+      "66:    else await extensionControl(session.id, kind, message, nativeControlSource.getStore() ?? 0)"
+    ],
+    "Worker request bridge": [
+      "131:    void runner.withExtensionHostRequest(frame.id, () => invoke(frame.channel!, Array.isArray(frame.payload) ? frame.payload : [])).then("
+    ],
+    "Worker grants / retired ownership": [
+      "714:        if !self.ctx.host.sdk_status_items() {",
+      "828:        crate::extensions::process_host::set_sdk_status_item(&self.ctx, &scope, &params, callback)?;"
+    ],
+    "Client filter and actual server supersession": [
+      "61:    let Effect::Refresh(token) = s.tick(500).unwrap() else {",
+      "66:    assert!(s.refresh_finished(&token, None, 501).unwrap().is_some());",
+      "85:    let t = s.token();",
+      "89:    let t = s.token();",
+      "97:fn client_filter_and_server_search_are_distinct() {",
+      "100:    assert_eq!(s.filtered_ids(), vec![\"b\"]);",
+      "103:    let t = s.token();",
+      "109:    assert_eq!(s.filtered_ids(), vec![\"a\", \"b\"]);",
+      "118:    let Effect::Invoke { token, .. } = s.invoke(\"open\", None).unwrap() else {",
+      "121:    let Some(Effect::Search { token: newer, .. }) = s.search(\"b\".into()) else {",
+      "127:        .refresh_finished(&token, Some(reply(root(&[\"wrong\"]))), 2)",
+      "130:    assert_eq!(s.filtered_ids(), vec![\"b\"]);",
+      "146:fn action_shortcut_panel_filter_and_submit() {",
+      "156:    assert_eq!(s.action_filter(\"OPEN\").len(), 1);",
+      "279:    let Some(Effect::Invoke { token, .. }) = s.primary(false).unwrap() else {",
+      "285:    s.no_view(&token, String::new(), vec![], None, 1);",
+      "287:    let Some(Effect::Invoke { token, .. }) = s.primary(false).unwrap() else {",
+      "290:    s.failed(&token, 2);",
+      "292:    let Some(Effect::Invoke { token, .. }) = s.primary(false).unwrap() else {",
+      "295:    s.no_view(&token, \"Saved answer\".into(), vec![], None, 3);",
+      "298:    s.no_view(&token, \"stale\".into(), vec![], None, 4);",
+      "299:    assert_ne!(s.notice_message.as_deref(), Some(\"stale\"));",
+      "336:        let t = s.token();",
+      "349:        let t = s.token();",
+      "384:    let t = s.token();",
+      "388:    let t = s.token();",
+      "391:    let t = s.token();",
+      "398:fn review_m9_client_filter_keeps_pending_action_token_and_server_search_retires_it() {",
+      "400:    let Effect::Invoke { token, .. } = s.invoke(\"open\", None).unwrap() else {",
+      "404:    assert!(s.accepts(&token));",
+      "409:    assert!(!s.accepts(&token));"
+    ],
+    "M11 retained modules": [
+      "2:mod m11;",
+      "8:pub mod production_launch;",
+      "9:pub mod update_integration;",
+      "95:            .update(cx, |view, _, _| view.migration_pending())",
+      "313:            .update(cx, |view, _, _| view.migration_pending())",
+      "1170:                    .update(cx, |view, _, cx| view.retry_migration(cx))",
+      "1571:    let migration = production.as_ref().and_then(|p| {",
+      "1745:                        Launcher::new_with_migration(",
+      "1749:                            migration,"
+    ],
+    "actual root regression and SDK registry": [
+      "34:            v.action_search.focus_handle(cx).focus(w, cx);",
+      "140:            // Grid arrows navigate tiles only when the search input is not focused.",
+      "144:                let focus = view.read(cx).focus.clone();",
+      "145:                focus.focus(w, cx);",
+      "589:macro_rules! sdk_case {",
+      "597:sdk_case!(sdk_list, \"list\");",
+      "598:sdk_case!(sdk_grid, \"grid\");",
+      "599:sdk_case!(sdk_detail, \"detail\");",
+      "600:sdk_case!(sdk_form, \"form\");",
+      "601:sdk_case!(sdk_actions, \"actions\");",
+      "602:sdk_case!(sdk_prompts, \"prompts\");",
+      "603:sdk_case!(sdk_feedback, \"feedback\");",
+      "604:sdk_case!(sdk_menubar, \"menubar\");",
+      "605:sdk_case!(sdk_invalidation, \"invalidation\");"
+    ]
+  },
+  "root_boundary_test_correction": [
+    "186:                payload: json!({\"sessionId\":\"session-104\",\"generation\":\"g\",\"revision\":1}),",
+    "201:    let drain = cx.update(|_, cx| launcher.update(cx, |v, cx| v.drain_extensions(cx)));",
+    "213:        \"quiescence must retain the current extension\"",
+    "221:        Some(\"session-104\".into())",
+    "224:    cx.update(|_, cx| launcher.update(cx, |v, cx| v.dispose_extensions(cx)));",
+    "225:    let drain = cx.update(|_, cx| launcher.update(cx, |v, cx| v.drain_extensions(cx)));",
+    "246:    assert_eq!(disposed, vec![\"session-101\", \"session-103\", \"session-104\"]);"
+  ]
+}

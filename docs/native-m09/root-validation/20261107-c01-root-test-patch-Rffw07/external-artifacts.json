@@ -1,0 +1,22 @@
+{
+  "tezbar-debug-preview": {
+    "path": "/tmp/tezbar-m9-c01-validation-Rffw07/tezbar-debug-preview",
+    "bytes": 220225784,
+    "sha256": "5e57d2c5432674b2731d5e798e2367d6a31b6c09eb54ccf928a4332cd9bafd5e"
+  },
+  "root-cache-before.json": {
+    "path": "/tmp/tezbar-m9-c01-validation-Rffw07/root-cache-before.json",
+    "bytes": 38551891,
+    "sha256": "0e3b8015d6523535fb3e9359ae5fe05d1fd0f984a1e5a84a1d2ffb426dfe7f0a"
+  },
+  "root-cache-after.json": {
+    "path": "/tmp/tezbar-m9-c01-validation-Rffw07/root-cache-after.json",
+    "bytes": 38551891,
+    "sha256": "0e3b8015d6523535fb3e9359ae5fe05d1fd0f984a1e5a84a1d2ffb426dfe7f0a"
+  },
+  "final-processes.log": {
+    "path": "/tmp/tezbar-m9-c01-validation-Rffw07/final-processes.log",
+    "bytes": 87996,
+    "sha256": "e2c5a9a79e4f550a87567500055a3fae5d3a54394693d935a1104479c99cefdf"
+  }
+}

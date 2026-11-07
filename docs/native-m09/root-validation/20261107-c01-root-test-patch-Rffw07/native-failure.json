@@ -1,0 +1,40 @@
+{
+  "actual_test_summary": [
+    "test result: FAILED. 405 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.92s"
+  ],
+  "review_m9_passed": [
+    "app::m9_review_tests::review_m9_busy_install_refuses_quit_before_cancelling_live_chat",
+    "app::m9_review_tests::review_m9_discarded_foreground_reply_is_disposed_but_background_status_keeps_owner",
+    "app::m9_review_tests::review_m9_cancelled_final_quit_restores_active_extension",
+    "surfaces::extension_runtime::review_regressions::review_m9_date_default_local",
+    "surfaces::extension_runtime::review_regressions::review_m9_grid_default_columns",
+    "surfaces::extension_runtime::review_regressions::review_m9_inline_setup_then_noview_command",
+    "surfaces::extension_runtime::review_regressions::review_m9_list_search_left_arrow_moves_caret",
+    "surfaces::extension_runtime::review_regressions::review_m9_menubar_info_items",
+    "surfaces::extension_runtime::review_regressions::review_m9_noview_sdk_controls",
+    "surfaces::extension_runtime::review_regressions::review_m9_search_during_slow_push",
+    "surfaces::extension_runtime::tests::review_m9_action_panel_scrolls_across_sections_and_resets_on_reopen",
+    "surfaces::extension_runtime::tests::review_m9_dropdown_keeps_groups_current_choice_keyboard_and_escape",
+    "surfaces::extension_runtime::tests::review_m9_grid_sections_use_same_ranges_for_render_selection_and_leases",
+    "surfaces::extensions_store::tests::review_m9_store_disposes_run_reply_after_hiding",
+    "surfaces::extension_runtime::review_regressions::review_m9_slow_push_control"
+  ],
+  "sdk_passed": [
+    "surfaces::extension_runtime::real_sdk::sdk_actions",
+    "surfaces::extension_runtime::real_sdk::sdk_detail",
+    "surfaces::extension_runtime::real_sdk::sdk_feedback",
+    "surfaces::extension_runtime::real_sdk::sdk_form",
+    "surfaces::extension_runtime::real_sdk::sdk_grid",
+    "surfaces::extension_runtime::real_sdk::sdk_invalidation",
+    "surfaces::extension_runtime::real_sdk::sdk_list",
+    "surfaces::extension_runtime::real_sdk::sdk_menubar",
+    "surfaces::extension_runtime::real_sdk::sdk_prompts"
+  ],
+  "failure": "surfaces::command_bar::extension_integration_tests::retained_store_runtime_ack_source_fence_and_settings_route",
+  "location": "apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs:204",
+  "actual": 2,
+  "expected": 3,
+  "read_only_diagnosis": "Test still assumes drain_extensions performs final disposal. Root changed drain to a nondestructive barrier; dispose_extensions is now a separate final App step. No patch or skip applied.",
+  "suggestion_for_root": "Preserve explicit assertion of nondestructive drain, then exercise the actual final dispose_extensions boundary and retain session-101/session-103/session-104 disposal assertion.",
+  "native_bench": "stopped pending root decision; would exercise the same failing test"
+}

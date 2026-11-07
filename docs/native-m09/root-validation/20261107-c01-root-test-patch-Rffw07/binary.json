@@ -1,0 +1,22 @@
+{
+  "path": "/tmp/tezbar-m9-c01-validation-Rffw07/tezbar-debug-preview",
+  "sha256": "5e57d2c5432674b2731d5e798e2367d6a31b6c09eb54ccf928a4332cd9bafd5e",
+  "bytes": 220225784,
+  "metadata": {
+    "version": "0.3.0-beta.7",
+    "source": "c01fa313fb04b5b53a97780c03ce2cb1838bb352",
+    "dirty": "true",
+    "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+    "preview": true,
+    "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+    "runtime_shaders": true,
+    "bench_control": false
+  },
+  "source_variant": "c01 + exact authorized root test patch, dirty",
+  "build_provenance": "all workspace crate fingerprints initially invalidated; APFS-cloned dependency cache reused; app cache invalidated again after patch; not a clean build",
+  "execution": "--version only, before App/production admission",
+  "gui_launch": false,
+  "bench_control": false,
+  "link_tree_forbidden_dependencies": [],
+  "RAM_measurement": null
+}

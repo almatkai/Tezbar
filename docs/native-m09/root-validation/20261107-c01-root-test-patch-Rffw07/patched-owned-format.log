@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/tezbar-m9-c01-validation-Rffw07/patched-format-check.py", line 2, in <module>
+    root=pathlib.Path.cwd();out=pathlib.Path(__file__).parent;owned=json.loads((root/'docs/native-m09/root-repairs/owned-files.json').read_text());owned['apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs']={};items=[];logs=[];copies=out/'format-baseline';copies.mkdir()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/pathlib.py", line 1313, in mkdir
+    self._accessor.mkdir(self, mode)
+FileExistsError: [Errno 17] File exists: '/tmp/tezbar-m9-c01-validation-Rffw07/format-baseline'

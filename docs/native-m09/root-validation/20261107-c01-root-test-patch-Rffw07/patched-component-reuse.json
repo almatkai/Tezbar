@@ -1,0 +1,21 @@
+{
+  "only_input_change": [
+    "apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs"
+  ],
+  "reused_c01_execution_receipts": [
+    "typecheck",
+    "typescript",
+    "ui",
+    "models-198",
+    "core-worker",
+    "core-host",
+    "core-status",
+    "core-launch",
+    "core-worker-integration",
+    "host",
+    "worker-smoke"
+  ],
+  "reason": "One native integration test changed. No TS, UI, model, core, host, worker, dependency or lock input changed. Native test/check/build gates rerun on patched dirty freeze.",
+  "actual_at_c01": true,
+  "not_claimed_postpatch_reruns": true
+}

@@ -1,0 +1,7 @@
+
+running 1 test
+OPUS-PROBE date TZ=Some("America/Los_Angeles") raw_defaults=[String("2026-11-07"), String("2026-11-07"), String("2026-11-07T23:30")] form_values={"datetime": String("2026-11-07T23:30"), "evening": String("2026-11-07"), "local": String("2026-11-07")}
+test surfaces::extension_runtime::review_regressions::review_m9_date_default_local ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 405 filtered out; finished in 0.25s
+

@@ -1,0 +1,36 @@
+{
+  "command": [
+    "node",
+    "tests/fixtures/extensions/prepare.mjs"
+  ],
+  "environment": {
+    "CARGO_TARGET_DIR": "/tmp/tezbar-m9-c01-validation-Rffw07/target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "2",
+    "RUST_TEST_THREADS": "2",
+    "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+    "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+    "TZ": "Asia/Almaty"
+  },
+  "exit_code": 0,
+  "seconds": 0.5,
+  "log_sha256": "545373841a2266ab1d2e1038d82915c41e8764898b129c46c640bd530513c613",
+  "before": {
+    "head": "c01fa313fb04b5b53a97780c03ce2cb1838bb352",
+    "branch": "feat/native-gpui-app",
+    "status": "",
+    "file_count": 2691,
+    "root_freeze_files": 608,
+    "root_freeze_aggregate": "c44dfaa97ae5e846dd20142d5ae15e4a5d06267905c20548488b142c1c53dadd",
+    "aggregate": "f2ba4fcf039f693b1b547970cc7f8b38c3de9071aeecdc90e0de0965ada579b9"
+  },
+  "after": {
+    "head": "c01fa313fb04b5b53a97780c03ce2cb1838bb352",
+    "branch": "feat/native-gpui-app",
+    "status": "",
+    "file_count": 2691,
+    "root_freeze_files": 608,
+    "root_freeze_aggregate": "c44dfaa97ae5e846dd20142d5ae15e4a5d06267905c20548488b142c1c53dadd",
+    "aggregate": "f2ba4fcf039f693b1b547970cc7f8b38c3de9071aeecdc90e0de0965ada579b9"
+  }
+}
