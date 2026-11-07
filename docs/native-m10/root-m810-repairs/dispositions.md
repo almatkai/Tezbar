@@ -1,0 +1,31 @@
+# Root M8/M10 repair implementation — 2026-11-07
+
+Base: 151df16 (c01 plus the independently verified extension teardown test/evidence). This is implementation and headless evidence, not independent closure or full-migration acceptance. Tauri remains the default. No install, push, signing, user data or live provider was used.
+
+Original review: `/tmp/tezbar-gpui-m810-opus-0513321.md`, preserved verbatim in this evidence. The review's original pin is 0513321, not this repair. Earlier closed M10 Ctrl/Option/wheel/pin fixes and M8 quit-deferred-send are retained.
+
+| ID | Implementation | Permanent regression |
+| --- | --- | --- |
+| R1, SVG isolated layers | Compute preview scale first; bound simultaneous transformed layer areas along the ancestor stack, including three areas for clip/mask scratch. Keep independent 64 total-layer and 8192-node budgets. The layer-area ceiling is four canvas areas (+4px padding), approximately 16 MiB of RGBA layers at 1024px, excluding parser/path/canvas allocations. | `review_m810_r1_svg_rejects_simultaneous_layers_before_rasterization`: reject nested oversize layers before Pixmap; render 64 sibling opacity groups and an ordinary mask. |
+| R2, CSS parser work | Preflight decoded style element text plus style attributes together: 32 KiB and 1024 selector/rule delimiters, before `Tree::from_data`. | `review_m810_r2_stylesheets_are_bounded_before_usvg_css_parser`: large stylesheet, comma selectors and cumulative inline styles denied; ordinary stylesheet renders. |
+| R3, dashed strokes | Sum a conservative Bezier control-polygon length per contour and bound expanded dash work across paths to 65536. Bound raw dash source and dash-array length. | `review_m810_r3_dash_expansion_is_bounded_before_stroking`: 128 long/tiny-period paths denied before stroke; ordinary dashed icon renders. |
+| R4, failed Create/Attach/Resume | Every failure/malformed/null/missing-identity path ends replay, marks the stream unavailable and explicitly discards pending user input with a visible not-sent message. Later typing is not queued behind an unavailable stream. Creation, resume and replay admission failures also unwind that state. | `review_m810_r4_failed_create_attach_resume_discards_input_visibly`: production state, three request types and four failure shapes. Existing FIFO/1MiB boundary and failed-flush controls remain. |
+| R5, pointer starvation | Pointer button/motion/mouse-wheel reports use a separate production admission method; transient screen positions are dropped during replay or while keys drain. Suppressed motion resets dedup; alternate-screen wheel arrow keys keep keyboard ordering. | `review_m810_r5_pointer_reports_do_not_consume_replay_key_budget`; `review_m810_r5_real_motion_during_replay_keeps_keyboard_fifo`: actual GPUI mouse and key dispatch, retained keyboard and first same-cell post-replay report. |
+| R6, stale own Create | Retain bounded own process-generation/startup-progress identities before stale completion cleanup. Later first attach answers only bytes from the core's origin that have not already been consumed. Partial replay progress survives selection changes; one bounded protocol reply batch holds a reserved queue slot and its exact process identity through navigation. Restored sessions and later historical replays stay side-effect-free. Retire identities on final consumption, process exit, or authoritative removed/stopped sessions; refuse a 65th pending Create rather than silently evicting. | `review_m810_r6_stale_create_answers_first_startup_query_once`; `review_m810_r6_stale_attach_and_partial_replay_preserve_query_progress`. This is a synthetic startup-query proof, not a real ConPTY pass. |
+| R7, keyboard docs | Spec §5.5/§5.7 and ledger K-16/K-29 now record Mac Cmd app shortcuts / Ctrl letters to PTY, and provisional Windows Ctrl+Shift K/X/P/D with open O-TERM-KEYS choice and physical-layout gates. Rows remain todo. | Exact documentation reads; no physical Windows shortcut acceptance. |
+
+## Scope and tradeoffs
+
+The SVG preview subset continues to reject filters, patterns and markers. It now also rejects nested clip/mask object chains and isolating layers inside auxiliary clip/mask roots, whose independent coordinate systems require a more general scratch-memory allocator. Ordinary clipping/masks, gradients, uses, CSS and dashed icons remain supported within bounds. This is a bounded preview decoder, not a complete SVG browser implementation.
+
+Protocol reply batches are limited to 16 KiB; overflow is visible and stops replay instead of silently losing a device query. The one-job TerminalView actor serializes requests. Its 64-entry queue reserves four cleanup entries and one protocol entry; keyboard FIFO still admits exactly 60 chunks / 1MiB and flushes in order across available work slots. No wire protocol, core stream or PTY implementation changed.
+
+Promoted Opus probes P1–P4, P9 and F4 exercise actual GPUI Ctrl/Cmd dispatch, Option key_char text commit, fractional/alternate-screen scrolling, input bounds, flushed-write failure and accepted live owner pin merges. Broken-behaviour probes P5/P7/P8 were rewritten to assert corrected behavior. No test was skipped or removed.
+
+## Evidence limits
+
+The standalone SVG probe compiles the exact new pure functions with rustc -O against already cached debug dependencies. Ten cases passed, including rejection without rasterizing the malicious inputs. It is not a production RAM or pure-release benchmark. The original dangerous allocations/timings are the independent review's evidence; no multi-gigabyte malicious render was rerun.
+
+Compiler error in `focused-1.log` is preserved: a new test initially accessed private `State::replaying`. The test was corrected to assert public running/output behavior; no production field visibility was widened. Final native gates follow after source freeze. Shared UI/models/core/TS sources are unchanged from the independently verified c01+test-patch receipt; their existing results apply only as explicitly reused component evidence.
+
+Fresh Opus closure, real Windows scoped reads/ConPTY, GUI/IME/AX/GPU/RAM and actual installer/updater/profile migration remain open. No lower-RAM or full migration claim is made.

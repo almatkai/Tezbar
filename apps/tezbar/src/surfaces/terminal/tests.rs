@@ -1269,3 +1269,6 @@ fn review_m10_f8_replay_failure_refuses_queued_input_visibly() {
         assert!(!matches!(work.request, TerminalRequest::Input { .. }));
     }
 }
+
+#[path = "m810_review_regressions.rs"]
+mod m810_review_regressions;

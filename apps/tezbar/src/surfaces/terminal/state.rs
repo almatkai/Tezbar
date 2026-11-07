@@ -4,12 +4,17 @@ use super::{
     request::{Attached, Create, Reply, TerminalRequest, Update},
 };
 use serde_json::{Value, json};
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use tezbar_ui::terminal_grid::{CellMetrics, GridSize, TerminalGrid};
 use tezbar_ui_model::terminal::{self as model, Defaults, Session};
 
 const WRITE_BUDGET: usize = 1024 * 1024;
 const WORK_LIMIT: usize = 64;
+const STARTUP_LIMIT: usize = 64;
+struct PendingStartup {
+    generation: String,
+    through: u64,
+}
 #[derive(Clone, Debug, PartialEq)]
 pub enum TerminalEffect {
     Back { sentinel: &'static str },
@@ -38,6 +43,7 @@ pub enum Purpose {
     Resume(String),
     Replay,
     Write,
+    ProtocolReply,
     Resize,
     Cwd {
         id: String,
@@ -96,7 +102,7 @@ pub struct State {
     replay_token: Option<String>,
     position: u64,
     watermark: u64,
-    own_create: Option<(String, String)>,
+    pending_startup: BTreeMap<String, PendingStartup>,
     pending_input: VecDeque<(Vec<u8>, bool)>,
     pending_input_bytes: usize,
     target: u64,
@@ -142,7 +148,7 @@ impl State {
             replay_token: None,
             position: 0,
             watermark: 0,
-            own_create: None,
+            pending_startup: BTreeMap::new(),
             pending_input: VecDeque::new(),
             pending_input_bytes: 0,
             target: 0,
@@ -180,7 +186,8 @@ impl State {
         }
     }
     fn cancel_queued(&mut self) {
-        self.work.retain(Work::cleanup);
+        self.work
+            .retain(|w| w.cleanup() || matches!(w.purpose, Purpose::ProtocolReply));
         self.cwd_retries = None;
     }
     pub fn enqueue(&mut self, r: TerminalRequest, p: Purpose) -> bool {
@@ -200,8 +207,10 @@ impl State {
         if self.work.len()
             >= if matches!(p, Purpose::Cleanup) {
                 WORK_LIMIT
-            } else {
+            } else if matches!(p, Purpose::ProtocolReply) {
                 WORK_LIMIT - 4
+            } else {
+                WORK_LIMIT - 5
             }
             || (queued_bytes + size > WRITE_BUDGET && !matches!(p, Purpose::Cleanup))
         {
@@ -218,7 +227,20 @@ impl State {
     pub fn next_work(&mut self) -> Option<Work> {
         self.flush_pending_input();
         while let Some(w) = self.work.pop_front() {
-            if w.cleanup() || w.generation == self.generation {
+            if w.generation == self.generation
+                && matches!(w.purpose, Purpose::Create)
+                && self.pending_startup.len() >= STARTUP_LIMIT
+            {
+                self.error=Some("Terminal starts are waiting for attachment. Open or stop a pending session before creating another.".into());
+                self.running = false;
+                self.replaying = false;
+                self.discard_pending_input();
+                continue;
+            }
+            if w.cleanup()
+                || matches!(w.purpose, Purpose::ProtocolReply)
+                || w.generation == self.generation
+            {
                 return Some(w);
             }
         }
@@ -247,7 +269,6 @@ impl State {
         self.replaying = false;
         self.visibility_detached = false;
         self.input.clear();
-        self.own_create = None;
         self.pending_input.clear();
         self.pending_input_bytes = 0;
     }
@@ -264,7 +285,7 @@ impl State {
         } else if self.visibility_detached {
             self.visibility_detached = false;
             if let Some(id) = self.active.clone() {
-                self.enqueue(
+                self.replaying = self.enqueue(
                     TerminalRequest::Attach {
                         id: id.clone(),
                         cols: self.grid.size.cols,
@@ -272,6 +293,10 @@ impl State {
                     },
                     Purpose::Resume(id),
                 );
+                if !self.replaying {
+                    self.running = false;
+                    self.discard_pending_input();
+                }
             }
         }
     }
@@ -324,23 +349,19 @@ impl State {
         if s.running {
             self.attach(id.to_owned());
         } else {
-            self.replaying = true;
-            self.enqueue(
-                TerminalRequest::Create(Create {
-                    cwd: Some(s.cwd),
-                    restore_session_id: Some(s.session_id),
-                    restore_command: s.last_command.or(s.initial_command),
-                    name: Some(s.name),
-                    defaults: Defaults {
-                        save_for: s.save_for,
-                        keep_alive_for: s.keep_alive_for,
-                    },
-                    cols: self.grid.size.cols,
-                    rows: self.grid.size.rows,
-                    ..Default::default()
-                }),
-                Purpose::Create,
-            );
+            self.create(Create {
+                cwd: Some(s.cwd),
+                restore_session_id: Some(s.session_id),
+                restore_command: s.last_command.or(s.initial_command),
+                name: Some(s.name),
+                defaults: Defaults {
+                    save_for: s.save_for,
+                    keep_alive_for: s.keep_alive_for,
+                },
+                cols: self.grid.size.cols,
+                rows: self.grid.size.rows,
+                ..Default::default()
+            });
         }
     }
     pub fn new_session(&mut self) {
@@ -361,13 +382,15 @@ impl State {
         });
     }
     fn create(&mut self, r: Create) {
-        self.replaying = true;
-        self.enqueue(TerminalRequest::Create(r), Purpose::Create);
+        self.replaying = self.enqueue(TerminalRequest::Create(r), Purpose::Create);
+        if !self.replaying {
+            self.running = false;
+            self.discard_pending_input();
+        }
     }
     fn attach(&mut self, id: String) {
         self.active = Some(id.clone());
-        self.replaying = true;
-        self.enqueue(
+        self.replaying = self.enqueue(
             TerminalRequest::Attach {
                 id: id.clone(),
                 cols: self.grid.size.cols,
@@ -375,10 +398,35 @@ impl State {
             },
             Purpose::Attach(id),
         );
+        if !self.replaying {
+            self.running = false;
+            self.discard_pending_input();
+        }
     }
     pub fn refresh(&mut self) {
         if !self.disposed && !self.work.iter().any(|w| matches!(w.purpose, Purpose::List)) {
             self.enqueue(TerminalRequest::List, Purpose::List);
+        }
+    }
+    fn remember_startup(&mut self, value: &Value) {
+        let Some((id, generation)) = value["sessionId"]
+            .as_str()
+            .zip(value["generation"].as_str())
+            .filter(|(id, g)| !id.is_empty() && !g.is_empty() && id.len() <= 200 && g.len() <= 200)
+        else {
+            return;
+        };
+        if self.pending_startup.len() < STARTUP_LIMIT || self.pending_startup.contains_key(id) {
+            self.pending_startup.insert(
+                id.into(),
+                PendingStartup {
+                    generation: generation.into(),
+                    through: 0,
+                },
+            );
+        } else {
+            self.error =
+                Some("Terminal startup tracking is full. Open a pending session first.".into());
         }
     }
     pub fn complete(&mut self, w: Work, result: Reply) {
@@ -389,6 +437,13 @@ impl State {
                 self.failed_cleanup.push(w);
             }
             return;
+        }
+        // A retained Create job can finish after navigation. Its process identity
+        // remains ours until its first startup replay is actually consumed.
+        if matches!(w.purpose, Purpose::Create) {
+            if let Ok(value) = &result {
+                self.remember_startup(value);
+            }
         }
         if w.generation != self.generation || self.disposed {
             if matches!(
@@ -414,8 +469,16 @@ impl State {
             Err(e) => {
                 self.error = Some(e.chars().take(2048).collect());
                 self.replaying = false;
-                if matches!(w.purpose, Purpose::Write) {
-                    self.work.retain(|w| !matches!(w.purpose, Purpose::Write));
+                if matches!(
+                    w.purpose,
+                    Purpose::Create | Purpose::Attach(_) | Purpose::Resume(_)
+                ) {
+                    self.running = false;
+                    self.discard_pending_input();
+                }
+                if matches!(w.purpose, Purpose::Write | Purpose::ProtocolReply) {
+                    self.work
+                        .retain(|w| !matches!(w.purpose, Purpose::Write | Purpose::ProtocolReply));
                     self.discard_pending_input();
                 }
                 if matches!(w.purpose, Purpose::Replay) {
@@ -476,8 +539,6 @@ impl State {
             }
             Purpose::Create => match serde_json::from_value::<Attached>(value.clone()) {
                 Ok(r) => {
-                    self.own_create = (!r.generation.is_empty())
-                        .then(|| (r.session_id.clone(), r.generation.clone()));
                     self.upsert(r.summary);
                     self.attach(r.session_id);
                 }
@@ -489,13 +550,17 @@ impl State {
                         );
                     }
                     self.error = Some(e.to_string());
+                    self.running = false;
                     self.replaying = false;
+                    self.discard_pending_input();
                 }
             },
             Purpose::Attach(id) => {
                 if value.is_null() {
                     self.active = None;
+                    self.running = false;
                     self.replaying = false;
+                    self.discard_pending_input();
                     self.refresh();
                     return;
                 }
@@ -505,24 +570,36 @@ impl State {
                     }
                     _ => {
                         self.error = Some("Terminal attach returned a different session.".into());
+                        self.running = false;
                         self.replaying = false;
+                        self.discard_pending_input();
                     }
                 }
             }
             Purpose::Resume(id) => {
                 if value.is_null() {
                     self.running = false;
+                    self.replaying = false;
                     self.active = None;
+                    self.discard_pending_input();
                     self.refresh();
                 } else if value["sessionId"].as_str() == Some(&id)
                     && self.active.as_deref() == Some(&id)
                 {
                     match serde_json::from_value::<Attached>(value) {
                         Ok(r) => self.install_stream(r, true),
-                        Err(e) => self.error = Some(e.to_string()),
+                        Err(e) => {
+                            self.error = Some(e.to_string());
+                            self.running = false;
+                            self.replaying = false;
+                            self.discard_pending_input();
+                        }
                     }
                 } else {
                     self.error = Some("Terminal resume returned a different session.".into());
+                    self.running = false;
+                    self.replaying = false;
+                    self.discard_pending_input();
                 }
             }
             Purpose::Replay => self.replay_chunk(value),
@@ -560,22 +637,32 @@ impl State {
                     self.configure = None;
                 }
             }
-            Purpose::Write if value == Value::Bool(false) => {
+            Purpose::Write | Purpose::ProtocolReply if value == Value::Bool(false) => {
                 self.error = Some(
                     "Terminal input was not accepted; the remaining input was cancelled.".into(),
                 );
-                self.work.retain(|w| !matches!(w.purpose, Purpose::Write));
+                self.work
+                    .retain(|w| !matches!(w.purpose, Purpose::Write | Purpose::ProtocolReply));
                 self.pending_input.clear();
                 self.pending_input_bytes = 0;
             }
             Purpose::Mutation => self.refresh(),
             _ => {}
         }
+        if !self.replaying && !self.running {
+            self.discard_pending_input();
+        }
     }
     fn replace_rows(&mut self, v: Value) -> bool {
         match serde_json::from_value::<Vec<Session>>(v) {
             Ok(rows) => {
                 self.sessions.replace(rows);
+                self.pending_startup.retain(|id, _| {
+                    self.sessions
+                        .rows
+                        .iter()
+                        .any(|s| s.session_id == *id && s.running)
+                });
                 true
             }
             Err(e) => {
@@ -605,7 +692,9 @@ impl State {
         self.upsert(r.summary);
         if r.replay.is_empty() || r.generation.is_empty() {
             self.error = Some("Terminal stream identity is missing".into());
+            self.running = false;
             self.replaying = false;
+            self.discard_pending_input();
             return;
         }
         let same = resume && self.stream_generation.as_deref() == Some(&r.generation);
@@ -626,19 +715,20 @@ impl State {
         }
         self.stream_generation = Some(r.generation);
         self.replay_token = Some(r.replay);
-        // Only this owner's first attach to the process it just created can
-        // answer pre-watermark device queries. Restored prior-process bytes and
-        // all later attaches stay historical and side-effect-free.
-        self.watermark = if !resume
-            && self.own_create.take().as_ref()
-                == Some(&(
-                    r.session_id.clone(),
-                    self.stream_generation.clone().unwrap(),
-                )) {
+        // Reattach may follow an abandoned Create/Attach. Retain ownership
+        // through partial replay, suppressing bytes already consumed. Protocol
+        // replies are retained across navigation independently of user input.
+        self.watermark = if let Some(start) = self
+            .pending_startup
+            .get(&r.session_id)
+            .filter(|s| Some(&s.generation) == self.stream_generation.as_ref())
+        {
             r.origin
-                .filter(|origin| *origin <= r.watermark)
+                .filter(|o| *o <= r.watermark)
+                .map(|o| o.max(start.through).min(r.watermark))
                 .unwrap_or(r.watermark)
         } else {
+            self.pending_startup.remove(&r.session_id);
             r.watermark
         };
         self.target = self.target.max(r.watermark);
@@ -656,13 +746,18 @@ impl State {
             return;
         }
         if let Some(token) = self.replay_token.clone() {
-            self.enqueue(
+            if !self.enqueue(
                 TerminalRequest::Replay {
                     token,
                     position: self.position,
                 },
                 Purpose::Replay,
-            );
+            ) {
+                self.replaying = false;
+                self.running = false;
+                self.discard_pending_input();
+                self.release_replay();
+            }
         }
     }
     fn replay_chunk(&mut self, v: Value) {
@@ -704,20 +799,54 @@ impl State {
             .target
             .max(v["watermark"].as_u64().unwrap_or(self.position));
         self.dirty = true;
-        if let Ok(replies) = live_replies {
-            for reply in replies {
-                if let (Some(id), Some(generation)) =
+        // One bounded reply batch has its own reserved admission slot. Keep it
+        // across navigation: these bytes answer the exact process whose output
+        // we just parsed, rather than the next view's user-input owner.
+        let admitted = match live_replies {
+            Ok(replies) => {
+                let total = replies.iter().map(String::len).sum::<usize>();
+                if total > 16384 {
+                    self.error = Some("Terminal protocol reply buffer overflow".into());
+                    false
+                } else if total == 0 {
+                    true
+                } else if let (Some(id), Some(generation)) =
                     (self.active.clone(), self.stream_generation.clone())
                 {
                     self.enqueue(
                         TerminalRequest::Input {
                             id,
                             generation,
-                            bytes: reply.into_bytes(),
+                            bytes: replies.concat().into_bytes(),
                         },
-                        Purpose::Write,
-                    );
+                        Purpose::ProtocolReply,
+                    )
+                } else {
+                    false
                 }
+            }
+            Err(e) => {
+                self.error = Some(e.into());
+                false
+            }
+        };
+        if !admitted {
+            self.replaying = false;
+            self.running = false;
+            self.discard_pending_input();
+            self.release_replay();
+            return;
+        }
+        if let Some(id) = &self.active {
+            if let Some(start) = self
+                .pending_startup
+                .get_mut(id)
+                .filter(|s| Some(&s.generation) == self.stream_generation.as_ref())
+            {
+                start.through = self.position;
+            }
+            if self.position >= self.target {
+                self.pending_startup.remove(id);
             }
         }
         if self.position < self.target {
@@ -768,6 +897,13 @@ impl State {
         self.finish_exit();
     }
     pub fn stream_exit(&mut self, id: &str, generation: &str, position: u64, code: u32) {
+        if self
+            .pending_startup
+            .get(id)
+            .is_some_and(|s| s.generation == generation)
+        {
+            self.pending_startup.remove(id);
+        }
         if self.disposed || self.active.as_deref() != Some(id) {
             return;
         }
@@ -811,11 +947,29 @@ impl State {
             Err(e) => self.error = Some(e.into()),
         }
     }
+    /// Positional reports are meaningful only for the current, fully replayed
+    /// screen. They never consume the keyboard/IME FIFO's admission budget.
+    pub fn write_pointer_bytes(&mut self, bytes: Vec<u8>) -> bool {
+        if self.quit_preparing
+            || self.disposed
+            || !self.running
+            || self.replaying
+            || !self.pending_input.is_empty()
+            || bytes.is_empty()
+        {
+            return false;
+        }
+        self.enqueue_input(bytes, false)
+    }
     pub fn write_bytes(&mut self, bytes: Vec<u8>) {
         self.admit_input(bytes, false);
     }
     fn admit_input(&mut self, bytes: Vec<u8>, track: bool) {
         if self.quit_preparing || self.disposed || bytes.is_empty() {
+            return;
+        }
+        if !self.replaying && !self.running {
+            self.discard_pending_input();
             return;
         }
         if self.replaying || !self.pending_input.is_empty() {
@@ -837,10 +991,10 @@ impl State {
         }
         self.enqueue_input(bytes, track);
     }
-    fn enqueue_input(&mut self, bytes: Vec<u8>, track: bool) {
+    fn enqueue_input(&mut self, bytes: Vec<u8>, track: bool) -> bool {
         let (Some(id), Some(generation)) = (self.active.clone(), self.stream_generation.clone())
         else {
-            return;
+            return false;
         };
         let tracked = track.then(|| String::from_utf8_lossy(&bytes).into_owned());
         if self.enqueue(
@@ -854,7 +1008,9 @@ impl State {
             if let Some(text) = tracked {
                 self.track_input(&text);
             }
+            return true;
         }
+        false
     }
     fn discard_pending_input(&mut self) {
         if !self.pending_input.is_empty() {
@@ -867,6 +1023,9 @@ impl State {
         }
     }
     fn flush_pending_input(&mut self) {
+        if !self.replaying && !self.running {
+            self.discard_pending_input();
+        }
         if self.replaying || self.disposed || !self.running {
             return;
         }
@@ -876,7 +1035,7 @@ impl State {
                 .iter()
                 .map(|w| w.request.retained_bytes())
                 .sum::<usize>();
-            if self.work.len() >= WORK_LIMIT - 4 || retained + bytes.len() > WRITE_BUDGET {
+            if self.work.len() >= WORK_LIMIT - 5 || retained + bytes.len() > WRITE_BUDGET {
                 break;
             }
             let (bytes, track) = self.pending_input.pop_front().unwrap();

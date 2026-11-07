@@ -237,3 +237,6 @@ fn review_m10_panel_projects_active_session_and_cwd(cx: &mut TestAppContext) {
     assert!(!rows[0].active);
     assert!(rows[1].active);
 }
+
+#[path = "m810_review_pin.rs"]
+mod m810_review_pin;

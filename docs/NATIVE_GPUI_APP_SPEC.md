@@ -690,8 +690,14 @@ specifics are listed in ledger §S, column “States”.
   per-monitor size, zoom and position. On hide, return focus to the previously active app
   (macOS: hide the app, not only the window; Windows: restore the previous foreground HWND).
 - Keyboard: a full map per surface in ledger §K. Every in-app action has a menu-free shortcut
-  as today. macOS uses ⌘, Windows uses Ctrl, except the documented AltGr/Alt cases (⌥1–0,-,= pin
+  as today. Ordinary app actions use ⌘ on macOS and Ctrl on Windows. Terminal actions have
+  the explicit exception **O-TERM-KEYS** below. The documented AltGr/Alt cases remain (⌥1–0,-,= pin
   slots on macOS; Alt+digit on Windows).
+- **Open O-TERM-KEYS:** inside a terminal, macOS uses ⌘K/⌘X/⌘P/⌘D for configure, stop,
+  pin and delete. Ctrl+letter belongs to the shell, including Ctrl+D and Ctrl+X. Windows
+  currently defaults those four app commands to Ctrl+Shift+K/X/P/D so shell Ctrl bytes
+  remain available. This Windows default is provisional: the user's preference and
+  physical keyboard/AltGr acceptance are still pending; no platform acceptance is implied.
 - IME: marked text is underlined, candidate windows anchor at `bounds_for_range`, Enter and Esc
   go to the IME during composition, and only committed text drives searches or sends. This
   applies to every text field (launcher, chat composer, forms, notes, snippets, vault,
@@ -756,7 +762,8 @@ the only visual deviations, and each is listed in ledger §X for the Opus review
   100,000 lines (Decision: memory bound) plus the existing persisted history
   (`terminal-history`) for older output. Input: GPUI key events → xterm-compatible
   sequences (port the `attachCustomKeyEventHandler` rules at `TerminalView.tsx:364`, including
-  app shortcuts ⌘K/⌘X/⌘P/⌘D, ⌘+/−/0 text zoom, Alt-modified whole-UI zoom), bracketed paste,
+  app shortcuts ⌘K/⌘X/⌘P/⌘D on macOS and provisional Ctrl+Shift+K/X/P/D on Windows
+  (open O-TERM-KEYS, §5.5), ⌘/Ctrl +/−/0 text zoom, Alt-modified whole-UI zoom), bracketed paste,
   mouse reporting when the program enables it, IME composition inserted at the cursor, URL
   detection and opening on ⌘-click, resize → `terminal:resize` (cols and rows from the cell
   size). Accessibility: expose the visible buffer as a read-only text region with the cursor

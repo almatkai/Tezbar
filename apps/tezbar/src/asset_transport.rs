@@ -341,66 +341,7 @@ fn decode_preview(
 }
 
 fn decode_svg(bytes: &[u8], width: u32) -> Result<image::RgbaImage, String> {
-    // GPUI's pinned SvgRenderer uses default usvg href resolution, which can read
-    // local paths. Use the SAME locked Apache/MIT resvg with both resolvers denied.
-    // No Zed editor/UI/theme code is copied. Nested images must get their own leases.
-    if bytes.iter().filter(|b| **b == b'<').count() > 8192 {
-        return Err("SVG exceeds node budget".into());
-    }
-    svg_preflight(bytes)?;
-    let options = resvg::usvg::Options {
-        image_href_resolver: resvg::usvg::ImageHrefResolver {
-            resolve_data: Box::new(|_, _, _| None),
-            resolve_string: Box::new(|_, _| None),
-        },
-        ..Default::default()
-    };
-    let tree = resvg::usvg::Tree::from_data(bytes, &options).map_err(|_| "Invalid SVG image")?;
-    fn budget(
-        g: &resvg::usvg::Group,
-        left: &mut usize,
-        layers: &mut usize,
-        segments: &mut usize,
-        depth: usize,
-    ) -> Result<(), String> {
-        if !g.filters().is_empty() {
-            return Err("SVG filters are unsupported".into());
-        }
-        if g.should_isolate() {
-            *layers = layers
-                .checked_sub(1)
-                .ok_or("SVG exceeds isolated layer budget")?;
-        }
-        if depth > 64 {
-            return Err("SVG exceeds render depth".into());
-        }
-        for node in g.children() {
-            *left = left.checked_sub(1).ok_or("SVG exceeds render budget")?;
-            if let resvg::usvg::Node::Path(path) = node {
-                let count = path.data().segments().take(*segments + 1).count();
-                *segments = segments
-                    .checked_sub(count)
-                    .ok_or("SVG exceeds geometry budget")?;
-            }
-            if let resvg::usvg::Node::Group(g) = node {
-                budget(g, left, layers, segments, depth + 1)?;
-            }
-            let mut result = Ok(());
-            node.subroots(|g| {
-                if result.is_ok() {
-                    result = budget(g, left, layers, segments, depth + 1);
-                }
-            });
-            result?;
-        }
-        Ok(())
-    }
-    budget(tree.root(), &mut 8192, &mut 64, &mut 16384, 0)?;
-    let size = tree.size();
-    let max = width as f32;
-    let scale = (max / size.width()).min(max / size.height()).min(1.);
-    let w = (size.width() * scale).ceil().max(1.) as u32;
-    let h = (size.height() * scale).ceil().max(1.) as u32;
+    let (tree, w, h, scale) = svg_tree(bytes, width)?;
     let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h).ok_or("Invalid SVG size")?;
     resvg::render(
         &tree,
@@ -422,6 +363,181 @@ fn decode_svg(bytes: &[u8], width: u32) -> Result<image::RgbaImage, String> {
     Ok(rgba)
 }
 
+/// Admit an SVG before rasterization, including transient offscreen memory.
+fn svg_tree(bytes: &[u8], width: u32) -> Result<(resvg::usvg::Tree, u32, u32, f32), String> {
+    if bytes.iter().filter(|b| **b == b'<').count() > 8192 {
+        return Err("SVG exceeds node budget".into());
+    }
+    svg_preflight(bytes)?;
+    let options = resvg::usvg::Options {
+        image_href_resolver: resvg::usvg::ImageHrefResolver {
+            resolve_data: Box::new(|_, _, _| None),
+            resolve_string: Box::new(|_, _| None),
+        },
+        ..Default::default()
+    };
+    let tree = resvg::usvg::Tree::from_data(bytes, &options).map_err(|_| "Invalid SVG image")?;
+    let size = tree.size();
+    let max = width as f32;
+    let scale = (max / size.width()).min(max / size.height()).min(1.);
+    let w = (size.width() * scale).ceil().max(1.) as u32;
+    let h = (size.height() * scale).ceil().max(1.) as u32;
+    struct Budget {
+        nodes: usize,
+        layers: usize,
+        segments: usize,
+        dashes: usize,
+        max_w: f64,
+        max_h: f64,
+        live_limit: f64,
+    }
+    fn distance(a: resvg::tiny_skia::Point, b: resvg::tiny_skia::Point) -> f64 {
+        ((a.x as f64 - b.x as f64).powi(2) + (a.y as f64 - b.y as f64).powi(2)).sqrt()
+    }
+    fn path_budget(path: &resvg::usvg::Path, b: &mut Budget) -> Result<(), String> {
+        use resvg::tiny_skia::PathSegment::*;
+        let dashed = path.stroke().and_then(|s| s.dasharray());
+        let mut at = resvg::tiny_skia::Point::from_xy(0., 0.);
+        let mut start = at;
+        let mut length = 0.;
+        let mut contours = 0usize;
+        for segment in path.data().segments() {
+            b.segments = b
+                .segments
+                .checked_sub(1)
+                .ok_or("SVG exceeds geometry budget")?;
+            match segment {
+                MoveTo(p) => {
+                    at = p;
+                    start = p;
+                    contours += 1;
+                }
+                LineTo(p) => {
+                    length += distance(at, p);
+                    at = p;
+                }
+                QuadTo(c, p) => {
+                    length += distance(at, c) + distance(c, p);
+                    at = p;
+                }
+                CubicTo(c1, c2, p) => {
+                    length += distance(at, c1) + distance(c1, c2) + distance(c2, p);
+                    at = p;
+                }
+                Close => {
+                    length += distance(at, start);
+                    at = start;
+                }
+            }
+        }
+        if let Some(dashes) = dashed {
+            if dashes.len() > 1024 {
+                return Err("SVG exceeds dash pattern budget".into());
+            }
+            let period = dashes.iter().map(|v| *v as f64).sum::<f64>();
+            if !period.is_finite() || period <= 0. {
+                return Err("Invalid SVG dash period".into());
+            }
+            // tiny-skia expands dashes in path coordinates before transformation.
+            // Bezier control polygons bound arc length; round each contour up.
+            let estimate =
+                (length / period + (contours as f64)).ceil() * dashes.len().div_ceil(2) as f64;
+            if !estimate.is_finite() || estimate > b.dashes as f64 {
+                return Err("SVG exceeds expanded dash budget".into());
+            }
+            b.dashes -= estimate.ceil() as usize;
+        }
+        Ok(())
+    }
+    fn budget(
+        g: &resvg::usvg::Group,
+        parent: resvg::tiny_skia::Transform,
+        live: f64,
+        depth: usize,
+        auxiliary: bool,
+        b: &mut Budget,
+    ) -> Result<(), String> {
+        if depth > 64 {
+            return Err("SVG exceeds render depth".into());
+        }
+        if !g.filters().is_empty() {
+            return Err("SVG filters are unsupported".into());
+        }
+        // Complex clip/mask sub-layers have independent coordinate systems and
+        // allocate full parent scratch canvases. This preview subset fails
+        // closed for those; ordinary paths in one clip/mask remain supported.
+        if g.clip_path().is_some_and(|c| c.clip_path().is_some())
+            || g.mask().is_some_and(|m| m.mask().is_some())
+        {
+            return Err("SVG exceeds nested mask budget".into());
+        }
+        let ts = parent.pre_concat(g.transform());
+        let mut live = live;
+        if g.should_isolate() {
+            b.layers = b
+                .layers
+                .checked_sub(1)
+                .ok_or("SVG exceeds isolated layer budget")?;
+            if auxiliary {
+                return Err("SVG exceeds mask layer budget".into());
+            }
+            let bounds = g
+                .layer_bounding_box()
+                .transform(ts)
+                .ok_or("Invalid SVG layer bounds")?;
+            let area = (bounds.width().ceil() as f64 + 4.).min(b.max_w)
+                * (bounds.height().ceil() as f64 + 4.).min(b.max_h);
+            // resvg allocates an RGBA layer and clip/mask scratch. Reserve three
+            // layer areas if scratch is present, retaining every ancestor charge
+            // while children render. Siblings release their charge independently.
+            let scratch = if g.clip_path().is_some() || g.mask().is_some() {
+                3.
+            } else {
+                1.
+            };
+            live += area * scratch;
+            if !live.is_finite() || live > b.live_limit {
+                return Err("SVG exceeds simultaneous layer memory budget".into());
+            }
+        }
+        for node in g.children() {
+            b.nodes = b.nodes.checked_sub(1).ok_or("SVG exceeds render budget")?;
+            if let resvg::usvg::Node::Path(path) = node {
+                path_budget(path, b)?;
+            }
+            if let resvg::usvg::Node::Group(child) = node {
+                budget(child, ts, live, depth + 1, auxiliary, b)?;
+            }
+            let mut result = Ok(());
+            node.subroots(|root| {
+                if result.is_ok() {
+                    result = budget(root, ts, live, depth + 1, true, b);
+                }
+            });
+            result?;
+        }
+        Ok(())
+    }
+    let mut b = Budget {
+        nodes: 8192,
+        layers: 64,
+        segments: 16384,
+        dashes: 65536,
+        max_w: w as f64 * 5.,
+        max_h: h as f64 * 5.,
+        live_limit: 4. * (w as f64 + 4.) * (h as f64 + 4.),
+    };
+    budget(
+        tree.root(),
+        resvg::tiny_skia::Transform::from_scale(scale, scale),
+        0.,
+        0,
+        false,
+        &mut b,
+    )?;
+    Ok((tree, w, h, scale))
+}
+
 // usvg re-exports this already-locked XML parser. Count expanded reference work
 // BEFORE usvg expands <use>, then count the actual render tree before rasterization.
 // Namespace prefixes/comments cannot disguise amplifiers from the XML parser.
@@ -431,7 +547,40 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
     let doc = Document::parse(text).map_err(|_| "Invalid SVG XML")?;
     let mut ids = std::collections::HashMap::new();
     let mut geometry_bytes = 256 * 1024usize;
+    let mut stylesheet_bytes = 32 * 1024usize;
+    let mut stylesheet_selectors = 1024usize;
+    fn style_budget(text: &str, bytes: &mut usize, selectors: &mut usize) -> Result<(), String> {
+        *bytes = bytes
+            .checked_sub(text.len())
+            .ok_or("SVG stylesheet exceeds byte budget")?;
+        *selectors = selectors
+            .checked_sub(text.bytes().filter(|b| matches!(*b, b'{' | b',')).count())
+            .ok_or("SVG stylesheet exceeds selector budget")?;
+        Ok(())
+    }
+
     for n in doc.descendants().filter(|n| n.is_element()) {
+        if n.tag_name().name() == "style" {
+            for text in n
+                .children()
+                .filter(|c| c.is_text())
+                .filter_map(|c| c.text())
+            {
+                style_budget(text, &mut stylesheet_bytes, &mut stylesheet_selectors)?;
+            }
+        }
+        for attr in n.attributes().filter(|a| a.name() == "style") {
+            style_budget(
+                attr.value(),
+                &mut stylesheet_bytes,
+                &mut stylesheet_selectors,
+            )?;
+        }
+        if n.attribute("stroke-dasharray")
+            .is_some_and(|a| a.len() > 4096)
+        {
+            return Err("SVG exceeds dash source budget".into());
+        }
         // Bound path allocation before usvg constructs geometry. Element count
         // alone does not constrain a single d/points attribute with many vertices.
         for attr in n

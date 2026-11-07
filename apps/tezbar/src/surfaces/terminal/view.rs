@@ -42,7 +42,7 @@ impl TerminalView {
             modifiers(e.modifiers),
             self.state.grid.mode(),
         ) {
-            self.state.write_bytes(bytes);
+            self.state.write_pointer_bytes(bytes);
             self.pump(cx);
         } else if !e.modifiers.shift
             && self
@@ -78,7 +78,7 @@ impl TerminalView {
                 modifiers(e.modifiers),
                 self.state.grid.mode(),
             ) {
-                self.state.write_bytes(b);
+                self.state.write_pointer_bytes(b);
                 self.pump(cx);
             }
         }
@@ -100,7 +100,9 @@ impl TerminalView {
             modifiers(e.modifiers),
             self.state.grid.mode(),
         ) {
-            self.state.write_bytes(b);
+            if !self.state.write_pointer_bytes(b) {
+                self.motion.reset();
+            }
             self.pump(cx);
         }
     }
@@ -134,7 +136,19 @@ impl TerminalView {
                 self.state.grid.mode(),
             ) {
                 input::ScrollResult::Bytes(b) => {
-                    self.state.write_bytes(b);
+                    if self
+                        .state
+                        .grid
+                        .mode()
+                        .intersects(alacritty_terminal::term::TermMode::MOUSE_MODE)
+                        && !e.modifiers.shift
+                    {
+                        if !self.state.write_pointer_bytes(b) {
+                            self.scroll_wheel.reset();
+                        }
+                    } else {
+                        self.state.write_bytes(b);
+                    }
                     self.pump(cx);
                 }
                 input::ScrollResult::Rows(lines) => {

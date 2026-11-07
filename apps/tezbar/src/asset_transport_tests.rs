@@ -322,3 +322,88 @@ fn review_n1_geometry_source_and_segment_work_are_bounded() {
     assert!(svg_preflight(dense.as_bytes()).is_ok());
     assert!(decode_chat_preview(dense.as_bytes()).is_none());
 }
+
+#[test]
+fn review_m810_r1_svg_rejects_simultaneous_layers_before_rasterization() {
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">{}<rect x="-8192" y="-8192" width="17408" height="17408"/>{}</svg>"#,
+        "<g opacity=\".99\">".repeat(62),
+        "</g>".repeat(62)
+    );
+    assert!(
+        svg_tree(svg.as_bytes(), 1024)
+            .err()
+            .unwrap()
+            .contains("layer memory")
+    );
+    // Siblings release their temporary layer before the next sibling renders.
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">{}</svg>"#,
+        (0..64)
+            .map(|i| format!(
+                r#"<g opacity=".9"><rect x="{}" y="0" width="8" height="8"/></g>"#,
+                i * 12
+            ))
+            .collect::<String>()
+    );
+    assert!(decode_svg(svg.as_bytes(), 1024).is_ok());
+    let mask=br#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><defs><mask id="a"><rect width="32" height="32" fill="white"/></mask></defs><g mask="url(#a)"><rect width="32" height="32" fill="red"/></g></svg>"#;
+    assert!(decode_svg(mask, 128).is_ok());
+}
+#[test]
+fn review_m810_r2_stylesheets_are_bounded_before_usvg_css_parser() {
+    let css = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><style>{}</style><rect width="32" height="32"/></svg>"#,
+        ".a {fill:red}".repeat(60000)
+    );
+    assert!(
+        svg_tree(css.as_bytes(), 1024)
+            .err()
+            .unwrap()
+            .contains("stylesheet")
+    );
+    let selectors = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{} {{fill:red}}</style></svg>"#,
+        (0..2000)
+            .map(|i| format!(".c{i}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    assert!(
+        svg_tree(selectors.as_bytes(), 128)
+            .err()
+            .unwrap()
+            .contains("stylesheet")
+    );
+    let inline = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg">{}</svg>"#,
+        format!(
+            r#"<rect width="1" height="1" style="{}fill:red"/>"#,
+            " ".repeat(1024)
+        )
+        .repeat(40)
+    );
+    assert!(
+        svg_tree(inline.as_bytes(), 128)
+            .err()
+            .unwrap()
+            .contains("stylesheet")
+    );
+    assert!(decode_svg(br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><style>.a {fill:red}</style><rect class="a" width="16" height="16"/></svg>"#,128).is_ok());
+}
+#[test]
+fn review_m810_r3_dash_expansion_is_bounded_before_stroking() {
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">{}</svg>"#,
+        r#"<path d="M0 0 L1000000 0" stroke="black" stroke-width="1" stroke-dasharray=".1 .1"/>"#
+            .repeat(128)
+    );
+    assert!(
+        svg_tree(svg.as_bytes(), 1024)
+            .err()
+            .unwrap()
+            .contains("dash")
+    );
+    let normal=br#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="M0 8 L32 8" stroke="red" stroke-width="2" stroke-dasharray="2 2"/></svg>"#;
+    assert!(decode_svg(normal, 128).is_ok());
+}

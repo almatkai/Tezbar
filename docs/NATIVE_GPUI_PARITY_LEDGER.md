@@ -189,7 +189,7 @@ manual OS spikes and M3–M11 parity remain outstanding. Inactive services remai
 | K-13 | Launcher | ⌘H / Ctrl+H | history toggle (`CB:4163`) | todo |
 | K-14 | Launcher | `>` on empty bar | terminal mode | todo |
 | K-15 | Launcher | Backspace on empty mode input | leave mode | todo |
-| K-16 | Terminal mode | ⌘K ⌘X ⌘P ⌘D | settings, stop, pin, delete session | todo |
+| K-16 | Terminal mode | macOS ⌘K/⌘X/⌘P/⌘D; Windows provisional Ctrl+Shift+K/X/P/D | settings, stop, pin, delete; Ctrl+letter stays shell input; O-TERM-KEYS preference and physical acceptance pending | todo |
 | K-17 | App grid | ← → ↑ ↓ | grid navigation by 1 and by row | todo |
 | K-18 | AI | ⌘⇧S | attach active screen | todo |
 | K-19 | AI | ⌘. | stop | todo |
@@ -202,7 +202,7 @@ manual OS spikes and M3–M11 parity remain outstanding. Inactive services remai
 | K-26 | Snippets | ⌘N new, ↵ copy, edit, delete, jump | list actions | todo |
 | K-27 | Vault | ⌘N, ↵ copy, edit, lock | list actions | todo |
 | K-28 | Emoji | arrows, ↵ copy, recent | grid actions | todo |
-| K-29 | Terminal | ⌘+ ⌘− ⌘0 text zoom, Alt-modified UI zoom, ⌘K/⌘X/⌘P/⌘D, sessions toggle | terminal | todo |
+| K-29 | Terminal | ⌘/Ctrl +/−/0 text zoom, Alt-modified UI zoom; macOS ⌘K/⌘X/⌘P/⌘D; Windows provisional Ctrl+Shift+K/X/P/D; sessions toggle | terminal; O-TERM-KEYS preference and physical keyboard acceptance pending | todo |
 | K-30 | Settings | Enter save, Esc close, Tab order | settings | todo |
 | K-31 | Text fields | select all, word/line movement, undo/redo, IME | all inputs | todo |
 
