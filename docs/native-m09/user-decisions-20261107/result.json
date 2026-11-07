@@ -1,0 +1,12 @@
+{
+  "worker_tests": 4,
+  "native_key": 1,
+  "native_view": 1,
+  "real_sdk": 1,
+  "core_rust185_check": true,
+  "typecheck": true,
+  "source_base": "9832852 + user decisions; dirty",
+  "owned_processes": [],
+  "Windows_or_GUI_acceptance": false,
+  "whole_suite_rerun": false
+}

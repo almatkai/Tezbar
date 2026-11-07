@@ -8,6 +8,7 @@ export default function FixtureMenuBar() {
     <MenuBarExtra.Section title="Status"><MenuBarExtra.Item title={`Count ${count}`} onAction={() => setCount(n => n + 1)} /></MenuBarExtra.Section>
     <MenuBarExtra.Submenu title="More"><MenuBarExtra.Item title="Increment" onAction={() => setCount(n => n + 1)} /></MenuBarExtra.Submenu>
     <MenuBarExtra.Item title="Later" onAction={() => { setTimeout(() => setCount(n => n + 1), 150) }} />
+    <MenuBarExtra.Item title="Hide briefly" onAction={() => { setRemoved(true); setTimeout(() => setRemoved(false), 500) }} />
     <MenuBarExtra.Separator />
     <MenuBarExtra.Item title="Remove" onAction={() => setRemoved(true)} />
   </MenuBarExtra>

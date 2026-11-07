@@ -87,6 +87,7 @@ pub struct RuntimeView {
     opened: Option<u64>,
     visible: bool,
     disposed: bool,
+    retained_background: bool,
     start: Instant,
     timer: Option<Task<()>>,
     job: Option<Task<()>>,
@@ -194,6 +195,7 @@ impl RuntimeView {
             opened: None,
             visible: false,
             disposed: false,
+            retained_background: false,
             start: Instant::now(),
             timer: None,
             job: None,
@@ -437,8 +439,9 @@ impl RuntimeView {
         self.documents.clear();
         self.rows.clear();
         self.preference = Default::default();
+        let retained_background = std::mem::take(&mut self.retained_background);
         if let Some(mut s) = self.session.take() {
-            let background = s.root.kind == NodeKind::MenuBarExtra;
+            let background = retained_background || s.root.kind == NodeKind::MenuBarExtra;
             if let Some(Effect::Dispose(key)) = s.dispose().filter(|_| !background) {
                 let future = self
                     .transport
@@ -869,6 +872,7 @@ impl RuntimeView {
         let Some(s) = self.session.as_ref() else {
             return;
         };
+        self.retained_background |= s.root.kind == NodeKind::MenuBarExtra;
         let signature = s.actions.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
         if self.action_signature != signature {
             self.action_signature = signature;

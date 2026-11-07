@@ -483,8 +483,68 @@ pub fn verify(
                     .map(str::to_owned)),
                 Some("Fixture 2".into())
             );
-            action(&view, "Remove", &rt, cx);
+            // A background menu may temporarily render null. Retiring its GPUI
+            // screen and opening another command must not stop its worker timer.
+            action(&view, "Hide briefly", &rt, cx);
             assert!(fixture.host.status.lock().unwrap().is_empty());
+            let ordinary = rt.block_on(fixture.transport.run("list")).unwrap();
+            cx.update(|w, cx| view.update(cx, |v, cx| v.activate(ordinary, 2, w, cx).unwrap()));
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                if fixture
+                    .host
+                    .status_specs
+                    .lock()
+                    .unwrap()
+                    .values()
+                    .any(|s| s.title == "Fixture 2")
+                {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "Background menu did not return after its view was replaced"
+                );
+                rt.block_on(async { tokio::time::sleep(Duration::from_millis(5)).await });
+                cx.run_until_parked();
+            }
+            assert_eq!(
+                view.read_with(cx, |v, _| v.session.as_ref().unwrap().root.kind),
+                NodeKind::List
+            );
+            let remove = fixture
+                .host
+                .status_specs
+                .lock()
+                .unwrap()
+                .values()
+                .next()
+                .unwrap()
+                .items
+                .iter()
+                .find(|item| item["title"] == "Remove")
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let callback = fixture
+                .host
+                .status
+                .lock()
+                .unwrap()
+                .values()
+                .next()
+                .unwrap()
+                .clone();
+            callback(remove);
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !fixture.host.status.lock().unwrap().is_empty() {
+                assert!(
+                    Instant::now() < deadline,
+                    "Background Remove callback did not clear status"
+                );
+                rt.block_on(async { tokio::time::sleep(Duration::from_millis(5)).await });
+            }
             for _ in 0..130 {
                 let _ = rt.block_on(fixture.transport.run("menubar")).unwrap();
                 assert_eq!(fixture.host.status.lock().unwrap().len(), 1);

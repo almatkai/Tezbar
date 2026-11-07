@@ -92,7 +92,7 @@ pub struct ExtensionWorker {
     process: Arc<tokio::sync::Mutex<Option<Process>>>,
     launch: Option<WorkerLaunch>,
     sessions: Arc<Mutex<HashMap<String, (String, String, String)>>>,
-    status_signatures: Arc<Mutex<HashMap<String, u64>>>,
+    status_signatures: Arc<Mutex<HashMap<String, Option<u64>>>>,
     status_refreshing: Arc<Mutex<HashSet<String>>>,
     in_flight_runs: Arc<Mutex<HashMap<String, String>>>,
 }
@@ -727,10 +727,16 @@ impl ExtensionWorker {
             return Ok(());
         };
         if reply["root"]["type"] != "MenuBarExtra" {
-            self.status_signatures
+            // Retain background ownership while the extension temporarily returns
+            // no status item. Later worker invalidations must still refresh it.
+            if let Some(signature) = self
+                .status_signatures
                 .lock()
                 .map_err(|_| "Status owner unavailable")?
-                .remove(id);
+                .get_mut(id)
+            {
+                *signature = None;
+            }
             let _ = self.ctx.host.status_items().remove(&scope);
             return Ok(());
         }
@@ -818,7 +824,7 @@ impl ExtensionWorker {
             .lock()
             .map_err(|_| "Status owner unavailable")?
             .get(id)
-            == Some(&signature)
+            == Some(&Some(signature))
         {
             return Ok(());
         }
@@ -829,7 +835,7 @@ impl ExtensionWorker {
         self.status_signatures
             .lock()
             .map_err(|_| "Status owner unavailable")?
-            .insert(id.into(), signature);
+            .insert(id.into(), Some(signature));
         Ok(())
     }
     pub async fn shutdown(&self) {

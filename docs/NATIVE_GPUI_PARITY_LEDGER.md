@@ -189,7 +189,7 @@ manual OS spikes and M3–M11 parity remain outstanding. Inactive services remai
 | K-13 | Launcher | ⌘H / Ctrl+H | history toggle (`CB:4163`) | todo |
 | K-14 | Launcher | `>` on empty bar | terminal mode | todo |
 | K-15 | Launcher | Backspace on empty mode input | leave mode | todo |
-| K-16 | Terminal mode | macOS ⌘K/⌘X/⌘P/⌘D; Windows provisional Ctrl+Shift+K/X/P/D | settings, stop, pin, delete; Ctrl+letter stays shell input; O-TERM-KEYS preference and physical acceptance pending | todo |
+| K-16 | Terminal mode | macOS ⌘K/⌘X/⌘P/⌘D; Windows Ctrl+Shift+K/X/P/D | settings, stop, pin, delete; Ctrl+letter stays shell input; O-TERM-KEYS user choice resolved; physical acceptance pending | todo |
 | K-17 | App grid | ← → ↑ ↓ | grid navigation by 1 and by row | todo |
 | K-18 | AI | ⌘⇧S | attach active screen | todo |
 | K-19 | AI | ⌘. | stop | todo |
@@ -202,7 +202,7 @@ manual OS spikes and M3–M11 parity remain outstanding. Inactive services remai
 | K-26 | Snippets | ⌘N new, ↵ copy, edit, delete, jump | list actions | todo |
 | K-27 | Vault | ⌘N, ↵ copy, edit, lock | list actions | todo |
 | K-28 | Emoji | arrows, ↵ copy, recent | grid actions | todo |
-| K-29 | Terminal | ⌘/Ctrl +/−/0 text zoom, Alt-modified UI zoom; macOS ⌘K/⌘X/⌘P/⌘D; Windows provisional Ctrl+Shift+K/X/P/D; sessions toggle | terminal; O-TERM-KEYS preference and physical keyboard acceptance pending | todo |
+| K-29 | Terminal | ⌘/Ctrl +/−/0 text zoom, Alt-modified UI zoom; macOS ⌘K/⌘X/⌘P/⌘D; Windows Ctrl+Shift+K/X/P/D; sessions toggle | terminal; O-TERM-KEYS user choice resolved; physical keyboard acceptance pending | todo |
 | K-30 | Settings | Enter save, Esc close, Tab order | settings | todo |
 | K-31 | Text fields | select all, word/line movement, undo/redo, IME | all inputs | todo |
 
@@ -328,7 +328,7 @@ M9 local headless implementation evidence (2026-11-07, unstaged on `db4d0df`): t
 | E-32 | `Form.Description`, `Form.Separator` | same | same | todo |
 | E-33 | Native colour wheel (`nativeColorWheel`) via `color-picker-helper` | same | *(new)* | todo |
 | E-34 | `Tezbar.PreferenceSetup` inline setup | `ExtensionRuntimeView.tsx` | fixture 4 | todo |
-| E-35 | `MenuBarExtra` (+ `.Item`, `.Section`, `.Submenu`, `.Separator`) as status items (`host.tray.set/remove`); in-list rendering of MenuBarExtra items | `process_host.rs:274–345`, `list-runtime.tsx` | fixture 8 | todo |
+| E-35 | `MenuBarExtra` (+ `.Item`, `.Section`, `.Submenu`, `.Separator`) as status items (`host.tray.set/remove`); background owner survives launcher hide/other commands until disable/removal/quit (user decision 2026-11-07); in-list rendering of MenuBarExtra items | `process_host.rs:274–345`, `list-runtime.tsx` | fixture 8 | todo |
 | E-36 | Extension images: built-in icons, assets, remote URLs (fetch moves to Rust), tint, theme, emoji glyphs, cache trimming on idle | `extensionImages.ts`, `launcherIcons.tsx` | port `extensionImages.test.ts` (6) | todo |
 | E-37 | Runtime status messages (rust, mixed, worker states, `extension-worker-status`) | `extensionRuntimeStatus.ts` | 13 tests | todo |
 | E-38 | Hotkey-run extension view | A-24 | — | todo |

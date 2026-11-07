@@ -1,0 +1,6 @@
+
+running 1 test
+test surfaces::terminal::input::decision_tests::windows_control_is_shell_and_control_shift_is_tezbar ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 428 filtered out; finished in 0.00s
+

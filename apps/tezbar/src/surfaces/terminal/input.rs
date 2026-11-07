@@ -31,14 +31,24 @@ pub enum KeyResult {
     Session(usize),
 }
 pub fn key(key: &str, code: &str, m: Modifiers, mode: TermMode, composing: bool) -> KeyResult {
+    key_for_platform(key, code, m, mode, composing, cfg!(target_os = "macos"))
+}
+fn key_for_platform(
+    key: &str,
+    code: &str,
+    m: Modifiers,
+    mode: TermMode,
+    composing: bool,
+    macos: bool,
+) -> KeyResult {
     if composing {
         return KeyResult::PlatformText;
     }
     let lower = key.to_lowercase();
     // Shell control characters are never app actions on macOS. Windows app
     // actions use Ctrl+Shift so Ctrl+D/X/K/P remain available to the shell.
-    let primary = m.command || (cfg!(not(target_os = "macos")) && m.control);
-    let app_action = m.command || (cfg!(not(target_os = "macos")) && m.control && m.shift);
+    let primary = m.command || (!macos && m.control);
+    let app_action = m.command || (!macos && m.control && m.shift);
     if primary {
         let z = match (key, code) {
             ("+" | "=", _) | (_, "NumpadAdd") => Some(Zoom::In),
@@ -76,7 +86,7 @@ pub fn key(key: &str, code: &str, m: Modifiers, mode: TermMode, composing: bool)
     }
     // macOptionIsMeta was false in the old terminal. Let AppKit insert the
     // produced character (or start a dead-key composition), not ESC+base key.
-    if cfg!(target_os = "macos") && m.alt && !m.command && !m.control && key.chars().count() == 1 {
+    if macos && m.alt && !m.command && !m.control && key.chars().count() == 1 {
         return KeyResult::PlatformText;
     }
     let modifier = 1 + u8::from(m.shift) + 2 * u8::from(m.alt) + 4 * u8::from(m.control);
@@ -319,5 +329,42 @@ impl MotionReporter {
         }
         self.last = Some(key);
         result
+    }
+}
+
+#[cfg(test)]
+mod decision_tests {
+    use super::*;
+    #[test]
+    fn windows_control_is_shell_and_control_shift_is_tezbar() {
+        for (key, byte, action) in [
+            ("d", 4, KeyResult::Delete),
+            ("x", 24, KeyResult::Stop),
+            ("k", 11, KeyResult::Configure),
+            ("p", 16, KeyResult::Pin),
+        ] {
+            let modifiers = Modifiers {
+                control: true,
+                ..Default::default()
+            };
+            assert_eq!(
+                key_for_platform(key, "", modifiers, TermMode::empty(), false, false),
+                KeyResult::Bytes((byte as u8 as char).to_string())
+            );
+            assert_eq!(
+                key_for_platform(
+                    key,
+                    "",
+                    Modifiers {
+                        shift: true,
+                        ..modifiers
+                    },
+                    TermMode::empty(),
+                    false,
+                    false
+                ),
+                action
+            );
+        }
     }
 }

@@ -14,7 +14,7 @@ vi.mock('@tezbar/desktop-runtime', () => ({
   shell: { openExternal: host.open, showItemInFolder: host.reveal },
 }))
 vi.mock('./extensionWorker/windowState', () => ({ setSuppressBlurHide: vi.fn() }))
-import { clearAllExtensionSessions, runExtensionCommandFromPackageJson, invokeExtensionAction, refreshExtensionSession } from './extension-runner'
+import { clearAllExtensionSessions, runExtensionCommandFromPackageJson, invokeExtensionAction, refreshExtensionSession, disposeExtensionSession } from './extension-runner'
 afterAll(() => { clearAllExtensionSessions(); rmSync(root, { recursive: true, force: true }) })
 
 it('sequences sliding execution records without replaying system effects on rerender or polls', async () => {
@@ -56,3 +56,43 @@ it('no-view controls are best effort even when the native owner refuses them', a
   expect(result.effects?.some(e=>e.kind==='hud' && e.message==='finished')).toBe(true);
   host.control.mockResolvedValue(undefined);
 });
+
+
+function backgroundMenuPackage(): string {
+  const isolated=join(root,'background-menu');mkdirSync(join(isolated,'src'),{recursive:true})
+  const pkg=join(isolated,'package.json')
+  writeFileSync(pkg,JSON.stringify({name:'background-menu',commands:[{name:'menu',title:'Menu',mode:'view'},{name:'ordinary',title:'Ordinary',mode:'view'}]}))
+  writeFileSync(join(isolated,'src/menu.tsx'),`import React,{useState} from 'react';import {MenuBarExtra} from '@raycast/api';export default function Command(){const [count,setCount]=useState(0);return <MenuBarExtra title={'Count '+count}><MenuBarExtra.Item title="Increment" onAction={()=>setCount(n=>n+1)}/></MenuBarExtra>}`)
+  writeFileSync(join(isolated,'src/ordinary.tsx'),`import React from 'react';import {Detail} from '@raycast/api';export default function Command(){return <Detail markdown="Ordinary"/>}`)
+  return pkg
+}
+
+it('keeps MenuBarExtra alive while ordinary foreground sessions are pruned', async () => {
+  clearAllExtensionSessions()
+  const pkg=backgroundMenuPackage()
+  const menu=await runExtensionCommandFromPackageJson(pkg,'menu',undefined,{}, {effectMode:'system'})
+  if(!menu.ok || menu.mode!=='view')throw Error('Menu fixture did not start')
+  for(let i=0;i<40;i++){
+    const ordinary=await runExtensionCommandFromPackageJson(pkg,'ordinary',undefined,{}, {effectMode:'system'})
+    expect(ordinary.ok).toBe(true)
+  }
+  const reply=await invokeExtensionAction({sessionId:menu.sessionId,actionId:menu.actions[0]!.id})
+  if(!reply.ok || reply.mode!=='view')throw Error('Background menu was evicted')
+  expect(reply.root.type).toBe('MenuBarExtra');expect(reply.root.props.title).toBe('Count 1')
+  expect(disposeExtensionSession(menu.sessionId)).toBe(true)
+  expect((await refreshExtensionSession({sessionId:menu.sessionId})).ok).toBe(false)
+})
+
+it('refuses an extra background menu at capacity without evicting existing menus', async () => {
+  clearAllExtensionSessions()
+  const pkg=backgroundMenuPackage()
+  const first=await runExtensionCommandFromPackageJson(pkg,'menu',undefined,{}, {effectMode:'system'})
+  if(!first.ok || first.mode!=='view')throw Error('First menu did not start')
+  for(let i=1;i<64;i++)expect((await runExtensionCommandFromPackageJson(pkg,'menu',undefined,{}, {effectMode:'system'})).ok).toBe(true)
+  const overflow=await runExtensionCommandFromPackageJson(pkg,'menu',undefined,{}, {effectMode:'system'})
+  expect(overflow.ok).toBe(false)
+  if(!overflow.ok)expect(overflow.message).toContain('Too many background menus')
+  const existing=await invokeExtensionAction({sessionId:first.sessionId,actionId:first.actions[0]!.id})
+  expect(existing.ok).toBe(true)
+  clearAllExtensionSessions()
+})

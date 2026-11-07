@@ -475,3 +475,63 @@ fn review_m9_grid_sections_use_same_ranges_for_render_selection_and_leases(
         Some("g2".into())
     );
 }
+
+#[gpui::test]
+fn chosen_menubar_lifetime_survives_hide_switch_and_temporary_empty_root(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(
+                reply(json!({"type":"MenuBarExtra","props":{"title":"Background"}})),
+                1,
+                w,
+                cx,
+            )
+            .unwrap();
+            v.set_visible(false, w, cx);
+            v.set_visible(true, w, cx);
+            let event = v
+                .session
+                .as_mut()
+                .unwrap()
+                .invalidate("session", Some("generation"), 100)
+                .unwrap();
+            let Effect::Refresh(token) = event else {
+                panic!("expected owned refresh")
+            };
+            v.complete(
+                token,
+                Ok(reply(
+                    json!({"type":"Detail","props":{"markdown":"Temporarily no menu"}}),
+                )),
+                w,
+                cx,
+            );
+            assert!(v.retained_background);
+            let mut ordinary = reply(json!({"type":"List"}));
+            ordinary["sessionId"] = json!("ordinary");
+            v.activate(ordinary, 2, w, cx).unwrap();
+        })
+    });
+    settle(&rt, cx);
+    assert!(
+        !fake
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(c, _)| *c == "extension:dispose-session")
+    );
+    cx.update(|_, cx| view.update(cx, |v, cx| v.dispose(cx)));
+    settle(&rt, cx);
+    let calls = fake.calls.lock().unwrap();
+    let disposed = calls
+        .iter()
+        .filter(|(c, _)| *c == "extension:dispose-session")
+        .collect::<Vec<_>>();
+    assert_eq!(disposed.len(), 1);
+    assert_eq!(disposed[0].1[0]["sessionId"], "ordinary");
+}

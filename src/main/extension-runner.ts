@@ -149,6 +149,7 @@ function stripTimerNotificationMarkers(value: string | Buffer): string | Buffer 
 type RuntimeSession = {
   refreshRequest?: Promise<ExtensionRefreshSessionResult>
   viewDelivered?: boolean
+  retainedMenuBar?: boolean
   revision?: number
   invalidationQueued?: boolean
   id: string
@@ -245,6 +246,7 @@ type RaycastComponentToken = {
 const RUNTIME_COMPONENT_LIMIT = 10_000
 const RUNTIME_RECURSION_LIMIT = 80
 const SESSIONS_SOFT_LIMIT = 30
+const BACKGROUND_MENU_LIMIT = 64
 const INITIAL_RENDER_PASSES = 1
 const SEARCH_TEXT_RENDER_PASSES = 1
 const LIST_ITEM_PAGE_SIZE = 30
@@ -3661,6 +3663,14 @@ function renderCurrentView(
     props: { markdown: 'This extension returned an empty view.' },
     children: [],
   }
+  if (root.type === 'MenuBarExtra' && !session.retainedMenuBar) {
+    const retained = [...sessions.values()].filter(item => item.retainedMenuBar).length
+    if (retained >= BACKGROUND_MENU_LIMIT) {
+      deleteRuntimeSession(session.id)
+      return { ok: false, message: 'Too many background menus. Disable an unused extension before starting another.' }
+    }
+    session.retainedMenuBar = true
+  }
   if (session.stack.length > 1) {
     root.props = { ...(root.props ?? {}), backActionId: '__nav_pop__' }
     session.currentActions.push({ id: '__nav_pop__', title: 'Back', kind: 'pop' })
@@ -3913,12 +3923,12 @@ function deleteRuntimeSession(sessionId: string): boolean {
 }
 
 function pruneSessions(): void {
-  if (sessions.size <= SESSIONS_SOFT_LIMIT) return
-  const ids = [...sessions.keys()]
-  const overflow = sessions.size - SESSIONS_SOFT_LIMIT
+  // A rendered MenuBarExtra has a background owner. Switching ordinary commands
+  // must not evict its hooks, timers or tray callbacks from the worker.
+  const foreground = [...sessions.values()].filter(session => !session.retainedMenuBar)
+  const overflow = foreground.length - SESSIONS_SOFT_LIMIT
   for (let i = 0; i < overflow; i += 1) {
-    const id = ids[i]
-    if (id) deleteRuntimeSession(id)
+    deleteRuntimeSession(foreground[i]!.id)
   }
 }
 

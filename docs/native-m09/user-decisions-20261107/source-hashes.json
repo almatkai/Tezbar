@@ -1,0 +1,12 @@
+{
+  "apps/tezbar/src/surfaces/extension_runtime/mod.rs": "a06bd8f2337dc1e0b9f9fd8d403a7068f0cb4d6094d0f70ef197edbaa1b7fe7d",
+  "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs": "4a370ee7908981cccd2a511272b294bbd4eba7163b1f0c0d1dd4625d43804e96",
+  "apps/tezbar/src/surfaces/extension_runtime/tests.rs": "b998dd113c0542d953e720052997ed16bc33e3a1c1d6c2222bd759b4e1d4aa41",
+  "apps/tezbar/src/surfaces/terminal/input.rs": "6f7fe37a7f6fa1f76fd83385ceb8d53a88e2adad7bdb5aced3385a8ddf0a44d6",
+  "crates/tezbar-core/src/extension_worker.rs": "a770ac4a127582ab7b8c6ebde09fb4538c8f272dc2564ff75ea3fbca9ef189c9",
+  "docs/NATIVE_GPUI_APP_SPEC.md": "0bf61cb44df0f4dd8ac5ea450b693fed1bc8d66b1535c56a1ce6d684c5b5961d",
+  "docs/NATIVE_GPUI_PARITY_LEDGER.md": "d61babfc7eff1b031a542b91cded847f96cf82c8237d502601c5311422fa8c18",
+  "src/main/extension-runner-effects.test.ts": "47742e646c424178184bcad76068315ef6b659cdc44e12a5c085034ae068f82b",
+  "src/main/extension-runner.ts": "f184b3ed123cd80a83e16fafa2def25a339105d67400c4ab41cda6f26cc5e348",
+  "tests/fixtures/extensions/src/menubar.tsx": "d4c290315857522d40f5742254f787ce1930c9b0798b0ae8f26805b90752cef8"
+}
