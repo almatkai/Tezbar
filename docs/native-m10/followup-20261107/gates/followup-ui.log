@@ -1,0 +1,2 @@
+error: the package 'tezbar-ui' does not contain this feature: runtime-shaders
+help: package with the missing feature: tezbar-native

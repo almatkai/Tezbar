@@ -1,0 +1,306 @@
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `validate_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:16:8
+   |
+16 | pub fn validate_images(
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+
+warning: function `save` is never used
+  --> crates/tezbar-core/src/ai/runtime/store.rs:52:8
+   |
+52 | pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
+   |        ^^^^
+
+warning: methods `gemma_pending`, `gemma_save`, `gemma_clear`, `gemma_has`, `gemma_counts`, and `vector_backfill` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1219:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1219 |     pub fn gemma_pending(&self, roots: &[String], limit: usize) -> Result<Vec<Value>, String> {
+     |            ^^^^^^^^^^^^^
+...
+1246 |     pub fn gemma_save(&mut self, chunks: &[Value], vectors: &[Vec<f64>]) -> Result<usize, String> {
+     |            ^^^^^^^^^^
+...
+1301 |     pub fn gemma_clear(&self) -> Result<(), String> {
+     |            ^^^^^^^^^^^
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+...
+1354 |     pub fn vector_backfill(&self) -> Result<bool, String> {
+     |            ^^^^^^^^^^^^^^^
+
+warning: constant `REVISION` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:32:7
+   |
+32 | const REVISION: &str = runtime_models::Q8.revision;
+   |       ^^^^^^^^
+
+warning: constant `MODEL_FILE` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:33:7
+   |
+33 | const MODEL_FILE: &str = runtime_models::Q8.file;
+   |       ^^^^^^^^^^
+
+warning: constant `MODEL_SHA` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:34:7
+   |
+34 | const MODEL_SHA: &str = runtime_models::Q8.sha256;
+   |       ^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/tezbar-core/src/knowledge/runtime.rs:217:12
+    |
+216 | impl Runtime {
+    | ------------ associated function in this implementation
+217 |     pub fn new(ctx: CoreContext) -> Self {
+    |            ^^^
+
+warning: function `output` is never used
+  --> crates/tezbar-core/src/launcher/providers.rs:17:14
+   |
+17 | pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+   |              ^^^^^^
+
+warning: `tezbar-core` (lib) generated 12 warnings (run `cargo fix --lib -p tezbar-core` to apply 3 suggestions)
+   Compiling tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+warning: type `extension_runtime::view::Row` is more private than the item `extension_runtime::RuntimeView::rows`
+  --> apps/tezbar/src/surfaces/extension_runtime/mod.rs:76:5
+   |
+76 |     pub(super) rows: Vec<view::Row>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `extension_runtime::RuntimeView::rows` is reachable at visibility `pub(in crate::surfaces)`
+   |
+note: but type `extension_runtime::view::Row` is only usable at visibility `pub(in crate::surfaces::extension_runtime)`
+  --> apps/tezbar/src/surfaces/extension_runtime/view.rs:7:1
+   |
+ 7 | pub(super) struct Row {
+   | ^^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: variant `Open` is never constructed
+  --> apps/tezbar/src/surfaces/ai_chat/mod.rs:85:5
+   |
+49 | pub(crate) enum Action {
+   |                 ------ variant in this enum
+...
+85 |     Open(String),
+   |     ^^^^
+   |
+   = note: `Action` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `scroll` is never read
+   --> apps/tezbar/src/surfaces/ai_chat/mod.rs:165:5
+    |
+ 97 | pub struct ChatView {
+    |            -------- field in this struct
+...
+165 |     scroll: ScrollHandle,
+    |     ^^^^^^
+
+warning: methods `diagnostics_count`, `count`, `last`, and `run` are never used
+  --> apps/tezbar/src/surfaces/command_bar/../../../../../tests/fixtures/extensions/native_harness.rs:46:12
+   |
+35 | impl CoreTransport {
+   | ------------------ methods in this implementation
+...
+46 |     pub fn diagnostics_count(&self) -> usize {
+   |            ^^^^^^^^^^^^^^^^^
+...
+51 |     pub fn count(&self, channel: &str) -> usize {
+   |            ^^^^^
+...
+59 |     pub fn last(&self, channel: &str) -> Option<Value> {
+   |            ^^^^
+...
+72 |     pub async fn run(&self, command: &str) -> Result<Value, String> {
+   |                  ^^^
+
+warning: field `0` is never read
+   --> apps/tezbar/src/surfaces/command_bar/../../../../../tests/fixtures/extensions/native_harness.rs:127:27
+    |
+127 | pub struct DesktopRecords(Arc<TestHost>);
+    |            -------------- ^^^^^^^^^^^^^
+    |            |
+    |            field in this struct
+    |
+    = help: consider removing this field
+
+warning: methods `count` and `copied_lengths` are never used
+   --> apps/tezbar/src/surfaces/command_bar/../../../../../tests/fixtures/extensions/native_harness.rs:129:12
+    |
+128 | impl DesktopRecords {
+    | ------------------- methods in this implementation
+129 |     pub fn count(&self, channel: &str) -> usize {
+    |            ^^^^^
+...
+146 |     pub fn copied_lengths(&self) -> Vec<usize> {
+    |            ^^^^^^^^^^^^^^
+
+warning: field `desktop` is never read
+   --> apps/tezbar/src/surfaces/command_bar/../../../../../tests/fixtures/extensions/native_harness.rs:166:9
+    |
+162 | pub struct Fixture {
+    |            ------- field in this struct
+...
+166 |     pub desktop: DesktopRecords,
+    |         ^^^^^^^
+
+warning: method `reset_update_check` is never used
+   --> apps/tezbar/src/surfaces/command_bar/settings_integration.rs:159:19
+    |
+ 27 | impl Launcher {
+    | ------------- method in this implementation
+...
+159 |     pub(crate) fn reset_update_check(
+    |                   ^^^^^^^^^^^^^^^^^^
+
+warning: method `snapshot_summary` is never used
+    --> apps/tezbar/src/surfaces/terminal/state.rs:1265:12
+     |
+ 119 | impl State {
+     | ---------- method in this implementation
+...
+1265 |     pub fn snapshot_summary(&self) -> Value {
+     |            ^^^^^^^^^^^^^^^^
+
+warning: field `subscriptions` is never read
+  --> apps/tezbar/src/surfaces/extension_runtime/mod.rs:72:5
+   |
+60 | pub struct RuntimeView {
+   |            ----------- field in this struct
+...
+72 |     subscriptions: Vec<Subscription>,
+   |     ^^^^^^^^^^^^^
+
+warning: method `diagnostics_count` is never used
+  --> apps/tezbar/src/surfaces/extension_runtime/../../../../../tests/fixtures/extensions/native_harness.rs:46:12
+   |
+35 | impl CoreTransport {
+   | ------------------ method in this implementation
+...
+46 |     pub fn diagnostics_count(&self) -> usize {
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: method `copied_lengths` is never used
+   --> apps/tezbar/src/surfaces/extension_runtime/../../../../../tests/fixtures/extensions/native_harness.rs:146:12
+    |
+128 | impl DesktopRecords {
+    | ------------------- method in this implementation
+...
+146 |     pub fn copied_lengths(&self) -> Vec<usize> {
+    |            ^^^^^^^^^^^^^^
+
+warning: fields `window` and `subscriptions` are never read
+  --> apps/tezbar/src/surfaces/extensions_store/mod.rs:44:5
+   |
+38 | pub struct StoreView {
+   |            --------- fields in this struct
+...
+44 |     window: AnyWindowHandle,
+   |     ^^^^^^
+45 |     subscriptions: Vec<Subscription>,
+   |     ^^^^^^^^^^^^^
+
+warning: linker stderr: ld: __eh_frame section too large (max 16MB) to encode dwarf unwind offsets in compact unwind table, performance of exception handling might be affected
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `tezbar-native` (lib test) generated 14 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.21s
+     Running unittests src/lib.rs (/tmp/tezbar-m9-c01-validation-Rffw07/target/debug/deps/tezbar_native-89ad3a0758dc3d53)
+
+running 9 tests
+OPUS-D13 hide/MenuBarExtra: disposed=[] channels=["search:record-usage", "extension:run-command"]
+OPUS-D13 hide/List: disposed=[] channels=["search:record-usage", "extension:run-command"]
+test surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_hidden_launcher_keeps_background_menubar_owner ... ok
+
+thread 'surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_hidden_launcher_disposes_late_view_reply' (22049112) panicked at apps/tezbar/src/surfaces/command_bar/m9_followup_tests.rs:117:5:
+assertion `left == right` failed
+  left: []
+ right: ["orphan"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+OPUS-D13 query/List: disposed=["orphan"] channels=["search:record-usage", "extension:run-command", "extension:dispose-session"]
+test surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_new_query_disposes_late_view_reply ... ok
+test surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_hidden_launcher_disposes_late_view_reply ... FAILED
+OPUS-D13 real/query control: invalidated=[] disposed_events_before=["ext-session-mw6b5t6t-9oljxsq0", "ext-session-mw6b5t6t-9oljxsq0"] core_still_owned=Some(Ok(Bool(false))) launcher_calls=["search:record-usage", "extension:run-command", "extension:dispose-session"]
+OPUS-D13 real/hide: invalidated=["ext-session-mw6b5t6t-bh2lendq"] disposed_events_before=[] core_still_owned=Some(Ok(Bool(true))) launcher_calls=["search:record-usage", "extension:run-command"]
+
+thread 'surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_real_worker_hidden_launcher_orphans_live_session' (22049115) panicked at apps/tezbar/src/surfaces/command_bar/m9_followup_tests.rs:356:5:
+hidden run must be disposed before its effect timer continues
+test surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_real_worker_new_query_control_disposes ... ok
+test surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_real_worker_hidden_launcher_orphans_live_session ... FAILED
+OPUS-D13 rejected view: error=Some("Extension view is unavailable. Run the command again.") disposed=[]
+
+thread 'surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_rejected_view_reply_is_disposed' (22049211) panicked at apps/tezbar/src/surfaces/command_bar/m9_followup_tests.rs:201:5:
+assertion `left == right` failed: rejected view reply leaves its core/worker session alive
+  left: []
+ right: ["orphan"]
+test surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_rejected_view_reply_is_disposed ... FAILED
+OPUS-D12 controlled control: after=Some("kz")
+test surfaces::extension_runtime::followup_dropdown::review_m9_followup_d12_controlled_dropdown_control ... ok
+OPUS-D12 uncontrolled defaultValue: before=Some("jp") invoked_kz=true after(selected,rows)=(Some("jp"), ["kz-row"])
+
+thread 'surfaces::extension_runtime::followup_dropdown::review_m9_followup_d12_uncontrolled_dropdown_shows_users_choice' (22049216) panicked at apps/tezbar/src/surfaces/extension_runtime/followup_dropdown.rs:149:5:
+assertion `left == right` failed: dropdown trigger reverted to defaultValue after the user's choice
+  left: Some("jp")
+ right: Some("kz")
+test surfaces::extension_runtime::followup_dropdown::review_m9_followup_d12_uncontrolled_dropdown_shows_users_choice ... FAILED
+OPUS-D12 uncontrolled no default: after(selected,rows)=(Some("kz"), ["jp-row"])
+
+thread 'surfaces::extension_runtime::followup_dropdown::review_m9_followup_d12_uncontrolled_dropdown_without_default_shows_users_choice' (22049217) panicked at apps/tezbar/src/surfaces/extension_runtime/followup_dropdown.rs:196:5:
+assertion `left == right` failed: dropdown trigger fell back to the first option after the user chose Japan
+  left: Some("kz")
+ right: Some("jp")
+test surfaces::extension_runtime::followup_dropdown::review_m9_followup_d12_uncontrolled_dropdown_without_default_shows_users_choice ... FAILED
+
+failures:
+
+failures:
+    surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_hidden_launcher_disposes_late_view_reply
+    surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_real_worker_hidden_launcher_orphans_live_session
+    surfaces::command_bar::m9_followup_tests::review_m9_followup_d13_rejected_view_reply_is_disposed
+    surfaces::extension_runtime::followup_dropdown::review_m9_followup_d12_uncontrolled_dropdown_shows_users_choice
+    surfaces::extension_runtime::followup_dropdown::review_m9_followup_d12_uncontrolled_dropdown_without_default_shows_users_choice
+
+test result: FAILED. 4 passed; 5 failed; 0 ignored; 0 measured; 436 filtered out; finished in 1.27s
+
+error: test failed, to rerun pass `-p tezbar-native --lib`

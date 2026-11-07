@@ -1,0 +1,9 @@
+error: failed to select a version for `gpui`.
+    ... required by package `tezbar-ui v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui)`
+versions that meet the requirements `*` (locked to 0.2.2) are: 0.2.2
+
+package `tezbar-ui` depends on `gpui` with feature `runtime_shaders` but `gpui` does not have that feature.
+help: available features: bench, bench-support, default, font-kit, hot-reload, inspector, leak-detection, objc2, objc2-metal, profiler, proptest, scap, screen-capture, stacker, test-support, wayland, windows-manifest, x11
+
+
+failed to select a version for `gpui` which could resolve this conflict
