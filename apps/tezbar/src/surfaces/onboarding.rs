@@ -61,6 +61,8 @@ pub struct Onboarding {
     shortcut_save: Option<Task<()>>,
     pub finishing: bool,
     completed: bool,
+    splash: bool,
+    icon: std::sync::Arc<Image>,
 }
 impl Onboarding {
     pub fn new(
@@ -77,7 +79,7 @@ impl Onboarding {
             v
         });
         let practice = cx.new(|cx| {
-            let mut v = TextInput::new(cx);
+            let mut v = TextInput::new_native(cx);
             v.configure(FieldOptions {
                 name: "Try the command bar".into(),
                 placeholder: "= 12 * 8".into(),
@@ -92,6 +94,7 @@ impl Onboarding {
         let relay = cx.subscribe(&content, |_, _, e: &super::settings::SettingsEffect, cx| {
             cx.emit(OnboardingEffect::Settings(e.clone()))
         });
+        let summaries = cx.observe(&content, |_, _, cx| cx.notify());
         let mut steps = vec![Step::Shortcut, Step::Practice, Step::Ai, Step::Knowledge];
         if macos {
             steps.push(Step::Permissions)
@@ -125,15 +128,23 @@ impl Onboarding {
             recording: false,
             dirty_hotkey: false,
             focus: cx.focus_handle(),
-            _subscriptions: vec![sub, relay],
+            _subscriptions: vec![sub, relay, summaries],
             finish: None,
             load: None,
             shortcut_save: None,
             finishing: false,
             completed: false,
+            splash: true,
+            icon: std::sync::Arc::new(Image::from_bytes(
+                ImageFormat::Png,
+                include_bytes!("../../../../src/renderer/assets/app-icon.png").to_vec(),
+            )),
         }
     }
-    pub fn activate(&mut self, _w: &mut Window, cx: &mut Context<Self>) {
+    pub fn activate(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        if self.splash {
+            w.focus(&self.focus, cx);
+        }
         if self.load.is_some() {
             return;
         }
@@ -167,6 +178,7 @@ impl Onboarding {
             .update(cx, |view, cx| view.set_visible(content_visible, cx));
     }
     pub fn go(&mut self, index: usize, w: &mut Window, cx: &mut Context<Self>) {
+        self.splash = false;
         self.step = index.min(self.steps.len() - 1);
         self.practice_generation += 1;
         self.practice_load = None;
@@ -225,28 +237,10 @@ impl Onboarding {
                 "{} of 4 tried",
                 self.done.iter().filter(|s| **s != "shortcut").count()
             ),
-            Step::Ai => {
-                let cfg = if content.config.as_object().is_some_and(|m| !m.is_empty()) {
-                    &content.config
-                } else {
-                    &self.initial_config
-                };
-                if let Some(provider) = cfg["provider"].as_str() {
-                    if tezbar_ui_model::settings::providers::configured(cfg, provider) {
-                        format!(
-                            "{provider} · {}",
-                            cfg["taskModelOverrides"]["chat"]
-                                .as_str()
-                                .or(cfg["model"].as_str())
-                                .unwrap_or("Choose model")
-                        )
-                    } else {
-                        "Connect a model".into()
-                    }
-                } else {
-                    "Choose a provider".into()
-                }
-            }
+            Step::Ai => content
+                .onboarding_connection()
+                .map(|(provider, model)| format!("{provider} · {model}"))
+                .unwrap_or_else(|| "Not connected".into()),
             Step::Knowledge => content
                 .knowledge
                 .snapshot
@@ -372,6 +366,24 @@ impl Onboarding {
         if e.is_held {
             return;
         }
+        if self.splash && !self.recording {
+            self.splash = false;
+            w.focus(&self.focus, cx);
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        if e.keystroke.key == "enter"
+            && (e.keystroke.modifiers.platform || e.keystroke.modifiers.control)
+        {
+            if self.step + 1 == self.steps.len() {
+                self.finish(cx);
+            } else {
+                self.go(self.step + 1, w, cx);
+            }
+            cx.stop_propagation();
+            return;
+        }
         if self.rail_focus.iter().any(|f| f.is_focused(w))
             && matches!(e.keystroke.key.as_str(), "left" | "right" | "home" | "end")
         {
@@ -462,31 +474,7 @@ impl Onboarding {
                 return;
             }
             if let Some(hotkey) = super::settings::view::accelerator(&e.keystroke) {
-                self.dirty_hotkey = true;
-                self.recording = false;
-                self.store.enqueue(
-                    self.owner,
-                    vec![Edit::Global {
-                        field: "raymesHotkey".into(),
-                        value: json!(hotkey),
-                    }],
-                );
-                let store = self.store.clone();
-                let drain = store.drain_owner(self.owner);
-                self.shortcut_save = Some(cx.spawn(async move |this, cx| {
-                    let r = gpui_tokio::Tokio::spawn(cx, drain).await;
-                    let _ = this.update(cx, |v, cx| {
-                        if matches!(r, Ok(Ok(()))) {
-                            v.hotkey = hotkey;
-                            v.done.insert("shortcut");
-                        } else {
-                            v.error = Some(
-                                "Shortcut unavailable. Your previous shortcut is unchanged.".into(),
-                            );
-                        }
-                        cx.notify()
-                    });
-                }));
+                self.save_hotkey(hotkey, cx);
             }
             return;
         }
@@ -505,125 +493,691 @@ impl Drop for Onboarding {
         self.store.retire(self.owner)
     }
 }
-impl Render for Onboarding {
-    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = tokens::tokens(w);
-        let mut rail = div()
-            .id(("semantic", line!() as usize))
-            .role(Role::TabList)
+impl Onboarding {
+    fn save_hotkey(&mut self, hotkey: String, cx: &mut Context<Self>) {
+        self.dirty_hotkey = true;
+        self.recording = false;
+        self.error = None;
+        self.store.enqueue(
+            self.owner,
+            vec![Edit::Global {
+                field: "raymesHotkey".into(),
+                value: json!(hotkey),
+            }],
+        );
+        let store = self.store.clone();
+        let drain = store.drain_owner(self.owner);
+        self.shortcut_save = Some(cx.spawn(async move |this, cx| {
+            let result = gpui_tokio::Tokio::spawn(cx, drain).await;
+            let _ = this.update(cx, |v, cx| {
+                if matches!(result, Ok(Ok(()))) {
+                    v.hotkey = hotkey;
+                    v.done.insert("shortcut");
+                } else {
+                    v.error =
+                        Some("Shortcut unavailable. Your previous shortcut is unchanged.".into());
+                }
+                cx.notify();
+            });
+        }));
+    }
+    fn step_done(&self, step: Step, cx: &App) -> bool {
+        match step {
+            Step::Shortcut => true,
+            Step::Practice => self.done.iter().filter(|s| **s != "shortcut").count() == 4,
+            Step::Ai => self.content.read(cx).onboarding_connection().is_some(),
+            Step::Knowledge => self
+                .content
+                .read(cx)
+                .knowledge
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| !s.roots.is_empty()),
+            Step::Permissions => self
+                .content
+                .read(cx)
+                .permissions
+                .snapshot
+                .as_ref()
+                .is_some_and(|s| {
+                    s.statuses.iter().all(|p| {
+                        matches!(
+                            p.state,
+                            tezbar_ui_model::utilities::PermissionState::Granted
+                                | tezbar_ui_model::utilities::PermissionState::Unsupported
+                        )
+                    })
+                }),
+        }
+    }
+    fn heading(&self, title: &str, description: &str, t: tokens::Tokens) -> Div {
+        div()
             .flex()
-            .gap(px(8.));
-        for (i, step) in self.steps.iter().enumerate() {
-            let view = cx.entity().downgrade();
-            let summary = self.summary(*step, cx);
-            rail = rail.child(
+            .flex_col()
+            .gap(px(8.))
+            .mb(px(20.))
+            .child(
+                div()
+                    .text_size(px(20.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(title.to_owned()),
+            )
+            .child(
+                div()
+                    .max_w(px(460.))
+                    .text_size(px(12.5))
+                    .line_height(px(19.))
+                    .text_color(t.text3)
+                    .child(description.to_owned()),
+            )
+    }
+    fn practice_body(&self, t: tokens::Tokens, cx: &mut Context<Self>) -> Div {
+        let q = self.practice.read(cx).content.to_string();
+        let mode = tezbar_ui_model::launcher::input_mode(&q, self.practice_terminal);
+        let mut response = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .p(px(16.))
+            .min_h(px(124.));
+        for (i, row) in self.completions.iter().enumerate() {
+            let weak = cx.entity().downgrade();
+            response = response.child(
                 controls::action_button(
-                    format!("onboarding-step-{i}"),
-                    step.title(),
+                    format!("practice-folder-{i}"),
+                    row["title"].as_str().unwrap_or("Folder").to_owned(),
                     ButtonTone::Ghost,
                     false,
                     t,
                     move |w, cx| {
-                        let _ = view.update(cx, |v, cx| v.go(i, w, cx));
+                        let _ = weak.update(cx, |v, cx| v.complete_path(i, w, cx));
                     },
                 )
-                .role(Role::Tab)
-                .aria_selected(self.step == i)
-                .aria_description(summary.clone())
-                .track_focus(&self.rail_focus[i])
-                .tab_index(if self.step == i { 0 } else { -1 })
-                .flex()
-                .flex_col()
-                .gap(px(3.))
-                .child(div().text_size(px(10.)).text_color(t.text2).child(summary)),
+                .role(Role::ListBoxOption)
+                .aria_selected(i == self.completion_selected)
+                .bg(if i == self.completion_selected {
+                    t.selected
+                } else {
+                    transparent_black().into()
+                })
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text4)
+                        .child(row["subtitle"].as_str().unwrap_or("").to_owned()),
+                ),
             );
         }
-        let body = match self.steps[self.step] {
-            Step::Shortcut => {
-                let view = cx.entity().downgrade();
+        if self.completions.is_empty() {
+            response = response.child(
                 div()
-                    .child("Press the keys together to set your Tezbar shortcut.")
-                    .child(controls::action_button(
-                        "onboarding-hotkey",
-                        if self.recording {
-                            "Press shortcut…".to_string()
+                    .text_size(px(
+                        if self.done.contains("math")
+                            && mode.mode == tezbar_ui_model::launcher::Mode::Basic
+                        {
+                            28.
                         } else {
-                            self.hotkey.clone()
+                            12.5
                         },
-                        ButtonTone::Quiet,
+                    ))
+                    .child(if self.result.is_empty() {
+                        "Try one of the examples below.".into()
+                    } else {
+                        self.result.clone()
+                    }),
+            );
+            let hint = match mode.mode {
+                tezbar_ui_model::launcher::Mode::Terminal => {
+                    "Backspace on an empty line goes back to search."
+                }
+                tezbar_ui_model::launcher::Mode::Ai => {
+                    "Ask anything. Tezbar can read files and run commands, and asks before anything risky."
+                }
+                _ => "Enter copies it. Units work too, like 5 km to mi.",
+            };
+            response = response.child(div().text_size(px(11.5)).text_color(t.text4).child(hint));
+        }
+        let input = div()
+            .flex()
+            .items_center()
+            .gap(px(12.))
+            .px(px(16.))
+            .h(px(48.))
+            .child(
+                div()
+                    .text_color(if self.practice_terminal {
+                        t.success
+                    } else {
+                        t.text3
+                    })
+                    .child(if self.practice_terminal {
+                        ">_"
+                    } else if mode.mode == tezbar_ui_model::launcher::Mode::Ai {
+                        "AI"
+                    } else {
+                        "⌕"
+                    }),
+            )
+            .child(div().flex_1().child(self.practice.clone()));
+        let bar = div()
+            .flex()
+            .flex_col()
+            .min_h(px(176.))
+            .rounded(px(12.))
+            .border_1()
+            .border_color(t.hairline)
+            .bg(t.panel)
+            .overflow_hidden()
+            .child(input)
+            .child(div().border_t_1().border_color(t.hairline).child(response));
+        let tasks = [
+            (
+                "math",
+                "=",
+                "Do quick math",
+                "Type a sum, like 12% of 480",
+                "12% of 480",
+            ),
+            (
+                "folder",
+                "/",
+                "Jump to a folder",
+                "Start with / and a folder name",
+                "/",
+            ),
+            (
+                "terminal",
+                ">",
+                "Open a terminal",
+                "Press > on an empty bar",
+                ">",
+            ),
+            (
+                "ai",
+                "Space",
+                "Ask the AI",
+                "Start with a space, then ask",
+                " ",
+            ),
+        ];
+        let mut grid = div().flex().flex_col().gap(px(8.)).mt(px(12.));
+        for pair in tasks.chunks(2) {
+            let mut row = div().flex().gap(px(8.));
+            for &(id, trigger, title, hint, example) in pair {
+                let weak = cx.entity().downgrade();
+                let done = self.done.contains(id);
+                row = row.child(
+                    controls::action_button(
+                        format!("onboarding-practice-{id}"),
+                        title,
+                        ButtonTone::Ghost,
                         false,
                         t,
                         move |w, cx| {
-                            let _ = view.update(cx, |v, cx| {
-                                v.recording = true;
-                                w.focus(&v.focus, cx);
-                                cx.notify()
+                            let _ = weak.update(cx, |v, cx| {
+                                v.practice_terminal = false;
+                                v.practice_cwd = None;
+                                v.practice
+                                    .update(cx, |input, cx| input.set_text(example, w, cx));
+                                v.practice_committed(example, cx);
+                                v.practice.focus_handle(cx).focus(w, cx);
                             });
                         },
-                    ))
-                    .into_any_element()
-            }
-            Step::Practice => {
-                let mut d = div()
+                    )
+                    .flex_1()
+                    .min_w(px(0.))
+                    .min_h(px(62.))
+                    .p(px(10.))
                     .flex()
                     .flex_col()
-                    .gap(px(12.))
-                    .child(self.practice.clone())
-                    .child(self.result.clone())
-                    .child(format!(
-                        "{} of 4 tried",
-                        self.done.iter().filter(|s| **s != "shortcut").count()
-                    ));
-                for (i, row) in self.completions.iter().enumerate() {
-                    let view = cx.entity().downgrade();
-                    d = d.child(
-                        controls::action_button(
-                            format!("practice-folder-{i}"),
-                            row["title"].as_str().unwrap_or("Folder").to_string(),
-                            ButtonTone::Ghost,
-                            false,
-                            t,
-                            move |w, cx| {
-                                let _ = view.update(cx, |v, cx| v.complete_path(i, w, cx));
-                            },
-                        )
-                        .role(Role::ListBoxOption)
-                        .aria_selected(i == self.completion_selected),
-                    );
-                }
-                d.into_any_element()
-            }
-            _ => div()
-                .size_full()
-                .child(self.content.clone())
-                .into_any_element(),
-        };
-        let view = cx.entity().downgrade();
-        let back = cx.entity().downgrade();
-        let skip = cx.entity().downgrade();
-        let retry = cx.entity().downgrade();
-        controls::sheet(t)
-            .track_focus(&self.focus)
-            .on_key_down(cx.listener(Self::key))
-            .child(
-                div()
-                    .p(px(20.))
+                    .items_start()
+                    .border_1()
+                    .border_color(if done { t.success } else { t.hairline })
+                    .rounded(px(8.))
+                    .bg(if done { t.selected } else { t.panel })
                     .child(
                         div()
-                            .id(("semantic", line!() as usize))
-                            .role(Role::Heading)
-                            .child("Welcome to Tezbar"),
+                            .text_size(px(11.))
+                            .text_color(t.text4)
+                            .child(format!("{}  {hint}", if done { "✓" } else { trigger })),
+                    ),
+                );
+            }
+            grid = grid.child(row);
+        }
+        div().child(bar).child(grid)
+    }
+}
+impl Render for Onboarding {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = tokens::tokens(w);
+        if self.splash {
+            let weak = cx.entity().downgrade();
+            return controls::sheet(t)
+                .font_family(tokens::font_family(cx, false))
+                .id("onboarding-splash")
+                .role(Role::Group)
+                .aria_label("Welcome to Tezbar")
+                .track_focus(&self.focus)
+                .on_key_down(cx.listener(Self::key))
+                .items_center()
+                .justify_center()
+                .gap(px(16.))
+                .child(
+                    div()
+                        .size(px(80.))
+                        .rounded(px(12.))
+                        .overflow_hidden()
+                        .child(img(self.icon.clone()).size_full()),
+                )
+                .child(
+                    div()
+                        .text_size(px(28.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Welcome to Tezbar"),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.))
+                        .text_color(t.text3)
+                        .child("Five quick steps and it’s set up the way you work."),
+                )
+                .child(
+                    controls::action_button(
+                        "onboarding-start",
+                        "Press any key to start",
+                        ButtonTone::Ghost,
+                        false,
+                        t,
+                        move |w, cx| {
+                            let _ = weak.update(cx, |v, cx| v.go(0, w, cx));
+                        },
                     )
-                    .child(rail),
+                    .text_size(px(11.))
+                    .text_color(t.text4),
+                )
+                .into_any_element();
+        }
+        let mut rail = div()
+            .id("onboarding-step-rail")
+            .role(Role::TabList)
+            .w(px(200.))
+            .flex_shrink_0()
+            .flex()
+            .flex_col()
+            .border_r_1()
+            .border_color(t.hairline)
+            .px(px(12.))
+            .py(px(20.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .px(px(8.))
+                    .child(img(self.icon.clone()).size(px(28.)).rounded(px(8.)))
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("Set up Tezbar"),
+                    ),
+            );
+        let mut steps = div().flex_1().mt(px(24.)).flex().flex_col().gap(px(4.));
+        for (i, step) in self.steps.iter().enumerate() {
+            let weak = cx.entity().downgrade();
+            let current = self.step == i;
+            let done = self.step_done(*step, cx);
+            let summary = self.summary(*step, cx);
+            steps = steps.child(
+                div()
+                    .id(format!("onboarding-step-{i}"))
+                    .role(Role::Tab)
+                    .aria_label(step.title())
+                    .aria_selected(current)
+                    .aria_description(summary.clone())
+                    .track_focus(&self.rail_focus[i])
+                    .tab_index(if current { 0 } else { -1 })
+                    .cursor_pointer()
+                    .w_full()
+                    .px(px(8.))
+                    .py(px(8.))
+                    .rounded(px(8.))
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .bg(if current {
+                        t.selected
+                    } else {
+                        transparent_black().into()
+                    })
+                    .hover(|s| {
+                        if current {
+                            s
+                        } else {
+                            s.bg(t.pill)
+                        }
+                    })
+                    .on_mouse_down(MouseButton::Left, move |_, w, cx| {
+                        let _ = weak.update(cx, |v, cx| v.go(i, w, cx));
+                    })
+                    .child(
+                        div()
+                            .size(px(22.))
+                            .flex_shrink_0()
+                            .rounded_full()
+                            .border_1()
+                            .border_color(if done {
+                                t.success
+                            } else if current {
+                                t.accent_strong
+                            } else {
+                                t.hairline
+                            })
+                            .bg(if done {
+                                t.selected
+                            } else {
+                                transparent_black().into()
+                            })
+                            .text_size(px(12.))
+                            .text_color(if done { t.success } else { t.accent_strong })
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(if done {
+                                "✓"
+                            } else if current {
+                                "●"
+                            } else {
+                                ""
+                            }),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .justify_center()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(12.5))
+                                    .line_height(px(16.))
+                                    .font_weight(if current {
+                                        FontWeight::MEDIUM
+                                    } else {
+                                        FontWeight::NORMAL
+                                    })
+                                    .text_color(if current { t.text1 } else { t.text2 })
+                                    .child(step.title()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .line_height(px(14.))
+                                    .text_color(t.text4)
+                                    .child(summary),
+                            ),
+                    ),
+            );
+        }
+        let skip = cx.entity().downgrade();
+        rail = rail.child(steps).child(
+            controls::action_button(
+                "onboarding-skip",
+                "Skip setup",
+                ButtonTone::Ghost,
+                self.finishing,
+                t,
+                move |_, cx| {
+                    let _ = skip.update(cx, |v, cx| v.finish(cx));
+                },
             )
-            .child(div().flex_1().min_h(px(0.)).p(px(20.)).child(body))
-            .when_some(self.error.clone(), |d, e| {
+            .text_size(px(11.5))
+            .text_color(t.text4),
+        );
+        let step = self.steps[self.step];
+        let (title, description) = match step {
+            Step::Shortcut => (
+                "Pick the shortcut that opens Tezbar",
+                "Tezbar stays out of the way until you press this, from any app. Press it again, or Esc, to put it away.",
+            ),
+            Step::Practice => (
+                "Try the bar",
+                "One bar, a few starting characters. Try these here — nothing opens or runs until you do it in the real bar.",
+            ),
+            Step::Ai => (
+                "Connect an AI model",
+                "AI chat can read files and run commands for you, asking before anything risky. Bring your own key, or use a local model.",
+            ),
+            Step::Knowledge => (
+                "Choose what DeepSearch reads",
+                "DeepSearch reads the text inside documents, PDFs, and screenshots, with OCR running on this computer, so you can find a file by what it says. Start a search with ! to use it.",
+            ),
+            Step::Permissions => (
+                "Allow what you’ll use",
+                "A few features need macOS access. Allow only what you want to use — the rest can wait.",
+            ),
+        };
+        let mut body = div().w_full().child(self.heading(title, description, t));
+        match step {
+            Step::Shortcut => {
+                let mut keys = div().flex().items_center().gap(px(8.)).h(px(52.));
+                for key in self.hotkey.split('+') {
+                    keys = keys.child(
+                        div()
+                            .min_w(px(48.))
+                            .h(px(48.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .px(px(12.))
+                            .rounded(px(9.))
+                            .border_1()
+                            .border_color(t.rim)
+                            .bg(t.pill)
+                            .text_size(px(18.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(
+                                match key {
+                                    "Alt" => "⌥",
+                                    "Command" => "⌘",
+                                    "Control" => "⌃",
+                                    "Shift" => "⇧",
+                                    v => v,
+                                }
+                                .to_owned(),
+                            ),
+                    );
+                }
+                let change = cx.entity().downgrade();
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(16.))
+                        .h(px(148.))
+                        .rounded(px(12.))
+                        .border_1()
+                        .border_color(if self.recording {
+                            t.accent_strong
+                        } else {
+                            t.hairline
+                        })
+                        .bg(t.panel)
+                        .child(if self.recording {
+                            div()
+                                .text_size(px(14.))
+                                .text_color(t.text3)
+                                .child("Press the keys together…")
+                        } else {
+                            keys
+                        })
+                        .child(div().text_size(px(11.5)).text_color(t.text4).child(
+                            if self.recording {
+                                "Hold a modifier, then press a key. Esc cancels."
+                            } else {
+                                "Works in every app, even full-screen ones."
+                            },
+                        )),
+                );
+                let mut shortcut_actions =
+                    div().flex().items_center().gap(px(12.)).mt(px(16.)).child(
+                        controls::action_button(
+                            "onboarding-hotkey",
+                            if self.recording {
+                                "Cancel"
+                            } else {
+                                "Change shortcut"
+                            },
+                            if self.recording {
+                                ButtonTone::Ghost
+                            } else {
+                                ButtonTone::Primary
+                            },
+                            self.finishing,
+                            t,
+                            move |w, cx| {
+                                let _ = change.update(cx, |v, cx| {
+                                    v.recording = !v.recording;
+                                    w.focus(&v.focus, cx);
+                                    cx.notify();
+                                });
+                            },
+                        ),
+                    );
+                let default = if cfg!(windows) {
+                    "Control+Space"
+                } else {
+                    "Alt+Space"
+                };
+                if self.hotkey != default && !self.recording {
+                    let reset = cx.entity().downgrade();
+                    shortcut_actions = shortcut_actions.child(controls::action_button(
+                        "onboarding-reset-hotkey",
+                        format!("Reset to {default}"),
+                        ButtonTone::Quiet,
+                        self.finishing,
+                        t,
+                        move |_, cx| {
+                            let _ = reset.update(cx, |v, cx| v.save_hotkey(default.into(), cx));
+                        },
+                    ));
+                }
+                body = body.child(shortcut_actions);
+            }
+            Step::Practice => body = body.child(self.practice_body(t, cx)),
+            _ => body = body.child(self.content.clone()),
+        }
+        let next = cx.entity().downgrade();
+        let back = cx.entity().downgrade();
+        let retry = cx.entity().downgrade();
+        let last = self.step + 1 == self.steps.len();
+        let done = self.step_done(step, cx);
+        let footer = div().debug_selector(|| "onboarding-footer".into())
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap(px(8.))
+            .px(px(28.))
+            .py(px(12.))
+            .border_t_1()
+            .border_color(t.hairline)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .text_size(px(11.))
+                    .text_color(t.text4)
+                    .child(controls::keycap(
+                        if cfg!(windows) { "Ctrl" } else { "⌘" },
+                        t,
+                    ))
+                    .child(controls::keycap("↵", t))
+                    .child(if last { "Finish" } else { "Continue" }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .when(self.step > 0, |d| {
+                        d.child(controls::back_button(
+                            controls::action_button(
+                                "onboarding-back",
+                                "Back",
+                                ButtonTone::Ghost,
+                                self.finishing,
+                                t,
+                                move |w, cx| {
+                                    let _ = back
+                                        .update(cx, |v, cx| v.go(v.step.saturating_sub(1), w, cx));
+                                },
+                            ),
+                            t,
+                        ))
+                    })
+                    .child(
+                        controls::action_button(
+                            "onboarding-next",
+                            if self.finishing {
+                                "Saving…"
+                            } else if last {
+                                "Start using Tezbar"
+                            } else if done {
+                                "Continue"
+                            } else {
+                                "Skip for now"
+                            },
+                            ButtonTone::Primary,
+                            self.finishing,
+                            t,
+                            move |w, cx| {
+                                let _ = next.update(cx, |v, cx| {
+                                    if v.step + 1 == v.steps.len() {
+                                        v.finish(cx)
+                                    } else {
+                                        v.go(v.step + 1, w, cx)
+                                    }
+                                });
+                            },
+                        )
+                        .min_w(px(112.)),
+                    ),
+            );
+        let is_centered_step = matches!(step, Step::Shortcut | Step::Practice);
+        let section = div()
+            .flex_1()
+            .min_w(px(0.))
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .id("onboarding-step-content")
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_y_scroll()
+                    .px(px(28.))
+                    .py(px(20.))
+                    .flex()
+                    .flex_col()
+                    .when(is_centered_step, |d| d.justify_center())
+                    .child(body),
+            )
+            .when_some(self.error.clone(), |d, error| {
                 d.child(
                     div()
-                        .id(("semantic", line!() as usize))
+                        .id("onboarding-error")
                         .role(Role::Alert)
+                        .px(px(28.))
+                        .pb(px(12.))
+                        .text_size(px(12.))
                         .text_color(t.danger)
-                        .child(e)
+                        .child(error)
                         .child(controls::action_button(
                             "onboarding-retry",
                             "Retry",
@@ -636,49 +1190,18 @@ impl Render for Onboarding {
                         )),
                 )
             })
-            .child(
-                controls::footer(t)
-                    .child(controls::action_button(
-                        "onboarding-back",
-                        "Back",
-                        ButtonTone::Ghost,
-                        self.step == 0 || self.finishing,
-                        t,
-                        move |w, cx| {
-                            let _ = back.update(cx, |v, cx| v.go(v.step.saturating_sub(1), w, cx));
-                        },
-                    ))
-                    .child(controls::action_button(
-                        "onboarding-next",
-                        if self.step + 1 == self.steps.len() {
-                            "Finish"
-                        } else {
-                            "Continue"
-                        },
-                        ButtonTone::Primary,
-                        self.finishing,
-                        t,
-                        move |w, cx| {
-                            let _ = view.update(cx, |v, cx| {
-                                if v.step + 1 == v.steps.len() {
-                                    v.finish(cx)
-                                } else {
-                                    v.go(v.step + 1, w, cx)
-                                }
-                            });
-                        },
-                    ))
-                    .child(controls::action_button(
-                        "onboarding-skip",
-                        "Skip tour",
-                        ButtonTone::Ghost,
-                        self.finishing,
-                        t,
-                        move |_, cx| {
-                            let _ = skip.update(cx, |v, cx| v.finish(cx));
-                        },
-                    )),
-            )
+            .child(footer);
+        controls::sheet(t)
+            .font_family(tokens::font_family(cx, false))
+            .id("native-onboarding")
+            .role(Role::Group)
+            .aria_label("Onboarding")
+            .flex_row()
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::key))
+            .child(rail)
+            .child(section)
+            .into_any_element()
     }
 }
 
@@ -833,6 +1356,26 @@ mod tests {
             assert_eq!(v.done.len(), 3);
             assert!(!v.steps.contains(&Step::Permissions));
         });
+    }
+
+    #[gpui::test]
+    fn shortcut_and_practice_steps_are_vertically_centered(cx: &mut TestAppContext) {
+        let fixture = Arc::new(Fixture::default());
+        let store = SettingsStore::new(fixture);
+        let (view, cx) =
+            cx.add_window_view(|w, cx| Onboarding::new(store, &UiState::default(), false, w, cx));
+        cx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.go(0, w, cx);
+            })
+        });
+        assert_eq!(view.read_with(cx, |v, _| v.step), 0);
+        cx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.go(1, w, cx);
+            })
+        });
+        assert_eq!(view.read_with(cx, |v, _| v.step), 1);
     }
 }
 
