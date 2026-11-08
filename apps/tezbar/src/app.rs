@@ -232,14 +232,14 @@ impl Owner {
                     point(px((p.x / scale) as f32), px((p.y / scale) as f32)),
                     size(px(profile.width as f32), px(profile.height as f32)),
                 );
-                let _ = native::place_scaled(w, bounds, scale);
+                let _ = native::place_scaled(w, bounds, scale, cx);
                 view.zoom = profile.zoom as f32;
                 placed = true;
                 let _ = native::visible(w, true);
                 view.show(w, cx);
                 #[cfg(windows)]
                 {
-                    let _ = native::place_scaled(w, bounds, scale);
+                    let _ = native::place_scaled(w, bounds, scale, cx);
                 }
             }
         });
@@ -261,6 +261,9 @@ impl Owner {
             return;
         }
         if let Ok(Some((monitor, p, profile))) = self.launcher.update(cx, |v, w, cx| {
+            // A queued move may change monitors/DPI. Preserve the last known-good
+            // snapshot until the real OS callback reports the completed geometry.
+            if native::placement_pending(w, cx) { return None; }
             let display = w.display(cx)?;
             let monitor = native::monitor_key(display.as_ref());
             let scale = native::display_scale(display.as_ref());
@@ -827,7 +830,7 @@ impl Owner {
         if let Some(panel) = self.panel {
             let updated = panel.update(cx, |view, w, cx| {
                 view.sessions = rows.clone();
-                let _ = native::place(w, bounds);
+                let _ = native::place(w, bounds, cx);
                 let _ = native::visible(w, true);
                 cx.notify();
             });
@@ -872,7 +875,7 @@ impl Owner {
                 .launcher
                 .update(cx, |_, w, _| windows::terminal_sessions::bounds(w.bounds()))
             {
-                let _ = panel.update(cx, |_, w, _| native::place(w, bounds));
+                let _ = panel.update(cx, |_, w, cx| native::place(w, bounds, cx));
             }
         }
     }
@@ -908,7 +911,7 @@ impl Owner {
             Instant::now(),
         ) {
             if (locked.x || locked.y) && (cfg!(windows) || !native::left_button_down()) {
-                let _ = self.launcher.update(cx, |_, w, _| {
+                let _ = self.launcher.update(cx, |_, w, cx| {
                     native::place(
                         w,
                         Bounds::new(
@@ -918,6 +921,7 @@ impl Owner {
                             ),
                             bounds.size,
                         ),
+                        cx,
                     )
                 });
             }
@@ -945,7 +949,7 @@ impl Owner {
                 let _ = overlay.update(cx, |view, w, cx| {
                     view.x = locked.x;
                     view.y = locked.y;
-                    let _ = native::place_scaled(w, display.visible_bounds(), scale);
+                    let _ = native::place_scaled(w, display.visible_bounds(), scale, cx);
                     let _ = native::visible(w, locked.x || locked.y);
                     cx.notify();
                 });
@@ -993,7 +997,7 @@ impl Owner {
                             (initial, origin, tezbar_host::monitors::cursor_point())
                         {
                             let _ =
-                                owner.launcher.update(cx, |_, w, _| {
+                                owner.launcher.update(cx, |_, w, cx| {
                                     let scale = w.scale_factor() as f64;
                                     native::place(
                                         w,
@@ -1010,6 +1014,7 @@ impl Owner {
                                             ),
                                             initial.size,
                                         ),
+                                        cx,
                                     )
                                 });
                         }
@@ -1572,6 +1577,7 @@ pub fn run_production(admission: production_launch::Admission) -> anyhow::Result
         allow_desktop_integration: true,
         launcher_shortcut: None,
         theme: "system".into(),
+        home: Some(plan.core.home_dir.clone()),
         #[cfg(feature = "bench-control")]
         control_token: None,
     };

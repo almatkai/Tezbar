@@ -9,6 +9,7 @@ pub struct Preview {
     /// Explicit preview key; does not enable scans, clipboard observation or command hotkeys.
     pub launcher_shortcut: Option<String>,
     pub theme: String,
+    pub home: Option<PathBuf>,
     #[cfg(feature = "bench-control")]
     pub control_token: Option<String>,
 }
@@ -43,6 +44,7 @@ impl Preview {
         let mut allow_desktop_integration = false;
         let mut launcher_shortcut = None;
         let mut theme = "system".to_string();
+        let mut home = None;
         #[cfg(feature = "bench-control")]
         let mut token_file = None;
         let mut i = 0;
@@ -56,7 +58,7 @@ impl Preview {
                             .ok_or_else(|| anyhow::anyhow!("token file required"))?,
                     ));
                 }
-                "--profile" | "--resources" | "--theme" | "--launcher-shortcut" => {
+                "--profile" | "--resources" | "--theme" | "--launcher-shortcut" | "--home" => {
                     let flag = &args[i];
                     i += 1;
                     let value = args
@@ -65,6 +67,7 @@ impl Preview {
                     match flag.as_str() {
                         "--profile" => root = Some(PathBuf::from(value)),
                         "--resources" => resources = Some(PathBuf::from(value)),
+                        "--home" => home = Some(PathBuf::from(value)),
                         "--launcher-shortcut" => {
                             let shortcut = tezbar_host::desktop::parse_shortcut(value)
                                 .map_err(anyhow::Error::msg)?;
@@ -91,6 +94,13 @@ impl Preview {
         )?;
         preview.allow_desktop_integration = allow_desktop_integration;
         preview.launcher_shortcut = launcher_shortcut;
+        preview.home = home.or_else(|| {
+            if allow_desktop_integration || std::env::var_os("TEZBAR_PREVIEW_USER_HOME").is_some() {
+                std::env::var_os("HOME").map(PathBuf::from)
+            } else {
+                None
+            }
+        });
         #[cfg(feature = "bench-control")]
         if let Some(path) = token_file {
             let path = real(&path)?;
@@ -134,6 +144,9 @@ impl Preview {
         for name in ["data", "config", "home", "temp", "logs"] {
             std::fs::create_dir_all(root.join(name))?;
         }
+        for sub in ["Desktop", "Documents", "Downloads", "Pictures"] {
+            let _ = std::fs::create_dir_all(root.join("home").join(sub));
+        }
         Ok(Self {
             root,
             resources,
@@ -141,15 +154,20 @@ impl Preview {
             allow_desktop_integration: false,
             launcher_shortcut: None,
             theme,
+            home: None,
             #[cfg(feature = "bench-control")]
             control_token: None,
         })
     }
     pub fn core_paths(&self) -> tezbar_core::common::CorePaths {
+        let home_dir = self
+            .home
+            .clone()
+            .unwrap_or_else(|| self.root.join("home"));
         tezbar_core::common::CorePaths {
             data_dir: self.root.join("data"),
             config_dir: self.root.join("config"),
-            home_dir: self.root.join("home"),
+            home_dir,
             temp_dir: self.root.join("temp"),
             resource_dir: self.resources.clone(),
         }
@@ -195,7 +213,26 @@ mod tests {
         assert!(!preview.allow_desktop_integration);
         assert!(preview.launcher_shortcut.is_none());
         args.push("--allow-desktop-integration".into());
-        assert!(Preview::parse(&args).unwrap().allow_desktop_integration);
+        let p_desktop = Preview::parse(&args).unwrap();
+        assert!(p_desktop.allow_desktop_integration);
+        if let Some(user_home) = std::env::var_os("HOME").map(PathBuf::from) {
+            assert_eq!(p_desktop.core_paths().home_dir, user_home);
+        }
+    }
+    #[::core::prelude::v1::test]
+    fn custom_home_flag_supported() {
+        let (p, r) = fixture();
+        let custom = tempfile::tempdir().unwrap();
+        let args = vec![
+            "--profile".into(),
+            p.path().display().to_string(),
+            "--resources".into(),
+            r.path().display().to_string(),
+            "--home".into(),
+            custom.path().display().to_string(),
+        ];
+        let preview = Preview::parse(&args).unwrap();
+        assert_eq!(preview.core_paths().home_dir, custom.path());
     }
     #[::core::prelude::v1::test]
     fn launcher_hotkey_can_be_enabled_without_desktop_services() {

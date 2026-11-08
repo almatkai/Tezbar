@@ -379,6 +379,9 @@ fn path_completion_retains_values_ids_and_open_with_learning() {
     let apps = apps.as_array().unwrap();
     let docs = providers::app_documents(apps);
     assert_eq!(docs[0]["id"], "app:/Applications/Visual Studio Code.app");
+    // A bare backtick is the launchpad: every installed app, not an empty grid.
+    let all = providers::complete(&ctx, "`", apps).unwrap();
+    assert_eq!(all.as_array().map(Vec::len), Some(2), "{all}");
     let grid = providers::complete(&ctx, "`vsc", apps).unwrap();
     assert_eq!(
         grid[0]["id"],
@@ -405,6 +408,28 @@ fn path_completion_retains_values_ids_and_open_with_learning() {
             "Open in Finder"
         }
     );
+}
+#[test]
+fn slash_path_completion_finds_directories_and_prefix_matches() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = profile(dir.path());
+    let desktop = ctx.paths.home_dir.join("Desktop");
+    let downloads = ctx.paths.home_dir.join("Downloads");
+    let docs = ctx.paths.home_dir.join("Documents");
+    std::fs::create_dir_all(&desktop).unwrap();
+    std::fs::create_dir_all(&downloads).unwrap();
+    std::fs::create_dir_all(&docs).unwrap();
+
+    let root_rows = providers::complete(&ctx, "/", &[]).unwrap();
+    let titles: Vec<_> = root_rows.as_array().unwrap().iter().map(|r| r["title"].as_str().unwrap()).collect();
+    assert!(titles.contains(&"Desktop"));
+    assert!(titles.contains(&"Downloads"));
+    assert!(titles.contains(&"Documents"));
+
+    let desk_rows = providers::complete(&ctx, "/Desk", &[]).unwrap();
+    assert_eq!(desk_rows[0]["title"], "Desktop");
+    assert_eq!(desk_rows[0]["kind"], "directory");
+    assert_eq!(desk_rows[0]["value"], "/Desktop/");
 }
 #[test]
 fn directory_visits_collapse_siblings_and_prefer_strong_concrete_branch() {

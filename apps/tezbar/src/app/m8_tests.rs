@@ -70,6 +70,7 @@ pub(in crate::app) fn owner(
         allow_desktop_integration: false,
         launcher_shortcut: None,
         theme: "dark".into(),
+        home: None,
         #[cfg(feature = "bench-control")]
         control_token: None,
     };

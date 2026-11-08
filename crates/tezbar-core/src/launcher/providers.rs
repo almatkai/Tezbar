@@ -603,11 +603,13 @@ pub fn resolve(home: &Path, input: &str) -> PathBuf {
             "/var/",
             "/System/",
             "/Library/",
+            "/Applications/",
         ]
         .iter()
         .any(|p| input.starts_with(p))
         && input != "/Users"
         && input != "/Volumes"
+        && input != "/Applications"
     {
         return home.join(input.trim_start_matches('/'));
     }
@@ -819,13 +821,15 @@ pub fn complete(ctx: &CoreContext, query: &str, apps: &[Value]) -> CoreResult {
             }
             let path = e.path();
             let Ok(kind) = e.file_type() else { continue };
-            if !kind.is_dir() && !kind.is_file() {
+            let is_dir = kind.is_dir() || (kind.is_symlink() && path.is_dir());
+            let is_file = kind.is_file() || (kind.is_symlink() && path.is_file());
+            if !is_dir && !is_file {
                 continue;
             }
             if out.iter().any(|i| i["path"].as_str() == path.to_str()) {
                 continue;
             }
-            out.push(json!({"id":format!("path:{}",path.display()),"title":name,"subtitle":display(home,&path),"kind":if kind.is_dir(){"directory"}else{"file"},"value":slash(home,&path,kind.is_dir()),"path":path,"score":(if kind.is_dir(){1000}else{500})+if name.to_lowercase()==prefix{1000}else if name.to_lowercase().starts_with(&prefix){100}else{0}}));
+            out.push(json!({"id":format!("path:{}",path.display()),"title":name,"subtitle":display(home,&path),"kind":if is_dir{"directory"}else{"file"},"value":slash(home,&path,is_dir),"path":path,"score":(if is_dir{1000}else{500})+if name.to_lowercase()==prefix{1000}else if name.to_lowercase().starts_with(&prefix){100}else{0}}));
         }
     }
     out.sort_by(|a, b| {
