@@ -1,6 +1,21 @@
 //! Small native control constructors share visual and semantic state.
 use crate::tokens::{self, Tokens};
 use gpui::{prelude::*, *};
+actions!(
+    window_chrome,
+    [
+        /// A press on empty header/footer chrome; the window owner may turn it
+        /// into a window move once the pointer travels.
+        ArmWindowMove
+    ]
+);
+/// Presses that no focusable control claimed (text fields focus and prevent
+/// default) ask the window owner to arm a move.
+fn arm_window_move(_: &MouseDownEvent, w: &mut Window, cx: &mut App) {
+    if !w.default_prevented() {
+        w.dispatch_action(Box::new(ArmWindowMove), cx);
+    }
+}
 #[derive(Clone, Copy)]
 pub enum ButtonTone {
     Primary,
@@ -188,6 +203,7 @@ pub fn header(t: Tokens) -> Div {
         .px(px(14. * t.zoom))
         .border_b_1()
         .border_color(t.hairline)
+        .on_mouse_down(MouseButton::Left, arm_window_move)
 }
 pub fn footer(t: Tokens) -> Div {
     div()
@@ -198,9 +214,17 @@ pub fn footer(t: Tokens) -> Div {
         .h(px(tokens::FOOTER * t.zoom))
         .flex_shrink_0()
         .px(px(12. * t.zoom))
+        // Content masks are rectangular: without its own radius the footer fill
+        // pokes square corners past the sheet's rounded border (visible wherever the
+        // OS does not mask the window shape, e.g. Windows).
+        .rounded_b(px(tokens::SHEET_RADIUS - 1.))
         .bg(t.bar_float)
         .text_size(px(10.5 * t.zoom))
         .text_color(t.text3)
+        // Lists scroll under the translucent footer; presses must not reach the
+        // rows beneath it (scrolling still does).
+        .block_mouse_except_scroll()
+        .on_mouse_down(MouseButton::Left, arm_window_move)
 }
 pub fn popover(
     id: impl Into<ElementId>,
@@ -307,6 +331,87 @@ impl FocusScope {
 mod tests {
     use super::*;
     use ::core::prelude::v1::test;
+    /// A focusable, clickable row with the surface footer floated over it, as
+    /// in launcher lists that scroll under the translucent footer.
+    struct ChromeTest {
+        row_clicks: std::rc::Rc<std::cell::Cell<usize>>,
+        arms: std::rc::Rc<std::cell::Cell<usize>>,
+        row_focus: FocusHandle,
+        input_focus: FocusHandle,
+    }
+    impl Render for ChromeTest {
+        fn render(&mut self, w: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let t = crate::tokens::tokens(w);
+            let (clicks, arms) = (self.row_clicks.clone(), self.arms.clone());
+            sheet(t)
+                .relative()
+                .on_action(move |_: &ArmWindowMove, _, _| arms.set(arms.get() + 1))
+                .child(
+                    header(t).child(
+                        div()
+                            .debug_selector(|| "chrome-input".into())
+                            .flex_1()
+                            .h_full()
+                            .track_focus(&self.input_focus),
+                    ),
+                )
+                .child(
+                    div()
+                        .id("row")
+                        .debug_selector(|| "chrome-row".into())
+                        .absolute()
+                        .bottom_0()
+                        .left_0()
+                        .right_0()
+                        .h(px(80.))
+                        .track_focus(&self.row_focus)
+                        .on_click(move |_, _, _| clicks.set(clicks.get() + 1)),
+                )
+                .child(
+                    footer(t)
+                        .debug_selector(|| "chrome-footer".into())
+                        .absolute()
+                        .bottom_0()
+                        .left_0()
+                        .right_0(),
+                )
+                .size(px(400.))
+        }
+    }
+    #[gpui::test]
+    fn footer_press_arms_a_move_and_never_reaches_rows_beneath(cx: &mut gpui::TestAppContext) {
+        let (clicks, arms) = Default::default();
+        let (_view, cx) = cx.add_window_view(|_, cx| ChromeTest {
+            row_clicks: std::rc::Rc::clone(&clicks),
+            arms: std::rc::Rc::clone(&arms),
+            row_focus: cx.focus_handle(),
+            input_focus: cx.focus_handle(),
+        });
+        cx.run_until_parked();
+        let row: std::rc::Rc<std::cell::Cell<usize>> = clicks;
+        let arms: std::rc::Rc<std::cell::Cell<usize>> = arms;
+        // The row is reachable above the footer.
+        let row_bounds = cx.debug_bounds("chrome-row").unwrap();
+        cx.simulate_click(row_bounds.origin + point(px(20.), px(10.)), Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(row.get(), 1);
+        assert_eq!(arms.get(), 0);
+        // A press on the footer arms a window move and does not click the row.
+        let footer = cx.debug_bounds("chrome-footer").unwrap();
+        cx.simulate_click(footer.center(), Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(row.get(), 1);
+        assert_eq!(arms.get(), 1);
+        // Header chrome arms too, but a focusable control inside it (the text field) does not.
+        let input = cx.debug_bounds("chrome-input").unwrap();
+        cx.simulate_click(input.center(), Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(arms.get(), 1);
+        let header = cx.debug_bounds("surface-header").unwrap();
+        cx.simulate_click(header.origin + point(px(5.), px(10.)), Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(arms.get(), 2);
+    }
     struct ButtonTest {
         hits: std::rc::Rc<std::cell::Cell<usize>>,
         focus: FocusHandle,

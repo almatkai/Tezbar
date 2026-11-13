@@ -1849,16 +1849,10 @@ impl Render for Launcher {
         root
             .relative()
             .font_family(tokens::font_family(cx, false))
-            // Empty header/footer chrome moves the window. Text fields and other
-            // focusable controls prevent default on press, so selection still works.
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, e: &MouseDownEvent, w, _| {
-                    this.move_arm = (!w.default_prevented()
-                        && move_zone(e.position, w.viewport_size(), this.zoom))
-                    .then_some(e.position);
-                }),
-            )
+            // Empty header/footer chrome (any mounted surface) moves the window.
+            .on_action(cx.listener(|this, _: &controls::ArmWindowMove, w, _| {
+                this.move_arm = Some(w.mouse_position());
+            }))
             .capture_key_down(cx.listener(|this, e, w, cx| this.key(e, w, cx)))
             // TextInput consumes horizontal-arrow actions before key_down runs.
             .capture_action(cx.listener(|this, _: &tezbar_ui::text_input::Left, w, cx| {
@@ -2275,11 +2269,6 @@ fn kbd_group(keys: impl Into<SharedString>, t: tokens::Tokens) -> Div {
         .child(keys.into())
 }
 
-/// Header and footer strips of the launcher frame (any mounted surface) act as a move handle.
-pub(super) fn move_zone(at: Point<Pixels>, viewport: Size<Pixels>, zoom: f32) -> bool {
-    let y = f32::from(at.y);
-    y <= tokens::HEADER * zoom || y >= f32::from(viewport.height) - tokens::FOOTER * zoom
-}
 /// A press only becomes a move after real travel, so plain clicks on chips stay clicks.
 pub(super) fn move_started(origin: Point<Pixels>, now: Point<Pixels>) -> bool {
     let (dx, dy) = (f32::from(now.x - origin.x), f32::from(now.y - origin.y));
@@ -2289,11 +2278,7 @@ pub(super) fn move_started(origin: Point<Pixels>, now: Point<Pixels>) -> bool {
 mod move_zone_tests {
     use super::*;
     #[::core::prelude::v1::test]
-    fn header_and_footer_strips_move_and_travel_threshold_keeps_clicks() {
-        let viewport = size(px(760.), px(640.));
-        assert!(move_zone(point(px(300.), px(10.)), viewport, 1.));
-        assert!(move_zone(point(px(300.), px(635.)), viewport, 1.));
-        assert!(!move_zone(point(px(300.), px(320.)), viewport, 1.));
+    fn travel_threshold_keeps_plain_clicks_as_clicks() {
         assert!(!move_started(point(px(10.), px(10.)), point(px(12.), px(12.))));
         assert!(move_started(point(px(10.), px(10.)), point(px(14.), px(10.))));
     }
