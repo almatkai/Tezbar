@@ -422,7 +422,7 @@ fn canonical_surface_shortcuts_have_typed_destinations() {
     }
     assert!(Navigation::from_core(&json!("nonexistent"), 1).is_none());
 }
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[::core::prelude::v1::test]
 fn presentation_uses_current_os_locale_for_currency_date_relative_and_count() {
     use tezbar_core::instant::{
