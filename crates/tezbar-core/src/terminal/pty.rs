@@ -79,7 +79,8 @@ fn metadata(ctx: &CoreContext, channel: &str, payload: Value) -> Result<Value, S
 }
 
 struct NativeTerminalSession {
-    master: Box<dyn MasterPty + Send>,
+    /// `None` once the waiter has closed a Windows pseudoconsole after shell exit.
+    master: Option<Box<dyn MasterPty + Send>>,
     writer: std::sync::Arc<TerminalInput>,
     metadata_gate: std::sync::Arc<Mutex<()>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
@@ -174,7 +175,7 @@ fn stop_session(session: &mut NativeTerminalSession) -> Result<(), String> {
         // portable-pty only sends SIGHUP, which interactive shells can ignore.
         // Include background job groups attached to this isolated PTY. The
         // explicit PID/group signals below remain the fallback on minimal hosts.
-        if let Some(tty) = session.master.tty_name() {
+        if let Some(tty) = session.master.as_ref().and_then(|master| master.tty_name()) {
             if let Some(name) = tty.to_str().and_then(|name| name.strip_prefix("/dev/")) {
                 let _ = ProcessCommand::new("/usr/bin/pkill")
                     .args(["-KILL", "-t", name])
@@ -186,7 +187,11 @@ fn stop_session(session: &mut NativeTerminalSession) -> Result<(), String> {
         if session.exited.load(Ordering::Acquire) {
             return Ok(());
         }
-        if let Some(group) = session.master.process_group_leader() {
+        if let Some(group) = session
+            .master
+            .as_ref()
+            .and_then(|master| master.process_group_leader())
+        {
             if group > 1 && group != unsafe { libc::getpgrp() } {
                 unsafe {
                     libc::kill(-group, libc::SIGKILL);
@@ -200,8 +205,13 @@ fn stop_session(session: &mut NativeTerminalSession) -> Result<(), String> {
     }
     #[cfg(windows)]
     if let Some(pid) = session.pid {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW: a console child of this GUI process would flash a window.
         let status = ProcessCommand::new("taskkill")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(0x08000000)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .status()
             .map_err(|e| e.to_string())?;
         if status.success() {
@@ -713,7 +723,7 @@ fn native_terminal_create_inner(
         session_id.clone(),
         NativeTerminalSession {
             stream: output_stream.clone(),
-            master: pair.master,
+            master: Some(pair.master),
             writer,
             metadata_gate: metadata_gate.clone(),
             killer,
@@ -854,6 +864,21 @@ fn native_terminal_create_inner(
             Err(_) => (1, None),
         };
         exited.store(true, Ordering::Release);
+        // ConPTY keeps its output pipe open until the pseudoconsole is closed, so
+        // the reader never sees EOF after the shell exits (Unix polls `exited`).
+        // Close this generation's pseudoconsole: conhost flushes the final output
+        // and ends the stream, letting the drain below finish.
+        #[cfg(windows)]
+        {
+            let master = exit_state
+                .sessions
+                .lock()
+                .unwrap()
+                .get_mut(&exit_session_id)
+                .filter(|session| std::sync::Arc::ptr_eq(&session.exited, &exited))
+                .and_then(|session| session.master.take());
+            drop(master);
+        }
         // Drain the last output before publishing exit/removing the id.
         let _ = output_thread.join();
         let state = &exit_state;
@@ -919,10 +944,11 @@ pub fn native_terminal_attach_impl(
         {
             return Ok(None);
         }
-        session
-            .master
-            .resize(pty_size(request.cols, request.rows))
-            .map_err(|error| format!("failed to resize terminal: {error}"))?;
+        if let Some(master) = &session.master {
+            master
+                .resize(pty_size(request.cols, request.rows))
+                .map_err(|error| format!("failed to resize terminal: {error}"))?;
+        }
         (
             session.shell.clone(),
             session.history_path.clone(),
@@ -1100,8 +1126,10 @@ pub fn native_terminal_resize_impl(
     let Some(session) = sessions.get(&session_id) else {
         return Ok(false);
     };
-    session
-        .master
+    let Some(master) = &session.master else {
+        return Ok(false);
+    };
+    master
         .resize(pty_size(cols, rows))
         .map_err(|error| format!("failed to resize terminal: {error}"))?;
     Ok(true)
@@ -1144,7 +1172,7 @@ mod tests {
         drop(pair.slave);
         let mut session = NativeTerminalSession {
             stream: test_stream(),
-            master: pair.master,
+            master: Some(pair.master),
             writer: TerminalInput::start(writer),
             metadata_gate: std::sync::Arc::new(Mutex::new(())),
             killer: child.clone_killer(),
@@ -1198,7 +1226,7 @@ mod tests {
             "blocked".into(),
             NativeTerminalSession {
                 stream: test_stream(),
-                master: pair.master,
+                master: Some(pair.master),
                 writer: TerminalInput::start(writer),
                 metadata_gate: std::sync::Arc::new(Mutex::new(())),
                 killer: child.clone_killer(),
@@ -1374,9 +1402,11 @@ pub fn native_terminal_stream_attach(
         let Some(s) = sessions.get(&request.session_id) else {
             return Ok(Value::Null);
         };
-        s.master
-            .resize(pty_size(request.cols, request.rows))
-            .map_err(|e| e.to_string())?;
+        if let Some(master) = &s.master {
+            master
+                .resize(pty_size(request.cols, request.rows))
+                .map_err(|e| e.to_string())?;
+        }
         (s.metadata_gate.clone(), s.stream.clone(), s.shell.clone())
     };
     let _metadata = gate.lock().unwrap();
@@ -1572,6 +1602,55 @@ mod m10_windows_tests {
     use base64::{engine::general_purpose::STANDARD, Engine};
     use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
+    /// portable-pty opens ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR: conhost asks for the
+    /// cursor position (`ESC[6n`) and holds the client until a terminal answers. The GPUI
+    /// terminal emulator answers in the app; headless fixtures must answer themselves.
+    fn answer_cursor_query(state: &NativeTerminalState, id: &str) {
+        let sessions = state.sessions.lock().unwrap();
+        if let Some(session) = sessions.get(id) {
+            assert!(session.writer.send(b"\x1b[1;1R".to_vec()));
+        }
+    }
+
+    /// ConPTY keeps its output pipe open after the shell exits; the waiter must close
+    /// the pseudoconsole or the exit never publishes and shutdown joins forever.
+    #[test]
+    fn conpty_shell_exit_publishes_exit_and_releases_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = CoreContext::headless(crate::common::CorePaths {
+            data_dir: dir.path().join("data"),
+            config_dir: dir.path().join("profile"),
+            resource_dir: dir.path().into(),
+            temp_dir: dir.path().into(),
+            home_dir: dir.path().into(),
+        });
+        let state = ctx.terminal.clone();
+        let mut command = CommandBuilder::new("cmd.exe");
+        command.args(["/D", "/Q", "/C", "echo M10_SELF_EXIT"]);
+        command.cwd(dir.path());
+        let request =
+            serde_json::from_value(json!({"cwd":dir.path(),"cols":80,"rows":24})).unwrap();
+        let created =
+            native_terminal_create_inner(ctx.clone(), &state, request, Some(command)).unwrap();
+        answer_cursor_query(&state, &created.session_id);
+        let started = std::time::Instant::now();
+        assert!(
+            state.wait_stopped(&created.session_id),
+            "self-exiting ConPTY shell never released its session"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        // Every waiter finished: shutdown must not block on a stuck output drain.
+        let (done, joined) = std::sync::mpsc::channel();
+        let waiting = state.clone();
+        std::thread::spawn(move || {
+            shutdown_all(&waiting);
+            let _ = done.send(());
+        });
+        joined
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("shutdown_all joined a deadlocked ConPTY waiter");
+    }
+
     #[test]
     fn private_conpty_raw_input_replay_and_owned_process_shutdown() {
         let dir = tempfile::tempdir().unwrap();
@@ -1600,6 +1679,7 @@ mod m10_windows_tests {
         }
         let _cleanup = Cleanup(state.clone());
         let id = created.session_id;
+        answer_cursor_query(&state, &id);
         let pid = state.sessions.lock().unwrap()[&id].pid.unwrap();
         // Retain this exact process identity, rather than checking a possibly reused PID.
         let process =
