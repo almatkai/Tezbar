@@ -2238,3 +2238,39 @@ async fn stopping_during_a_test_catalog_cancels_the_probe_and_prevents_adoption(
         }
     }
 }
+
+#[test]
+fn trust_hashes_ignore_object_order_and_discovery_metadata_but_preserve_identity() {
+    let a: Value = serde_json::from_str(r#"{"id":"web","url":"http://fixture.invalid","command":"fixture","headers":{"X-A":"a","X-B":"b"},"toolPolicy":"ask","schema":{"required":["first","second"],"properties":{"a":{"type":"string"},"b":{"type":"boolean"}}}}"#).unwrap();
+    let b: Value = serde_json::from_str(r#"{"schema":{"properties":{"b":{"type":"boolean"},"a":{"type":"string"}},"required":["first","second"]},"toolPolicy":"ask","headers":{"X-B":"b","X-A":"a"},"command":"fixture","url":"http://fixture.invalid","id":"web"}"#).unwrap();
+    assert_eq!(manifest::hash(&a), manifest::hash(&b));
+    assert_eq!(command_pin(&a), command_pin(&b));
+    let mut discovered = a.clone();
+    discovered["catalog"] = json!({"tools":[]});
+    discovered["tested"] = json!(true);
+    discovered["needsAuth"] = json!(true);
+    discovered["requestedScopes"] = json!("issues:write");
+    discovered["cachedEra"] = json!("v1");
+    discovered["ttlMs"] = json!(60000);
+    assert_eq!(command_pin(&a), command_pin(&discovered));
+    discovered.as_object_mut().unwrap().remove("needsAuth");
+    discovered.as_object_mut().unwrap().remove("requestedScopes");
+    assert_eq!(command_pin(&a), command_pin(&discovered));
+    for (field, value) in [
+        ("url", json!("http://changed.invalid")),
+        ("command", json!("changed")),
+        ("headers", json!({"X-A":"changed","X-B":"b"})),
+        ("toolPolicy", json!("allow")),
+        ("schema", json!({"required":["second","first"]})),
+    ] {
+        let mut changed = a.clone();
+        changed[field] = value;
+        assert_ne!(command_pin(&a), command_pin(&changed), "{field}");
+    }
+    let descriptor = json!({"name":"echo","description":"original","inputSchema":{"type":"object"}});
+    let mut changed = descriptor.clone();
+    changed["description"] = json!("changed");
+    assert_ne!(manifest::hash(&descriptor), manifest::hash(&changed));
+    assert_ne!(manifest::hash(&json!([1,2])), manifest::hash(&json!([2,1])));
+    assert_ne!(manifest::hash(&json!(1)), manifest::hash(&json!("1")));
+}

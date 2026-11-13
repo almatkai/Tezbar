@@ -181,22 +181,51 @@ pub fn heuristic(prompt: &str, answer: Option<&str>) -> (String, String) {
         }
     }
     let mut icon = "chat";
-    for(pattern,kind)in [
-("football|soccer|fifa|champions league|футбол","trophy"),
-("nba|basketball|баскетбол","sports"),
-("tennis|теннис","sports"),
-("rust|python|typescript|javascript|golang|c\\+\\+|react|vue|node|bun|docker|k8s|git|github|api|backend|frontend|mcp|кодинг|баг|ошибк[а-я]*","snippets"),
-("cpu|mac|gpu|ram|terminal|bash|zsh|shell|linux|windows|диск|ssd|памят[а-я]*|процесс[а-я]*","cpu"),
-("weather|rain|snow|temperature|погода|дождь|снег|температур[а-я]*","weather"),
-("music|song|album|spotify|artist|песн[а-я]*|музык[а-я]*|трек[а-я]*","audio"),
-("crypto|bitcoin|btc|eth|finance|stock|dollar|валют[а-я]*|деньг[а-я]*|биткоин|курс","brew"),
-("ai|gpt|llm|claude|gemini|deepseek|ollama|нейросет[а-я]*|модел[а-я]*","ai"),
-("write|essay|summary|draft|article|письм[а-я]*|стать[а-я]*|сочинени[а-я]*|пересказ","edit"),
-("translate|english|russian|spanish|перевод[а-я]*|язык[а-я]*","finder"),
-("movie|film|cinema|фильм[а-я]*|кино|сериал[а-я]*","picture"),
-("recipe|food|cooking|coffee|еда|рецепт[а-я]*|кофе","coffee"),
-("search|find|where|поиск|найди","search"),
-]{if matches(&text,pattern){icon=kind;break;}}
+    for (pattern, kind) in [
+        ("football|soccer|fifa|champions league|футбол", "trophy"),
+        ("nba|basketball|баскетбол", "sports"),
+        ("tennis|теннис", "sports"),
+        (
+            "rust|python|typescript|javascript|golang|c\\+\\+|react|vue|node|bun|docker|k8s|git|github|api|backend|frontend|mcp|кодинг|баг|ошибк[а-я]*",
+            "snippets",
+        ),
+        (
+            "cpu|mac|gpu|ram|terminal|bash|zsh|shell|linux|windows|диск|ssd|памят[а-я]*|процесс[а-я]*",
+            "cpu",
+        ),
+        (
+            "weather|rain|snow|temperature|погода|дождь|снег|температур[а-я]*",
+            "weather",
+        ),
+        (
+            "music|song|album|spotify|artist|песн[а-я]*|музык[а-я]*|трек[а-я]*",
+            "audio",
+        ),
+        (
+            "crypto|bitcoin|btc|eth|finance|stock|dollar|валют[а-я]*|деньг[а-я]*|биткоин|курс",
+            "brew",
+        ),
+        (
+            "ai|gpt|llm|claude|gemini|deepseek|ollama|нейросет[а-я]*|модел[а-я]*",
+            "ai",
+        ),
+        (
+            "write|essay|summary|draft|article|письм[а-я]*|стать[а-я]*|сочинени[а-я]*|пересказ",
+            "edit",
+        ),
+        (
+            "translate|english|russian|spanish|перевод[а-я]*|язык[а-я]*",
+            "finder",
+        ),
+        ("movie|film|cinema|фильм[а-я]*|кино|сериал[а-я]*", "picture"),
+        ("recipe|food|cooking|coffee|еда|рецепт[а-я]*|кофе", "coffee"),
+        ("search|find|where|поиск|найди", "search"),
+    ] {
+        if matches(&text, pattern) {
+            icon = kind;
+            break;
+        }
+    }
     (
         if clean.is_empty() {
             "New chat".into()

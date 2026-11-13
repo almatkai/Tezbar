@@ -26,6 +26,37 @@ fn local_data_glyph_and_remote_policy() {
     assert!(resolve(&outside_uri, root, &[outside].into()).is_ok());
 }
 #[test]
+fn sdk_asset_names_resolve_under_assets_for_every_image_variant() {
+    let root = Path::new("/fixture/ext");
+    for raw in [
+        "pixel.png",
+        "./pixel.png",
+        "assets/pixel.png",
+        "./assets/pixel.png",
+    ] {
+        let source = resolve(raw, root, &BTreeSet::new()).unwrap();
+        assert!(matches!(&source, Source::File(path) if path == &root.join("assets/pixel.png")));
+        for variant in [
+            Variant::Icon,
+            Variant::Avatar,
+            Variant::Artwork,
+            Variant::Screenshot,
+        ] {
+            let mut cache = ImageCache::default();
+            let (_, effect) = cache.acquire(source.clone(), variant).unwrap();
+            assert!(
+                matches!(effect, Some(Effect::ReadFile{path,..}) if path == root.join("assets/pixel.png"))
+            );
+        }
+    }
+    assert!(
+        matches!(resolve("nested/icon.png", root, &BTreeSet::new()),Ok(Source::File(path)) if path == root.join("assets/nested/icon.png"))
+    );
+    for raw in ["../pixel.png", "assets/../../pixel.png", "./../pixel.png"] {
+        assert!(resolve(raw, root, &BTreeSet::new()).is_err());
+    }
+}
+#[test]
 fn coalesces_inflight_and_peeks_only_owned_ready_handles() {
     let mut c = ImageCache::default();
     let (a, e) = c.acquire(remote(), Variant::Icon).unwrap();
@@ -75,9 +106,10 @@ fn oversized_resource_rejected_and_cache_bounded() {
         c.acquire(Source::Builtin(format!("icon{i}")), Variant::Icon)
             .unwrap();
     }
-    assert!(c
-        .acquire(Source::Builtin("overflow".into()), Variant::Icon)
-        .is_err());
+    assert!(
+        c.acquire(Source::Builtin("overflow".into()), Variant::Icon)
+            .is_err()
+    );
 }
 #[test]
 fn one_hundred_mount_hide_cycles_release_image_handles() {
@@ -264,12 +296,14 @@ fn windows_drive_and_unc_paths_require_authorization_before_url_parsing() {
         let allowed = [PathBuf::from(raw)].into();
         assert!(matches!(resolve(raw, root, &allowed), Ok(Source::File(_))));
     }
-    assert!(resolve(
-        r"C:\Apps\..\secret",
-        root,
-        &[PathBuf::from(r"C:\Apps\..\secret")].into()
-    )
-    .is_err());
+    assert!(
+        resolve(
+            r"C:\Apps\..\secret",
+            root,
+            &[PathBuf::from(r"C:\Apps\..\secret")].into()
+        )
+        .is_err()
+    );
 }
 
 #[test]

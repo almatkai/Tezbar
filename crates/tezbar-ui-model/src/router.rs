@@ -111,7 +111,12 @@ impl Router {
             "open-indexing" => Surface::Indexing,
             "start-onboarding" => Surface::Onboarding,
             "show-updated-version" => Surface::ReleaseNotes,
-            "show-system-monitor" => Surface::SystemMonitor,
+            "show-system-monitor"
+            | "show-cpu-info"
+            | "show-macos-version"
+            | "show-memory-info"
+            | "show-disk-usage"
+            | "show-battery-status" => Surface::SystemMonitor,
             "open-clipboard-history" => Surface::Clipboard,
             "download-app-update" | "restart-app-update" | "check-for-updates" => {
                 return Some(vec![Effect::UpdateAction]);

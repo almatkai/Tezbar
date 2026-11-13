@@ -7,7 +7,7 @@ const [directory, identity] = process.argv.slice(2)
 if (process.platform !== 'darwin' || !directory || !identity)
   throw new Error('Usage on macOS: sign-macos-resources DIRECTORY CERTIFICATE')
 const policy = JSON.parse(
-  readFileSync(new URL('../src-tauri/macos-signing.json', import.meta.url), 'utf8')
+  readFileSync(new URL('../packaging/macos-signing.json', import.meta.url), 'utf8')
 )
 const root = fileURLToPath(new URL('../', import.meta.url))
 const directories = [directory, ...policy.nativeHelpers.map((path) => dirname(join(root, path)))]

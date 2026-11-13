@@ -309,7 +309,10 @@ pub struct Catalog {
     pub message: Option<String>,
     pub total: usize,
     pub has_more: bool,
+    /// A failed page requires an explicit retry, never another render-driven request.
+    pub pagination_failed: bool,
     next: u64,
+    offset: usize,
     request: Option<(u64, bool)>,
 }
 impl Catalog {
@@ -317,6 +320,12 @@ impl Catalog {
         if more && (self.loading || self.loading_more || !self.has_more) {
             return None;
         }
+        if !more {
+            // Old rows may remain visible while refreshing, but cannot page a new query.
+            self.has_more = false;
+        }
+        self.pagination_failed = false;
+        self.message = None;
         self.query = query.clone();
         self.next += 1;
         self.request = Some((self.next, more));
@@ -334,7 +343,7 @@ impl Catalog {
         Some(Effect::Search {
             token: self.next,
             query,
-            offset: if more { self.store.len() } else { 0 },
+            offset: if more { self.offset } else { 0 },
             limit: 25,
         })
     }
@@ -355,7 +364,22 @@ impl Catalog {
         self.loading_more = false;
         match result {
             Ok((items, installed, total, has_more)) => {
+                let previous_len = self.store.len();
+                self.offset = if more {
+                    self.offset + items.len()
+                } else {
+                    items.len()
+                };
                 if more {
+                    let mut ids = self
+                        .store
+                        .iter()
+                        .map(|e| e.id.clone())
+                        .collect::<BTreeSet<_>>();
+                    let items = items
+                        .into_iter()
+                        .filter(|e| ids.insert(e.id.clone()))
+                        .collect::<Vec<_>>();
                     if select_next {
                         self.selected =
                             items.first().map(|r| r.id.clone()).or(self.selected.take());
@@ -367,9 +391,13 @@ impl Catalog {
                     self.installed = installed;
                 }
                 self.total = total;
-                self.has_more = has_more;
+                // Stop if a broken server claims more pages but adds no new rows.
+                self.has_more = has_more && (!more || self.store.len() > previous_len);
             }
-            Err(e) => self.message = Some(e),
+            Err(e) => {
+                self.pagination_failed = more;
+                self.message = Some(e);
+            }
         }
     }
     pub fn install(&mut self, id: &str, platform: &str) -> Result<Effect, &'static str> {

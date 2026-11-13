@@ -1,5 +1,5 @@
 //! Native copies of Tezbar’s existing launcher glyphs and command mappings.
-//! Source: src/renderer/launcherIcons.tsx (Apache-2.0); fixed compile-time SVG data only.
+//! Source: tests/oracles/legacy-renderer/launcherIcons.tsx (Apache-2.0); fixed compile-time SVG data only.
 //! Source SHA-256: b0b8fdcb6c2f891e92454e904da03881bb89f6760e7b4d469f1fd17a347930ab
 use super::{Action, Mode, Row};
 use gpui::{prelude::*, *};

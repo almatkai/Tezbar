@@ -23,8 +23,8 @@
   },
   "include": [
     "vitest.config.ts",
-    "src/renderer/**/*.ts",
-    "src/renderer/**/*.tsx",
+    "tests/oracles/legacy-renderer/**/*.ts",
+    "tests/oracles/legacy-renderer/**/*.tsx",
     "src/shared/**/*.ts"
   ]
 }

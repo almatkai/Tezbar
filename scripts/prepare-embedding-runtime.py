@@ -17,7 +17,7 @@ stage=importlib.util.module_from_spec(spec);spec.loader.exec_module(stage)
 
 
 def main():
-    pin=json.loads((ROOT/'src-tauri/runtime/embedding-macos-arm64.json').read_text())
+    pin=json.loads((ROOT/'packaging/runtime/embedding-macos-arm64.json').read_text())
     destination=ROOT/'build/embedding-runtime/resources/embedding-runtime.zip'
     if destination.exists():
         # Wrong existing bytes fail closed; never silently replace a staged input.

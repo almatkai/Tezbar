@@ -1,6 +1,6 @@
 [
   {
-    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/commandBarInputMode.test.ts",
     "ts_case": "gives AI mode priority over slash-path completion after double Space",
     "calls": [
       {
@@ -51,7 +51,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/commandBarInputMode.test.ts",
     "ts_case": "keeps AI mode active and searches chats after typing beyond the double-Space switch",
     "calls": [
       {
@@ -103,7 +103,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/commandBarInputMode.test.ts",
     "ts_case": "preserves regular AI activation when two spaces are trailing",
     "calls": [
       {
@@ -129,7 +129,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/commandBarInputMode.test.ts",
     "ts_case": "does not treat an ordinary internal double-space query as AI mode",
     "calls": [
       {
@@ -155,7 +155,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/commandBarInputMode.test.ts",
     "ts_case": "preserves leading-Space AI prompts without treating them as directories",
     "calls": [
       {
@@ -204,7 +204,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/commandBarInputMode.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/commandBarInputMode.test.ts",
     "ts_case": "returns null boot for empty AI mode prompt so newChat can be opened",
     "calls": [
       {
@@ -250,7 +250,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherArgument.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherArgument.test.ts",
     "ts_case": "retains numeric input filtering and range validation",
     "calls": [
       {
@@ -389,7 +389,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/optimisticSearch.test.ts",
     "ts_case": "puts the matching app and extension surface above generic files",
     "calls": [
       {
@@ -482,7 +482,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/optimisticSearch.test.ts",
     "ts_case": "matches corrected layouts in the first frame without unrelated cached results",
     "calls": [
       {
@@ -866,7 +866,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/optimisticSearch.test.ts",
     "ts_case": "preserves literal Russian matches and supports the reverse layout",
     "calls": [
       {
@@ -1020,7 +1020,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/optimisticSearch.test.ts",
     "ts_case": "prefers a literal match over an equally relevant corrected match",
     "calls": [
       {
@@ -1080,7 +1080,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/optimisticSearch.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/optimisticSearch.test.ts",
     "ts_case": "does not carry an unrelated high-score result into a typed query",
     "calls": [
       {
@@ -1129,7 +1129,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "records a submitted launcher query without surrounding whitespace",
     "calls": [
       {
@@ -1143,7 +1143,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "preserves AI mode when normalizing a recalled prompt",
     "calls": [
       {
@@ -1165,7 +1165,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "leaves terminal commands to terminal history",
     "calls": [
       {
@@ -1179,7 +1179,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "keeps only the latest query",
     "calls": [
       {
@@ -1194,7 +1194,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "only recalls the last query after ArrowUp reaches the top search result",
     "calls": [
       {
@@ -1239,7 +1239,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "leaves ArrowDown for result navigation",
     "calls": [
       {
@@ -1258,7 +1258,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "never recalls a launcher query from Deep Search mode",
     "calls": [
       {
@@ -1277,7 +1277,7 @@
     ]
   },
   {
-    "ts_file": "src/renderer/launcherQueryHistory.test.ts",
+    "ts_file": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
     "ts_case": "safely parses persisted history",
     "calls": [
       {

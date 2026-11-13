@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{io::Read, path::Path};
 
-pub const GPUI_REV: &str = "c84af5b99cbc366d675064e52b23664a015b6e35";
+pub const GPUI_REV: &str = env!("TEZBAR_NATIVE_GPUI_POLICY_REV");
+pub const RUST_VERSION: &str = env!("TEZBAR_NATIVE_RUST_POLICY_VERSION");
 const START: &[u8] = b"\0TEZBAR_NATIVE_BUILD_V2\0";
 const END: &[u8] = b"\0TEZBAR_NATIVE_BUILD_END\0";
 const RECORD_LIMIT: usize = 4096;
@@ -12,10 +13,23 @@ const RECORD_LIMIT: usize = 4096;
 // remove it. Feature values come from this compilation, never from a sidecar.
 macro_rules! record {
     ($bench:literal, $shaders:literal) => {
-        concat!("\0TEZBAR_NATIVE_BUILD_V2\0{\"schema\":2,\"version\":\"", env!("CARGO_PKG_VERSION"),
-            "\",\"sourceCommit\":\"", env!("TEZBAR_NATIVE_GIT_SHA"), "\",\"dirty\":", env!("TEZBAR_NATIVE_DIRTY"),
-            ",\"benchControl\":", $bench, ",\"runtimeShaders\":", $shaders,
-            ",\"gpuiRev\":\"c84af5b99cbc366d675064e52b23664a015b6e35\",\"rustVersion\":\"1.98.1\"}\0TEZBAR_NATIVE_BUILD_END\0")
+        concat!(
+            "\0TEZBAR_NATIVE_BUILD_V2\0{\"schema\":2,\"version\":\"",
+            env!("CARGO_PKG_VERSION"),
+            "\",\"sourceCommit\":\"",
+            env!("TEZBAR_NATIVE_GIT_SHA"),
+            "\",\"dirty\":",
+            env!("TEZBAR_NATIVE_DIRTY"),
+            ",\"benchControl\":",
+            $bench,
+            ",\"runtimeShaders\":",
+            $shaders,
+            ",\"gpuiRev\":\"",
+            env!("TEZBAR_NATIVE_GPUI_REV"),
+            "\",\"rustVersion\":\"",
+            env!("TEZBAR_NATIVE_RUST_VERSION"),
+            "\"}\0TEZBAR_NATIVE_BUILD_END\0"
+        )
     };
 }
 #[cfg(all(feature = "bench-control", feature = "runtime-shaders"))]
@@ -52,7 +66,7 @@ impl BuildMetadata {
             || self.dirty
             || self.bench_control
             || self.gpui_rev != GPUI_REV
-            || self.rust_version != "1.98.1"
+            || self.rust_version != RUST_VERSION
         {
             return Err("Native binary provenance mismatch".into());
         }
@@ -63,6 +77,16 @@ pub fn current() -> BuildMetadata {
     let bytes = std::hint::black_box(EMBEDDED).as_bytes();
     serde_json::from_slice(&bytes[START.len()..bytes.len() - END.len()])
         .expect("compile-time native metadata")
+}
+
+#[cfg(test)]
+mod observed_identity_tests {
+    #[test]
+    fn metadata_records_observed_build_identity() {
+        let value = super::current();
+        assert_eq!(value.rust_version, env!("TEZBAR_NATIVE_RUST_VERSION"));
+        assert_eq!(value.gpui_rev, env!("TEZBAR_NATIVE_GPUI_REV"));
+    }
 }
 
 /// Memory stays bounded independently of executable size. Only one complete

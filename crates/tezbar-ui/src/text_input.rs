@@ -139,6 +139,7 @@ pub struct ByteSelection {
     pub reversed: bool,
 }
 pub struct TextInput {
+    native_clipboard: bool,
     external_edits: bool,
     external_action_selection: Option<ByteSelection>,
     styled_ranges: Vec<StyledRange>,
@@ -165,9 +166,16 @@ pub struct TextInput {
 pub struct Committed(pub String);
 impl gpui::EventEmitter<Committed> for TextInput {}
 impl TextInput {
+    /// Plain native field with clipboard operations captured at the input gesture.
+    pub fn new_native(cx: &mut Context<Self>) -> Self {
+        let mut input = Self::new(cx);
+        input.native_clipboard = true;
+        input
+    }
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self {
             options: FieldOptions::default(),
+            native_clipboard: false,
             external_edits: false,
             external_action_selection: None,
             styled_ranges: Vec::new(),
@@ -555,24 +563,34 @@ impl TextInput {
         window.show_character_palette();
     }
 
-    fn paste(&mut self, _: &Paste, _: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(ClipboardEffect::Read);
+    fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
+        if self.native_clipboard {
+            if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+                self.paste_text(&text, window, cx);
+            }
+        } else {
+            cx.emit(ClipboardEffect::Read);
+        }
+    }
+    fn write_clipboard(&self, cx: &mut Context<Self>) {
+        let text = self.content[self.selected_range.clone()].to_string();
+        if self.native_clipboard {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+        } else {
+            cx.emit(ClipboardEffect::Write(text));
+        }
     }
     pub fn paste_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         self.replace_text_in_range(None, text, window, cx);
     }
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
         if !self.options.password && !self.selected_range.is_empty() {
-            cx.emit(ClipboardEffect::Write(
-                self.content[self.selected_range.clone()].to_string(),
-            ));
+            self.write_clipboard(cx);
         }
     }
     fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
         if !self.options.password && !self.selected_range.is_empty() {
-            cx.emit(ClipboardEffect::Write(
-                self.content[self.selected_range.clone()].to_string(),
-            ));
+            self.write_clipboard(cx);
             self.replace_text_in_range(None, "", window, cx);
         }
     }
@@ -1430,6 +1448,9 @@ impl Render for TextInput {
             )
             .border(if self.options.border { px(1.) } else { px(0.) })
             .rounded(px(7.))
+            .when(self.options.border, |d| {
+                d.px(px(10. * t.zoom)).py(px(5. * t.zoom)).bg(t.field)
+            })
             .border_color(if self.options.error.is_some() {
                 t.danger
             } else if self.focus_handle.is_focused(window) {
@@ -2115,6 +2136,76 @@ mod rich_marked_style_tests {
                 assert_eq!(i.content.as_ref(), "one 世界");
                 assert_eq!(i.styled_ranges[0].range, 4..10);
             })
+        });
+    }
+}
+
+#[cfg(test)]
+mod native_clipboard_tests {
+    use super::*;
+    use ::core::prelude::v1::test;
+
+    #[gpui::test]
+    fn native_clipboard_keypresses_preserve_unicode_selection_and_password(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let (field, cx) = cx.add_window_view(|_, cx| TextInput::new_native(cx));
+        cx.update(|w, cx| {
+            bind_keys(cx);
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string("Қазақ 😀".into()));
+            field.update(cx, |f, cx| {
+                f.set_text("replace", w, cx);
+                w.focus(&f.focus_handle, cx);
+            });
+        });
+        cx.run_until_parked();
+        let keys = if cfg!(target_os = "macos") {
+            "cmd-a cmd-v"
+        } else {
+            "ctrl-a ctrl-v"
+        };
+        cx.simulate_keystrokes(keys);
+        cx.update(|_, cx| assert_eq!(field.read(cx).content.as_ref(), "Қазақ 😀"));
+        cx.update(|_, cx| {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string("sentinel".into()))
+        });
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-a cmd-c"
+        } else {
+            "ctrl-a ctrl-c"
+        });
+        cx.update(|_, cx| {
+            assert_eq!(
+                cx.read_from_clipboard().unwrap().text().unwrap(),
+                "Қазақ 😀"
+            )
+        });
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-x"
+        } else {
+            "ctrl-x"
+        });
+        cx.update(|_, cx| assert!(field.read(cx).content.is_empty()));
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-v"
+        } else {
+            "ctrl-v"
+        });
+        cx.update(|_, cx| field.update(cx, |f, _| f.options.password = true));
+        cx.update(|_, cx| {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string("sentinel".into()))
+        });
+        cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-a cmd-c cmd-x"
+        } else {
+            "ctrl-a ctrl-c ctrl-x"
+        });
+        cx.update(|_, cx| {
+            assert_eq!(field.read(cx).content.as_ref(), "Қазақ 😀");
+            assert_eq!(
+                cx.read_from_clipboard().unwrap().text().unwrap(),
+                "sentinel"
+            );
         });
     }
 }

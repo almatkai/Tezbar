@@ -194,7 +194,7 @@ def clean_fixture_env():
     for key in list(env):
         if key.startswith(("TEZBAR_HOST_TEST_", "TEZBAR_LAUNCHER_")):
             del env[key]
-    env.update(CARGO_BUILD_JOBS="1", RUST_TEST_THREADS="1", RUSTUP_TOOLCHAIN="1.85.0")
+    env.update(CARGO_BUILD_JOBS="1", RUST_TEST_THREADS="1", RUSTUP_TOOLCHAIN="1.98.1")
     return env
 
 
@@ -256,8 +256,8 @@ def bounded(argv, cwd, env, log, timeout):
 def prepare(repo, out, local_releases=None, build_sdk=True):
     target = native_target()
     out.mkdir(parents=True, exist_ok=False)
-    catalog = load(repo / "src-tauri/src/native_core/extensions/v2_catalog.json")
-    acquisition = load(repo / "src-tauri/src/native_core/extensions/acquisition.json")
+    catalog = load(repo / "crates/tezbar-core/src/extensions/v2_catalog.json")
+    acquisition = load(repo / "crates/tezbar-core/src/extensions/acquisition.json")
     require(acquisition.get("com.tezbar.native.port-manager") == "local-import-only", "Private acquisition policy changed")
     public = [m for m in catalog if m["slug"] in PUBLIC]
     require({m["slug"] for m in public} == PUBLIC and len(public) == 10, "Public catalog changed")
@@ -306,11 +306,11 @@ def prepare(repo, out, local_releases=None, build_sdk=True):
         require(head == SDK_REV, "SDK revision mismatch")
         import tomllib
         require(tomllib.loads((sdk_dir / "Cargo.toml").read_text())["package"]["version"] == "0.1.1", "SDK version mismatch")
-        bounded(["cargo", "+1.85.0", "build", "--locked", "--bin", "sdk-fixture", "-j1"], sdk_dir,
+        bounded(["cargo", "+1.98.1", "build", "--locked", "--bin", "sdk-fixture", "-j1"], sdk_dir,
                 {**env, "CARGO_TARGET_DIR": str(out / "sdk-target")}, out / "sdk-build.log", 900)
         sdk = out / "sdk-target/debug" / ("sdk-fixture.exe" if os.name == "nt" else "sdk-fixture")
         binary_header(sdk.read_bytes(), target)
-    save(out / "fixtures.json", {"target": target, "catalogSha256": sha(repo / "src-tauri/src/native_core/extensions/v2_catalog.json"),
+    save(out / "fixtures.json", {"target": target, "catalogSha256": sha(repo / "crates/tezbar-core/src/extensions/v2_catalog.json"),
                                  "sdkRevision": SDK_REV if sdk else None, "sdk": str(sdk) if sdk else None,
                                  "sdkSha256": sha(sdk) if sdk else None, "packages": records})
     return load(out / "fixtures.json")
@@ -319,7 +319,7 @@ def prepare(repo, out, local_releases=None, build_sdk=True):
 def fixture_inputs(repo, out, need_sdk=False):
     info = load(out / "fixtures.json")
     require(info["target"] == native_target(), "Fixture target mismatch")
-    require(info["catalogSha256"] == sha(repo / "src-tauri/src/native_core/extensions/v2_catalog.json"), "Catalog changed after preparation")
+    require(info["catalogSha256"] == sha(repo / "crates/tezbar-core/src/extensions/v2_catalog.json"), "Catalog changed after preparation")
     for r in info["packages"]:
         require(sha(r["manifest"]) == r["manifestSha256"] and sha(r["archive"]) == r["archiveSha256"], "Prepared fixture changed")
         verify_package(load(r["manifest"]), r["archive"], info["target"])
@@ -354,7 +354,7 @@ def rust_tests(repo, out, published=True):
     require(real_cargo is not None, "Cargo unavailable")
     shim = out / "cargo-shim"
     shim.mkdir()
-    bounded(["rustc", "+1.85.0", "--edition=2021", str(repo / "scripts/ci-cargo-one-job.rs"),
+    bounded(["rustc", "+1.98.1", "--edition=2021", str(repo / "scripts/ci-cargo-one-job.rs"),
              "-o", str(shim / ("cargo.exe" if os.name == "nt" else "cargo"))], repo, env, out / "cargo-shim.log", 60)
     env.update(TEZBAR_CI_REAL_CARGO=real_cargo, PATH=str(shim) + os.pathsep + env["PATH"])
     if published:
@@ -362,8 +362,8 @@ def rust_tests(repo, out, published=True):
                                           by_slug["google-calendar"]["manifest"], by_slug["google-calendar"]["archive"]))))
     log = out / "rust-library.log"
     try:
-        bounded([real_cargo, "+1.85.0", "test", "--lib", "--locked", "-j1", "--", "--test-threads=1", "--nocapture"],
-                repo / "src-tauri", env, log, 1800)
+        bounded([real_cargo, "+1.98.1", "test", "--lib", "--locked", "--offline", "-p", "tezbar-core", "-j1", "--", "--test-threads=1", "--nocapture"],
+                repo, env, log, 1800)
     finally:
         text = log.read_text(encoding="utf-8", errors="replace")
         print(text, end="")
@@ -580,7 +580,7 @@ def cli(repo, out, binary):
         results.append({"label": label, "expectedExit": expected})
         return value
     initial = run("list-empty", ["--extensions-v2-list", "--json"])
-    catalog = load(repo / "src-tauri/src/native_core/extensions/v2_catalog.json")
+    catalog = load(repo / "crates/tezbar-core/src/extensions/v2_catalog.json")
     require(len(initial) == len(catalog) and all(not m["installed"] for m in initial), "CLI profile not empty")
     port = next(m for m in initial if m["slug"] == "port-manager")
     require(port["acquisition"]["type"] == "local-import-only" and port["status"] == "unavailable", "Private acquisition metadata mismatch")

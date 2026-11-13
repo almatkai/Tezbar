@@ -45,8 +45,10 @@ impl From<&Row> for Pin {
         }
     }
 }
+/// ⌥1…9, ⌥0, ⌥-, ⌥= (React `MAX_PINNED_COMMANDS`).
+pub const MAX_PINS: usize = 12;
 pub fn normalize_pins(pins: &mut Vec<Pin>) {
-    pins.truncate(12);
+    pins.truncate(MAX_PINS);
     for (i, p) in pins.iter_mut().enumerate() {
         p.slot = i + 1;
     }

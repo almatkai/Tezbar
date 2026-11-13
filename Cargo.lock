@@ -6459,6 +6459,7 @@ dependencies = [
  "sha2",
  "simplecss",
  "snap",
+ "svgtypes",
  "tempfile",
  "tezbar-core",
  "tezbar-host",

@@ -525,7 +525,7 @@ impl PlatformCore {
                 }
                 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                 open_target(target).await?;
-                Ok(json!({"ok":true,"message":"Opened application"}))
+                Ok(json!({"ok":true}))
             }
             "core:platform:open-with-app" => {
                 let path = value["path"].as_str().ok_or("File path required")?;
@@ -550,7 +550,21 @@ impl PlatformCore {
                     return r;
                 }
                 #[cfg(target_os = "macos")]
-                output("/usr/bin/open", &["-a", app, path], 10).await?;
+                {
+                    let app_path = std::path::Path::new(app);
+                    let cli = app_path.join("Contents/Resources/app/bin/code");
+                    let spawned_cli = if cli.is_file() {
+                        tokio::process::Command::new(&cli)
+                            .arg(path)
+                            .spawn()
+                            .is_ok()
+                    } else {
+                        false
+                    };
+                    if !spawned_cli {
+                        output("/usr/bin/open", &["-a", app, path], 10).await?;
+                    }
+                }
                 #[cfg(target_os = "windows")]
                 {
                     let mut command = windows_open_with_command(app, path);
@@ -569,7 +583,7 @@ impl PlatformCore {
                         .spawn()
                         .map_err(|e| e.to_string())?;
                 }
-                Ok(json!({"ok":true,"message":"Opened file"}))
+                Ok(json!({"ok":true}))
             }
             "core:platform:reveal-file" => {
                 if text.is_empty() || text.contains('\0') {

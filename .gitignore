@@ -75,3 +75,7 @@ CLAUDE.md
 
 # Native application workspace build artifacts
 /target/
+
+# Retained build cache from the retired Tauri checkout
+/src-tauri/target/
+/src-tauri/gen/

@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-09",
+  "head": "0228b4fa289d5fce78bc3cf179575c4011c59f7c",
+  "source_state": "dirty; scoped repair amid separate migration WIP; no clean artifact claim",
+  "owned_inputs": {
+    "apps/tezbar/build.rs": "2e5946f621e7b1f2474193a70b757f6a43002e612bb9cd457cddf34f52dd8925",
+    "apps/tezbar/src/app.rs": "3d4f0cc58177deb94f1150730d9910fcd7fab87786b59c94cf69c25bd9333f2a",
+    "apps/tezbar/src/app/m11.rs": "7b08cb0e15daebab7b77bc9b20004186308e2d59bb17a422775ca19ecd90ff71",
+    "apps/tezbar/src/app/m8_tests.rs": "97d1a16cea9749db517765def45c1fbcdb618062226371b718f687a5955e5b4e",
+    "apps/tezbar/src/app/production_launch/build_metadata.rs": "d2b65d1b54597fa0e7fa58099e031348025a315e36ee76b058a668be886ad54a",
+    "apps/tezbar/src/app/production_launch/bundle_validation.rs": "a7aba7f5b2bab170822861789b7c3906938b5c7b92b37e7287a1b80f160f4807",
+    "crates/tezbar-update/src/native.rs": "a80ffbfe2a57afbe0189cb7a5959ccef9765cace06302349ade4cf1645f40596",
+    "docs/native-m11/integration/prepare-cutover.py": "2a906cbeeda205e24cb9ecb45debace1d90765b5f99448acae27cba17747bef2",
+    "scripts/native/README.md": "532e474062013b51d727cdc5284f798a326a138974054b6a10df220ef717083e",
+    "scripts/native/admission-fixture.test.mjs": "e5606325e8ba528036f5972cf52b03bd259e176247288641e72318c18b2c1656",
+    "scripts/native/build-identity.test.mjs": "200ea1a3699a75cf45abafbe55d01d233e9032b96840b2e6b4dce8065e431ce2",
+    "scripts/native/build-metadata.mjs": "8758e58b19e2210f814b7c9ff18e828186eb20d0f07c8721f98e35a10394a8c8",
+    "scripts/native/cutover.test.py": "b00ac09c7b5e496eff01408da2a15d1cda7ad9065510e133547a86a525ec8fce",
+    "scripts/native/package-macos.mjs": "94d894cec5363cdb24a89c22e67f7ce71df1a7f3039367c05746eafc8545ca3d",
+    "scripts/native/provenance.test.mjs": "04e8f1c686c4217c26867464732370fcfe58eb1473c7b0b514559bdad9c3921b"
+  },
+  "gates": {
+    "native_targeted": {
+      "passed": 25,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 496
+    },
+    "node": {
+      "passed": 8,
+      "failed": 0
+    },
+    "identity_pre_repair": {
+      "passed": 0,
+      "failed": 1,
+      "expected_red": true
+    },
+    "python": {
+      "passed": 3,
+      "failed": 0
+    },
+    "updater_185": {
+      "passed": 43,
+      "failed": 0,
+      "ignored": 1
+    },
+    "updater_185_added_retry_test": {
+      "passed": 1,
+      "failed": 0
+    },
+    "cutover_successor": {
+      "relocations": 282,
+      "binary_copies": 52,
+      "state": "NOT_APPLIED_NOT_RELEASE_READY"
+    }
+  },
+  "native_final_compile_log_sha256": "32d43651a701d9cb9d6bb78a398918a29a0bbdf1c1e9ab86686309d3ee451912",
+  "native_final_compiler_stream_sha256": "389d9febc21bf7e4b08f302663d4042a934d95f40dad2d183c5db28d557b35c3",
+  "successor_patch_sha256": "d301ad0fbe3ffcd63906e4b3c52333c5b45beb124c932cda1449a6bd9465e7d8",
+  "evidence": {
+    "README.md": "07afd64e45a36185ec6a65d30b76635971d8ac67b54fa353e44afaa405e17350",
+    "cutover-successor.log": "efd81d370621effdf0dfb9b4cd98b9166908aeed08c0d56cb63f79ddfcecc1e0",
+    "cutover-tests.log": "154e45a7e5d9f52be8a99f3ff7f5988e77514f15aeb0fdb9dd86f81b9f0649a6",
+    "failed-compile-errors.json": "79b58c99b01804ae1ffd8ad41a71ac918dbb22e6001bbb5cc953231765b1cf0d",
+    "final-own-inputs.json": "bdbd7dd1a86137f1e097c4404429f8b8a930c9e50b578224eaf7fca3219ff5a5",
+    "final-test-binary.json": "7612c55bbd60cbd70174eba5f3f55d8bd4e2c0a2d0ae58931779a22edafd9ff1",
+    "identity-baseline-red.log": "ad10f671183b846f9ed936e5d52d1ad6909b63057754ff71003cb669a5bd079c",
+    "native-compile.log.failed-path": "021451734a5342e0a8bec30782411aa8759e84811a0af4bf452bddc190ba5702",
+    "native-compile.log.failed-test-macro": "830028cf0861979c105ec9cf3c52c355ed7bc761d9f40d8e158e7d4d999df924",
+    "native-compile.log.failed-types": "464c124e6a1884d73e07c7d17842b67478ddab7ca6c2ce53650625f037764460",
+    "native-final-compile.log": "32d43651a701d9cb9d6bb78a398918a29a0bbdf1c1e9ab86686309d3ee451912",
+    "native-final-targeted.log": "0d5eb0816c5cdd1220ec7becca8eb5a28ee59ad3976416c5f852c1f9938a3522",
+    "node-tests.log": "2300dbea2e205c0fbafc9c8dc650160cd6131cba03cc38cdc81feace4496d4ce",
+    "node-tests.log.failed-path": "bdd777eeb90adce696d37742d9e406deef34e2df0f003eed774789b1ffb5e23b",
+    "review-input.md": "72e19778a8e9bcd30dc52d9012330a8e4a96dc90745fbaa7f10bbfb8fe944d9d",
+    "rustfmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "successor-inventory.json": "c7ee0873d6030732d845a1c407d3c7f56be54205fbab646debe71840c1078af8",
+    "updater-msrv-retry.log": "4cacf56c93defbab6f15f806a6893ebcd4a0d6b2d1e83ed1b57ae5b5ae0f0712",
+    "updater-msrv.log": "7384a607bc50797c154edb342e561f62ae622d459b0e24a49cc21672cb90132a"
+  }
+}

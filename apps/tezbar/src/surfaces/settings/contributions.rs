@@ -267,6 +267,12 @@ impl SettingsContent {
                 }
                 Some(Ok(e))
             }
+            I::UseAgentsMd(value) => {
+                self.contributions.display["useAgentsMd"] = json!(value);
+                self.contributions
+                    .edit_instructions(self.value("instructions"));
+                Some(Ok(self.contributions.save_instructions(value)))
+            }
             I::Instructions => {
                 self.contributions
                     .edit_instructions(self.value("instructions"));

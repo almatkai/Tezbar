@@ -16,8 +16,8 @@ seed=packages(subprocess.check_output(['git','show',f'{BASE}:src-tauri/Cargo.loc
 a=versions(seed)
 report={'baseline':BASE,'locks':{}}
 failed=False
-for path in ['Cargo.lock','src-tauri/Cargo.lock','prototypes/native-launcher/Cargo.lock']:
-    data=(ROOT/path).read_bytes(); current=packages(data.decode()); b=versions(current)
+for path, current_path in [('Cargo.lock','Cargo.lock'), ('src-tauri/Cargo.lock','docs/native-m11/legacy-tauri-archive/Cargo.lock'), ('prototypes/native-launcher/Cargo.lock','prototypes/native-launcher/Cargo.lock')]:
+    data=(ROOT/current_path).read_bytes(); current=packages(data.decode()); b=versions(current)
     changes=[dict(name=name,before=a[name],after=b[name]) for name in sorted(a.keys() & b.keys()) if a[name]!=b[name]]
     watch=[c for c in changes if c['name'] in WATCH]
     registry_changes=sorted(set(k for k in seed if k[2].startswith('registry+')) ^ set(k for k in current if k[2].startswith('registry+')))
@@ -28,7 +28,7 @@ for path in ['Cargo.lock','src-tauri/Cargo.lock','prototypes/native-launcher/Car
     if domain_seed.returncode==0:
         domain=packages(domain_seed.stdout)
         domain_registry_changes=sorted(set(k for k in domain if k[2].startswith('registry+')) ^ set(k for k in current if k[2].startswith('registry+')))
-    report['locks'][path]={'sha256':hashlib.sha256(data).hexdigest(),'watchlist':{name:b.get(name) for name in sorted(WATCH)},'watchlist_changes':watch,'shared_registry_changes':changes,'registry_set_changes':registry_changes,'registry_added':registry_added,'registry_removed':registry_removed,'domain_baseline_registry_set_changes':domain_registry_changes,'path_packages':sorted(k[:2] for k in current if k[2]=='path')}
+    report['locks'][path]={'current_path':current_path,'sha256':hashlib.sha256(data).hexdigest(),'watchlist':{name:b.get(name) for name in sorted(WATCH)},'watchlist_changes':watch,'shared_registry_changes':changes,'registry_set_changes':registry_changes,'registry_added':registry_added,'registry_removed':registry_removed,'domain_baseline_registry_set_changes':domain_registry_changes,'path_packages':sorted(k[:2] for k in current if k[2]=='path')}
     failed |= bool(watch) or (path=='src-tauri/Cargo.lock' and bool(registry_changes)) or (path=='prototypes/native-launcher/Cargo.lock' and bool(domain_registry_changes))
 print(json.dumps(report,indent=2))
 raise SystemExit(1 if failed else 0)

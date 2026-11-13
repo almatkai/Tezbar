@@ -54,7 +54,8 @@ pub enum Effect {
     },
     Release(String),
 }
-/// Absolute legacy icons require explicit adapter-provided authorization. Relative assets stay in the extension root.
+/// Absolute legacy icons require explicit adapter-provided authorization.
+/// SDK asset names are relative to assets/; explicit assets/ paths keep that root.
 pub fn resolve(
     raw: &str,
     extension_root: &Path,
@@ -87,7 +88,7 @@ pub fn resolve(
     if let Ok(u) = url::Url::parse(raw) {
         match u.scheme() {
             "https" if u.username().is_empty() && u.password().is_none() => {
-                return Ok(Source::Remote(u.into()))
+                return Ok(Source::Remote(u.into()));
             }
             "file" => {
                 let p = u.to_file_path().map_err(|_| "Invalid file URI")?;
@@ -113,7 +114,12 @@ pub fn resolve(
     }) {
         return Err("Image path escapes extension");
     }
-    local(extension_root.join(path), extension_root, allowed_legacy)
+    let path = if path.starts_with("assets") {
+        extension_root.join(path)
+    } else {
+        extension_root.join("assets").join(path)
+    };
+    local(path, extension_root, allowed_legacy)
 }
 fn local(path: PathBuf, root: &Path, allowed: &BTreeSet<PathBuf>) -> Result<Source, &'static str> {
     if path.components().any(|c| matches!(c, Component::ParentDir)) {

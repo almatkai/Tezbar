@@ -180,6 +180,8 @@ impl Launcher {
                         cwd: s.cwd.clone(),
                         running: s.running,
                         active: view.active_session() == Some(s.session_id.as_str()),
+                        last_command: s.last_command.clone().or_else(|| s.initial_command.clone()),
+                        updated_at: s.metadata.get("updatedAt").and_then(Value::as_u64),
                     })
                     .collect()
             })

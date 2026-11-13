@@ -1,0 +1,63 @@
+{
+  "purpose": "Supplemental named inputs and fresh source query, not a complete compiled-input set or full-tree freeze",
+  "worker_first_party_inputs": {
+    "src/main/extensionWorker/framing.ts": "5cb589a0d2d5c5e63d1e22c6b47f4b60a21482bca943b140cfec64752423b05c",
+    "src/main/extensionWorker/host.ts": "1006d76af9c6eee74aff897c92fae1861d0d011e142b9cdc42442356aef5567e",
+    "src/main/extensionWorker/services.ts": "27aa655c915ace0f74fe71a23411c428e70419ebb5106980b8030cd7422d870a",
+    "src/shared/extensionRepository.ts": "eca9e562f40ebf95692001e02fb49acb1fd0363b7ec10682a3f9eecd4eb35b90",
+    "src/main/extensionWorker/desktop.ts": "3d9142c2f358a9d13677d9580d6c6975f18e42c9260af4fd4565899f4f77f8c2",
+    "src/main/better-sqlite3-shim.ts": "003285d02b563474ccaabdd3af9daccc82ab8ea0df12a1b212097d81e18a1714",
+    "src/main/extension-sql.ts": "57d05d54c3e6ae526a4c12d0e7253ddcb79f7b3574767fbdd87ec7432eb36ec7",
+    "src/main/extensionWorker/clipboard.ts": "b8ff17943545b6f56e7e8fdbdd419ffd53354de0b8ec9634766063264e0e9c6b",
+    "src/main/extension-confirm-alert.ts": "fb3dc3eeaaddc759b83a6e8e74878f03982d7e1c3c12767bf21a803426f6be11",
+    "src/main/powershell-script.ts": "d3d98fbbe3382a2124bbe9a5b87c3424291cc6a28e52d1614812c6f415cc95c8",
+    "src/main/esbuild-runtime.ts": "cb5139a6127fdae73d061e6e0e7fe1124b0fb3f9c557e338f3fc019ac925e318",
+    "src/main/extensionWorker/windowState.ts": "ad1b617749efea3c5f9d6d457cb0a74106ca644c6ca5d1dda88197a00b181a07",
+    "src/main/extension-platform.ts": "45da9ecd8fbabc99527cf3955c22ab371ba0aa0fcd839a6930c35cffde231db7",
+    "src/main/extension-builder.ts": "eb27592a5faf84872d1bed32438b4032ecec633f66009e6c6ad57b9f25fb2877",
+    "src/main/extension-api.ts": "ae4efa46b600bf12f396c56d3916a43e561bc6101fc78481868afff931a26a1c",
+    "src/main/bun-manager.ts": "069efe2fa96a819e49b2d0de111cc1992bfb4968d94872aeaa73592ca9a490a8",
+    "src/shared/lovedExtensions.ts": "93abc8a2e814dc56b964b205f1ab9d05d77435568c765f59656ee14b6533fb11",
+    "src/main/extension-registry.ts": "a92d43fc79748e6bae7aec81cdb19af03b435c5106aba600d77025624c247606",
+    "src/main/extension-runner.ts": "f184b3ed123cd80a83e16fafa2def25a339105d67400c4ab41cda6f26cc5e348",
+    "src/main/extensions/raycastShim.ts": "3d14e9c0002312455fcdd5008c3bcdb2abee6b4dda26100d605b509ac0271f11",
+    "src/main/extensions/service.ts": "cbecfd493153490b6f29f95725e3723307050117cb82afabfe32717d8089440a",
+    "src/main/extensionWorker/main.ts": "20f0fbd84c739081858c5bde725d8698e4fffc2f56e636fe8f8e9e1bca1b905b"
+  },
+  "additional_include_str_inputs": {
+    "src-tauri/tauri.conf.json": "b1c55c62710fc28847ee016005e07bd6a12d7afdd24b46c81100f4859a2e24ed",
+    "src-tauri/runtime/embedding-macos-arm64.json": "df3561b331d78f0818ad77da022905a66a0d4269318e47c4642ba32364cf6d1c"
+  },
+  "worker_query": {
+    "file": "crates/tezbar-core/src/extension_worker.rs",
+    "query": "RunGrant|in_flight_runs|status_signatures|sdk_status_items|set_sdk_status_item",
+    "source_sha256": "03d8bfc52f29a253ba7afb5ce21509ed3716b59b01f55e3855b293ebc384b184",
+    "matches": [
+      "52:struct RunGrant {",
+      "59:    runs: Arc<Mutex<HashMap<String, RunGrant>>>,",
+      "99:    status_signatures: Arc<Mutex<HashMap<String, Option<(u64, u64)>>>>,",
+      "104:    in_flight_runs: Arc<Mutex<HashMap<String, RunGrant>>>,",
+      "114:            status_signatures: Default::default(),",
+      "117:            in_flight_runs: Default::default(),",
+      "186:                self.in_flight_runs",
+      "191:                        RunGrant {",
+      "201:            runs: self.in_flight_runs.clone(),",
+      "222:                .in_flight_runs",
+      "394:        let in_flight_runs = self.in_flight_runs.clone();",
+      "395:        let status_signatures = self.status_signatures.clone();",
+      "439:                        let runs = in_flight_runs.clone();",
+      "552:                                    if let Ok(mut s) = status_signatures.lock() {",
+      "565:                                let tracked = status_signatures",
+      "699:        let sdk_signatures = self.status_signatures.clone();",
+      "788:        if let Ok(mut signatures) = self.status_signatures.lock() {",
+      "809:            if !self.ctx.host.sdk_status_items() {",
+      "835:                    .status_signatures",
+      "942:                    .status_signatures",
+      "991:                .status_signatures",
+      "999:            if let Err(error) = crate::extensions::process_host::set_sdk_status_item(",
+      "1009:        if let Ok(mut signatures) = self.status_signatures.lock() {"
+    ]
+  },
+  "prepared_json_sha256": "6da666abf5f469b23e72ddf7befcc2db676d5d40e60c4f4a0822c94d5656ce91",
+  "worker_bundle_sha256": "8f6a4f700068c5b7e5ac7971817e95c45e12755b504665f31e73c384d09851b6"
+}

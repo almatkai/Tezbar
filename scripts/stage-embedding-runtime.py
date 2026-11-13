@@ -32,7 +32,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('package', type=Path)
     a = p.parse_args()
-    pin = json.loads((ROOT/'src-tauri/runtime/embedding-macos-arm64.json').read_text())
+    pin = json.loads((ROOT/'packaging/runtime/embedding-macos-arm64.json').read_text())
     verify(a.package, pin)
     destination = ROOT/'build/embedding-runtime/resources/embedding-runtime.zip'
     destination.parent.mkdir(parents=True, exist_ok=True)

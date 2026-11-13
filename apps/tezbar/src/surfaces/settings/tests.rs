@@ -95,6 +95,9 @@ impl SettingsTransport for Fixture {
                     json!({"user_code":"SYNTHETIC","verification_uri":"https://example.invalid/device","interval":1}),
                 ),
                 "ai-extensions:oauth-start" => Ok(json!({"url":"https://fixture.invalid/oauth"})),
+                "ai-accounts:antigravity:sign-in" => Ok(
+                    json!({"url":"https://accounts.google.com/o/oauth2/v2/auth?state=fixture","status":"pending"}),
+                ),
                 "llm-list-models" => Ok(json!([{"id":"discovered","contextWindow":1234}])),
                 _ => Ok(json!({"ok":true})),
             }
@@ -183,6 +186,79 @@ fn all_eight_native_tabs_hydrate_without_writes_and_live_navigation(cx: &mut Tes
     cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(&intent, w, cx)));
     settle(&rt, cx);
     assert_eq!(view.read_with(cx, |v, _| v.tab), Tab::Knowledge);
+}
+#[gpui::test]
+fn permissions_tab_shows_controls_directly_and_refreshes_without_requesting_access(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let f = fixture();
+    f.responses.lock().unwrap().insert(
+        "permissions:snapshot",
+        json!({"platform":"macos","statuses":[{
+            "descriptor":{
+                "id":"accessibility","title":"Accessibility",
+                "summary":"App control","rationale":"Needed to automate the active app: move windows, click through menus, send keystrokes to focused controls.",
+                "settingsUrl":"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+                "remediation":"Enable Tezbar in System Settings"
+            },
+            "state":"denied","checkedAt":1
+        }]}),
+    );
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate_tab(Tab::Permissions, w, cx)));
+    settle(&rt, cx);
+    assert!(
+        cx.debug_bounds("permission-Accessibility").is_some(),
+        "Selecting Permissions must show its controls without another Open Permissions action"
+    );
+    assert!(cx.debug_bounds("permission-settings-Accessibility").is_some());
+    let window = cx.update(|window, _| window.window_handle());
+    let mut description_heights = Vec::new();
+    for width in [920., 640.] {
+        cx.simulate_window_resize(window, size(px(width), px(900.)));
+        settle(&rt, cx);
+        let card = cx.debug_bounds("permission-card-Accessibility").unwrap();
+        let description = cx.debug_bounds("permission-description-Accessibility").unwrap();
+        assert!(card.left() >= px(0.) && card.right() <= px(width));
+        let mut previous_right = description.right();
+        for selector in ["permission-Accessibility", "permission-settings-Accessibility"] {
+            let button = cx.debug_bounds(selector).unwrap();
+            assert!(
+                button.left() >= previous_right && button.right() <= card.right(),
+                "Permission controls must stay beside the wrapped description and inside the card at {width}px: card={card:?}, description={description:?}, button={button:?}"
+            );
+            previous_right = button.right();
+        }
+        description_heights.push(description.size.height);
+    }
+    assert!(
+        description_heights[1] >= description_heights[0],
+        "Permission descriptions must wrap when the window narrows"
+    );
+    let snapshots = || {
+        f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(channel, _)| *channel == "permissions:snapshot")
+            .count()
+    };
+    let before = snapshots();
+    let refresh = cx.debug_bounds("settings-Refresh").expect("Refresh permissions");
+    cx.simulate_click(refresh.center(), Modifiers::default());
+    settle(&rt, cx);
+    assert_eq!(snapshots(), before + 1);
+    assert!(
+        !f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(channel, _)| *channel == "permissions:request"),
+        "Viewing or refreshing permission statuses must not request access"
+    );
 }
 #[gpui::test]
 fn actual_text_input_provider_edit_is_scoped_and_survives_initial_read(cx: &mut TestAppContext) {
@@ -987,16 +1063,19 @@ fn native_voice_selects_uninstalled_models_and_keeps_downloads_independent(
         ["local-model-assets"]
     );
     let button = cx
-        .debug_bounds("settings-Use Not installed")
+        .debug_bounds("settings-select-STT Model")
         .unwrap()
         .center();
     cx.simulate_click(button, Modifiers::default());
     settle(&rt, cx);
-    let button = cx.debug_bounds("settings-Delete Partial").unwrap().center();
+    let button = cx.debug_bounds("select-STT Model-0").unwrap().center();
+    cx.simulate_click(button, Modifiers::default());
+    settle(&rt, cx);
+    let button = cx.debug_bounds("voice-delete-partial").unwrap().center();
     cx.simulate_click(button, Modifiers::default());
     settle(&rt, cx);
     let button = cx
-        .debug_bounds("settings-Cancel Downloading download")
+        .debug_bounds("voice-cancel-downloading")
         .unwrap()
         .center();
     cx.simulate_click(button, Modifiers::default());
@@ -1557,7 +1636,7 @@ fn review_function_key_range_requires_exact_f1_through_f24() {
 }
 
 #[gpui::test]
-fn review_scale_stepper_uses_each_click_before_parent_save_returns(cx: &mut TestAppContext) {
+fn review_scale_selector_uses_each_choice_before_parent_save_returns(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let store = SettingsStore::new(fixture());
     let (view, cx) =
@@ -1574,10 +1653,28 @@ fn review_scale_stepper_uses_each_click_before_parent_save_returns(cx: &mut Test
         })
     });
     settle(&rt, cx);
-    let first = cx.debug_bounds("settings-Increase scale").unwrap().center();
+    let menu = cx
+        .debug_bounds("settings-select-Interface scale")
+        .unwrap()
+        .center();
+    cx.simulate_click(menu, Modifiers::default());
+    settle(&rt, cx);
+    let first = cx
+        .debug_bounds("select-Interface scale-6")
+        .unwrap()
+        .center();
     cx.simulate_click(first, Modifiers::default());
     settle(&rt, cx);
-    let second = cx.debug_bounds("settings-Increase scale").unwrap().center();
+    let menu = cx
+        .debug_bounds("settings-select-Interface scale")
+        .unwrap()
+        .center();
+    cx.simulate_click(menu, Modifiers::default());
+    settle(&rt, cx);
+    let second = cx
+        .debug_bounds("select-Interface scale-7")
+        .unwrap()
+        .center();
     cx.simulate_click(second, Modifiers::default());
     settle(&rt, cx);
     assert!((view.read_with(cx, |v, _| v.layout.as_ref().unwrap().1.zoom) - 1.1).abs() < 0.001);
@@ -2076,6 +2173,139 @@ async fn review_nb1_replacement_supersedes_an_already_recorded_rejection() {
     assert_eq!(f.config.lock().unwrap()["raymesHotkey"], json!("Control+J"));
     assert!(!store.owner_pending(owner));
 }
+#[gpui::test]
+fn settings_parity_named_provider_and_model_controls_use_the_durable_queue(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(
+                Action::SetField("provider.name".into(), "Fixture Local".into()),
+                w,
+                cx,
+            );
+            v.action(
+                Action::SetField("provider.url".into(), "http://127.0.0.1:8080/v1".into()),
+                w,
+                cx,
+            );
+            v.action(Action::CreateNamedProvider, w, cx);
+        })
+    });
+    settle(&rt, cx);
+    {
+        // React shape: `{id,title,subtitle}` in the list; the endpoint lives in
+        // `providerConfigs`, which is the only place the core reads it from.
+        let config = f.config.lock().unwrap();
+        assert!(config["customProviders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == "custom:fixture-local" && p["title"] == "Fixture Local"));
+        let endpoint = &config["providerConfigs"]["custom:fixture-local"];
+        assert_eq!(endpoint["baseURL"], "http://127.0.0.1:8080/v1");
+        assert_eq!(endpoint["openaiCompatibleBaseURL"], "http://127.0.0.1:8080/v1");
+        assert_eq!(endpoint["protocol"], "openai-chat");
+    }
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(Action::Provider("ollama".into()), w, cx);
+            v.provider.models = vec![json!({"id":"fixture","capabilities":["tools"]})];
+            v.action(
+                Action::ModelCapability("fixture".into(), "vision".into()),
+                w,
+                cx,
+            );
+            v.action(
+                Action::ModelProtocol("fixture".into(), "openai-responses".into()),
+                w,
+                cx,
+            );
+            v.action(
+                Action::ModelFlag("fixture".into(), "hiddenFromPicker", true),
+                w,
+                cx,
+            );
+        })
+    });
+    settle(&rt, cx);
+    let c = f.config.lock().unwrap();
+    let m = &c["providerModels"]["ollama"][0];
+    assert_eq!(m["id"], "fixture");
+    assert_eq!(m["hiddenFromPicker"], true);
+    assert_eq!(m["protocol"], "openai-responses");
+    assert!(
+        m["capabilities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c == "vision")
+    );
+}
+#[gpui::test]
+fn settings_parity_modal_escape_restores_origin_without_closing_settings(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let store = SettingsStore::new(fixture());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(w, cx);
+            w.focus(&v.tabs[0], cx);
+            v.action(Action::Dialog(Some(SettingsDialog::CustomProvider)), w, cx);
+        })
+    });
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            assert!(v.dialog_focus.is_focused(w));
+            v.key(
+                &KeyDownEvent {
+                    keystroke: Keystroke::parse("escape").unwrap(),
+                    is_held: false,
+                    prefer_character_input: false,
+                },
+                w,
+                cx,
+            );
+            assert!(v.dialog.is_none());
+            assert!(v.tabs[0].is_focused(w));
+        })
+    });
+}
+#[gpui::test]
+fn onboarding_connection_activates_only_after_real_model_discovery(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(Action::Provider("ollama".into()), w, cx);
+            v.action(Action::ConnectOnboarding, w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert_eq!(f.config.lock().unwrap()["provider"], "ollama");
+    assert_eq!(f.config.lock().unwrap()["model"], "discovered");
+    assert!(
+        f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(channel, _)| *channel == "llm-list-models")
+    );
+}
 #[tokio::test]
 async fn review_nb1_another_owners_shortcut_cannot_consume_the_rejection() {
     let f = fixture();
@@ -2100,4 +2330,93 @@ async fn review_nb1_another_owners_shortcut_cannot_consume_the_rejection() {
             .unwrap(),
         Err(store::REJECTED_CHANGE.into())
     );
+}
+
+
+/// Exercises actual dropdown clicks and targeted writes with identical captions.
+/// Normal GPUI TestPlatform does not activate AX; the native macOS window is the
+/// separate crash regression seam. Put each target first in its own fixture so
+/// scrolling/clipped popovers cannot conceal a routing failure.
+#[gpui::test]
+fn model_protocol_dropdowns_with_identical_captions_update_their_own_models(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    for target in ["first", "second"] {
+        let backend = fixture();
+        let order = if target == "first" { ["first", "second"] } else { ["second", "first"] };
+        backend.config.lock().unwrap()["providerModels"]["ollama"] = json!([
+            {"id":order[0]}, {"id":order[1]}
+        ]);
+        let store = SettingsStore::new(backend.clone());
+        let (view, window_cx) = cx.add_window_view(|window, cx| {
+            SettingsContent::new(store, &UiState::default(), window, cx)
+        });
+        let window = window_cx.update(|window, _| window.window_handle());
+        window_cx.simulate_window_resize(window, size(px(1400.), px(1300.)));
+        window_cx.update(|window, cx| {
+            view.update(cx, |view, cx| view.activate_tab(Tab::Ai, window, cx));
+        });
+        settle(&rt, window_cx);
+        assert_eq!(view.read_with(window_cx, |view, _| view.provider.models.len()), 2);
+        let (selector, option) = if target == "first" {
+            ("settings-select-Protocol for first", "select-Protocol for first-1")
+        } else {
+            ("settings-select-Protocol for second", "select-Protocol for second-1")
+        };
+        let trigger = window_cx.debug_bounds(selector).expect("Semantic protocol dropdown");
+        window_cx.simulate_click(trigger.center(), Modifiers::default());
+        settle(&rt, window_cx);
+        assert_eq!(view.read_with(window_cx, |view, _| view.menu.clone()), Some(format!("Protocol for {target}")));
+        let choice = window_cx.debug_bounds(option).expect("Target model protocol choices");
+        window_cx.simulate_click(choice.center(), Modifiers::default());
+        settle(&rt, window_cx);
+        assert!(view.read_with(window_cx, |view, _| view.menu.is_none()));
+        let config = backend.config.lock().unwrap();
+        let models = config["providerModels"]["ollama"].as_array().unwrap();
+        for model in models {
+            if model["id"] == target {
+                assert_eq!(model["protocol"], "openai-chat");
+            } else {
+                assert!(model.get("protocol").is_none(), "An identically captioned neighbour remains unchanged");
+            }
+        }
+    }
+}
+
+#[gpui::test]
+fn antigravity_sign_in_opens_the_core_authorize_url(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| v.action(Action::Account(AccountAction::SignIn), w, cx))
+    });
+    settle(&rt, cx);
+    let calls = f.calls.lock().unwrap().clone();
+    // `open-external-url` admits GitHub only, so the Google page must go through the
+    // trusted open path, and nothing may surface as a Settings error.
+    assert!(
+        calls.iter().any(|(c, a)| *c == "shell:open"
+            && a[0] == "https://accounts.google.com/o/oauth2/v2/auth?state=fixture"),
+        "{calls:?}"
+    );
+    assert!(!calls.iter().any(|(c, _)| *c == "open-external-url"));
+    view.read_with(cx, |v, _| {
+        assert!(v.error.is_none(), "{:?}", v.error);
+        assert_eq!(v.account_status, "pending");
+    });
+}
+#[::core::prelude::v1::test]
+fn trusted_open_rejects_non_https_and_arbitrary_schemes() {
+    use super::request::trusted_open;
+    assert!(trusted_open("https://accounts.google.com/o/oauth2/v2/auth").is_some());
+    assert!(trusted_open("x-apple.systempreferences:com.apple.preference.security").is_some());
+    for bad in ["http://accounts.google.com", "file:///etc/passwd", "javascript:alert(1)", "https://", "https://a b"] {
+        assert!(trusted_open(bad).is_none(), "{bad}");
+    }
 }

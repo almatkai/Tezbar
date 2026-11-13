@@ -6,6 +6,7 @@ use tezbar_ui_model::vault::{Draft, Effect as E, Kind, Vault};
 pub struct VaultScreen {
     pub model: Vault,
     pub(super) icon_open: bool,
+    pub(super) show_note: bool,
     pub(super) icon_query: String,
     pub(super) icon_selected: usize,
     pub supported: Option<bool>,
@@ -54,6 +55,7 @@ pub(super) enum Completion {
 impl VaultScreen {
     pub fn conceal(&mut self) {
         self.revealed = false;
+        self.show_note = false;
         self.icon_open = false;
         self.detail = None;
         self.session += 1;
@@ -211,6 +213,8 @@ impl Utilities {
                             self.vault.error = None;
                             if let Some(id) = self.vault.requested.take() {
                                 self.vault_detail(id, cx);
+                            } else {
+                                self.vault_select_first(cx);
                             }
                         }
                         Err(e) => self.vault.error = Some(e),
@@ -295,6 +299,7 @@ impl Utilities {
                 self.vault.conceal();
                 self.fields.clear();
                 self.field_subscriptions.clear();
+                self.focus.focus(w, cx);
                 self.request(
                     UtilityRequest::VaultLock,
                     super::Completion::Simple,
@@ -394,22 +399,37 @@ impl Utilities {
             }
             Action::VaultKind(kind) => {
                 self.vault.kind = kind;
-                self.vault.selected = 0;
-                self.vault.detail = None;
-                self.vault.revealed = false;
+                self.vault_select_first(cx);
             }
             _ => {}
         }
     }
     fn defer_vault_form(&self, cx: &mut Context<Self>) {
-        if self.vault.model.draft.is_some() {
-            let entity = cx.entity().downgrade();
-            let window = self.window;
-            cx.defer(move |cx| {
-                let _ = window.update(cx, |_, w, cx| {
-                    let _ = entity.update(cx, |this, cx| this.vault_form(w, cx));
+        let entity = cx.entity().downgrade();
+        let window = self.window;
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, w, cx| {
+                let _ = entity.update(cx, |this, cx| {
+                    if this.visible && this.surface == Surface::Vault && this.vault.model.unlocked {
+                        if this.vault.model.draft.is_some() {
+                            this.vault_form(w, cx);
+                        } else {
+                            this.search.focus_handle(cx).focus(w, cx);
+                        }
+                    }
                 });
             });
+        });
+    }
+    pub(super) fn vault_select_first(&mut self, cx: &mut Context<Self>) {
+        self.vault.selected = 0;
+        self.vault.detail = None;
+        self.vault.revealed = false;
+        self.vault.read += 1;
+        if self.vault.model.unlocked {
+            if let Some(id) = self.vault.visible().first().map(|r| r.id.clone()) {
+                self.vault_detail(id, cx);
+            }
         }
     }
     fn vault_form(&mut self, w: &mut Window, cx: &mut Context<Self>) {
@@ -418,13 +438,28 @@ impl Utilities {
         let Some(d) = &self.vault.model.draft else {
             return;
         };
+        self.vault.show_note = !d.note.is_empty();
         let values = [
             ("Name", d.name.clone(), false),
-            ("Value", d.value.clone(), true),
+            ("Value", d.value.clone(), false),
             ("Note", d.note.clone(), false),
         ];
         for (i, (name, text, password)) in values.into_iter().enumerate() {
             let f = self.field(name, &text, i > 0, password, w, cx);
+            f.update(cx, |input, _| {
+                input.configure(FieldOptions {
+                    name: name.into(),
+                    placeholder: match i {
+                        0 => "Name",
+                        1 => "Paste a password, API key, SSH key…",
+                        _ => "Host, user, where it’s used…",
+                    }
+                    .into(),
+                    multiline: i > 0,
+                    password,
+                    ..Default::default()
+                })
+            });
             self.field_subscriptions
                 .push(cx.subscribe(&f, move |this, _, e: &Committed, cx| {
                     match i {
@@ -440,8 +475,8 @@ impl Utilities {
                 }));
             self.fields.push(f);
         }
-        if let Some(first) = self.fields.first() {
-            first.focus_handle(cx).focus(w, cx);
+        if let Some(value) = self.fields.get(1) {
+            value.focus_handle(cx).focus(w, cx);
         }
     }
 }
@@ -500,7 +535,7 @@ impl Utilities {
             field
         });
         self.icon_subscriptions
-            .push(Self::clipboard_subscription(&field, cx));
+            .push(Self::clipboard_subscription(&field, w, cx));
         self.icon_subscriptions
             .push(cx.subscribe(&field, |this, _, e: &Committed, cx| {
                 this.vault.icon_query = e.0.clone();

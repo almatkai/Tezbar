@@ -68,8 +68,8 @@ fn verify_resources(
         || value["sourceCommit"] != binary.source_commit
         || value["benchControl"] != binary.bench_control
         || value["runtimeShaders"] != binary.runtime_shaders
-        || value["gpuiRev"] != "c84af5b99cbc366d675064e52b23664a015b6e35"
-        || value["rustVersion"] != "1.98.1"
+        || value["gpuiRev"] != build_metadata::GPUI_REV
+        || value["rustVersion"] != build_metadata::RUST_VERSION
         || value["dirty"] != false
     {
         return Err("Native resource provenance mismatch".into());

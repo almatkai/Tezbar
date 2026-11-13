@@ -2,6 +2,8 @@
 mod barrier;
 mod contributions;
 pub use barrier::EffectBarrier;
+mod dialogs;
+mod panels;
 mod request;
 mod store;
 #[cfg(test)]
@@ -143,6 +145,7 @@ enum Completion {
     KnowledgeMutation(u64),
     Folder,
     Models(String, u64),
+    OnboardingModels(String, u64),
     DeviceStart(u64),
     DevicePoll(u64, String, String),
     Account(u64, bool),
@@ -154,8 +157,29 @@ enum Completion {
     Preferences(String, Option<String>, u64),
     Simple,
 }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SettingsDialog {
+    Import,
+    Extension { id: String, section: String },
+    Model(String),
+    CustomProvider,
+    Connection,
+    Preferences(String, Option<String>),
+    Permissions,
+}
 #[derive(Clone)]
 pub enum Action {
+    Dialog(Option<SettingsDialog>),
+    Menu(String),
+    SetField(String, String),
+    ModelFlag(String, &'static str, bool),
+    ModelProtocol(String, String),
+    ModelCapability(String, String),
+    ModelsVisible(bool),
+    CreateNamedProvider,
+    PreviewConnection,
+    ImportFile,
+    InstalledCommand(String, Option<String>),
     Tab(Tab),
     Refresh,
     Retry,
@@ -170,10 +194,15 @@ pub enum Action {
     ResetLayout,
     Zoom(f64),
     RecordHotkey,
+    RecordCommandHotkey(String),
     Toggle(&'static str, bool),
     Provider(String),
     SaveProvider,
     Discover,
+    ConnectOnboarding,
+    DiscoverOnboarding,
+    FinishOnboardingConnect(String, String),
+    EditOnboardingConnection,
     AddModel,
     RemoveModel(String),
     SaveModel(String),
@@ -240,6 +269,7 @@ pub enum ContributionIntent {
     SaveSavedSecret(String, usize),
     ReloadSecretFields(String),
     Instructions,
+    UseAgentsMd(bool),
     ReviewProject(String),
     TrustProject,
     DismissProject,
@@ -282,6 +312,9 @@ pub struct SettingsContent {
     pub voice: Value,
     voice_modes: Vec<String>,
     pub selected_voice: String,
+    onboarding_connected: Option<(String, String)>,
+    onboarding_editing: bool,
+    onboarding_checking: bool,
     storage: Value,
     clipboard: Value,
     dry_run: bool,
@@ -295,6 +328,11 @@ pub struct SettingsContent {
     pi: Value,
     selected_extension: Option<String>,
     selected_installed: Option<String>,
+    selected_command: Option<String>,
+    dialog: Option<SettingsDialog>,
+    menu: Option<String>,
+    dialog_restore: Option<FocusHandle>,
+    dialog_focus: FocusHandle,
     secret_slots: BTreeMap<String, Vec<settings::contributions::SecretDescriptor>>,
     oauth_sessions: BTreeMap<(String, String), u64>,
     review: Option<Value>,
@@ -302,6 +340,7 @@ pub struct SettingsContent {
     confirm_restore: Option<FocusHandle>,
     confirm_focus: Vec<FocusHandle>,
     hotkey_recording: bool,
+    command_hotkey_recording: Option<String>,
     device_identity: Option<(String, String)>,
     pub update_status: tezbar_update::AppUpdateStatus,
     pub update_channel: String,
@@ -358,6 +397,9 @@ impl SettingsContent {
             voice: Value::Null,
             voice_modes: vec![],
             selected_voice: String::new(),
+            onboarding_connected: None,
+            onboarding_editing: false,
+            onboarding_checking: false,
             storage: Value::Null,
             clipboard: Value::Null,
             dry_run: false,
@@ -371,6 +413,11 @@ impl SettingsContent {
             pi: Value::Null,
             selected_extension: None,
             selected_installed: None,
+            selected_command: None,
+            dialog: None,
+            menu: None,
+            dialog_restore: None,
+            dialog_focus: cx.focus_handle(),
             secret_slots: BTreeMap::new(),
             oauth_sessions: BTreeMap::new(),
             review: None,
@@ -378,6 +425,7 @@ impl SettingsContent {
             confirm_restore: None,
             confirm_focus: vec![cx.focus_handle(), cx.focus_handle()],
             hotkey_recording: false,
+            command_hotkey_recording: None,
             device_identity: None,
             update_status: tezbar_update::AppUpdateStatus::Idle,
             update_channel: String::new(),
@@ -543,6 +591,8 @@ impl SettingsContent {
         }
         self.tab = tab;
         self.hotkey_recording = false;
+        self.command_hotkey_recording = None;
+        self.menu = None;
         if !self.embedded {
             cx.emit(SettingsEffect::RememberTab(tab.id().into()));
         }
@@ -955,12 +1005,8 @@ impl SettingsContent {
                     && self.oauth_sessions.values().any(|token| *token == t)
                 {
                     if let Ok(v) = &r {
-                        if let Some(url) = v["url"].as_str() {
-                            self.request(
-                                SettingsRequest::OpenUrl(url.into()),
-                                Completion::Simple,
-                                cx,
-                            )
+                        if let Some(open) = v["url"].as_str().and_then(request::trusted_open) {
+                            self.request(open, Completion::Simple, cx)
                         }
                     }
                 }
@@ -986,6 +1032,24 @@ impl SettingsContent {
                     }
                 }
             }
+            Completion::OnboardingModels(p, t) => {
+                self.onboarding_checking = false;
+                if self.provider.provider == p {
+                    match r {
+                        Ok(v) if v.as_array().is_some_and(|v|!v.is_empty()) => {
+                            let models = v.as_array().unwrap().iter().cloned().map(|v|if v.is_string(){json!({"id":v})}else{v}).collect::<Vec<_>>();
+                            let model = models.iter().find(|m|m["id"] == self.provider.selected_model).or_else(||models.first()).map(|m|text(&m["id"])).unwrap_or_default();
+                            if let Some(edit) = self.provider.discovered_models(t, models) {
+                                self.store.discover(self.owner, edit);
+                                self.provider.selected_model = model.clone();
+                                self.queue(vec![Edit::Activate { provider:p.clone(), model:model.clone() }], cx);
+                                self.flush(Some(Action::FinishOnboardingConnect(p, model)), cx);
+                            }
+                        }
+                        _ => self.error = Some("Couldn’t verify the connection. You can finish this later in Settings → AI.".into()),
+                    }
+                }
+            }
             Completion::Models(p, t) => match r {
                 Ok(v) => {
                     let models = v
@@ -994,7 +1058,17 @@ impl SettingsContent {
                         .unwrap_or_default()
                         .into_iter()
                         .map(|v| if v.is_string() { json!({"id":v}) } else { v })
-                        .collect();
+                        .collect::<Vec<_>>();
+                    // The core (like the React backend) answers an unreachable endpoint or a
+                    // rejected key with an empty list. Say so instead of a silent no-op.
+                    if models.is_empty() && self.provider.provider == p {
+                        self.error = Some(if p == "ollama" {
+                            "No models found. Start Ollama and check its base URL, then Refresh."
+                        } else {
+                            "No models found. Check the API key and base URL, then Refresh."
+                        }
+                        .into());
+                    }
                     if self.provider.provider == p {
                         if let Some(e) = self.provider.discovered_models(t, models) {
                             self.store.discover(self.owner, e);
@@ -1058,13 +1132,13 @@ impl SettingsContent {
                         Ok(v) => {
                             self.account_status = text(&v["status"]);
                             if open {
-                                if let Some(url) = v["url"].as_str() {
+                                // The authorize URL comes from the core's own sign-in start
+                                // (accounts.google.com); `open-external-url` admits GitHub only.
+                                if let Some(open) =
+                                    v["url"].as_str().and_then(request::trusted_open)
+                                {
                                     self.account_status = "pending".into();
-                                    self.request(
-                                        SettingsRequest::OpenUrl(url.into()),
-                                        Completion::Simple,
-                                        cx,
-                                    )
+                                    self.request(open, Completion::Simple, cx)
                                 }
                             }
                             if self.account_status != "pending" {
@@ -1075,9 +1149,10 @@ impl SettingsContent {
                                 )
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
                             self.account_status = "error".into();
-                            self.error = Some("Could not complete account sign-in. Retry.".into())
+                            // Already filtered by the store (`user_error`).
+                            self.error = Some(e.into())
                         }
                     }
                 }
@@ -1102,7 +1177,7 @@ impl SettingsContent {
                 }
             }
             other => match r {
-                Err(_) => self.error = Some("Could not complete Settings action. Retry.".into()),
+                Err(e) => self.error = Some(e.into()),
                 Ok(v) => match other {
                     Completion::Voice => self.voice = v,
                     Completion::VoiceSelected => self.selected_voice = text(&v["modelId"]),
@@ -1202,7 +1277,7 @@ impl SettingsContent {
             return;
         }
         let input = cx.new(|cx| {
-            let mut v = TextInput::new(cx);
+            let mut v = TextInput::new_native(cx);
             v.configure(FieldOptions {
                 name: label.to_string().into(),
                 password,
@@ -1491,6 +1566,27 @@ impl SettingsContent {
     }
     fn prepare_fields(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         for (id, label, multi, secret) in [
+            ("connection.name", "Connection name", false, false),
+            ("connection.transport", "Connection type", false, false),
+            ("connection.command", "Command", false, false),
+            ("connection.args", "Arguments, one per line", true, false),
+            ("connection.url", "Web address", false, false),
+            (
+                "connection.cwd",
+                "Working directory (optional)",
+                false,
+                false,
+            ),
+            ("connection.timeout", "Time limit, seconds", false, false),
+            ("connection.env", "Environment variables (JSON)", true, true),
+            ("provider.name", "Provider name (e.g. Model)", false, false),
+            (
+                "provider.url",
+                "Base URL (e.g. http://127.0.0.1:8080/v1)",
+                false,
+                false,
+            ),
+            ("provider.protocol", "Protocol", false, false),
             ("model.new", "Model ID", false, false),
             ("model.metadata", "Model metadata JSON", true, false),
             (
@@ -1545,7 +1641,278 @@ impl SettingsContent {
         if self.store.validation_error(self.owner).is_none() {
             self.error = None;
         }
+        if !matches!(&a, Action::Menu(_)) {
+            self.menu = None;
+        }
         match a {
+            Action::ImportFile => self.import_configuration(cx),
+            Action::PreviewConnection => {
+                let name = self.value("connection.name");
+                let transport = if self.value("connection.transport") == "http" {
+                    "http"
+                } else {
+                    "stdio"
+                };
+                let mut connection = json!({"id":"connection","name":name,"transport":transport});
+                if name.trim().is_empty() {
+                    self.error = Some("Enter a connection name.".into());
+                } else {
+                    if transport == "http" {
+                        connection["url"] = json!(self.value("connection.url"));
+                    } else {
+                        connection["command"] = json!(self.value("connection.command"));
+                        connection["args"] = json!(
+                            self.value("connection.args")
+                                .lines()
+                                .map(str::to_owned)
+                                .collect::<Vec<_>>()
+                        );
+                        let cwd = self.value("connection.cwd");
+                        if !cwd.trim().is_empty() {
+                            connection["cwd"] = json!(cwd);
+                        }
+                        let timeout = self
+                            .value("connection.timeout")
+                            .parse::<u64>()
+                            .unwrap_or(120);
+                        connection["timeoutMs"] = json!(timeout.clamp(1, 1800) * 1000);
+                        let env = self.value("connection.env");
+                        if !env.trim().is_empty() {
+                            match serde_json::from_str::<Value>(&env) {
+                                Ok(v) if v.is_object() => connection["env"] = v,
+                                _ => {
+                                    self.error =
+                                        Some("Environment variables must be a JSON object.".into());
+                                    cx.notify();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    let manifest = json!({"manifestVersion":1,"id":format!("user.native-{}",self.next_job),"name":name,"connections":[connection]});
+                    let effect = self.contributions.import_preview(manifest.to_string());
+                    self.contribution_effect(effect, cx);
+                }
+            }
+            Action::ConnectOnboarding => {
+                if !self.onboarding_checking && !self.saving {
+                    self.flush(Some(Action::DiscoverOnboarding), cx);
+                }
+            }
+            Action::FinishOnboardingConnect(provider, model) => {
+                self.onboarding_connected = Some((provider, model));
+                self.onboarding_editing = false;
+                self.message = Some("Connected".into());
+            }
+            Action::EditOnboardingConnection => self.onboarding_editing = true,
+            Action::DiscoverOnboarding => {
+                let p = self.provider.provider.clone();
+                let base_url = self
+                    .provider
+                    .field(provider_field(&p, "baseURL"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let key = self
+                    .provider
+                    .field(provider_field(&p, "apiKey"))
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                if p != "ollama" && key.as_ref().is_none_or(|key| key.trim().is_empty()) {
+                    self.error = Some("Enter an API key to connect this provider.".into());
+                } else {
+                    self.onboarding_checking = true;
+                    self.request(
+                        SettingsRequest::Models {
+                            provider: p.clone(),
+                            base_url,
+                            key,
+                        },
+                        Completion::OnboardingModels(p, self.provider.discovery_token()),
+                        cx,
+                    );
+                }
+            }
+            Action::Dialog(dialog) => {
+                self.menu = None;
+                if matches!(
+                    &dialog,
+                    Some(SettingsDialog::Connection | SettingsDialog::Import)
+                ) {
+                    self.contributions.preview = None;
+                }
+                if dialog.is_none() {
+                    for key in ["import", "connection.env"] {
+                        if let Some(field) = self.fields.get_mut(key) {
+                            field.value.clear();
+                            field.dirty = false;
+                            field
+                                .input
+                                .update(cx, |input, cx| input.clear_silently(w, cx));
+                        }
+                    }
+                }
+                if dialog.is_some() && self.dialog.is_none() {
+                    self.dialog_restore = w.focused(cx);
+                    w.focus(&self.dialog_focus, cx);
+                } else if dialog.is_none() {
+                    if let Some(focus) = self.dialog_restore.take() {
+                        w.focus(&focus, cx);
+                    }
+                }
+                if let Some(SettingsDialog::Preferences(id, command)) = &dialog {
+                    self.action(Action::Preferences(id.clone(), command.clone()), w, cx);
+                }
+                self.dialog = dialog;
+            }
+            Action::Menu(key) => {
+                self.menu = if self.menu.as_ref() == Some(&key) {
+                    None
+                } else {
+                    Some(key)
+                }
+            }
+            Action::SetField(key, value) => {
+                if key.starts_with("connection.") || key == "import" {
+                    self.contributions.preview = None;
+                }
+                self.action(Action::PreferenceValue(key.clone(), json!(value)), w, cx);
+                self.field_changed(&key, cx);
+                if key == "currency" {
+                    self.action(Action::Currency, w, cx);
+                }
+                self.menu = None;
+            }
+            Action::ModelFlag(id, field, value) => {
+                let mut models = self.provider.models.clone();
+                if let Some(model) = models.iter_mut().find(|m| m["id"] == id) {
+                    model[field] = json!(value);
+                }
+                self.provider.models = models.clone();
+                self.queue(
+                    vec![Edit::Models {
+                        provider: self.provider.provider.clone(),
+                        models,
+                    }],
+                    cx,
+                );
+            }
+            Action::ModelProtocol(id, protocol) => {
+                let mut models = self.provider.models.clone();
+                if let Some(model) = models.iter_mut().find(|m| m["id"] == id) {
+                    if protocol.is_empty() {
+                        model.as_object_mut().map(|m| m.remove("protocol"));
+                    } else {
+                        model["protocol"] = json!(protocol);
+                    }
+                }
+                self.provider.models = models.clone();
+                self.queue(
+                    vec![Edit::Models {
+                        provider: self.provider.provider.clone(),
+                        models,
+                    }],
+                    cx,
+                );
+            }
+            Action::ModelCapability(id, capability) => {
+                let mut models = self.provider.models.clone();
+                if let Some(model) = models.iter_mut().find(|m| m["id"] == id) {
+                    let mut caps = model["capabilities"]
+                        .as_array()
+                        .cloned()
+                        .unwrap_or_default();
+                    if caps.iter().any(|c| c == &capability) {
+                        caps.retain(|c| c != &capability);
+                    } else {
+                        caps.push(json!(capability));
+                    }
+                    model["capabilities"] = json!(caps);
+                }
+                self.provider.models = models.clone();
+                self.queue(
+                    vec![Edit::Models {
+                        provider: self.provider.provider.clone(),
+                        models,
+                    }],
+                    cx,
+                );
+            }
+            Action::ModelsVisible(visible) => {
+                let mut models = self.provider.models.clone();
+                for model in &mut models {
+                    model["hiddenFromPicker"] = json!(!visible);
+                }
+                self.provider.models = models.clone();
+                self.queue(
+                    vec![Edit::Models {
+                        provider: self.provider.provider.clone(),
+                        models,
+                    }],
+                    cx,
+                );
+            }
+            Action::CreateNamedProvider => {
+                let name = self.value("provider.name").trim().to_owned();
+                let url = self.value("provider.url").trim().to_owned();
+                if name.is_empty() || url.is_empty() {
+                    self.error = Some("Enter a provider name and Base URL.".into());
+                } else {
+                    // React `createCustomProvider`: `{id,title,subtitle}` in the list, the
+                    // endpoint in `providerConfigs[id]` — the only place the core reads it.
+                    let mut slug = String::new();
+                    for c in name.to_lowercase().chars() {
+                        if c.is_ascii_alphanumeric() {
+                            slug.push(c);
+                        } else if !slug.ends_with('-') {
+                            slug.push('-');
+                        }
+                    }
+                    let slug = match slug.trim_matches('-') {
+                        "" => "provider".to_owned(),
+                        slug => slug.to_owned(),
+                    };
+                    let taken = |id: &str| {
+                        self.config["customProviders"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .any(|p| p["id"] == id)
+                    };
+                    let mut provider = format!("custom:{slug}");
+                    let mut suffix = 2;
+                    while taken(&provider) {
+                        provider = format!("custom:{slug}-{suffix}");
+                        suffix += 1;
+                    }
+                    let url = url.replacen("://0.0.0.0", "://127.0.0.1", 1);
+                    let protocol = self.value("provider.protocol");
+                    let field = |field: &str, value: &str| Edit::Field {
+                        provider: provider.clone(),
+                        field: field.into(),
+                        value: json!(value),
+                    };
+                    let mut edits = vec![
+                        Edit::CreateProvider {
+                            provider: provider.clone(),
+                            value: json!({"id":provider,"title":name,"subtitle":"Custom OpenAI-compatible endpoint"}),
+                        },
+                        field("baseURL", &url),
+                        field("openaiCompatibleBaseURL", &url),
+                    ];
+                    edits.push(field(
+                        "protocol",
+                        if protocol.is_empty() { "openai-chat" } else { &protocol },
+                    ));
+                    self.queue(edits, cx);
+                    self.dialog = None;
+                    self.provider.load(provider, &self.config);
+                    self.provider_fields(w, cx);
+                }
+            }
+            Action::InstalledCommand(id, command) => {
+                self.selected_installed = Some(id);
+                self.selected_command = command;
+            }
             Action::Permission(id) => self.flush(Some(Action::RequestPermission(id)), cx),
             Action::RequestPermission(id) => {
                 if let Some(tezbar_ui_model::utilities::PermissionEffect::Request {
@@ -1563,7 +1930,9 @@ impl SettingsContent {
             Action::OpenPermissionSettings(url) => {
                 if url.starts_with("x-apple.systempreferences:") || url.starts_with("ms-settings:")
                 {
-                    self.request(SettingsRequest::OpenUrl(url), Completion::Simple, cx)
+                    if let Some(open) = request::trusted_open(&url) {
+                        self.request(open, Completion::Simple, cx)
+                    }
                 }
             }
             Action::Tab(t) => self.select_tab(t, w, cx),
@@ -1639,6 +2008,10 @@ impl SettingsContent {
                     zoom: Some(zoom),
                     reset: false,
                 });
+            }
+            Action::RecordCommandHotkey(id) => {
+                self.command_hotkey_recording = Some(id);
+                w.focus(&self.focus, cx);
             }
             Action::RecordHotkey => {
                 self.hotkey_recording = true;
@@ -1901,7 +2274,10 @@ impl SettingsContent {
             Action::OpenPermissions => self.flush(Some(Action::ShowPermissions), cx),
             Action::ShowPermissions => cx.emit(SettingsEffect::OpenPermissions),
             Action::BrowseStore => cx.emit(SettingsEffect::BrowseStore),
-            Action::InstalledSelect(id) => self.selected_installed = Some(id),
+            Action::InstalledSelect(id) => {
+                self.selected_installed = Some(id);
+                self.selected_command = None;
+            }
             Action::CommandEnabled(id, v) => self.request(
                 SettingsRequest::CommandEnabled(id, v),
                 Completion::ExtensionsMutation,
@@ -2182,3 +2558,6 @@ impl Completion {
         }
     }
 }
+
+#[cfg(test)]
+mod native_input_tests;

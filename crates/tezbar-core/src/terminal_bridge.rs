@@ -28,7 +28,7 @@ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> Handler
         let ctx=ctx.clone(); let channel=channel.to_owned(); let raw=args.first().cloned().unwrap_or(Value::Null);
         if channel == "core:terminal:stream-attach" {native_terminal_replay_reaper(&ctx.terminal);}
         return Some(tokio::task::spawn_blocking(move || {
-            if !ctx.runs_desktop_services() { return Err("Native terminal requires the desktop application".into()); }
+            if !ctx.runs_native_terminal() { return Err("Native terminal requires the desktop application".into()); }
             let state=&*ctx.terminal;
             let text=|key: &str| raw[key].as_str().ok_or_else(|| format!("Terminal {key} is required"));
             match channel.as_str() {
@@ -68,7 +68,7 @@ pub async fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> Handler
             let config = ctx.config.read()?;
             return Ok(config["terminalSessions"].as_array().into_iter().flatten().find(|s| s["sessionId"] == id).cloned().unwrap_or(Value::Null));
         }
-        if !ctx.runs_desktop_services() { return Err("Native terminal requires the desktop application".into()); }
+        if !ctx.runs_native_terminal() { return Err("Native terminal requires the desktop application".into()); }
         let app = ctx.clone();
         let state = &*ctx.terminal;
         let dimension = |key: &str, max: u64| -> Result<u16, String> {

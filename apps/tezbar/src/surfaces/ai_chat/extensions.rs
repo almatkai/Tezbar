@@ -63,7 +63,7 @@ impl ChatView {
         for arg in item["arguments"].as_array().into_iter().flatten().take(32) {
             if let Some(name) = arg["name"].as_str() {
                 let input = cx.new(|cx| {
-                    let mut v = TextInput::new(cx);
+                    let mut v = TextInput::new_native(cx);
                     v.configure(FieldOptions {
                         name: name.to_string().into(),
                         ..Default::default()

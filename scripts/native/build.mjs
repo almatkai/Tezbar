@@ -1,4 +1,4 @@
-// Explicit native opt-in; never reads signing secrets or changes the default Tauri product.
+// Native GPUI Cargo build and explicit private preview assembly; no web UI fallback.
 import { spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync, realpathSync, existsSync, lstatSync, readlinkSync } from 'node:fs'
 import { resolve, dirname, join, basename } from 'node:path'
@@ -64,8 +64,8 @@ export async function nativeBuild(args) {
   if(embedded.sourceCommit!==sourceCommit || embedded.dirty!==sourceDirty || embedded.benchControl || !embedded.runtimeShaders || embedded.gpuiRev!==GPUI_REV || embedded.rustVersion!=='1.98.1') throw Error('Built native executable provenance does not match source')
   const files=await inventoryResources(options.resources)
   const [binary]=await inventoryResources(dirname(executable),[[basename(executable),'tezbar']])
-  const policy=JSON.parse(readFileSync(join(root,'src-tauri/macos-signing.json')))
-  const catalog=JSON.parse(readFileSync(join(root,'src-tauri/runtime/embedding-macos-arm64.json')))
+  const policy=JSON.parse(readFileSync(join(root,'packaging/macos-signing.json')))
+  const catalog=JSON.parse(readFileSync(join(root,'packaging/runtime/embedding-macos-arm64.json')))
   const version=JSON.parse(readFileSync(join(root,'package.json'))).version
   if(embedded.version!==version) throw Error('Built native version differs from package version')
   // Existing version only. Channel is derived for policy validation, never promoted or published.

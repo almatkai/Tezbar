@@ -15,7 +15,7 @@ spec.loader.exec_module(stage)
 
 class PackagePin(unittest.TestCase):
     def setUp(self):
-        self.pin = json.loads((ROOT/'src-tauri/runtime/embedding-macos-arm64.json').read_text())
+        self.pin = json.loads((ROOT/'packaging/runtime/embedding-macos-arm64.json').read_text())
         self.package = ROOT/'build/embedding-runtime/resources/embedding-runtime.zip'
 
     def test_actual_package_matches_every_compiled_file_pin(self):

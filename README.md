@@ -1,7 +1,7 @@
 # Tezbar ⚡️
 
 > **Meet Tezbar: Your Mac’s command bar on steroids.**  
-> A fast, keyboard-first desktop launcher and autonomous command surface built on **Rust + Tauri**. Full Raycast extension compatibility, built-in terminal, multimodal AI agent, and zero lock-in.
+> A fast, keyboard-first desktop launcher and autonomous command surface built on **Rust + GPUI**. Full Raycast extension compatibility, built-in terminal, multimodal AI agent, and zero lock-in.
 
 ---
 
@@ -41,8 +41,8 @@
 
 ## Tech Stack
 
-- **Core**: [Tauri](https://tauri.app/) + [Rust](https://www.rust-lang.org/)
-- **Frontend**: [React 18](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS](https://tailwindcss.com/)
+- **Core and interface**: [Rust](https://www.rust-lang.org/) + GPUI
+- **Extension compatibility**: isolated Bun worker for JavaScript/Raycast commands; every extension view is rendered by GPUI
 - **Native Modules**: Swift helpers on macOS (Screen OCR, Accessibility, Color Picker), ConPTY on Windows
 - **Storage & Indexing**: SQLite with local vector embeddings
 
@@ -59,7 +59,7 @@ not start Bun. See [Rust core architecture and validation](docs/RUST_CORE.md).
 ### Prerequisites
 
 - **Node.js**: v22+ & [pnpm](https://pnpm.io/) for development and builds
-- **Rust toolchain**: 1.85 or newer (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- **Rust toolchain**: cached Rust 1.98.1 for GPUI (pinned in `rust-toolchain.toml`); core/updater retain their documented MSRV
 - **macOS** (12+) or **Windows** (10/11)
 
 ### Setup & Run in Development
@@ -75,29 +75,42 @@ pnpm install
 # Build native Swift helpers (macOS)
 pnpm build:native
 
-# Start development mode
+# Start an isolated native GPUI preview
 pnpm dev
+
+# Inspect its build/launch command without starting the UI
+pnpm dev --command
 ```
 
 ---
 
 ## Useful Scripts
 
-When preparing a Tezbar release, add its user-facing Markdown notes to
-`docs/releases/<package.json version>.md`. The frontend build requires this file
-and bundles it into the app for the Release Notes launcher command and release-notes page.
+The default app entrypoints build and run Rust/GPUI. `pnpm dev` uses a fresh,
+minimal UI-only temporary profile and does not access the production profile.
+Extension execution, native helpers and embedding features need prepared resources;
+use `pnpm dev --help` for explicit local resource inputs. Development has no hot reload.
 
-| Script                                                           | Description                                                          |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `pnpm dev`                                                       | Start the Tauri app in development mode with hot reload              |
-| `pnpm build`                                                     | Build and package the production desktop application                 |
-| `pnpm build:native`                                              | Compile macOS Swift native helpers                                   |
-| `pnpm build:windows`                                             | Build Windows NSIS and MSI installers                                |
-| `pnpm typecheck && pnpm test`                                    | Check TypeScript contracts and regression fixtures                   |
-| `cargo test --manifest-path src-tauri/Cargo.toml --lib --locked` | Check native services, migration and lifecycle fixtures              |
-| `pnpm test:extension-worker`                                     | Build and exercise the real isolated extension worker; requires Bun  |
-| `node scripts/check-backend-lifecycle.mjs`                       | Check native profile persistence across restart without a JS runtime |
-| `pnpm icons:generate`                                            | Regenerate app icon assets across all formats from SVG               |
+| Script | Description |
+| --- | --- |
+| `pnpm dev` | Build and run the isolated GPUI development app |
+| `pnpm preview` | Run the same GPUI preview with a release-profile binary |
+| `pnpm build` | Compile the native GPUI executable in Cargo release mode |
+| `pnpm native:preview:package --resources <stage> --output <fresh-temp-child>` | Assemble an explicit private macOS preview; not a publication artifact |
+| `pnpm release:build --help` | Native release builder inputs and signing policy |
+| `pnpm build:windows --help` | Native Windows build/installer entrypoint |
+| `pnpm ui:check` | Reject web UI in default routes and normal native dependencies |
+| `pnpm build:native` | Compile platform helpers |
+| `pnpm typecheck && pnpm test` | Check worker contracts and archived behavior oracles |
+| `cargo test --locked --offline -j2 -p tezbar-native --features runtime-shaders` | Check native UI, services and lifecycle fixtures |
+| `pnpm test:extension-worker` | Build and exercise the isolated extension worker; requires Bun |
+| `pnpm icons:sync` | Copy reviewed icons from `packaging/icons` into resource locations |
+
+The previous React UI lives under `tests/oracles/legacy-renderer` solely as a
+behavioral reference and regression-test input. Its React/Tauri libraries are
+build/test dependencies, not an application frontend. The retired Tauri host and
+frontend build configuration are archived under `docs/native-m11`; active signing,
+icon and runtime-catalog inputs live under `packaging`.
 
 ---
 

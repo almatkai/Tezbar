@@ -68,7 +68,9 @@ pub async fn applications(ctx: &CoreContext) -> CoreResult {
             PathBuf::from("/System/Applications"),
             PathBuf::from("/System/Applications/Utilities"),
             PathBuf::from("/System/Library/CoreServices/Applications"),
-            PathBuf::from("/System/Library/CoreServices"),
+            // CoreServices contains background agents, not an application catalog.
+            // Finder is the user-facing bundle outside its Applications directory.
+            PathBuf::from("/System/Library/CoreServices/Finder.app"),
             home.join("Applications"),
         ];
         #[cfg(target_os = "windows")]
@@ -659,6 +661,8 @@ pub fn usage_keys(path: &Path) -> Vec<String> {
 pub fn complete(ctx: &CoreContext, query: &str, apps: &[Value]) -> CoreResult {
     let home = &ctx.paths.home_dir;
     let launchpad = query.trim_start().starts_with('`');
+    let trimmed_query = query.trim_end();
+    let trimmed_target = resolve(home, trimmed_query);
     let mut target = resolve(home, query);
     let mut term = if launchpad {
         query.trim_start().trim_start_matches('`').trim().to_owned()
@@ -666,12 +670,15 @@ pub fn complete(ctx: &CoreContext, query: &str, apps: &[Value]) -> CoreResult {
         String::new()
     };
     let mut app_mode = false;
-    if query.ends_with(' ') && target.exists() {
-        app_mode = true
+    if query.ends_with(' ') && (target.exists() || trimmed_target.exists()) {
+        if trimmed_target.exists() {
+            target = trimmed_target;
+        }
+        app_mode = true;
     } else if !target.exists() {
         for (i, c) in query.char_indices().rev() {
             if c == ' ' {
-                let before = resolve(home, &query[..i]);
+                let before = resolve(home, query[..i].trim_end());
                 if before.exists() {
                     target = before;
                     term = query[i + 1..].trim().into();

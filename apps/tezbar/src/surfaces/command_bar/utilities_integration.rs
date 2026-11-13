@@ -78,7 +78,6 @@ impl Launcher {
         self.suppress_pin_click = false;
         self.model_menu = false;
         self.menu = None;
-        self.pin_picker = None;
         cx.notify();
     }
     pub(super) fn hide_utilities(&mut self, window: &mut Window, cx: &mut Context<Self>) {

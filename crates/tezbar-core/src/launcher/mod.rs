@@ -545,7 +545,16 @@ impl LauncherCore {
             "path:complete" => {
                 let ctx = self.inner.ctx.clone();
                 let q = text_arg(a, 0)?.to_owned();
-                let apps = self.inner.apps.read().await.clone();
+                let mut apps = self.inner.apps.read().await.clone();
+                // The launchpad (`` ` ``) and "Open With" lists read the app index. Background
+                // indexing fills it only with desktop services (never in Preview), and only
+                // after startup; enumerate on demand like `core:apps:list`. This reads the
+                // application folders and writes nothing outside the profile.
+                if apps.is_empty() {
+                    let discovered = providers::applications(&ctx).await?;
+                    apps = discovered.as_array().cloned().unwrap_or_default();
+                    *self.inner.apps.write().await = apps.clone();
+                }
                 tokio::task::spawn_blocking(move || providers::complete(&ctx, &q, &apps))
                     .await
                     .map_err(|e| e.to_string())?
@@ -827,7 +836,25 @@ impl LauncherCore {
                     ctx.request("core:platform:open-file", vec![json!(path)])
                         .await?
                 } else {
-                    ctx.request("core:platform:open-with-app",vec![json!({"path":path,"appPath":app.as_ref().map(|a|a["path"].clone()).unwrap_or(json!(name)),"appName":name})]).await?
+                    let app_path = action["appPath"]
+                        .as_str()
+                        .filter(|p| !p.is_empty())
+                        .map(str::to_owned)
+                        .or_else(|| {
+                            app.as_ref()
+                                .and_then(|a| a["path"].as_str())
+                                .map(str::to_owned)
+                        })
+                        .unwrap_or_else(|| name.to_owned());
+                    ctx.request(
+                        "core:platform:open-with-app",
+                        vec![json!({
+                            "path": path,
+                            "appPath": app_path,
+                            "appName": name
+                        })],
+                    )
+                    .await?
                 };
                 if r["ok"] != false && !name.is_empty() {
                     if let Err(error) = self.record_open_with(path, name.into()).await {

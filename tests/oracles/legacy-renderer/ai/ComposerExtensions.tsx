@@ -1,0 +1,214 @@
+import { useEffect, useState, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { Button, TextField } from '../ui/primitives'
+import { extensionRequest as request } from './api'
+import type { AgentInputImage } from '../../../../src/shared/agent'
+import type { ComposerItem } from '../../../../src/shared/aiExtensions'
+export function useComposerExtensions(
+  draft: string,
+  setDraft: (text: string) => void,
+  cwd: string | undefined,
+  onProfile: (id: string) => void,
+  onImages?: (images: AgentInputImage[]) => void,
+  scope?: string
+): {
+  menu: ReactNode
+  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => boolean
+  profileName: (id: string) => string
+  consumeEscape: () => boolean
+  activeDescendant?: string
+} {
+  const [items, setItems] = useState<ComposerItem[]>([])
+  const [index, setIndex] = useState(0)
+  const [dismissed, setDismissed] = useState(false)
+  const [prompt, setPrompt] = useState<ComposerItem | null>(null)
+  const [arguments_, setArguments] = useState<Record<string, string>>({})
+  const [error, setError] = useState('')
+  const generation = useRef(0)
+  const currentDraft = useRef(draft)
+  currentDraft.current = draft
+  useEffect(() => {
+    generation.current++
+    setPrompt(null)
+    setError('')
+  }, [cwd, scope])
+  useEffect(() => {
+    let cancelled = false
+    setItems([])
+    const refresh = (): void => {
+      if (typeof window.tezbar.aiExtensions === 'function')
+        void request<ComposerItem[]>('composer-items', cwd)
+          .then((items) => {
+            if (!cancelled) setItems(items)
+          })
+          .catch(() => {})
+    }
+    refresh()
+    const unsubscribe = window.tezbar.onAiExtensionsChanged?.(refresh)
+    return () => {
+      cancelled = true
+      generation.current++
+      unsubscribe?.()
+    }
+  }, [cwd, scope])
+  useEffect(() => {
+    setIndex(0)
+    setDismissed(false)
+  }, [draft])
+  const filtered =
+    !dismissed && /^\/[\p{L}\p{N}_-]*$/u.test(draft)
+      ? items.filter((i) => (i.name || '').toLowerCase().startsWith(draft.slice(1).toLowerCase()))
+      : []
+  useEffect(() => {
+    document.getElementById(`ai-command-${index}`)?.scrollIntoView?.({ block: 'nearest' })
+  }, [index])
+  const resolve = async (item: ComposerItem, args: Record<string, string>): Promise<void> => {
+    const requestId = ++generation.current
+    const originalDraft = draft
+    try {
+      const result = await request<{ text: string; images?: AgentInputImage[] }>(
+        item.kind === 'resources' ? 'read-resource' : 'prompt-resolve',
+        { ...item, cwd },
+        args
+      )
+      if (requestId !== generation.current || currentDraft.current !== originalDraft) return
+      setDraft(result.text)
+      if (result.images?.length) onImages?.(result.images)
+      setPrompt(null)
+      setError('')
+      document.getElementById('ai-chat-input')?.focus()
+    } catch (e) {
+      if (requestId !== generation.current) return
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+  const choose = (item: ComposerItem): void => {
+    if (item.kind === 'agents') {
+      generation.current++
+      onProfile(item.id || item.name)
+      setDraft('')
+      return
+    }
+    if (item.arguments?.length) {
+      generation.current++
+      setPrompt(item)
+      setArguments({})
+      setDismissed(true)
+      return
+    }
+    void resolve(item, {})
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!filtered.length) return false
+    if (event.key === 'Escape') {
+      event.stopPropagation()
+      event.preventDefault()
+      setDismissed(true)
+      generation.current++
+      return true
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setIndex((i) => (i + (event.key === 'ArrowDown' ? 1 : filtered.length - 1)) % filtered.length)
+      return true
+    }
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault()
+      choose(filtered[index] || filtered[0]!)
+      return true
+    }
+    return false
+  }
+  return {
+    onKeyDown,
+    profileName: (id) =>
+      items.find((i) => i.kind === 'agents' && (i.id === id || i.name === id))?.title ||
+      items.find((i) => i.kind === 'agents' && (i.id === id || i.name === id))?.name ||
+      `${id.split('::').pop()} (unavailable)`,
+    consumeEscape: () => {
+      if (!filtered.length && !prompt) return false
+      setDismissed(true)
+      setPrompt(null)
+      generation.current++
+      return true
+    },
+    activeDescendant: filtered.length ? `ai-command-${index}` : undefined,
+    menu: (
+      <>
+        {!!filtered.length && (
+          <div
+            role="listbox"
+            aria-label="AI commands"
+            className="mb-2 max-h-60 overflow-auto rounded-lg border border-ink-4/20 py-1 text-[12px]"
+          >
+            {filtered.map((item, i) => (
+              <button
+                type="button"
+                role="option"
+                id={`ai-command-${i}`}
+                key={`${item.extensionId}:${item.connectionId}:${item.kind}:${item.name}`}
+                aria-selected={i === index}
+                className={`block w-full px-3 py-1.5 text-left ${i === index ? 'bg-ink-4/15 text-ink-1' : 'text-ink-2'}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choose(item)}
+              >
+                {(i === 0 || filtered[i - 1]?.extensionName !== item.extensionName) && (
+                  <span role="presentation" className="block text-[11px] font-medium text-ink-3">
+                    {item.extensionName}
+                  </span>
+                )}
+                /{item.name} {item.title}
+              </button>
+            ))}
+          </div>
+        )}
+        {prompt && (
+          <div className="mb-2 space-y-2 text-[12px]">
+            {prompt.arguments?.map((arg, i, all) => (
+              <label className="block" key={arg.name}>
+                {arg.name}
+                {arg.required ? ' *' : ''}
+                <TextField
+                  autoFocus={i === 0}
+                  value={arguments_[arg.name] || ''}
+                  onChange={(e) => setArguments((a) => ({ ...a, [arg.name]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      generation.current++
+                      setPrompt(null)
+                      document.getElementById('ai-chat-input')?.focus()
+                      return
+                    }
+                    if (e.key !== 'Enter') return
+                    e.preventDefault()
+                    const next = e.currentTarget
+                      .closest('label')
+                      ?.nextElementSibling?.querySelector('input')
+                    if (i + 1 < all.length && next instanceof HTMLInputElement) next.focus()
+                    else void resolve(prompt, arguments_)
+                  }}
+                />
+              </label>
+            ))}
+            <Button onClick={() => void resolve(prompt, arguments_)}>Insert in draft</Button>
+            <Button
+              variant="quiet"
+              onClick={() => {
+                generation.current++
+                setPrompt(null)
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="ai-extension-error">
+            {error}
+          </p>
+        )}
+      </>
+    ),
+  }
+}

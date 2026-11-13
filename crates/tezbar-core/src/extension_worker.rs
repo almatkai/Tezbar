@@ -128,7 +128,17 @@ impl ExtensionWorker {
         if !CHANNELS.contains(&channel) && channel != "core:extension-status-action" {
             return Err(format!("Channel is not an extension operation: {channel}"));
         }
-        if channel == "extension:dispose-session" {
+        // Session controls are continuations, never runtime activation requests.
+        // In particular, delayed GPUI/status refreshes after disposal or a crash
+        // must not discover/download Bun or start a replacement process.
+        let may_launch = matches!(
+            channel,
+            "extension:run-command"
+                | "extension:install"
+                | "extensions:install"
+                | "extensions:reinstall"
+        );
+        if !may_launch {
             let id = args
                 .first()
                 .and_then(|v| v["sessionId"].as_str())
@@ -138,9 +148,13 @@ impl ExtensionWorker {
                 .lock()
                 .map(|s| s.contains_key(id))
                 .unwrap_or(false);
-            self.remove_sdk_session(id);
-            if !exists {
-                return Ok(json!(false));
+            if channel == "extension:dispose-session" {
+                self.remove_sdk_session(id);
+                if !exists {
+                    return Ok(json!(false));
+                }
+            } else if !exists {
+                return Err("Extension session not found; reopen the extension".into());
             }
         }
         let (sender, pending, alive) = {
@@ -149,6 +163,11 @@ impl ExtensionWorker {
                 .as_ref()
                 .is_some_and(|p| p.alive.load(Ordering::Acquire))
             {
+                // Check while holding the process owner: a session can still be
+                // in the supervisor's cleanup map after its process has died.
+                if !may_launch {
+                    return Err("Extension Worker stopped; reopen the extension".into());
+                }
                 if let Some(previous) = process.take() {
                     let _ = previous.finished.await;
                 }

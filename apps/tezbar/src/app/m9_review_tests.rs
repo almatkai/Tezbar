@@ -193,6 +193,7 @@ fn review_m9_discarded_foreground_reply_is_disposed_but_background_status_keeps_
 fn review_m9_busy_install_refuses_quit_before_cancelling_live_chat(cx: &mut TestAppContext) {
     let (rt, root, f, view, cx) = mount(cx);
     let app = owner(cx, &rt, &root, &f);
+    assert!(app.read_with(&cx.cx, |v, _| v.settings.is_none()));
     view.update(cx, |v, cx| {
         v.review_m9_configure_extensions(f.core.clone());
         v.receive_navigation(submit(1, "Keep this run alive"), cx)
@@ -211,6 +212,8 @@ fn review_m9_busy_install_refuses_quit_before_cancelling_live_chat(cx: &mut Test
         }
     }
     assert!(!app.read_with(&cx.cx, |v, _| v.lifecycle.quitting));
+    assert!(app.read_with(&cx.cx, |v, _| v.settings.is_none()));
+    assert!(!app.read_with(&cx.cx, |v, _| v.lifecycle.settings));
     assert!(
         app.read_with(&cx.cx, |v, _| v.save_error.clone())
             .unwrap()

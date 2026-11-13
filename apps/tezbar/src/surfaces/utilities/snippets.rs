@@ -154,7 +154,12 @@ impl Utilities {
             let mut f = TextInput::new(cx);
             f.configure(FieldOptions {
                 name: name.to_string().into(),
-                placeholder: name.to_string().into(),
+                placeholder: match name {
+                    "Title" => "e.g. Stand-up reply",
+                    "Trigger" => "Short search key, e.g. standup",
+                    "Snippet" => "Text copied when the snippet runs. Use ${date}, ${time}, ${uuid}, … for dynamic parts.",
+                    _ => name,
+                }.to_string().into(),
                 multiline,
                 password,
                 ..Default::default()
@@ -163,24 +168,34 @@ impl Utilities {
             f
         });
         self.field_subscriptions
-            .push(Self::clipboard_subscription(&field, cx));
+            .push(Self::clipboard_subscription(&field, w, cx));
         field
     }
     pub(super) fn clipboard_subscription(
         field: &Entity<TextInput>,
+        w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Subscription {
-        cx.subscribe(
+        cx.subscribe_in(
             field,
-            |this, field, e: &tezbar_ui::text_input::ClipboardEffect, cx| match e {
+            w,
+            |this, field, e: &tezbar_ui::text_input::ClipboardEffect, w, cx| match e {
                 tezbar_ui::text_input::ClipboardEffect::Read => {
+                    // Capture the clipboard for this paste gesture before another app changes it.
+                    if !this.visible || !field.focus_handle(cx).is_focused(w) {
+                        return;
+                    }
+                    let epoch = this.epoch;
                     let selection = field.read(cx).selection_bytes();
-                    this.request(
-                        UtilityRequest::ReadText,
-                        Completion::Paste(field.downgrade(), this.epoch, selection),
-                        false,
-                        cx,
-                    );
+                    if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+                        if epoch == this.epoch {
+                            field.update(cx, |input, cx| {
+                                if input.selection_bytes() == selection {
+                                    input.paste_text(&text, w, cx);
+                                }
+                            });
+                        }
+                    }
                 }
                 tezbar_ui::text_input::ClipboardEffect::Write(text) => this.request(
                     UtilityRequest::WriteText(text.clone()),

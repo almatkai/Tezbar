@@ -64,6 +64,7 @@ pub fn path_rows(value: Value) -> Result<(Vec<Row>, HashMap<String, Value>), Str
                     Action::OpenWithApp {
                         path: string(v, "path"),
                         app_name: v["appName"].as_str().map(str::to_owned),
+                        app_path: v["appPath"].as_str().map(str::to_owned),
                     }
                 }
             } else {

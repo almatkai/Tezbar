@@ -1,0 +1,14 @@
+[
+  {
+    "attempt": "native-compile.jsonl.failed-test-macro",
+    "diagnostic": "error: recursion limit reached while expanding `#[test]`\n   --> apps/tezbar/src/app/m11.rs:395:5\n    |\n395 |     #[gpui::test]\n    |     ^^^^^^^^^^^^^\n    |\n    = help: consider increasing the recursion limit by adding a `#![recursion_limit = \"256\"]` attribute to your crate (`tezbar_native`)\n    = note: this error originates in the attribute macro `test` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+  },
+  {
+    "attempt": "native-compile.jsonl.failed-types",
+    "diagnostic": "error[E0433]: cannot find `m8_tests` in `super`\n   --> apps/tezbar/src/app/m11.rs:399:35\n    |\n399 |         let owner = super::super::m8_tests::owner(cx, &rt, &root, &backend);\n    |                                   ^^^^^^^^ could not find `m8_tests` in `super`\n\n"
+  },
+  {
+    "attempt": "native-compile.jsonl.failed-types",
+    "diagnostic": "error[E0308]: mismatched types\n   --> apps/tezbar/src/app/m11.rs:198:24\n    |\n197 |                 match prepared {\n    |                       -------- this expression has type `Result<Result<(VerifiedArtifact, Result<StagedMac, ...>), ...>, ...>`\n198 |                     Ok((artifact, staged)) => {\n    |                        ^^^^^^^^^^^^^^^^^^ expected `Result<(VerifiedArtifact, ...), ...>`, found `(_, _)`\n    |\n    = note: expected enum `std::result::Result<(tezbar_update::native::VerifiedArtifact, std::result::Result<StagedMac, std::string::String>), JoinError>`\n              found tuple `(_, _)`\n    = note: the full name for the type has been written to '/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/tezbar_native-89ad3a0758dc3d53.long-type-5990347487845731701.txt'\n    = note: consider using `--verbose` to print the full type name to the console\n\n"
+  }
+]

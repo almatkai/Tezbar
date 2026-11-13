@@ -240,3 +240,32 @@ fn review_m10_panel_projects_active_session_and_cwd(cx: &mut TestAppContext) {
 
 #[path = "m810_review_pin.rs"]
 mod m810_review_pin;
+#[gpui::test]
+fn backspace_on_empty_terminal_query_returns_home(cx: &mut TestAppContext) {
+    let rt = crate::surfaces::settings::tests::runtime(cx);
+    let f = Arc::new(Fixture::default());
+    let (relay, _rx) = Relay::new();
+    cx.update(|cx| cx.set_global(CoreEvents::new(relay.clone())));
+    let (launcher, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(f.clone(), relay, None, w, cx));
+    cx.update(|w, cx| {
+        launcher.update(cx, |v, cx| {
+            v.ready = true;
+            v.show(w, cx);
+        })
+    });
+    cx.simulate_input(">");
+    settle(&rt, cx);
+    assert!(launcher.read_with(cx, |v, _| v.model.terminal_mode));
+    cx.simulate_input("ls");
+    settle(&rt, cx);
+    cx.simulate_keystrokes("backspace backspace");
+    settle(&rt, cx);
+    assert!(launcher.read_with(cx, |v, _| v.model.terminal_mode));
+    cx.simulate_keystrokes("backspace");
+    settle(&rt, cx);
+    launcher.read_with(cx, |v, _| {
+        assert!(!v.model.terminal_mode, "input {:?}", v.model.input);
+        assert!(v.model.input.is_empty());
+    });
+}

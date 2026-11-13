@@ -672,6 +672,73 @@ fn permissions_native_action_lock_refresh_and_accessible_status(cx: &mut TestApp
     assert!(view.read_with(cx, |v, _| v.permissions.banner.is_some()));
 }
 #[gpui::test]
+fn vault_locked_screen_hides_browsing_and_unlock_restores_it(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Vault, 1), w, cx)));
+    settle(&rt, cx);
+    let unlock = cx
+        .debug_bounds("Unlock Vault")
+        .expect("Visible unlock action");
+    let viewport = cx.update(|w, _| w.viewport_size());
+    assert!((unlock.center().x - viewport.width / 2.).abs() < px(1.));
+    assert!(unlock.origin.y > viewport.height / 4.);
+    assert!(
+        cx.debug_bounds("All types").is_none(),
+        "Locked Vault must not show filters"
+    );
+    assert!(cx.debug_bounds("vault-search").is_none());
+    cx.update(|w, cx| {
+        assert!(
+            !view.read(cx).search.focus_handle(cx).is_focused(w),
+            "Hidden search must not own focus"
+        );
+    });
+    cx.simulate_keystrokes("enter");
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.vault.model.unlocked));
+    assert!(cx.debug_bounds("Unlock Vault").is_none());
+    assert!(
+        cx.debug_bounds("All types").is_none(),
+        "The original Vault has no type filter"
+    );
+    assert!(cx.debug_bounds("vault-search").is_some());
+    cx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            v.vault.revealed = true;
+            v.search_changed("no matching item".into(), cx);
+        })
+    });
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.vault.detail.is_none()));
+    assert!(!view.read_with(cx, |v, _| v.vault.revealed));
+    cx.update(|_, cx| view.update(cx, |v, cx| v.search_changed(String::new(), cx)));
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.vault.detail.is_some()));
+    cx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            v.vault.rows.clear();
+            v.vault.detail = None;
+            cx.notify();
+        })
+    });
+    settle(&rt, cx);
+    assert!(
+        cx.debug_bounds("vault-empty-new").is_none(),
+        "The original empty state uses the New shortcut"
+    );
+    cx.simulate_keystrokes("cmd-n");
+    settle(&rt, cx);
+    assert_eq!(view.read_with(cx, |v, _| v.fields.len()), 3);
+    assert!(cx.debug_bounds("vault-search").is_none());
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::Lock, w, cx)));
+    settle(&rt, cx);
+    assert!(cx.debug_bounds("All types").is_none());
+    assert!(cx.debug_bounds("vault-search").is_none());
+}
+#[gpui::test]
 fn vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let fixture = Arc::new(Fixture::default());
@@ -827,7 +894,10 @@ fn native_paste_is_plain_safe_and_note_owned(cx: &mut TestAppContext) {
     });
     settle(&rt, cx);
     let input = view.read_with(cx, |v, cx| v.editor.read(cx).input.clone());
-    cx.update(|w, cx| input.focus_handle(cx).focus(w, cx));
+    cx.update(|w, cx| {
+        input.focus_handle(cx).focus(w, cx);
+        cx.write_to_clipboard(ClipboardItem::new_string("<script>synthetic</script> & safe".into()));
+    });
     cx.simulate_keystrokes(if cfg!(target_os = "macos") {
         "cmd-v"
     } else {
@@ -845,7 +915,7 @@ fn native_paste_is_plain_safe_and_note_owned(cx: &mut TestAppContext) {
             .iter()
             .filter(|(c, _)| c == "clipboard:read")
             .count(),
-        1
+        0
     );
 }
 #[gpui::test]
@@ -1234,6 +1304,10 @@ fn qr_preview_copy_and_export_are_worker_owned_and_selection_scoped(cx: &mut Tes
     });
     settle(&rt, cx);
     assert!(view.read_with(cx, |v, _| v.qr_image.is_some()));
+    assert!(cx.debug_bounds("Copy Image").is_some());
+    assert!(cx.debug_bounds("Download Image").is_some());
+    assert!(cx.debug_bounds("Copy result").is_some());
+    assert!(cx.debug_bounds("Save PNG").is_none());
     cx.update(|w, cx| {
         view.update(cx, |v, cx| {
             v.act(Action::CopyQr, w, cx);
@@ -1258,7 +1332,7 @@ fn qr_preview_copy_and_export_are_worker_owned_and_selection_scoped(cx: &mut Tes
     );
 }
 #[gpui::test]
-fn release_exact_version_native_enter_full_markdown_error_and_retry(cx: &mut TestAppContext) {
+fn release_exact_version_action_full_markdown_error_and_retry(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let fixture = Arc::new(Fixture::default());
     let body = format!("# Historical\n{}", "- Change **preserved**\n".repeat(100));
@@ -1271,11 +1345,14 @@ fn release_exact_version_native_enter_full_markdown_error_and_retry(cx: &mut Tes
         view.update(cx, |v, cx| {
             v.configure_release("2".into(), Some("# Current".into()));
             v.navigate(nav(Surface::ReleaseNotes, 1), w, cx);
-            v.search.update(cx, |f, cx| f.set_text("1", w, cx));
         })
     });
     assert!(fixture.releases.lock().unwrap().is_empty());
-    cx.simulate_keystrokes("enter");
+    assert!(
+        cx.debug_bounds("utility-search").is_none(),
+        "The source release screen has no version-search input"
+    );
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::ReleaseVersion("1".into()), w, cx)));
     settle(&rt, cx);
     assert_eq!(
         *fixture.releases.lock().unwrap(),
@@ -1587,3 +1664,483 @@ fn background_host_update_ready_is_actionable_and_idle_has_no_badge(cx: &mut Tes
 }
 
 include!("review_regressions.rs");
+
+#[gpui::test]
+fn utility_search_escape_clears_before_leaving(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    let backs = std::rc::Rc::new(std::cell::Cell::new(0));
+    let sink = backs.clone();
+    cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, event: &UtilityEffect, _| {
+            if matches!(event, UtilityEffect::Back) {
+                sink.set(sink.get() + 1);
+            }
+        })
+        .detach();
+    });
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.navigate(nav(Surface::Snippets, 1), w, cx);
+            v.search
+                .update(cx, |input, cx| input.set_text("missing", w, cx));
+            v.search_changed("missing".into(), cx);
+            v.search.focus_handle(cx).focus(w, cx);
+        })
+    });
+    settle(&rt, cx);
+    cx.simulate_keystrokes("escape");
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, cx| v.search.read(cx).content.is_empty()));
+    assert_eq!(backs.get(), 0);
+    cx.simulate_keystrokes("escape");
+    settle(&rt, cx);
+    assert_eq!(backs.get(), 1);
+}
+
+/// A renderer fixture checks the source's one-row command chrome without opening
+/// a desktop application or reading the user's actual utility stores.
+#[gpui::test]
+fn utility_command_surface_header_geometry_matches_source(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    fixture
+        .vault_unlocked
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    for (nonce, surface) in [
+        Surface::Clipboard,
+        Surface::Notes,
+        Surface::Snippets,
+        Surface::Vault,
+        Surface::Emoji,
+        Surface::Indexing,
+        Surface::Permissions,
+        Surface::ReleaseNotes,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let vault = surface == Surface::Vault;
+        let searchable = !matches!(surface, Surface::Permissions | Surface::ReleaseNotes);
+        cx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.navigate(nav(surface, nonce as u64 + 1), w, cx)
+            })
+        });
+        settle(&rt, cx);
+        let header = cx
+            .debug_bounds("utility-header")
+            .expect("Exactly one command header");
+        let back = cx.debug_bounds("Back").expect("Compact Back action");
+        let footer = cx.debug_bounds("utility-footer").expect("Command footer");
+        let zoom = cx.update(|w, _| tokens::tokens(w).zoom);
+        assert!((back.size.width - px(24. * zoom)).abs() < px(1.));
+        assert!((back.size.height - px(24. * zoom)).abs() < px(1.));
+        assert!((back.center().y - header.center().y).abs() < px(1.));
+        assert!(footer.origin.y > header.bottom());
+        let search = cx.debug_bounds(if vault {
+            "vault-search"
+        } else {
+            "utility-search"
+        });
+        if searchable {
+            let search = search.expect("Search belongs in the command header");
+            assert!(search.size.width > px(0.));
+            assert!(search.origin.y >= header.origin.y);
+            assert!(search.bottom() <= header.bottom() + px(1.));
+            assert!(search.origin.x > back.origin.x);
+        } else {
+            assert!(
+                search.is_none(),
+                "Permissions and Release Notes have titles, not search inputs"
+            );
+        }
+        for label in [
+            "Restore",
+            "Copy note",
+            "Retry save",
+            "Start indexing",
+            "Pause indexing",
+            "All types",
+        ] {
+            assert!(
+                cx.debug_bounds(label).is_none(),
+                "No invented toolbar action: {label}"
+            );
+        }
+    }
+}
+
+#[gpui::test]
+fn utility_master_detail_uses_original_44_percent_split_and_keeps_empty_preview(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    fixture
+        .vault_unlocked
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    for (nonce, surface) in [
+        Surface::Clipboard,
+        Surface::Notes,
+        Surface::Snippets,
+        Surface::Vault,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        cx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.navigate(nav(surface, nonce as u64 + 1), w, cx)
+            })
+        });
+        settle(&rt, cx);
+        let master = cx.debug_bounds("utility-master").expect("Master column");
+        let detail = cx.debug_bounds("utility-detail").expect("Detail column");
+        let zoom = cx.update(|w, _| tokens::tokens(w).zoom);
+        let full_width = detail.right() - master.origin.x;
+        let expected = (full_width * 0.44).min(px(340. * zoom));
+        assert!(
+            (master.size.width - expected).abs() < px(1.5),
+            "Source width is 44%, capped at 340px"
+        );
+        assert!(
+            (detail.origin.x - master.right() - px(12. * zoom)).abs() < px(1.5),
+            "Source split gap is 12px"
+        );
+        assert!((detail.origin.y - master.origin.y).abs() < px(1.));
+        cx.update(|_, cx| {
+            view.update(cx, |v, cx| {
+                v.search_changed("no-fixture-can-match-this-query".into(), cx)
+            })
+        });
+        settle(&rt, cx);
+        let empty_detail = cx
+            .debug_bounds("utility-detail")
+            .expect("Empty master retains its separate preview column");
+        assert!((empty_detail.origin.x - detail.origin.x).abs() < px(1.5));
+    }
+}
+
+#[gpui::test]
+fn monitor_dashboard_fixture_retains_three_column_summary_without_search(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        Utilities::new(Arc::new(Fixture::default()), &UiState::default(), w, cx)
+    });
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.navigate(nav(Surface::SystemMonitor, 1), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let cpu = cx
+        .debug_bounds("monitor-stat-cpu")
+        .expect("CPU summary card");
+    let memory = cx
+        .debug_bounds("monitor-stat-memory")
+        .expect("Memory summary card");
+    let battery = cx
+        .debug_bounds("monitor-stat-battery")
+        .expect("Battery summary, including unavailable battery state");
+    assert!((cpu.origin.y - memory.origin.y).abs() < px(1.));
+    assert!((memory.origin.y - battery.origin.y).abs() < px(1.));
+    assert!((cpu.size.width - memory.size.width).abs() < px(1.));
+    assert!((memory.size.width - battery.size.width).abs() < px(1.));
+    assert!(cpu.right() < memory.origin.x && memory.right() < battery.origin.x);
+    assert!(cx.debug_bounds("utility-search").is_none());
+    assert!(cx.debug_bounds("Auto refresh").is_none());
+    assert!(cx.debug_bounds("Live").is_some());
+    cx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            v.monitor.value = None;
+            v.monitor.error = None;
+            v.monitor.set_auto_refresh(false, v.now());
+            cx.notify();
+        })
+    });
+    settle(&rt, cx);
+    assert!(cx.debug_bounds("monitor-stat-cpu").is_none());
+    assert!(cx.debug_bounds("monitor-loading").is_some());
+    assert!(cx.debug_bounds("monitor-error").is_none());
+    assert!(cx.debug_bounds("system-monitor-dashboard").is_some());
+    cx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            v.monitor.error = Some("Synthetic unavailable sensor".into());
+            cx.notify();
+        })
+    });
+    settle(&rt, cx);
+    assert!(cx.debug_bounds("Try again").is_some());
+    assert!(cx.debug_bounds("monitor-error").is_some());
+    assert!(cx.debug_bounds("monitor-loading").is_none());
+    assert!(cx.debug_bounds("monitor-stat-cpu").is_none());
+}
+
+#[gpui::test]
+fn emoji_fixture_uses_eight_columns_36px_cells_and_4px_gaps(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        Utilities::new(Arc::new(Fixture::default()), &UiState::default(), w, cx)
+    });
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.navigate(nav(Surface::Emoji, 1), w, cx);
+            v.search_changed("face".into(), cx);
+            assert!(
+                v.emoji.visible().len() > 8,
+                "Fixture query spans at least two rows"
+            );
+        })
+    });
+    settle(&rt, cx);
+    let zoom = cx.update(|w, _| tokens::tokens(w).zoom);
+    let first = cx
+        .debug_bounds("emoji-cell-0")
+        .expect("First search result");
+    let second = cx
+        .debug_bounds("emoji-cell-1")
+        .expect("Second search result");
+    let eighth = cx
+        .debug_bounds("emoji-cell-7")
+        .expect("Eighth result in the same row");
+    let ninth = cx
+        .debug_bounds("emoji-cell-8")
+        .expect("Ninth result begins the next row");
+    assert!((first.size.height - px(36. * zoom)).abs() < px(1.));
+    assert!((first.origin.y - eighth.origin.y).abs() < px(1.));
+    assert!((second.origin.x - first.right() - px(4. * zoom)).abs() < px(1.));
+    assert!((ninth.origin.y - first.bottom() - px(4. * zoom)).abs() < px(1.));
+    assert!((ninth.origin.x - first.origin.x).abs() < px(1.));
+}
+
+#[gpui::test]
+fn vault_note_is_optional_and_expands_without_replacing_draft(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    fixture
+        .vault_unlocked
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.navigate(nav(Surface::Vault, 1), w, cx);
+        })
+    });
+    settle(&rt, cx);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::New, w, cx)));
+    settle(&rt, cx);
+    assert!(cx.debug_bounds("utility-field-1").is_some());
+    assert!(cx.debug_bounds("utility-field-0").is_some());
+    assert!(cx.debug_bounds("utility-field-2").is_none());
+    let add_note = cx
+        .debug_bounds("Add note")
+        .expect("Optional note starts as a compact action");
+    cx.simulate_click(add_note.center(), Modifiers::default());
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.vault.show_note));
+    assert!(cx.debug_bounds("utility-field-2").is_some());
+    assert!(cx.debug_bounds("Add note").is_none());
+    assert_eq!(view.read_with(cx, |v, _| v.fields.len()), 3);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::Cancel, w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::New, w, cx)));
+    settle(&rt, cx);
+    assert!(
+        cx.debug_bounds("Add note").is_some(),
+        "A new draft starts with its optional note collapsed"
+    );
+}
+
+#[gpui::test]
+fn clipboard_conversion_ui_tracks_pending_result_error_and_selection(cx: &mut TestAppContext) {
+    use tezbar_core::instant::transform::ClipboardAction as C;
+    let rt = runtime(cx);
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        Utilities::new(Arc::new(Fixture::default()), &UiState::default(), w, cx)
+    });
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Clipboard, 1), w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let plain = v
+                .clipboard
+                .visible()
+                .iter()
+                .position(|e| !e.is_secret)
+                .unwrap();
+            v.act(Action::Select(plain), w, cx);
+            v.act(Action::Convert(C::Count), w, cx);
+            assert_eq!(v.clipboard_ui.active, Some(C::Count));
+            assert!(v.clipboard_ui.pending.is_some());
+        })
+    });
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.clipboard_ui.pending.is_none()));
+    assert!(cx.debug_bounds("clipboard-conversion-result").is_some());
+    assert!(cx.debug_bounds("Copy result").is_some());
+    assert!(cx.debug_bounds("Copy Image").is_none());
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            // A real transformation error: JSON beyond the engine's supported depth.
+            let entry = v
+                .clipboard
+                .rows
+                .iter_mut()
+                .find(|entry| !entry.is_secret)
+                .unwrap();
+            if let model::ClipboardContent::Text { text, .. } = &mut entry.content {
+                *text = format!("{}0{}", "[".repeat(140), "]".repeat(140));
+            }
+            v.act(Action::Convert(C::Json), w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.clipboard.conversion, Some(Err(_)))));
+    assert!(cx.debug_bounds("clipboard-conversion-result").is_some());
+    assert!(
+        cx.debug_bounds("Copy result").is_none(),
+        "An error is not copyable output"
+    );
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let secret = v
+                .clipboard
+                .visible()
+                .iter()
+                .position(|e| e.is_secret)
+                .unwrap();
+            v.act(Action::Select(secret), w, cx);
+            assert!(v.clipboard_ui.active.is_none());
+        })
+    });
+    settle(&rt, cx);
+    assert!(
+        cx.debug_bounds("clipboard-conversions").is_none(),
+        "Secure values never expose transform controls"
+    );
+}
+
+#[gpui::test]
+fn plain_utility_previews_keep_literal_markdown_without_code_toolbar(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        Utilities::new(Arc::new(Fixture::default()), &UiState::default(), w, cx)
+    });
+    let literal = "# literal heading\n**literal stars**\n```rust\nlet raw = 1;\n```";
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Snippets, 1), w, cx)));
+    settle(&rt, cx);
+    cx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            v.snippets.rows[0].preview = literal.into();
+            v.snippets.rows[0].body = literal.into();
+            cx.notify();
+        })
+    });
+    settle(&rt, cx);
+    assert!(cx.debug_bounds("snippets-plain-preview").is_some());
+    assert!(cx.debug_bounds("clipboard-plain-preview").is_none());
+    assert_eq!(
+        view.read_with(cx, |v, _| v.snippets.visible()[0].preview.clone()),
+        literal
+    );
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Clipboard, 2), w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let entry = v
+                .clipboard
+                .rows
+                .iter_mut()
+                .find(|entry| !entry.is_secret)
+                .unwrap();
+            if let model::ClipboardContent::Text { text, .. } = &mut entry.content {
+                *text = literal.into();
+            }
+            let index = v
+                .clipboard
+                .visible()
+                .iter()
+                .position(|entry| !entry.is_secret)
+                .unwrap();
+            v.act(Action::Select(index), w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert!(cx.debug_bounds("clipboard-plain-preview").is_some());
+    assert!(cx.debug_bounds("snippets-plain-preview").is_none());
+    assert_eq!(
+        view.read_with(cx, |v, _| v
+            .clipboard
+            .selected_entry()
+            .unwrap()
+            .text()
+            .unwrap()
+            .to_owned()),
+        literal
+    );
+}
+
+#[gpui::test]
+fn audit_vault_draft_actions_are_compact_and_inside_editor(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Arc::new(Fixture::default());
+    f.vault_unlocked
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let (view, cx) = cx.add_window_view(|w, cx| Utilities::new(f, &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Vault, 1), w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::New, w, cx)));
+    settle(&rt, cx);
+    let name = cx.debug_bounds("utility-field-0").unwrap();
+    let save = cx.debug_bounds("Save").unwrap();
+    let cancel = cx.debug_bounds("Cancel").unwrap();
+    assert!(
+        save.size.height < px(40.),
+        "Save must be a compact button, got {:?}",
+        save
+    );
+    assert!(
+        cancel.size.height < px(40.),
+        "Cancel must be a compact button"
+    );
+    assert!(
+        save.origin.y >= name.bottom(),
+        "Actions belong below form fields"
+    );
+    assert!((save.origin.y - cancel.origin.y).abs() < px(1.));
+    assert!(save.origin.x >= name.origin.x - px(10.));
+    assert!(cancel.right() <= name.right() + px(10.));
+}
+
+#[gpui::test]
+fn audit_search_chrome_remains_plain_after_navigation(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let (view, cx) = cx.add_window_view(|w, cx| {
+        Utilities::new(Arc::new(Fixture::default()), &UiState::default(), w, cx)
+    });
+    for (i, surface) in [
+        Surface::Snippets,
+        Surface::Notes,
+        Surface::Clipboard,
+        Surface::Emoji,
+        Surface::Snippets,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(surface, i as u64 + 1), w, cx)));
+        settle(&rt, cx);
+        assert!(
+            !view.read_with(cx, |v, cx| v.search.read(cx).options.border),
+            "Navigation must not replace header input with a bordered form field"
+        );
+    }
+}

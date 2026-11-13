@@ -67,6 +67,9 @@ impl CoreContext {
     pub fn runs_desktop_services(&self) -> bool {
         self.desktop_services
     }
+    pub fn runs_native_terminal(&self) -> bool {
+        self.desktop_services || self.host.native_terminal()
+    }
 
     #[cfg(feature = "native-launcher-facade")]
     pub(crate) fn with_headless_desktop_services(mut self) -> Self {

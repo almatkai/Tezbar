@@ -98,7 +98,7 @@ impl RuntimeView {
             if matches!(f.kind.as_str(), "checkbox" | "dropdown") {
                 continue;
             }
-            let input = cx.new(TextInput::new);
+            let input = cx.new(TextInput::new_native);
             let field = key.clone();
             let sub = cx.subscribe(&input, move |v, _, e: &Committed, cx| {
                 let _ = v.preference.model.edit(&field, json!(e.0));

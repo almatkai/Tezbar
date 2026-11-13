@@ -178,15 +178,25 @@ impl Metrics {
         std::time::Duration::from_millis(if self.reduced_motion { 0 } else { 90 })
     }
 }
+static FONTS: std::sync::OnceLock<(gpui::SharedString, gpui::SharedString)> =
+    std::sync::OnceLock::new();
 pub fn font_family(cx: &gpui::App, mono: bool) -> gpui::SharedString {
-    static FONTS: std::sync::OnceLock<(gpui::SharedString, gpui::SharedString)> =
-        std::sync::OnceLock::new();
     let fonts = FONTS.get_or_init(|| (choose_font(cx, false), choose_font(cx, true)));
     if mono {
         fonts.1.clone()
     } else {
         fonts.0.clone()
     }
+}
+/// The installed monospace family for call sites without an `App`. GPUI has no CSS-style
+/// `monospace` alias, so `font_family("monospace")` silently falls back to the UI font.
+/// Surfaces render inside a sheet that already resolved [`font_family`]; before that,
+/// Menlo ships with every macOS.
+pub fn mono_family() -> gpui::SharedString {
+    FONTS
+        .get()
+        .map(|fonts| fonts.1.clone())
+        .unwrap_or_else(|| "Menlo".into())
 }
 fn choose_font(cx: &gpui::App, mono: bool) -> gpui::SharedString {
     let available = cx.text_system().all_font_names();

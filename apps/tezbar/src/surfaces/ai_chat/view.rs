@@ -152,12 +152,20 @@ impl ChatView {
                                     .child(
                                         this.b(
                                             format!("resume-{}", row.id),
-                                            row.title.clone(),
+                                            "",
                                             Action::Resume(row.id.clone()),
                                             t,
                                             cx,
                                         )
+                                        .aria_label(row.title.clone())
                                         .flex_1()
+                                        .h_full()
+                                        .flex()
+                                        .flex_col()
+                                        .items_start()
+                                        .justify_center()
+                                        .bg(transparent_black())
+                                        .child(div().text_size(px(12.)).child(row.title.clone()))
                                         .child(
                                             div().text_size(px(10.)).text_color(t.text3).child(
                                                 format!(
@@ -199,7 +207,7 @@ impl ChatView {
                     .text_size(px(11.))
                     .text_color(t.text3)
                     .child(if turn.role == chat::Role::User {
-                        "You"
+                        ""
                     } else {
                         "Agent"
                     });
@@ -221,7 +229,7 @@ impl ChatView {
                 }
                 row.into_any_element()
             }
-            Row::Text { id, .. } => {
+            Row::Text { id, turn, .. } => {
                 let height = self
                     .documents
                     .get(&id)
@@ -242,13 +250,30 @@ impl ChatView {
                         (lines as f32 * 20. + 12.).clamp(48., 440.)
                     })
                     .unwrap_or(48.);
+                let user = turn.role == chat::Role::User;
                 div()
-                    .px(px(20.))
+                    .flex()
+                    .px(px(20. * t.zoom))
                     .py(px(6.))
-                    .h(px(height))
-                    .children(self.documents.get(&id).map(|d| d.view.clone()))
+                    .h(px(height + if user { 16. } else { 0. }))
+                    .when(user, |d| d.justify_end())
+                    .child(
+                        div()
+                            .when(user, |d| {
+                                d.w(gpui::relative(0.9))
+                                    .rounded(px(16.))
+                                    .border_1()
+                                    .border_color(t.hairline)
+                                    .bg(t.pill)
+                                    .px(px(16.))
+                                    .py(px(8.))
+                            })
+                            .when(!user, |d| d.w_full())
+                            .children(self.documents.get(&id).map(|d| d.view.clone())),
+                    )
                     .into_any_element()
             }
+
             Row::Stage(turn, n) => {
                 let stage = &turn.stages[n];
                 let key = format!("{}-{}", turn.id, stage.index);
@@ -438,6 +463,8 @@ impl ChatView {
             .id("tool-approval")
             .role(Role::AlertDialog)
             .aria_label(approval.title.clone())
+            .mb(px(8. * t.zoom))
+            .bg(t.bar)
             .mx(px(16.))
             .p(px(12.))
             .border_1()
@@ -451,10 +478,20 @@ impl ChatView {
             .child(
                 div()
                     .id("approval-command")
-                    .max_h(px(130.))
+                    .font_family(tezbar_ui::tokens::mono_family())
+                    .rounded(px(8.))
+                    .bg(t.pill)
+                    .p(px(8.))
+                    .max_h(px(112.))
                     .overflow_y_scroll()
                     .text_color(t.text2)
                     .child(self.approval_body().unwrap_or_default()),
+            )
+            .child(
+                div()
+                    .text_size(px(10.5))
+                    .text_color(t.text4)
+                    .child("Only approve commands you expect this task to run."),
             )
             .child(
                 div()
@@ -500,7 +537,18 @@ impl ChatView {
             .map(|c| c.attachments.clone())
             .unwrap_or_default();
         let unsaved = self.active().is_some_and(|c| c.unsaved());
-        let mut body = div().px(px(16.)).py(px(10.)).flex().flex_col().gap(px(8.));
+        let mut body = div()
+            .relative()
+            .mx(px(16. * t.zoom))
+            .mb(px(8. * t.zoom))
+            .p(px(10. * t.zoom))
+            .rounded(px(14. * t.zoom))
+            .border_1()
+            .border_color(t.hairline)
+            .bg(t.bar)
+            .flex()
+            .flex_col()
+            .gap(px(8.));
         if let Some(error) = self.active().and_then(|c| c.input_error.clone()) {
             body = body.child(
                 div()
@@ -658,83 +706,141 @@ impl ChatView {
                 );
             }
         }
-        body.child(
-            div()
-                .max_h(px(160.))
-                .min_h(px(48.))
-                .child(self.input.clone()),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap(px(6.))
-                .child(self.b("capture", "Capture screen", Action::Capture, t, cx))
-                .child(self.b("choose-image", "Attach image", Action::ChooseImages, t, cx))
-                .child(self.b(
-                    "retry-images",
-                    "Retry image previews",
-                    Action::RetryImages,
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    "clipboard-image",
-                    "Paste image",
-                    Action::ClipboardImage,
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    "cwd",
-                    s.cwd.unwrap_or_else(|| "Choose folder".into()),
-                    Action::DirectoryMenu,
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    "models",
-                    s.model.unwrap_or_else(|| "Choose model".into()),
-                    Action::Models,
-                    t,
-                    cx,
-                ))
-                .when(unsaved, |d| {
-                    d.child(self.b("save-response", "Retry saving", Action::Save, t, cx))
-                })
-                .child(self.b(
-                    "send",
-                    if busy { "Stop" } else { "Send" },
-                    if busy { Action::Stop } else { Action::Send },
-                    t,
-                    cx,
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .gap(px(6.))
-                .text_size(px(10.))
-                .child("Permission mode")
-                .children(
-                    [
-                        (ApprovalMode::Review, "Request Review"),
-                        (ApprovalMode::Default, "Default"),
-                        (ApprovalMode::Auto, "Auto (Preview)"),
-                        (ApprovalMode::Turbo, "Turbo"),
-                    ]
-                    .into_iter()
-                    .map(|(m, label)| {
+        let modes = [
+            (
+                ApprovalMode::Review,
+                "Request Review",
+                "Ask before every tool and command.",
+            ),
+            (
+                ApprovalMode::Default,
+                "Default",
+                "Read in the working folder; ask before writes and other commands.",
+            ),
+            (
+                ApprovalMode::Auto,
+                "Auto (Preview)",
+                "Read outside the folder and change files inside it.",
+            ),
+            (
+                ApprovalMode::Turbo,
+                "Turbo",
+                "Change files outside the folder and run other commands.",
+            ),
+        ];
+        let selected_mode = s.approval_mode.as_ref().unwrap_or(&ApprovalMode::Default);
+        let mode_title = modes
+            .iter()
+            .find(|(mode, _, _)| mode == selected_mode)
+            .map(|(_, title, _)| *title)
+            .unwrap_or("Default");
+        if self.modes_open {
+            body = body.child(
+                controls::popover("chat-permission-modes", "Choose permission mode", t)
+                    .absolute()
+                    .right(px(0.))
+                    .bottom(px(108. * t.zoom))
+                    .w(px(360. * t.zoom))
+                    .children(modes.iter().map(|(mode, title, subtitle)| {
                         self.b(
-                            format!("mode-{label}"),
-                            label,
-                            Action::Mode(m.clone()),
+                            format!("mode-{title}"),
+                            "",
+                            Action::Mode(mode.clone()),
                             t,
                             cx,
                         )
-                        .aria_selected(s.approval_mode.as_ref() == Some(&m))
-                    }),
+                        .aria_label(*title)
+                        .role(Role::ListBoxOption)
+                        .aria_selected(mode == selected_mode)
+                        .w_full()
+                        .h_auto()
+                        .py(px(8.))
+                        .child(
+                            div().flex().flex_col().items_start().child(*title).child(
+                                div()
+                                    .text_size(px(10.5))
+                                    .text_color(t.text4)
+                                    .child(*subtitle),
+                            ),
+                        )
+                    })),
+            );
+        }
+        body.child(
+            div().flex().justify_end().child(
+                self.b(
+                    "permission-mode",
+                    format!("{mode_title} ⌄"),
+                    Action::Modes,
+                    t,
+                    cx,
+                )
+                .aria_label("Agent permission mode")
+                .aria_expanded(self.modes_open),
+            ),
+        )
+        .child(
+            div()
+                .flex()
+                .items_end()
+                .gap(px(8.))
+                .child(
+                    self.b("capture", "⌁", Action::Capture, t, cx)
+                        .aria_label("Attach active screen")
+                        .size(px(28.)),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .max_h(px(120.))
+                        .min_h(px(28.))
+                        .child(self.input.clone()),
+                )
+                .child(
+                    self.b(
+                        "send",
+                        if busy { "■" } else { "↑" },
+                        if busy { Action::Stop } else { Action::Send },
+                        t,
+                        cx,
+                    )
+                    .aria_label(if busy { "Stop agent" } else { "Send message" })
+                    .size(px(28.)),
                 ),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(
+                    self.b(
+                        "cwd",
+                        s.cwd
+                            .as_deref()
+                            .map(tezbar_ui_model::terminal::compact_path)
+                            .unwrap_or_else(|| "Choose folder".into()),
+                        Action::DirectoryMenu,
+                        t,
+                        cx,
+                    ),
+                )
+                .child(div().flex_1())
+                .child(
+                    self.b("choose-image", "⊕", Action::ChooseImages, t, cx)
+                        .aria_label("Attach image"),
+                )
+                .child(
+                    self.b("clipboard-image", "▣", Action::ClipboardImage, t, cx)
+                        .aria_label("Paste image"),
+                )
+                .when(!attachments.is_empty(), |d| {
+                    d.child(self.b("retry-images", "Retry previews", Action::RetryImages, t, cx))
+                })
+                .when(unsaved, |d| {
+                    d.child(self.b("save-response", "Retry saving", Action::Save, t, cx))
+                }),
         )
         .into_any_element()
     }
@@ -800,8 +906,16 @@ impl ChatView {
         if self.delete_pending.is_some() {
             return;
         }
-        if key == "escape" && (self.models_open || self.directories_open || self.prompt.is_some()) {
+        if key == "escape"
+            && (self.models_open
+                || self.history_open
+                || self.modes_open
+                || self.directories_open
+                || self.prompt.is_some())
+        {
             self.models_open = false;
+            self.history_open = false;
+            self.modes_open = false;
             self.directories_open = false;
             self.prompt = None;
             self.arguments.clear();
@@ -933,6 +1047,8 @@ impl Render for ChatView {
         let t = tokens::tokens(w);
         let mut root = controls::sheet(t)
             .id("native-ai-chat")
+            .font_family(tezbar_ui::tokens::font_family(cx, false))
+            .relative()
             .track_focus(&self.focus)
             // GPUI resolves TextInput actions before low-level key capture. Intercept only
             // the shared actions whose focused chat meaning differs from ordinary editing.
@@ -949,7 +1065,17 @@ impl Render for ChatView {
             .child(
                 controls::header(t)
                     .gap(px(8.))
-                    .child(self.b("back", "Back", Action::Back, t, cx))
+                    .child(
+                        div()
+                            .size(px(28. * t.zoom))
+                            .rounded(px(8.))
+                            .bg(t.pill)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(11.))
+                            .child("AI"),
+                    )
                     .child(
                         div().flex_1().text_size(px(13.)).child(
                             self.active()
@@ -962,9 +1088,31 @@ impl Render for ChatView {
                                 .unwrap_or_else(|| "Past chats".into()),
                         ),
                     )
-                    .child(self.b("history", "Past chats", Action::Panel, t, cx))
-                    .child(self.b("new", "New chat", Action::New, t, cx))
-                    .child(self.b("settings", "AI Settings", Action::Settings, t, cx)),
+                    .child(
+                        self.b(
+                            "models",
+                            self.selection()
+                                .model
+                                .unwrap_or_else(|| "Choose model".into()),
+                            Action::Models,
+                            t,
+                            cx,
+                        )
+                        .max_w(gpui::relative(0.45)),
+                    )
+                    .child(
+                        self.b("history", "◷", Action::History, t, cx)
+                            .aria_label("Chat history")
+                            .aria_expanded(self.history_open),
+                    )
+                    .child(
+                        self.b("new", "+", Action::New, t, cx)
+                            .aria_label("New chat"),
+                    )
+                    .child(controls::back_button(
+                        self.b("back", "Back", Action::Back, t, cx),
+                        t,
+                    )),
             );
         if let Some(error) = &self.error {
             root = root.child(
@@ -1012,18 +1160,67 @@ impl Render for ChatView {
         if self.controller.active.is_none() {
             root = root.child(self.history(t, cx));
         } else {
-            root = root
-                .child(
-                    list(
-                        self.transcript.clone(),
-                        cx.processor(move |v, index, _, cx| v.row(index, t, cx)),
-                    )
-                    .flex_1()
-                    .min_h_0(),
+            let empty = self.projection.is_empty() && !self.active().is_some_and(|c| c.busy());
+            let transcript = if empty {
+                div().id("chat-empty-transcript").debug_selector(|| "chat-empty-transcript".into()).flex_1().min_h_0().overflow_y_scroll().flex().flex_col().items_start().justify_center().gap(px(16. * t.zoom)).px(px(20. * t.zoom)).py(px(32. * t.zoom))
+                    .child(div().max_w(px(448. * t.zoom))
+                        .child(div().text_size(px(19. * t.zoom)).child("What do you want to check?"))
+                        .child(div().mt(px(8.)).text_size(px(12.5 * t.zoom)).text_color(t.text3)
+                            .child("The agent can inspect this computer and use tools to get real answers. Commands that need permission appear here before they run.")))
+                    .child(div().flex().flex_wrap().gap(px(8.)).children([
+                        "What is using the most CPU?", "Show listening ports", "Find a file on my computer"
+                    ].into_iter().enumerate().map(|(i, text)| self.b(format!("suggestion-{i}"), text, Action::Draft(text.into()), t, cx)
+                        .bg(transparent_black()).border_1().border_color(t.hairline).rounded(px(8.)).px(px(12.)).py(px(8.)))))
+                    .child(self.b("configure-provider", "Configure a provider", Action::Settings, t, cx).bg(transparent_black()).text_size(px(11.)).text_color(t.text4))
+                    .into_any_element()
+            } else {
+                list(
+                    self.transcript.clone(),
+                    cx.processor(move |v, index, _, cx| v.row(index, t, cx)),
                 )
+                .flex_1()
+                .min_h_0()
+                .into_any_element()
+            };
+            root = root
+                .child(transcript)
                 .child(self.diagnostics_view(t, cx))
                 .child(self.approval(t, cx))
                 .child(self.composer(t, cx));
+        }
+        if self.history_open {
+            root = root.child(
+                div()
+                    .id("chat-history-popover")
+                    .absolute()
+                    .right(px(12.))
+                    .top(px(tokens::HEADER + 4.))
+                    .w(px(360. * t.zoom))
+                    .h(px(288. * t.zoom))
+                    .rounded(px(12.))
+                    .border_1()
+                    .border_color(t.hairline)
+                    .bg(t.popover_solid)
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex()
+                            .justify_between()
+                            .items_center()
+                            .px(px(10.))
+                            .py(px(4.))
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(t.text3)
+                                    .child("Conversations"),
+                            )
+                            .child(self.b("close-history", "Close", Action::History, t, cx)),
+                    )
+                    .child(self.history(t, cx)),
+            );
         }
         if self.models_open {
             let options = tezbar_ui_model::settings::providers::model_options(
@@ -1036,7 +1233,16 @@ impl Render for ChatView {
                     .id("chat-models")
                     .role(Role::ListBox)
                     .aria_label("Choose model")
-                    .max_h(px(240.))
+                    .absolute()
+                    .right(px(16.))
+                    .top(px(tokens::HEADER + 4.))
+                    .w(px(340. * t.zoom))
+                    .rounded(px(12.))
+                    .border_1()
+                    .border_color(t.hairline)
+                    .bg(t.popover_solid)
+                    .p(px(8.))
+                    .max_h(px(280.))
                     .child(self.model_filter.clone())
                     .child(
                         uniform_list(
@@ -1069,7 +1275,12 @@ impl Render for ChatView {
             );
         }
         let statuses = self.controller.background();
-        let mut footer = controls::footer(t).child("AI");
+        let mut footer = controls::footer(t).child(div().flex_1().child("AI")).child(
+            div()
+                .text_size(px(10. * t.zoom))
+                .text_color(t.text4)
+                .child("Attach screen  ⌘⇧S    Send  ↵    New line  ⇧↵"),
+        );
         // In parent composition the shared footer owns these statuses and routing.
         for status in statuses
             .into_iter()

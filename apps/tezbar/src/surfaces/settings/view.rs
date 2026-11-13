@@ -4,7 +4,7 @@ use tezbar_ui::{
     tokens::{self, Tokens},
 };
 impl SettingsContent {
-    fn button(
+    pub(super) fn button(
         &self,
         id: String,
         label: impl Into<SharedString>,
@@ -25,65 +25,34 @@ impl SettingsContent {
         )
         .debug_selector(move || id.clone())
     }
-    fn b(&self, label: &str, action: Action, t: Tokens, cx: &mut Context<Self>) -> Stateful<Div> {
+    pub(super) fn b(
+        &self,
+        label: &str,
+        action: Action,
+        t: Tokens,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let scope = match &action {
+            Action::Knowledge(
+                knowledge::Operation::RemoveRoot(id) | knowledge::Operation::RootEnabled { id, .. },
+            ) => id.clone(),
+            Action::Knowledge(knowledge::Operation::RootDepth { id, depth }) => {
+                format!("{id}-{depth}")
+            }
+            Action::CommandAlias(id)
+            | Action::CommandHotkey(id)
+            | Action::CommandEnabled(id, _)
+            | Action::Uninstall(id)
+            | Action::Preferences(id, _) => id.clone(),
+            _ => String::new(),
+        };
         self.button(
-            match &action {
-                Action::Knowledge(
-                    knowledge::Operation::RemoveRoot(id)
-                    | knowledge::Operation::RootEnabled { id, .. },
-                ) => format!("settings-{id}-{label}"),
-                Action::Knowledge(knowledge::Operation::RootDepth { id, depth }) => {
-                    format!("settings-{id}-depth-{depth}")
-                }
-                Action::CommandAlias(id)
-                | Action::CommandHotkey(id)
-                | Action::CommandEnabled(id, _)
-                | Action::Uninstall(id)
-                | Action::Preferences(id, _) => format!("settings-{id}-{label}"),
-                Action::Contribution(intent) => {
-                    use ContributionIntent::*;
-                    let scope = match intent {
-                        Select(id)
-                        | Test(id)
-                        | Enable(id, _)
-                        | Remove(id)
-                        | Review(id)
-                        | Accept(id)
-                        | SaveCollection(id, _)
-                        | ReloadSecretFields(id)
-                        | SaveSecret(id, _, _) => id.clone(),
-                        SaveRow(id, collection, index, field) => {
-                            format!("{id}-{collection}-{index}-{field}")
-                        }
-                        SaveSavedSecret(id, index) => format!("{id}-secret-{index}"),
-                        SetTool(id, tool, _, connection) => format!("{id}-{connection:?}-{tool}"),
-                        Operation(id, action, args) => format!(
-                            "{id}-{:?}-{}",
-                            std::mem::discriminant(action),
-                            args.iter()
-                                .find_map(|v| v.get("connectionId").and_then(Value::as_str))
-                                .or_else(|| {
-                                    if matches!(
-                                        action,
-                                        ContributionAction::OAuthStart
-                                            | ContributionAction::OAuthStatus
-                                            | ContributionAction::OAuthCancel
-                                            | ContributionAction::ClearAllowance
-                                    ) {
-                                        args.get(1).and_then(Value::as_str)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .unwrap_or("")
-                        ),
-                        _ => String::new(),
-                    };
-                    format!("settings-{scope}-{label}")
-                }
-                _ => format!("settings-{label}"),
+            if scope.is_empty() {
+                format!("settings-{label}")
+            } else {
+                format!("settings-{scope}-{label}")
             },
-            label.to_string(),
+            label.to_owned(),
             action,
             t,
             cx,
@@ -91,6 +60,12 @@ impl SettingsContent {
     }
     pub(super) fn choice_selected(&self, action: &Action) -> bool {
         match action {
+            Action::SetField(key, value) => {
+                self.value(key) == *value
+                    || (key == "connection.transport"
+                        && self.value(key).is_empty()
+                        && value == "stdio")
+            }
             Action::Theme(theme) => self.state.theme == *theme,
             Action::UpdateChannel(channel) => self.update_channel == *channel,
             Action::Knowledge(knowledge::Operation::Depth(depth)) => self
@@ -114,7 +89,7 @@ impl SettingsContent {
             _ => false,
         }
     }
-    fn choice(
+    pub(super) fn choice(
         &self,
         label: &str,
         action: Action,
@@ -129,9 +104,9 @@ impl SettingsContent {
             } else {
                 Toggled::False
             })
-            .when(selected, |button| button.bg(t.pill_strong))
+            .when(selected, |d| d.bg(t.selected))
     }
-    fn field_view(&self, id: &str) -> AnyElement {
+    pub(super) fn field_view(&self, id: &str) -> AnyElement {
         self.fields
             .get(id)
             .map(|f| {
@@ -142,39 +117,15 @@ impl SettingsContent {
             })
             .unwrap_or_else(|| div().child("Loading…").into_any_element())
     }
-    fn labeled(&self, id: &str, label: &str) -> Div {
+    pub(super) fn labeled(&self, id: &str, label: &str) -> Div {
         div()
             .flex()
             .flex_col()
             .gap(px(6.))
-            .child(div().text_size(px(12.)).child(label.to_string()))
+            .child(div().text_size(px(12.)).child(label.to_owned()))
             .child(self.field_view(id))
     }
-    fn row(&self, label: &str, detail: &str, t: Tokens) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(8.))
-            .py(px(13.))
-            .border_b_1()
-            .border_color(t.hairline)
-            .child(
-                div()
-                    .id(format!("heading-{label}"))
-                    .role(Role::Heading)
-                    .text_size(px(13.))
-                    .child(label.to_string()),
-            )
-            .when(!detail.is_empty(), |d| {
-                d.child(
-                    div()
-                        .text_color(t.text2)
-                        .text_size(px(12.))
-                        .child(detail.to_string()),
-                )
-            })
-    }
-    fn toggle(
+    pub(super) fn toggle(
         &self,
         label: &str,
         key: &'static str,
@@ -182,11 +133,13 @@ impl SettingsContent {
         t: Tokens,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let view = cx.entity().downgrade();
-        controls::checkbox(format!("toggle-{key}"), label.to_string(), checked, t).on_click(
-            move |_, w, cx| {
-                let _ = view.update(cx, |v, cx| v.action(Action::Toggle(key, !checked), w, cx));
-            },
+        self.check(
+            format!("toggle-{key}"),
+            label.to_owned(),
+            checked,
+            Action::Toggle(key, !checked),
+            t,
+            cx,
         )
     }
     pub(super) fn tab_control(
@@ -196,1379 +149,218 @@ impl SettingsContent {
         t: Tokens,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        self.b(tab.title(), Action::Tab(tab), t, cx)
+        let weak = cx.entity().downgrade();
+        let key_view = weak.clone();
+        // The legacy toolbar has a 20px icon over a 12px label, in a 54px tile.
+        div()
+            .id(format!("settings-tab-{}", tab.id()))
             .role(Role::Tab)
+            .aria_label(tab.title())
             .aria_selected(self.tab == tab)
             .track_focus(&self.tabs[index])
             .tab_index(if self.tab == tab { 0 } else { -1 })
-            .when(self.tab == tab, |d| d.bg(t.pill_strong))
-    }
-    fn general(&mut self, t: Tokens, cx: &mut Context<Self>) -> Div {
-        let mut d = div().flex().flex_col().gap(px(4.));
-        let name = self
-            .layout
-            .as_ref()
-            .map(|(n, _)| n.as_str())
-            .unwrap_or("Loading display…");
-        let mut appearance = self
-            .row("Launcher appearance", name, t)
-            .child(self.labeled("layout.width", "Width"))
-            .child(self.labeled("layout.height", "Height"))
-            .child(self.b("Apply size", Action::Layout, t, cx));
-        let current_zoom = self.layout.as_ref().map(|(_, p)| p.zoom).unwrap_or(1.0);
-        let zoom = div()
+            .h(px(54.))
+            .min_w(px(86.))
             .flex()
+            .flex_col()
             .items_center()
-            .gap(px(8.))
-            .child(self.b(
-                "Decrease scale",
-                Action::Zoom((current_zoom - 0.05).max(0.75)),
-                t,
-                cx,
-            ))
-            .child(format!("{:.0}%", current_zoom * 100.))
-            .child(self.b(
-                "Increase scale",
-                Action::Zoom((current_zoom + 0.05).min(2.0)),
-                t,
-                cx,
-            ));
-        appearance = appearance.child(zoom).child(self.b(
-            "Reset size & scale for this display",
-            Action::ResetLayout,
-            t,
-            cx,
-        ));
-        d = d.child(appearance);
-        d = d.child(
-            self.row(
-                "Startup",
-                "Keeps the launcher surface alive between quick open and close cycles.",
-                t,
-            )
-            .child(
-                controls::checkbox("startup", "Launch Tezbar at login", true, t)
-                    .tab_index(-1)
-                    .aria_description("Read only"),
-            ),
-        );
-        d = d.child(
-            self.row(
-                "Onboarding",
-                "Show the onboarding tour on the next app launch.",
-                t,
-            )
-            .child(
-                self.b(
-                    "Run onboarding on next launch",
-                    Action::Toggle(
-                        "hasCompletedOnboarding",
-                        self.config["hasCompletedOnboarding"] == false,
-                    ),
-                    t,
-                    cx,
-                )
-                .role(Role::CheckBox)
-                .aria_toggled(if self.config["hasCompletedOnboarding"] == false {
-                    Toggled::True
-                } else {
-                    Toggled::False
-                }),
-            ),
-        );
-        d = d.child(
-            self.row(
-                "Tezbar Hotkey",
-                "Press a modifier and another key. Escape cancels; Backspace restores the default.",
-                t,
-            )
-            .child(self.b(
-                if self.hotkey_recording {
-                    "Press shortcut…"
-                } else {
-                    self.config["raymesHotkey"]
-                        .as_str()
-                        .unwrap_or("Record shortcut")
-                },
-                Action::RecordHotkey,
-                t,
-                cx,
-            )),
-        );
-        for (id, title) in [
-            ("uiStateRetentionMs", "Last Screen"),
-            ("extensionRuntimeTimeoutMs", "Extension Return"),
-            ("aiModeTimeoutMs", "AI Return"),
-            ("terminalModeTimeoutMs", "Terminal Return"),
-        ] {
-            d = d.child(
-                self.row(
-                    title,
-                    if id == "uiStateRetentionMs" {
-                        "Seconds"
-                    } else {
-                        "Minutes; 0 means Never."
-                    },
-                    t,
-                )
-                .child(self.field_view(id)),
-            );
-        }
-        let mut themes = self.row("Appearance", "Applies to all Tezbar windows.", t);
-        for (label, theme) in [
-            ("System", Theme::System),
-            ("White", Theme::White),
-            ("Dark", Theme::Dark),
-        ] {
-            themes = themes.child(self.choice(label, Action::Theme(theme), t, cx));
-        }
-        d = d.child(themes);
-        d = d.child(
-            self.row(
-                "Currency conversion",
-                "Leave blank to use your frequent target currency.",
-                t,
-            )
-            .child(self.field_view("currency"))
-            .child(self.b("Save currency", Action::Currency, t, cx)),
-        );
-        let mut updates = self
-            .row("Updates", &update_label(&self.update_status), t)
-            .child(self.b(
-                "Check for updates",
-                Action::Update(UpdateAction::Check),
-                t,
-                cx,
-            ));
-        match &self.update_status {
-            tezbar_update::AppUpdateStatus::Available { .. } => {
-                updates = updates.child(self.b(
-                    "Download update",
-                    Action::Update(UpdateAction::Download),
-                    t,
-                    cx,
-                ))
-            }
-            tezbar_update::AppUpdateStatus::Ready { .. } => {
-                updates = updates.child(self.b(
-                    "Restart to update",
-                    Action::Update(UpdateAction::Restart),
-                    t,
-                    cx,
-                ))
-            }
-            tezbar_update::AppUpdateStatus::ManualAvailable { installer_url, .. } => {
-                updates = updates.child(self.b(
-                    "Download installer",
-                    Action::Update(UpdateAction::Installer(installer_url.clone())),
-                    t,
-                    cx,
-                ))
-            }
-            _ => {}
-        }
-        updates = updates
-            .child(self.b(
-                if self.state.auto_update_enabled {
-                    "Disable automatic updates"
-                } else {
-                    "Enable automatic updates"
-                },
-                Action::AutoUpdate(!self.state.auto_update_enabled),
-                t,
-                cx,
-            ))
-            .child(self.b("Release notes", Action::ReleaseNotes, t, cx));
-        for channel in ["stable", "beta", "alpha"] {
-            updates = updates.child(self.choice(
-                &display_name(channel),
-                Action::UpdateChannel(channel.into()),
-                t,
-                cx,
-            ));
-        }
-        d.child(updates)
-    }
-    fn ai(&mut self, t: Tokens, cx: &mut Context<Self>) -> Div {
-        let mut d = div().flex().flex_col().gap(px(10.));
-        let mut providers = div().flex().flex_wrap().gap(px(5.));
-        let mut ids = settings::provider_catalog()["RECOMMENDED_AI_MODEL"]
-            .as_object()
-            .map(|m| m.keys().cloned().collect::<Vec<_>>())
-            .unwrap_or_default();
-        ids.extend(
-            self.config["customProviders"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|v| v["id"].as_str().map(str::to_string)),
-        );
-        for p in ids {
-            providers = providers.child(
-                self.b(
-                    &format!(
-                        "{p}{}",
-                        if self.config["provider"] == p {
-                            " · Active"
-                        } else if settings::providers::configured(&self.config, &p) {
-                            " · Configured"
-                        } else {
-                            ""
-                        }
-                    ),
-                    Action::Provider(p.clone()),
-                    t,
-                    cx,
-                )
-                .role(Role::Tab)
-                .aria_selected(self.provider.provider == p),
-            );
-        }
-        d = d.child(providers);
-        let p = self.provider.provider.clone();
-        let managed = self.config["customProviders"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .any(|v| v["id"] == p && v.get("_extensionId").is_some());
-        d = d.child(self.row(
-            &format!("{p} configuration"),
-            if managed {
-                "Managed by AI Extension. Edit its provider and credentials in AI Extensions."
+            .justify_center()
+            .gap(px(4.))
+            .rounded(px(8.))
+            .border_1()
+            .border_color(if self.tab == tab {
+                t.rim
             } else {
-                "Credentials are scoped to this provider."
-            },
-            t,
-        ));
-        if !managed {
-            for (field, label) in [
-                ("protocol", "Protocol"),
-                ("baseURL", "Base URL"),
-                ("apiKey", "API key"),
-                ("headers", "Headers JSON"),
-                ("githubOAuthClientId", "GitHub OAuth client ID"),
-            ] {
-                d = d.child(self.labeled(&format!("provider.{p}.{field}"), label));
-            }
-        }
-        d = d
-            .child(self.b("Use this provider", Action::ActivateProvider, t, cx))
-            .child(self.b("Discover models", Action::Discover, t, cx));
-        for m in self.provider.models.clone() {
-            let id = text(&m["id"]);
-            d = d.child(
-                div()
-                    .flex()
-                    .gap(px(6.))
-                    .child(self.b(
-                        &format!(
-                            "{}{}",
-                            if id == self.provider.selected_model {
-                                "✓ "
-                            } else {
-                                ""
-                            },
-                            id
-                        ),
-                        Action::SelectModel(id.clone()),
-                        t,
-                        cx,
-                    ))
-                    .child(div().text_color(t.text2).child(text(&m["capabilities"])))
-                    .when(!managed, |d| {
-                        d.child(self.field_view(&format!("model.{p}.{id}")))
-                            .child(self.b(
-                                &format!("Save model {id}"),
-                                Action::SaveModel(id.clone()),
-                                t,
-                                cx,
-                            ))
-                            .child(self.b(&format!("Remove {id}"), Action::RemoveModel(id), t, cx))
-                    }),
-            );
-        }
-        if !managed {
-            d = d
-                .child(self.labeled("model.new", "Add model ID"))
-                .child(self.labeled("model.metadata", "Model metadata (JSON)"))
-                .child(self.b("Add model", Action::AddModel, t, cx));
-        }
-        d = d
-            .child(self.labeled("provider.new", "Custom provider definition"))
-            .child(self.b("Create provider", Action::CreateProvider, t, cx));
-        if p.starts_with("custom:") && !managed {
-            d = d.child(self.b("Remove provider", Action::RemoveProvider, t, cx));
-        }
-        if p == "copilot" {
-            d = d.child(
-                self.row("GitHub Copilot", &format_device(&self.device.phase), t)
-                    .child(self.b("Sign in with GitHub", Action::SignIn, t, cx))
-                    .child(self.b("Cancel GitHub sign-in", Action::CancelSignIn, t, cx)),
-            );
-        }
-        if p == "antigravity" {
-            let mut accounts=self.row("Antigravity accounts","This unofficial integration is not endorsed by Google. Linked accounts stay in their existing account store.",t);
-            for a in self.accounts.as_array().into_iter().flatten() {
-                let id = text(&a["accountId"]);
-                accounts = accounts.child(
-                    div()
-                        .child(text(&a["email"]))
-                        .child(self.b(
-                            &format!("Use account {id}"),
-                            Action::Account(AccountAction::Switch(id.clone())),
-                            t,
-                            cx,
-                        ))
-                        .child(self.b(
-                            &format!("Remove account {id}"),
-                            Action::Account(AccountAction::Remove(id)),
-                            t,
-                            cx,
-                        )),
-                );
-            }
-            accounts = accounts
-                .child(self.b(
-                    "Sign in with Google",
-                    Action::Account(AccountAction::SignIn),
-                    t,
-                    cx,
-                ))
-                .child(self.field_view("account.callback"))
-                .child(self.b("Use callback URL", Action::AccountCallback, t, cx))
-                .child(self.b(
-                    "Cancel Google sign-in",
-                    Action::Account(AccountAction::Cancel),
-                    t,
-                    cx,
-                ))
-                .child(self.account_status.clone());
-            d = d.child(accounts);
-        }
-        for (key, label, default) in [
-            ("thinking", "Enable model thinking", false),
-            ("memoryEnabled", "Enable memory retrieval", true),
-            ("memoryIncludePrivate", "Include private memory", false),
-            (
-                "aiActionRequirePermission",
-                "Require permission for actions",
-                true,
-            ),
-            (
-                "aiActionRedactionEnabled",
-                "Redact sensitive action data",
-                true,
-            ),
-        ] {
-            d = d.child(self.toggle(
-                label,
-                key,
-                self.config[key].as_bool().unwrap_or(default),
-                t,
-                cx,
-            ));
-        }
-        d = d
-            .child(self.labeled("memoryMaxItems", "Memory items per request"))
-            .child(self.labeled(
-                "headerTimeoutSeconds",
-                "Header wait, seconds (blank: 30 remote, 120 local)",
-            ));
-        d = d
-            .child(
-                self.row("Provider status", "", t)
-                    .child(safe_display(&self.provider_statuses)),
-            )
-            .child(
-                self.row(
-                    "Pi extensions",
-                    "Read only; extensions are not loaded by this list.",
-                    t,
-                )
-                .child(safe_display(&self.pi)),
-            );
-        let mut tasks = self.row(
-            "Task overrides",
-            "Leave a provider or model blank to use its default.",
-            t,
-        );
-        for task in ["chat", "search", "action", "voice"] {
-            tasks = tasks
-                .child(self.labeled(
-                    &format!("task.{task}.provider"),
-                    &format!("{task} provider"),
-                ))
-                .child(self.labeled(&format!("task.{task}.model"), &format!("{task} model")))
-                .child(self.b(
-                    &format!("Save {task} override"),
-                    Action::SaveTask(task.into()),
-                    t,
-                    cx,
-                ));
-        }
-        d = d.child(tasks);
-        d.child(self.ai_extensions(t, cx))
-    }
-    fn voice(&self, t: Tokens, cx: &mut Context<Self>) -> Div {
-        let modes = if self.voice_modes.is_empty() {
-            "none".into()
-        } else {
-            self.voice_modes.join(", ")
-        };
-        let mut d = self
-            .row(
-                "Push to Talk",
-                "Tap to open Tezbar. Keep the same shortcut held to start dictation.",
-                t,
-            )
-            .child(text(&self.config["raymesHotkey"]))
-            .child(self.b("Change shortcut", Action::Tab(Tab::General), t, cx))
-            .child(self.row("Detected Modes", &modes, t));
-        for m in self.voice.as_array().into_iter().flatten() {
-            let id = text(&m["id"]);
-            let name = text(&m["name"]);
-            let ready = m["status"] == "downloaded";
-            let downloading = m["status"] == "downloading";
-            let selected = self.selected_voice == id;
-            let mut row = self
-                .row(
-                    &name,
-                    &format!(
-                        "{} · {} · {} · {} · {}",
-                        text(&m["family"]),
-                        text(&m["language"]),
-                        text(&m["tier"]),
-                        text(&m["sizeLabel"]),
-                        display_name(m["status"].as_str().unwrap_or("Not installed"))
-                    ),
-                    t,
-                )
-                .child(
-                    self.b(
-                        &format!("Use {name}"),
-                        Action::Voice(VoiceAction::Select(id.clone())),
-                        t,
-                        cx,
-                    )
-                    .role(Role::RadioButton)
-                    .aria_toggled(if selected {
-                        Toggled::True
-                    } else {
-                        Toggled::False
-                    }),
-                );
-            if m["downloadedBytes"].as_u64().unwrap_or(0) > 0 && !downloading {
-                row = row.child(self.b(
-                    &format!("Delete {name}"),
-                    Action::Voice(VoiceAction::Delete(id.clone())),
-                    t,
-                    cx,
-                ));
-            }
-            if downloading {
-                row = row.child(self.b(
-                    &format!("Cancel {name} download"),
-                    Action::Voice(VoiceAction::CancelDownload(id.clone())),
-                    t,
-                    cx,
-                ));
-                let stage = if m["stage"] == "installing-runtime" {
-                    format!("Installing {}…", text(&m["runtime"]["label"]))
-                } else {
-                    "Downloading model weights…".into()
-                };
-                row = row.child(stage);
-                let progress = m["progress"]
-                    .as_f64()
-                    .map(|p| format!("{:.0}%", p.clamp(0., 1.) * 100.))
-                    .unwrap_or_else(|| "In progress".into());
-                row = row.child(
-                    div()
-                        .id(format!("voice-progress-{id}"))
-                        .role(Role::ProgressIndicator)
-                        .aria_label(format!("{name}: {progress}"))
-                        .child(progress),
-                );
-            } else if !ready {
-                row = row.child(self.b(
-                    &format!(
-                        "{} {name}",
-                        if m["runtime"]["ready"] == true {
-                            "Download"
-                        } else {
-                            "Install & download"
-                        }
-                    ),
-                    Action::Voice(VoiceAction::Download(id)),
-                    t,
-                    cx,
-                ));
-            }
-            if !downloading {
-                row = row.child(format!(
-                    "{} {}",
-                    text(&m["runtime"]["label"]),
-                    if m["runtime"]["ready"] == true {
-                        "ready"
-                    } else {
-                        "not installed"
-                    }
-                ));
-                if m["runtime"]["ready"] != true {
-                    row = row.child(text(&m["runtime"]["installCommand"]));
-                }
-            }
-            if m["status"] == "error" {
-                row = row.child(
-                    div()
-                        .text_color(t.danger)
-                        .child("Could not download this model. Retry the download."),
-                );
-            }
-            d = d.child(row.child(div().text_color(t.text2).child(download_progress(
-                m["downloadedBytes"].as_u64().unwrap_or(0),
-                m["totalBytes"].as_u64(),
-            ))));
-        }
-        d.child(
-            div().text_color(t.text2).child(
-                "Downloading a model also installs its runtime so Hold-to-Speak works locally.",
-            ),
-        )
-    }
-    fn knowledge_view(&self, t: Tokens, cx: &mut Context<Self>) -> Div {
-        let mut d = self
-            .row(
-                "DeepSearch",
-                "Choose folders, search depth and a local search model.",
-                t,
-            )
-            .child(self.b("Choose folder", Action::ChooseFolder, t, cx))
-            .child(self.b(
-                "Add major folders",
-                Action::Knowledge(knowledge::Operation::AddMajor),
-                t,
-                cx,
-            ));
-        if let Some(s) = &self.knowledge.snapshot {
-            for depth in ["off", "basic", "smart", "deep"] {
-                d = d.child(self.choice(
-                    &display_name(depth),
-                    Action::Knowledge(knowledge::Operation::Depth(depth.into())),
-                    t,
-                    cx,
-                ));
-            }
-            for speed in ["slow", "medium", "fast"] {
-                d = d.child(self.choice(
-                    &display_name(speed),
-                    Action::Knowledge(knowledge::Operation::Speed(speed.into())),
-                    t,
-                    cx,
-                ));
-            }
-            for root in &s.roots {
-                let id = text(&root["id"]);
-                let mut row = self
-                    .row(
-                        root["path"].as_str().unwrap_or("Folder"),
-                        &display_name(root["status"].as_str().unwrap_or("")),
-                        t,
-                    )
-                    .child(self.b(
-                        if root["enabled"] == true {
-                            "Disable folder"
-                        } else {
-                            "Enable folder"
-                        },
-                        Action::Knowledge(knowledge::Operation::RootEnabled {
-                            id: id.clone(),
-                            enabled: root["enabled"] != true,
-                        }),
-                        t,
-                        cx,
-                    ))
-                    .child(self.b(
-                        "Remove folder",
-                        Action::Knowledge(knowledge::Operation::RemoveRoot(id.clone())),
-                        t,
-                        cx,
-                    ));
-                for depth in ["inherit", "off", "basic", "smart", "deep"] {
-                    row = row.child(self.choice(
-                        &display_name(depth),
-                        Action::Knowledge(knowledge::Operation::RootDepth {
-                            id: id.clone(),
-                            depth: depth.into(),
-                        }),
-                        t,
-                        cx,
-                    ));
-                }
-                d = d.child(row);
-            }
-            d = d.child(div().text_color(t.text2).child(safe_display(&s.status)));
-        } else {
-            d = d.child(if self.knowledge.loading {
-                "Loading Knowledge…"
+                transparent_black().into()
+            })
+            .bg(if self.tab == tab {
+                t.pill_strong
             } else {
-                "Knowledge status unavailable"
-            });
-        }
-        if let Some((summary, counts)) = self.knowledge.semantic_summary() {
-            d = d.child(div().text_color(t.text2).child(summary));
-            if let Some((done, total)) = counts {
-                d = d.child(format!("{done} of {total} indexed"));
-            }
-        }
-        for progress in self.knowledge.progress() {
-            let label = progress
-                .percent
-                .map(|p| format!("{} download: {p}%", progress.variant.name()))
-                .unwrap_or_else(|| format!("Verifying {}", progress.variant.name()));
-            d = d.child(
-                div()
-                    .id(format!("progress-{}", progress.variant.id()))
-                    .role(Role::ProgressIndicator)
-                    .aria_label(label.clone())
-                    .child(label),
-            );
-        }
-        d = d.child(self.b(
-            "Use built-in lightweight search",
-            Action::Knowledge(knowledge::Operation::Switch(None)),
-            t,
-            cx,
-        ));
-        for file in self.knowledge.files() {
-            let variant = file.id;
-            let mut row = self.row(variant.name(), &self.knowledge.file_label(&file), t);
-            if file.state == knowledge::FileState::Ready && file.failure.is_none() {
-                let entity = cx.entity().downgrade();
-                let selected =
-                    self.knowledge.selected() == format!("embeddinggemma-2:{}", variant.id());
-                row = row.child(
-                    controls::action_button(
-                        format!("select-{}", variant.id()),
-                        format!("Use {}", variant.name()),
-                        ButtonTone::Quiet,
-                        self.knowledge.phase != knowledge::Phase::Idle,
-                        t,
-                        move |w, cx| {
-                            let _ = entity.update(cx, |v, cx| {
-                                v.action(
-                                    Action::KnowledgeControl(
-                                        knowledge::Operation::Switch(Some(variant)),
-                                        format!("select:{}", variant.id()),
-                                    ),
-                                    w,
-                                    cx,
-                                )
-                            });
-                        },
-                    )
-                    .role(Role::RadioButton)
-                    .aria_toggled(if selected {
-                        Toggled::True
-                    } else {
-                        Toggled::False
-                    }),
-                );
-            }
-            for b in self.knowledge.buttons(variant) {
-                let operation = if b.trigger.contains("cancel") {
-                    knowledge::Operation::Cancel(variant)
-                } else if b.trigger.contains("remove") {
-                    knowledge::Operation::Remove(variant)
-                } else if b.trigger.contains("download") {
-                    knowledge::Operation::Download(variant)
-                } else {
-                    knowledge::Operation::Switch(Some(variant))
-                };
-                let view = cx.entity().downgrade();
-                let action = Action::KnowledgeControl(operation, b.trigger.clone());
-                row = row.child(
-                    controls::action_button(
-                        b.trigger,
-                        b.accessible_name,
-                        ButtonTone::Quiet,
-                        b.inert,
-                        t,
-                        move |w, cx| {
-                            let _ = view.update(cx, |v, cx| v.action(action.clone(), w, cx));
-                        },
-                    )
-                    .track_focus(
-                        &self.knowledge_focus[if variant == knowledge::Variant::Standard {
-                            0
-                        } else {
-                            1
-                        }],
-                    ),
-                );
-            }
-            d = d.child(row);
-        }
-        for (label, op) in [
-            ("Start indexing", knowledge::Operation::Start),
-            ("Pause indexing", knowledge::Operation::Pause),
-            ("Resume indexing", knowledge::Operation::Resume),
-        ] {
-            d = d.child(self.b(label, Action::Knowledge(op), t, cx));
-        }
-        d=d.child(self.row("Processing","On this computer: private, offline, and enabled. Tezbar Cloud: disabled; files are never uploaded.",t));
-        for alert in self.knowledge.alerts() {
-            d = d.child(
-                div()
-                    .id(("semantic", line!() as usize))
-                    .role(Role::Alert)
-                    .text_color(t.danger)
-                    .child(alert),
-            );
-        }
-        d
+                transparent_black().into()
+            })
+            .text_color(if self.tab == tab { t.text1 } else { t.text3 })
+            .text_size(px(12.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .child(tab_icon(tab).size(px(20.)).text_color(if self.tab == tab {
+                t.text1
+            } else {
+                t.text3
+            }))
+            .child(tab.title())
+            .on_click(move |_, w, cx| {
+                let _ = weak.update(cx, |v, cx| v.action(Action::Tab(tab), w, cx));
+            })
+            .on_key_down(move |event, w, cx| {
+                if !event.is_held && matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                    let _ = key_view.update(cx, |v, cx| v.action(Action::Tab(tab), w, cx));
+                    cx.stop_propagation();
+                }
+            })
     }
-    fn permissions_view(&self, t: Tokens, cx: &mut Context<Self>) -> Div {
-        let mut d = self.row(
-            "Permissions",
-            "Tezbar requests access only when you choose an action.",
-            t,
-        );
-        if let Some(snapshot) = &self.permissions.snapshot {
-            for status in &snapshot.statuses {
-                let desc = &status.descriptor;
-                let mut row = self
-                    .row(&desc.title, &desc.rationale, t)
-                    .child(format!("{:?}", status.state));
-                if !matches!(
-                    status.state,
-                    tezbar_ui_model::utilities::PermissionState::Granted
-                        | tezbar_ui_model::utilities::PermissionState::Unsupported
-                ) {
-                    row = row.child(self.b(
-                        &format!("Request {}", desc.title),
-                        Action::Permission(desc.id.clone()),
-                        t,
-                        cx,
-                    ));
-                }
-                if let Some(url) = &desc.settings_url {
-                    row = row.child(self.b(
-                        &format!("Open {} settings", desc.title),
-                        Action::OpenPermissionSettings(url.clone()),
-                        t,
-                        cx,
-                    ));
-                }
-                d = d.child(row);
-            }
-        } else {
-            d = d.child("Loading permissions…")
+    pub fn onboarding_connection(&self) -> Option<(String, String)> {
+        if let Some(connection) = &self.onboarding_connected {
+            return Some(connection.clone());
         }
-        if let Some((ok, message)) = &self.permissions.banner {
-            d = d.child(
-                div()
-                    .id("permission-feedback")
-                    .role(if *ok { Role::Status } else { Role::Alert })
-                    .child(message.clone()),
-            );
+        let provider = self.config["provider"].as_str()?;
+        if ["ollama", "opencode", "antigravity"].contains(&provider)
+            || !settings::providers::configured(&self.config, provider)
+        {
+            return None;
         }
-        d
+        let model = self.config["providerSelectedModels"][provider]
+            .as_str()
+            .or(self.config["model"].as_str())?;
+        Some((provider.to_owned(), model.to_owned()))
     }
-    fn storage_view(&self, t: Tokens, cx: &mut Context<Self>) -> Div {
-        let mut d = self.row(
-            "Clipboard",
-            "Clipboard history is text-only by default. Image capture is opt-in and size-capped.",
-            t,
-        );
-        for (key, label) in [
-            ("watchEnabled", "Watch clipboard history"),
-            ("captureImages", "Capture copied images"),
-        ] {
-            let enabled = self.clipboard[key] == true;
-            d = d.child(
-                self.b(label, Action::ClipboardToggle(key, !enabled), t, cx)
-                    .role(Role::CheckBox)
-                    .aria_toggled(if enabled {
-                        Toggled::True
-                    } else {
-                        Toggled::False
-                    }),
-            );
-        }
-        d = d
-            .child(self.labeled("clipboard.size", "Maximum image megapixels"))
-            .child(self.b("Save image size", Action::ClipboardSize, t, cx));
-        d = d
-            .child(
-                self.row("Storage breakdown", "", t)
-                    .child(safe_display(&self.storage)),
-            )
-            .child(self.b("Clear clipboard images", Action::ClearImages, t, cx))
-            .child(self.b("Vacuum search database", Action::Vacuum, t, cx))
-            .child(self.b("Clear legacy Chromium cache", Action::LegacyCleanup, t, cx));
-        d
-    }
-    fn extensions(&mut self, t: Tokens, _w: &mut Window, cx: &mut Context<Self>) -> Div {
-        let mut d = self.row("Installed extensions", "", t).child(self.b(
-            "Browse Store",
-            Action::BrowseStore,
-            t,
-            cx,
-        ));
-        let schema = merge_installed(&self.schema, &self.installed);
-        let filter = self.value("extensions.filter").to_lowercase();
-        d = d.child(self.labeled("extensions.filter", "Filter installed extensions"));
-        let rows = schema
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|e| filter.is_empty() || safe_display(e).to_lowercase().contains(&filter))
-            .cloned()
-            .collect::<Vec<_>>();
-        let selected = self
-            .selected_installed
-            .clone()
-            .or_else(|| rows.first().map(|e| text(&e["extName"])));
-        let choices = rows
-            .iter()
-            .map(|e| (text(&e["extName"]), text(&e["title"])))
-            .collect::<Vec<_>>();
-        let count = choices.len();
-        let selected_row = selected.clone();
-        d =
-            d.child(
-                uniform_list(
-                    "settings-installed-list",
-                    count,
-                    cx.processor(move |_this, range: std::ops::Range<usize>, _, cx| {
-                        range
-                            .map(|i| {
-                                let (id, label) = &choices[i];
-                                let action = Action::InstalledSelect(id.clone());
-                                tezbar_ui::virtual_list::row(
-                                    id.clone().into(),
-                                    label.clone().into(),
-                                    i,
-                                    count,
-                                    selected_row.as_ref() == Some(id),
-                                    t,
-                                )
-                                .tab_index(0)
-                                .child(label.clone())
-                                .on_click(cx.listener(
-                                    move |this, _, w, cx| this.action(action.clone(), w, cx),
-                                ))
-                            })
-                            .collect::<Vec<_>>()
-                    }),
-                )
-                .h(px(180.)),
-            );
-        for e in &rows {
-            if selected.as_deref() != e["extName"].as_str() {
-                continue;
+    /// Compact onboarding compositions use the same retained fields/actions, not Settings pages.
+    pub fn onboarding_body(&self, tab: Tab, t: Tokens, cx: &mut Context<Self>) -> Div {
+        use super::panels::{card, line, note, provider_title, stack};
+        match tab {
+            Tab::Ai=>{
+                if !self.onboarding_editing {
+                    if let Some((provider,model))=self.onboarding_connection() {
+                        return stack().child(card(t).flex_row().items_center().gap(px(12.)).child(div().text_color(t.success).child("✓"))
+                            .child(div().flex_1().text_size(px(12.5)).child(format!("Connected to {}, using {model}",provider_title(&provider,&self.config))))
+                            .child(self.b("Change",Action::EditOnboardingConnection,t,cx)))
+                            .child(note("Gemini, DeepSeek, GitHub Copilot, and OpenAI-compatible servers are in Settings → AI.",t));
+                    }
+                }
+                let p=self.provider.provider.clone();
+                let mut providers=div().flex().gap(px(8.));
+                for (id,title,note_text) in [("anthropic","Anthropic","Claude models"),("openai","OpenAI","GPT models"),("ollama","Ollama","Local, no API key")]{providers=providers.child(self.button(format!("onboarding-provider-{id}"),title,Action::Provider(id.into()),t,cx).flex_1().flex().flex_col().items_start().p(px(12.)).border_1().border_color(if p==id{t.accent_strong}else{t.hairline}).bg(if p==id{t.selected}else{transparent_black().into()}).role(Role::RadioButton).aria_toggled(if p==id{Toggled::True}else{Toggled::False}).child(note(note_text,t)));}
+                let mut form=line();
+                if p=="ollama"{form=form.child(note("Uses the models Ollama is serving at localhost:11434. Nothing leaves this computer.",t).flex_1());}else{form=form.child(div().flex_1().child(self.field_view(&format!("provider.{p}.apiKey"))));}
+                let weak=cx.entity().downgrade();
+                form=form.child(controls::action_button("onboarding-connect",if self.onboarding_checking||self.saving{"Checking…"}else{"Connect"},ButtonTone::Primary,self.onboarding_checking||self.saving,t,move |w,cx|{let _=weak.update(cx,|v,cx|v.action(Action::ConnectOnboarding,w,cx));}).min_w(px(92.)));
+                stack().child(card(t).child(providers).child(form).child(note(format!("Your key is stored on this computer and sent only to {}.",provider_title(&p,&self.config)),t)))
+                    .when(!self.provider.models.is_empty(),|d|d.child(self.select("AI model",&self.provider.selected_model,self.provider.models.iter().map(|m|(text(&m["id"]),Action::SelectModel(text(&m["id"])))) .collect(),t,cx)))
+                    .child(note("Gemini, DeepSeek, GitHub Copilot, and OpenAI-compatible servers are in Settings → AI.",t))
             }
-            let id = text(&e["extName"]);
-            let extension_id = text(&e["extensionId"]);
-            let name = e["title"].as_str().or(e["name"].as_str()).unwrap_or(&id);
-            let mut row = self
-                .row(name, "", t)
-                .child(self.b(
-                    &format!("Preferences for {name}"),
-                    Action::Preferences(extension_id.clone(), None),
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    &format!("Uninstall {name}"),
-                    Action::Uninstall(id.clone()),
-                    t,
-                    cx,
-                ));
-            for c in e["commands"].as_array().into_iter().flatten() {
-                let command = format!("extcmd:{id}:{}", text(&c["name"]));
-                for (kind, label, _source) in [
-                    ("alias", "Alias", "commandAliases"),
-                    ("hotkey", "Hotkey", "commandHotkeys"),
-                ] {
-                    let key = format!("command.{kind}.{command}");
-                    row = row.child(self.labeled(&key, label));
-                }
-                row = row
-                    .child(self.b(
-                        &format!(
-                                "Save alias for {}",
-                                c["title"]
-                                    .as_str()
-                                    .or(c["name"].as_str())
-                                    .unwrap_or("command")
-                            ),
-                        Action::CommandAlias(command.clone()),
-                        t,
-                        cx,
-                    ))
-                    .child(self.b(
-                        &format!(
-                                "Save shortcut for {}",
-                                c["title"]
-                                    .as_str()
-                                    .or(c["name"].as_str())
-                                    .unwrap_or("command")
-                            ),
-                        Action::CommandHotkey(command.clone()),
-                        t,
-                        cx,
-                    ))
-                    .child(self.b(
-                        &format!(
-                                "Toggle {}",
-                                c["title"]
-                                    .as_str()
-                                    .or(c["name"].as_str())
-                                    .unwrap_or("command")
-                            ),
-                        Action::CommandEnabled(
-                            command.clone(),
-                            self.extension_settings["disabledCommands"][&command] == true,
-                        ),
-                        t,
-                        cx,
-                    ))
-                    .child(self.b(
-                        &format!("Preferences {command}"),
-                        Action::Preferences(extension_id.clone(), Some(text(&c["name"]))),
-                        t,
-                        cx,
-                    ));
-            }
-            d = d.child(row);
+            Tab::Knowledge=>stack().child(self.render_folders(true,t,cx)).child(self.render_index_status(t,cx)),
+            Tab::Permissions=>stack().child(self.render_permission_cards(t,cx)).child(note("Tezbar only uses these permissions for the features you choose. Change them anytime in System Settings.",t)),
+            _=>stack(),
         }
-        for ((id, command), (_, v)) in &self.preferences {
-            let mut row = self.row(&format!("{id} preferences"), "", t);
-            for f in v["preferences"].as_array().into_iter().flatten() {
-                if command.is_some() && f["commandName"].as_str() != command.as_deref() {
-                    continue;
-                }
-                let name = text(&f["name"]);
-                let key = format!(
-                    "pref.{id}.{}.{name}",
-                    command.as_deref().unwrap_or("$extension")
-                );
-                if f["type"] == "checkbox" {
-                    let checked = self.value(&key) == "true";
-                    row = row.child(
-                        self.b(
-                            f["title"].as_str().unwrap_or(&name),
-                            Action::PreferenceValue(key, json!(!checked)),
-                            t,
-                            cx,
-                        )
-                        .role(Role::CheckBox)
-                        .aria_toggled(if checked {
-                            Toggled::True
-                        } else {
-                            Toggled::False
-                        }),
-                    );
-                } else if f["type"] == "dropdown" {
-                    let mut choices = div()
-                        .id(format!("choices-{key}"))
-                        .role(Role::Group)
-                        .aria_label(f["title"].as_str().unwrap_or(&name).to_string())
-                        .flex()
-                        .gap(px(6.));
-                    for option in f["data"].as_array().into_iter().flatten() {
-                        let value = text(&option["value"]);
-                        choices = choices.child(self.b(
-                            option["title"].as_str().unwrap_or(&value),
-                            Action::PreferenceValue(key.clone(), json!(value)),
-                            t,
-                            cx,
-                        ));
-                    }
-                    row = row.child(choices);
-                } else {
-                    row = row.child(self.labeled(&key, f["title"].as_str().unwrap_or(&name)));
-                }
-            }
-            d = d.child(row.child(self.button(
-                format!("save-preferences-{id}-{command:?}"),
-                "Save preferences",
-                Action::SavePreferences(id.clone(), command.clone()),
-                t,
-                cx,
-            )));
-        }
-        d
-    }
-    pub(super) fn ai_extensions(&mut self, t: Tokens, cx: &mut Context<Self>) -> Div {
-        use ContributionIntent as I;
-        let mut d=self.row("AI Extensions","Review command, arguments, environment and requested tools before testing or enabling.",t).child(self.labeled("import","Paste mcpServers or manifest")).child(self.b("Preview import",Action::Contribution(I::Preview),t,cx));
-        if let Some(preview) = &self.contributions.preview {
-            d = d.child(div().child(safe_display(preview))).child(self.b(
-                "Add reviewed import",
-                Action::Contribution(I::AddPreview),
-                t,
-                cx,
-            ));
-        }
-        let state = self.contributions.display.clone();
-        if state["project"].is_object() {
-            d = d.child(
-                self.row(
-                    "Project AI extensions",
-                    "Not running. Review the folder configuration before adding it.",
-                    t,
-                )
-                .child(safe_display(&state["project"]))
-                .child(self.b(
-                    "Add for this folder",
-                    Action::Contribution(I::TrustProject),
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    "Keep project disabled",
-                    Action::Contribution(I::DismissProject),
-                    t,
-                    cx,
-                )),
-            );
-        }
-        for e in state["extensions"].as_array().into_iter().flatten() {
-            let id = text(&e["id"]);
-            let name = e["name"].as_str().unwrap_or("AI extension");
-            let mut row = self
-                .row(
-                    e["name"].as_str().unwrap_or(&id),
-                    if e["enabled"] == true {
-                        "Enabled"
-                    } else {
-                        "Disabled"
-                    },
-                    t,
-                )
-                .child(self.b(
-                    &format!("Details for {name}"),
-                    Action::Contribution(I::Select(id.clone())),
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    &format!("Test {name}"),
-                    Action::Contribution(I::Test(id.clone())),
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    &format!(
-                        "{} {name}",
-                        if e["enabled"] == true {
-                            "Disable"
-                        } else {
-                            "Enable"
-                        }
-                    ),
-                    Action::Contribution(I::Enable(id.clone(), e["enabled"] != true)),
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    &format!("Review changes for {name}"),
-                    Action::Contribution(I::Review(id.clone())),
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    &format!("Keep {name} disabled"),
-                    Action::Contribution(I::Enable(id.clone(), false)),
-                    t,
-                    cx,
-                ))
-                .child(self.b(
-                    &format!("Remove {name}"),
-                    Action::Contribution(I::Remove(id.clone())),
-                    t,
-                    cx,
-                ));
-            if self.selected_extension.as_deref() == Some(&id) {
-                row = row.child(div().text_color(t.text2).child(safe_display(e)));
-                for (index, c) in e["connections"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .enumerate()
-                {
-                    let cid = text(&c["id"]);
-                    let connection_label = c["name"]
-                        .as_str()
-                        .map(str::to_owned)
-                        .unwrap_or_else(|| format!("Connection {}", index + 1));
-                    for field in ["command", "args", "url"] {
-                        row = row
-                            .child(self.labeled(&format!("connection.{id}.{index}.{field}"), field))
-                            .child(self.b(
-                                &format!("Save {} for {}", display_name(field), connection_label),
-                                Action::Contribution(I::SaveRow(
-                                    id.clone(),
-                                    "connections".into(),
-                                    index,
-                                    field.into(),
-                                )),
-                                t,
-                                cx,
-                            ));
-                    }
-                    for (label, action, args) in [
-                        (
-                            "Sign in",
-                            ContributionAction::OAuthStart,
-                            vec![json!(id), json!(cid)],
-                        ),
-                        (
-                            "Check sign-in",
-                            ContributionAction::OAuthStatus,
-                            vec![json!(id), json!(cid)],
-                        ),
-                        (
-                            "Cancel sign-in",
-                            ContributionAction::OAuthCancel,
-                            vec![json!(id), json!(cid)],
-                        ),
-                        (
-                            "List contributions",
-                            ContributionAction::ComposerItems,
-                            vec![],
-                        ),
-                    ] {
-                        row = row.child(self.b(
-                            &format!("{label} · {connection_label}"),
-                            Action::Contribution(I::Operation(id.clone(), action, args)),
-                            t,
-                            cx,
-                        ));
-                    }
-                }
-                for c in e["connections"].as_array().into_iter().flatten() {
-                    let cid = text(&c["id"]);
-                    for tool in c["catalog"]["tools"].as_array().into_iter().flatten() {
-                        let name = text(&tool["name"]);
-                        row = row
-                            .child(self.b(
-                                &format!(
-                                    "{} {name}",
-                                    if c["disabledTools"][&name] == true {
-                                        "Enable"
-                                    } else {
-                                        "Disable"
-                                    }
-                                ),
-                                Action::Contribution(I::SetTool(
-                                    id.clone(),
-                                    name.clone(),
-                                    c["disabledTools"][&name] == true,
-                                    Some(cid.clone()),
-                                )),
-                                t,
-                                cx,
-                            ))
-                            .child(self.b(
-                                &format!("Ask again before {name}"),
-                                Action::Contribution(I::Operation(
-                                    id.clone(),
-                                    ContributionAction::ClearAllowance,
-                                    vec![json!(id), json!(cid), json!(name)],
-                                )),
-                                t,
-                                cx,
-                            ));
-                    }
-                    for resource in c["catalog"]["resources"].as_array().into_iter().flatten() {
-                        let uri = text(&resource["uri"]);
-                        row = row.child(self.b(
-                            &format!("Read {}", resource["name"].as_str().unwrap_or(&uri)),
-                            Action::Contribution(I::Operation(
-                                id.clone(),
-                                ContributionAction::ReadResource,
-                                vec![json!({"extensionId":id,"connectionId":cid,"uri":uri})],
-                            )),
-                            t,
-                            cx,
-                        ));
-                    }
-                    for prompt in c["catalog"]["prompts"].as_array().into_iter().flatten() {
-                        let name = text(&prompt["name"]);
-                        row = row.child(self.b(
-                            &format!("Preview {name}"),
-                            Action::Contribution(I::Operation(
-                                id.clone(),
-                                ContributionAction::PromptResolve,
-                                vec![
-                                    json!({"extensionId":id,"connectionId":cid,"name":name}),
-                                    json!({}),
-                                ],
-                            )),
-                            t,
-                            cx,
-                        ));
-                    }
-                }
-                if let Some(slots) = self.secret_slots.get(&id) {
-                    for (index, descriptor) in slots.iter().enumerate() {
-                        row = row
-                            .child(self.labeled(
-                                &format!("secret.slot.{id}.{index}"),
-                                &format!("{} · {}", descriptor.label, descriptor.scope),
-                            ))
-                            .child(self.b(
-                                &format!("Save {}", descriptor.label),
-                                Action::Contribution(I::SaveSavedSecret(id.clone(), index)),
-                                t,
-                                cx,
-                            ));
-                    }
-                }
-                row = row.child(self.b(
-                    &format!("Refresh credentials for {name}"),
-                    Action::Contribution(I::ReloadSecretFields(id.clone())),
-                    t,
-                    cx,
-                ));
-                for collection in ["connections", "providers", "prompts", "commands", "agents"] {
-                    row = row
-                        .child(self.labeled(&format!("manifest.{id}.{collection}"), collection))
-                        .child(self.b(
-                            &format!("Save {} for {name}", display_name(collection)),
-                            Action::Contribution(I::SaveCollection(id.clone(), collection.into())),
-                            t,
-                            cx,
-                        ));
-                }
-                row = row
-                    .child(self.labeled(
-                        "allow.confirm",
-                        "Type the extension name to allow all tools",
-                    ))
-                    .child(self.b(
-                        &format!("Show logs for {name}"),
-                        Action::Contribution(I::Operation(
-                            id.clone(),
-                            ContributionAction::Logs,
-                            vec![json!(id)],
-                        )),
-                        t,
-                        cx,
-                    ));
-            }
-            d = d.child(row);
-        }
-        if let Some(review) = &self.review {
-            let id = text(&review["id"]);
-            d = d.child(
-                self.row(
-                    "Review tool changes",
-                    "Check schemas, annotations and trust pins below.",
-                    t,
-                )
-                .child(safe_display(review))
-                .child(self.b(
-                    "Accept exact reviewed changes",
-                    Action::Contribution(I::Accept(id)),
-                    t,
-                    cx,
-                )),
-            );
-        }
-        if let Some((_, result)) = &self.contributions.result {
-            d = d.child(div().text_color(t.text2).child(safe_display(result)));
-        }
-        d = d.child(self.b(
-            "Reset missing secrets",
-            Action::Contribution(I::ResetSecrets),
-            t,
-            cx,
-        ));
-        d = d
-            .child(self.labeled("instructions", "Custom instructions"))
-            .child(self.b(
-                "Save instructions",
-                Action::Contribution(I::Instructions),
-                t,
-                cx,
-            ));
-        if let Some(message) = self.contributions.message {
-            d = d.child(
-                div()
-                    .id(("semantic", line!() as usize))
-                    .role(Role::Status)
-                    .child(message),
-            );
-        }
-        d
     }
 }
 impl Render for SettingsContent {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tokens::tokens(w);
+        if self.embedded {
+            return div()
+                .size_full()
+                .flex()
+                .flex_col()
+                .text_color(t.text1)
+                .text_size(px(12.5))
+                .line_height(relative(1.5))
+                .font_family(tokens::font_family(cx, false))
+                .track_focus(&self.focus)
+                .on_key_down(cx.listener(|this, e: &KeyDownEvent, w, cx| this.key(e, w, cx)))
+                .child(self.onboarding_body(self.tab, t, cx))
+                .when_some(self.error.clone(), |d, error| {
+                    d.child(
+                        div()
+                            .id("onboarding-settings-error")
+                            .role(Role::Alert)
+                            .mt(px(12.))
+                            .text_size(px(12.))
+                            .text_color(t.danger)
+                            .child(error),
+                    )
+                })
+                .when_some(self.durable_error().map(str::to_owned), |d, error| {
+                    d.child(
+                        div()
+                            .id("onboarding-save-error")
+                            .role(Role::Alert)
+                            .text_color(t.danger)
+                            .child(error)
+                            .child(self.b("Retry saved changes", Action::Retry, t, cx)),
+                    )
+                })
+                .into_any_element();
+        }
         let mut tabs = div()
-            .id(("semantic", line!() as usize))
+            .id("settings-tabs")
             .role(Role::TabList)
             .flex()
-            .justify_between()
-            .gap(px(4.));
+            .items_end()
+            .justify_center()
+            .gap(px(8.));
         for (index, tab) in Tab::ALL.into_iter().enumerate() {
             tabs = tabs.child(self.tab_control(index, tab, t, cx));
         }
-        let body=match self.tab {Tab::General=>self.general(t,cx),Tab::Ai=>self.ai(t,cx),Tab::Voice=>self.voice(t,cx),Tab::Knowledge=>self.knowledge_view(t,cx),Tab::Storage=>self.storage_view(t,cx),Tab::Extensions=>self.extensions(t,w,cx),Tab::Permissions=>self.permissions_view(t,cx),Tab::Advanced=>self.row("Safety Dry-Run","Preview safety-aware shell, extension-install and native system actions without executing them.",t).child(self.b(if self.dry_run{"Dry-run is ON"}else{"Turn dry-run ON"},Action::DryRun(!self.dry_run),t,cx)).child(self.b("Quit Tezbar",Action::Quit,t,cx))};
-        let mut root = controls::sheet(t)
+        let body = match self.tab {
+            Tab::General => self.render_general(t, cx),
+            Tab::Ai => self.render_ai(t, cx),
+            Tab::Voice => self.render_voice(t, cx),
+            Tab::Knowledge => self.render_knowledge(t, cx),
+            Tab::Extensions => self.render_extensions(t, cx),
+            Tab::Permissions => self.render_permissions(t, cx),
+            Tab::Storage => self.render_storage(t, cx),
+            Tab::Advanced => self.render_advanced(t, cx),
+        };
+        let mut root = div()
             .id("native-settings")
-            .role(if self.embedded {
-                Role::Group
-            } else {
-                Role::Dialog
-            })
-            .aria_label(if self.embedded {
-                self.tab.title()
-            } else {
-                "Tezbar Settings"
-            })
+            .line_height(relative(1.5))
+            .font_family(tokens::font_family(cx, false))
+            .role(Role::Dialog)
+            .aria_label("Tezbar Settings")
+            .relative()
+            .size_full()
+            .flex()
+            .flex_col()
+            .overflow_hidden()
             .bg(t.settings_panel)
+            .text_color(t.text1)
+            .text_size(px(12.5))
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, w, cx| this.key(e, w, cx)))
-            .when(!self.embedded, |root| {
-                root.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(10.))
-                        .px(px(20.))
-                        .py(px(12.))
-                        .border_b_1()
-                        .border_color(t.hairline)
-                        .child(
-                            div()
-                                .id(("semantic", line!() as usize))
-                                .role(Role::Heading)
-                                .text_center()
-                                .child("Tezbar Settings"),
-                        )
-                        .child(tabs),
-                )
-            })
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .px(px(16.))
+                    .pt(px(8.))
+                    .pb(px(8.))
+                    .border_b_1()
+                    .border_color(t.hairline)
+                    .child(
+                        div()
+                            .id("settings-heading")
+                            .role(Role::Heading)
+                            .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                window.start_window_move();
+                            })
+                            .text_center()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(t.text2)
+                            .mb(px(8.))
+                            .child("Tezbar Settings"),
+                    )
+                    .child(tabs),
+            )
             .child(
                 div()
                     .id("settings-content")
                     .role(Role::TabPanel)
                     .aria_label(self.tab.title())
                     .flex_1()
+                    .min_h(px(0.))
                     .overflow_y_scroll()
-                    .px(px(24.))
+                    .px(px(20.))
+                    .py(px(16.))
                     .child(
                         div()
                             .w_full()
-                            .max_w(px(if self.tab == Tab::Ai { 850. } else { 610. }))
+                            .max_w(px(match self.tab {
+                                Tab::Ai => 850.,
+                                Tab::Knowledge => 650.,
+                                Tab::Extensions => 1100.,
+                                _ => 610.,
+                            }))
                             .mx_auto()
+                            .when(self.tab == Tab::Extensions, |d| d.h_full())
                             .child(body),
                     ),
             );
@@ -1599,18 +391,31 @@ impl Render for SettingsContent {
                     .child(error.to_owned()),
             );
         }
-        root = if self.embedded {
-            root.child(controls::footer(t).child(self.message.clone().unwrap_or_default()))
-        } else {
-            root.child(
-                controls::footer(t)
-                    .child(self.message.clone().unwrap_or_default())
-                    .child(self.b("Save", Action::Save, t, cx))
-                    .child(controls::keycap("Enter", t))
-                    .child(self.b("Close", Action::Close, t, cx))
-                    .child(controls::keycap("Esc", t)),
-            )
-        };
+        root = root.child(
+            div().debug_selector(|| "settings-footer".into())
+                .flex()
+                .items_center()
+                .flex_shrink_0()
+                .gap(px(8.))
+                .px(px(16.))
+                .py(px(8.))
+                .border_t_1()
+                .border_color(t.hairline)
+                .text_size(px(11.))
+                .text_color(t.text3)
+                .child(controls::keycap("Enter", t))
+                .child(self.b("Save", Action::Save, t, cx).bg(transparent_black()))
+                .child(controls::keycap("Esc", t))
+                .child(
+                    self.b("Close", Action::Close, t, cx)
+                        .bg(transparent_black()),
+                )
+                .child(div().flex_1())
+                .child(self.message.clone().unwrap_or_default()),
+        );
+        if let Some(dialog) = self.render_dialog(t, cx) {
+            root = root.child(dialog);
+        }
         if let Some(action) = self.confirmation.as_ref() {
             let (title, description, accept) = self.confirmation_copy(action);
             let weak = cx.entity().downgrade();
@@ -1622,7 +427,7 @@ impl Render for SettingsContent {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(t.settings_panel)
+                    .bg(rgba(0x00000066))
                     .child(
                         div()
                             .id("settings-confirmation")
@@ -1631,29 +436,50 @@ impl Render for SettingsContent {
                             .w_full()
                             .max_w(px(440.))
                             .p(px(20.))
+                            .rounded(px(12.))
+                            .border_1()
+                            .border_color(t.rim)
+                            .bg(t.popover_solid)
                             .flex()
                             .flex_col()
                             .gap(px(12.))
-                            .child(div().text_color(t.text1).child(title))
-                            .child(div().text_color(t.text2).child(description))
                             .child(
-                                controls::action_button(
-                                    "confirm-settings-action",
-                                    accept,
-                                    ButtonTone::Danger,
-                                    false,
-                                    t,
-                                    move |w, cx| {
-                                        let _ = weak.update(cx, |v, cx| {
-                                            v.action(Action::Confirm(true), w, cx)
-                                        });
-                                    },
-                                )
-                                .track_focus(&self.confirm_focus[0]),
+                                div()
+                                    .text_size(px(14.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(t.text1)
+                                    .child(title),
                             )
                             .child(
-                                self.b("Cancel", Action::Confirm(false), t, cx)
-                                    .track_focus(&self.confirm_focus[1]),
+                                div()
+                                    .text_size(px(12.5))
+                                    .text_color(t.text2)
+                                    .child(description),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_end()
+                                    .gap(px(8.))
+                                    .child(
+                                        self.b("Cancel", Action::Confirm(false), t, cx)
+                                            .track_focus(&self.confirm_focus[1]),
+                                    )
+                                    .child(
+                                        controls::action_button(
+                                            "confirm-settings-action",
+                                            accept,
+                                            ButtonTone::Danger,
+                                            false,
+                                            t,
+                                            move |w, cx| {
+                                                let _ = weak.update(cx, |v, cx| {
+                                                    v.action(Action::Confirm(true), w, cx)
+                                                });
+                                            },
+                                        )
+                                        .track_focus(&self.confirm_focus[0]),
+                                    ),
                             ),
                     ),
             );
@@ -1662,14 +488,14 @@ impl Render for SettingsContent {
     }
 }
 impl SettingsContent {
-    fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
         if e.is_held {
             return;
         }
         let key = e.keystroke.key.as_str();
         if self.confirmation.is_some() {
             if key == "tab" {
-                tezbar_ui::controls::FocusScope::cycle(
+                controls::FocusScope::cycle(
                     &self.confirm_focus,
                     e.keystroke.modifiers.shift,
                     w,
@@ -1682,26 +508,71 @@ impl SettingsContent {
             }
             return;
         }
-
+        if self.dialog.is_some() {
+            if key == "escape" {
+                self.action(Action::Dialog(None), w, cx);
+                cx.stop_propagation();
+                return;
+            }
+            if key == "tab" {
+                // Skip background tab stops when wrapping, including a parent window's controls.
+                for _ in 0..1024 {
+                    if e.keystroke.modifiers.shift {
+                        w.focus_prev(cx)
+                    } else {
+                        w.focus_next(cx)
+                    }
+                    if self.dialog_focus.contains_focused(w, cx) {
+                        break;
+                    }
+                }
+                cx.stop_propagation();
+                return;
+            }
+        }
+        if let Some(command) = self.command_hotkey_recording.clone() {
+            cx.stop_propagation();
+            if key == "escape" {
+                self.command_hotkey_recording = None;
+                cx.notify();
+                return;
+            }
+            let shortcut = if matches!(key, "backspace" | "delete") {
+                Some(String::new())
+            } else {
+                accelerator(&e.keystroke)
+            };
+            if let Some(shortcut) = shortcut {
+                self.command_hotkey_recording = None;
+                self.action(
+                    Action::SetField(format!("command.hotkey.{command}"), shortcut),
+                    w,
+                    cx,
+                );
+                self.action(Action::CommandHotkey(command), w, cx);
+            }
+            return;
+        }
         if self.hotkey_recording {
             cx.stop_propagation();
             if key == "escape" {
                 self.hotkey_recording = false;
+                cx.notify();
                 return;
             }
-            let accelerator = if matches!(key, "backspace" | "delete") {
+            let value = if matches!(key, "backspace" | "delete") {
                 Some(
                     if cfg!(windows) {
                         "Control+Space"
                     } else {
                         "Alt+Space"
                     }
-                    .to_string(),
+                    .to_owned(),
                 )
             } else {
                 accelerator(&e.keystroke)
             };
-            if let Some(v) = accelerator {
+            if let Some(v) = value {
                 self.hotkey_recording = false;
                 self.queue(
                     vec![Edit::Global {
@@ -1721,9 +592,14 @@ impl SettingsContent {
             }
             cx.stop_propagation();
         } else if key == "escape" {
-            if !self.embedded {
+            if self.menu.take().is_some() {
+                cx.notify();
+            } else if !self.embedded {
                 self.action(Action::Close, w, cx);
             }
+            cx.stop_propagation();
+        } else if key == "enter" && w.focused(cx).as_ref() == Some(&self.focus) {
+            self.action(Action::Save, w, cx);
             cx.stop_propagation();
         } else if matches!(key, "left" | "right" | "home" | "end")
             && self.tabs.iter().any(|f| f.is_focused(w))
@@ -1740,10 +616,23 @@ impl SettingsContent {
         }
     }
 }
+pub(super) fn tab_icon(tab: Tab) -> Svg {
+    let data:&'static [u8]=match tab{
+        Tab::Ai=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3Z M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></svg>"#,
+        Tab::Voice=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z M5 11a7 7 0 0 0 14 0 M12 18v3"/></svg>"#,
+        Tab::Knowledge=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></svg>"#,
+        Tab::Extensions=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linejoin="round"><path d="M8 3h3a2 2 0 1 1 4 0h3v5a2 2 0 1 1 0 4v5h-5a2 2 0 1 1-4 0H4v-5a2 2 0 1 1 0-4V3h4Z"/></svg>"#,
+        Tab::Permissions=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>"#,
+        Tab::Storage=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><ellipse cx="12" cy="6" rx="9" ry="3"/><path d="M3 6v12c0 1.7 4 3 9 3s9-1.3 9-3V6 M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>"#,
+        Tab::Advanced=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.4 2.4-3-3 2.4-2.4Z"/></svg>"#,
+        Tab::General=>br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.32 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.32 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831 2.34 2.34 0 0 1 2.33-4.033 2.34 2.34 0 0 0 3.32-1.915Z"/><circle cx="12" cy="12" r="3"/></svg>"#,
+    };
+    svg().data(data)
+}
 pub(crate) fn accelerator(k: &Keystroke) -> Option<String> {
     let mut parts = vec![];
     if k.modifiers.platform {
-        parts.push("Command".to_string())
+        parts.push("Command".to_owned())
     }
     if k.modifiers.control {
         parts.push("Control".into())
@@ -1772,7 +661,7 @@ pub(crate) fn accelerator(k: &Keystroke) -> Option<String> {
     });
     Some(parts.join("+"))
 }
-fn update_label(s: &tezbar_update::AppUpdateStatus) -> String {
+pub(super) fn update_label(s: &tezbar_update::AppUpdateStatus) -> String {
     use tezbar_update::AppUpdateStatus::*;
     match s {
         Idle => "Ready to check for updates".into(),
@@ -1787,7 +676,7 @@ fn update_label(s: &tezbar_update::AppUpdateStatus) -> String {
         Error { .. } => "Could not check for updates. Retry.".into(),
     }
 }
-fn format_device(s: &DevicePhase) -> String {
+pub(super) fn format_device(s: &DevicePhase) -> String {
     match s {
         DevicePhase::Waiting { code, .. } => format!("Enter code {code} in your browser"),
         DevicePhase::Saving => "Saving provider before sign-in…".into(),
@@ -1803,8 +692,6 @@ pub(super) fn safe_display(v: &Value) -> String {
         match v {
             Value::Object(map) => {
                 for (key, value) in map {
-                    // Environment names are case-sensitive executable inputs. Keep their
-                    // spelling, and HTTP header names, exactly as the review manifest provides.
                     let label = if literal_keys {
                         key.to_owned()
                     } else {
@@ -1831,11 +718,10 @@ pub(super) fn safe_display(v: &Value) -> String {
             Value::Number(value) => out.push(format!("{path}: {value}")),
         }
     }
-    let mut out = Vec::new();
+    let mut out = vec![];
     lines(v, "", false, &mut out);
     out.join("\n")
 }
-
 pub(super) fn display_name(value: &str) -> String {
     let chars = value.chars().collect::<Vec<_>>();
     let mut words = String::new();
@@ -1874,7 +760,6 @@ pub(super) fn display_name(value: &str) -> String {
         .collect::<Vec<String>>()
         .join(" ")
 }
-
 pub(super) fn download_progress(done: u64, total: Option<u64>) -> String {
     let done = tezbar_ui_model::utilities::monitor::decimal_bytes(done as f64);
     match total {
@@ -1885,7 +770,6 @@ pub(super) fn download_progress(done: u64, total: Option<u64>) -> String {
         _ => format!("{done} downloaded"),
     }
 }
-
 fn normalize_extension_id(id: &str) -> String {
     id.trim()
         .trim_start_matches('@')

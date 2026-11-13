@@ -24,6 +24,10 @@ pub struct SessionRow {
     pub running: bool,
     #[serde(default)]
     pub active: bool,
+    #[serde(default)]
+    pub last_command: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<u64>,
 }
 /// The authenticated fixture channel predates typed production rows. Preserve
 /// its [id, title] wire while also accepting the richer native row objects.
@@ -46,6 +50,8 @@ pub fn fixture_rows(value: serde_json::Value) -> Result<Vec<SessionRow>, String>
                         cwd: String::new(),
                         running: false,
                         active: false,
+                        last_command: None,
+                        updated_at: None,
                     },
                 })
                 .collect()
@@ -79,11 +85,26 @@ impl SessionsPanel {
         }
     }
 }
+fn session_age(at: u64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    let minutes = now.saturating_sub(at) / 60_000;
+    match minutes {
+        0 => "now".into(),
+        1..=59 => format!("{minutes}m ago"),
+        60..=1439 => format!("{}h ago", minutes / 60),
+        _ => format!("{}d ago", minutes / 1440),
+    }
+}
 impl Render for SessionsPanel {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = tezbar_ui::tokens::tokens(w);
         let relay = self.relay.clone();
         tezbar_ui::controls::sheet(t)
+            .font_family(tezbar_ui::tokens::font_family(cx, false))
+            .p(px(12. * t.zoom))
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
                 if e.keystroke.key == "escape" {
@@ -120,25 +141,49 @@ impl Render for SessionsPanel {
                 }
             }))
             .child(
-                tezbar_ui::controls::button(
-                    "terminal-new",
-                    if cfg!(target_os = "macos") {
-                        "New session · ⌘N"
-                    } else {
-                        "New session · Ctrl+N"
-                    },
-                    tezbar_ui::controls::ButtonTone::Quiet,
-                    false,
-                    t,
-                )
-                .on_click(move |_, _, _| {
-                    let _ = relay.send(crate::events::Event::TerminalPanelAction(None));
-                }),
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .px(px(4.))
+                    .mb(px(8.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_size(px(11. * t.zoom))
+                                    .text_color(t.success)
+                                    .child("Terminal Sessions"),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(10.5 * t.zoom))
+                                    .text_color(t.text4)
+                                    .child(format!(
+                                        "{} running",
+                                        self.sessions.iter().filter(|s| s.running).count()
+                                    )),
+                            ),
+                    )
+                    .child(
+                        tezbar_ui::controls::button(
+                            "terminal-new",
+                            "+",
+                            tezbar_ui::controls::ButtonTone::Quiet,
+                            false,
+                            t,
+                        )
+                        .aria_label("New terminal session")
+                        .size(px(28. * t.zoom))
+                        .on_click(move |_, _, _| {
+                            let _ = relay.send(crate::events::Event::TerminalPanelAction(None));
+                        }),
+                    ),
             )
-            .child(tezbar_ui::controls::header(t).child(format!(
-                "Terminal sessions · {} running",
-                self.sessions.iter().filter(|s| s.running).count()
-            )))
             .when(self.sessions.is_empty(), |d| d.child("Starting shell…"))
             .child(
                 uniform_list(
@@ -158,6 +203,9 @@ impl Render for SessionsPanel {
                                     row.active,
                                     t,
                                 )
+                                .h(px(64. * t.zoom))
+                                .px(px(10. * t.zoom))
+                                .py(px(8. * t.zoom))
                                 .on_click(move |_, _, _| {
                                     let _ = relay.send(crate::events::Event::TerminalPanelAction(
                                         Some(selected.clone()),
@@ -169,31 +217,66 @@ impl Render for SessionsPanel {
                                         .min_w_0()
                                         .flex()
                                         .flex_col()
-                                        .child(div().truncate().child(row.title.clone()))
                                         .child(
                                             div()
-                                                .text_size(px(11. * t.zoom))
-                                                .text_color(if row.active {
-                                                    rgb(0xffffff).into()
-                                                } else {
-                                                    t.text3
-                                                })
                                                 .truncate()
-                                                .child(tezbar_ui_model::terminal::compact_path(
-                                                    &row.cwd,
+                                                .text_size(px(12. * t.zoom))
+                                                .child(row.title.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_size(px(10. * t.zoom))
+                                                .font_family(tezbar_ui::tokens::mono_family())
+                                                .text_color(t.text4)
+                                                .truncate()
+                                                .child(format!(
+                                                    "{}{}",
+                                                    tezbar_ui_model::terminal::compact_path(
+                                                        &row.cwd
+                                                    ),
+                                                    row.last_command
+                                                        .as_ref()
+                                                        .filter(|v| !v.is_empty())
+                                                        .map(|v| format!(" · {v}"))
+                                                        .unwrap_or_default()
                                                 )),
+                                        )
+                                        .child(
+                                            div()
+                                                .mt(px(4.))
+                                                .text_size(px(9.5 * t.zoom))
+                                                .text_color(t.text4)
+                                                .child(if row.running {
+                                                    "running".to_owned()
+                                                } else {
+                                                    row.updated_at
+                                                        .map(|at| {
+                                                            format!("saved {}", session_age(at))
+                                                        })
+                                                        .unwrap_or_else(|| "saved".into())
+                                                }),
                                         ),
                                 )
                                 .when(i < 9, |d| {
-                                    d.child(div().text_size(px(11. * t.zoom)).child(format!(
-                                        "{}{}",
-                                        if cfg!(target_os = "macos") {
-                                            "⌘"
-                                        } else {
-                                            "Ctrl+"
-                                        },
-                                        i + 1
-                                    )))
+                                    d.child(
+                                        div()
+                                            .rounded(px(6.))
+                                            .border_1()
+                                            .border_color(t.hairline)
+                                            .bg(t.pill)
+                                            .px(px(6.))
+                                            .py(px(2.))
+                                            .text_size(px(9. * t.zoom))
+                                            .child(format!(
+                                                "{}{}",
+                                                if cfg!(target_os = "macos") {
+                                                    "⌘"
+                                                } else {
+                                                    "Ctrl+"
+                                                },
+                                                i + 1
+                                            )),
+                                    )
                                 })
                                 .into_any_element()
                             })

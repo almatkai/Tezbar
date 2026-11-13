@@ -6,7 +6,7 @@ import path from 'node:path'
 import { assertRelease, APP_IDS, PRODUCT_NAMES } from '../lib/release-policy.mjs'
 import { assertEmbeddingRuntimeDistribution } from '../lib/embedding-runtime-policy.mjs'
 
-import { captureBuildMetadata, GPUI_REV } from './build-metadata.mjs'
+import { captureBuildMetadata, GPUI_REV, RUST_VERSION } from './build-metadata.mjs'
 export { GPUI_REV }
 export const RESOURCE_ROOTS = Object.freeze([
   ['dist-backend/extension-worker.js', 'dist-backend/extension-worker.js'],
@@ -24,7 +24,7 @@ export const RESOURCE_ROOTS = Object.freeze([
   ['node_modules/esbuild', 'node_modules/esbuild'], ['node_modules/@esbuild', 'node_modules/@esbuild'],
   ['licenses/raycast-extensions-MIT.txt', 'licenses/raycast-extensions-MIT.txt'],
   ['resources/trayIconTemplate@2x.png', 'trayIconTemplate@2x.png'],
-  ['src-tauri/icons/icon.icns', 'icon.icns'],
+  ['packaging/icons/icon.icns', 'icon.icns'],
 ])
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex')
 function relativeName(value) {
@@ -94,7 +94,7 @@ export function planMacos(input) {
   const { version, channel, localPreview, stage, osTemp, executable, files, policy, catalog, payload, sourceCommit, allowUnsigned = false } = input
   assertRelease(channel, version)
   if (!path.isAbsolute(stage) || !path.isAbsolute(osTemp) || !inside(osTemp, stage)) throw new Error('Use a fresh OS-temp assembly directory')
-  if (!/^[a-f0-9]{40}$/.test(sourceCommit) || input.gpuiRev !== GPUI_REV || input.rustVersion !== '1.98.1' || input.benchControl !== false || typeof input.runtimeShaders !== 'boolean') throw new Error('Unreviewed native build provenance')
+  if (!/^[a-f0-9]{40}$/.test(sourceCommit) || input.gpuiRev !== GPUI_REV || input.rustVersion !== RUST_VERSION || input.benchControl !== false || typeof input.runtimeShaders !== 'boolean') throw new Error('Unreviewed native build provenance')
   if (policy.identifier !== 'com.tezbar.app' || !policy.teamIdentifier || !policy.designatedRequirement?.includes('certificate') || !Array.isArray(policy.nativeHelpers) || policy.nativeHelpers.length !== 4) throw new Error('Missing original signing policy')
   if (allowUnsigned && (localPreview || channel === 'stable')) throw new Error('Invalid release exception')
   const identifier = localPreview ? 'com.tezbar.preview.native' : APP_IDS[channel]

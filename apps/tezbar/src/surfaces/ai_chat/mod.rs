@@ -49,9 +49,11 @@ impl EventEmitter<ChatEffect> for ChatView {}
 pub(crate) enum Action {
     Back,
     Panel,
+    History,
     New,
     Resume(String),
     Send,
+    Draft(String),
     Stop,
     Retry(String),
     Save,
@@ -70,6 +72,7 @@ pub(crate) enum Action {
     SetDirectory(String),
     Models,
     Model(String, String),
+    Modes,
     Mode(ApprovalMode),
     Decide(Decision),
     Settings,
@@ -137,10 +140,12 @@ pub struct ChatView {
     error: Option<String>,
     loading: bool,
     history_error: bool,
+    history_open: bool,
     delete_pending: Option<Vec<String>>,
     clear_pending: bool,
     clear_inflight: bool,
     deleting: BTreeSet<String>,
+    modes_open: bool,
     models_open: bool,
     directories_open: bool,
     recent_directories: Vec<String>,
@@ -193,28 +198,31 @@ impl ChatView {
         cx: &mut Context<Self>,
     ) -> Self {
         let input = cx.new(|cx| {
-            let mut v = TextInput::new(cx);
+            let mut v = TextInput::new_native(cx);
             v.configure(FieldOptions {
                 name: "Message".into(),
-                placeholder: "Ask anything…".into(),
+                border: false,
+                placeholder: "Message Agent".into(),
                 multiline: true,
                 ..Default::default()
             });
             v
         });
         let filter = cx.new(|cx| {
-            let mut v = TextInput::new(cx);
+            let mut v = TextInput::new_native(cx);
             v.configure(FieldOptions {
                 name: "Filter past chats".into(),
+                border: false,
                 placeholder: "Search conversations…".into(),
                 ..Default::default()
             });
             v
         });
         let model_filter = cx.new(|cx| {
-            let mut v = TextInput::new(cx);
+            let mut v = TextInput::new_native(cx);
             v.configure(FieldOptions {
                 name: "Search models".into(),
+                border: false,
                 placeholder: "Find a model…".into(),
                 ..Default::default()
             });
@@ -327,10 +335,12 @@ impl ChatView {
             error: None,
             loading: false,
             history_error: false,
+            history_open: false,
             delete_pending: None,
             clear_pending: false,
             clear_inflight: false,
             deleting: BTreeSet::new(),
+            modes_open: false,
             models_open: false,
             directories_open: false,
             recent_directories: vec![],
@@ -452,6 +462,8 @@ impl ChatView {
         }
         self.loading = false;
         self.history_error = false;
+        self.history_open = false;
+        self.modes_open = false;
         self.directories_open = false;
         self.documents.clear();
         self.document_images.clear();
@@ -628,6 +640,15 @@ impl ChatView {
                     self.emit(ChatEffect::Settings, cx);
                     vec![]
                 }
+                Action::History => {
+                    self.history_open = !self.history_open;
+                    self.models_open = false;
+                    if self.history_open {
+                        vec![self.controller.refresh_history()]
+                    } else {
+                        vec![]
+                    }
+                }
                 Action::Panel => {
                     self.activate(Boot::Panel, identity("nav"), w, cx)?;
                     vec![]
@@ -646,6 +667,15 @@ impl ChatView {
                 }
                 Action::Resume(s) => {
                     self.activate(Boot::Resume { session_id: s }, identity("nav"), w, cx)?;
+                    vec![]
+                }
+                Action::Draft(text) => {
+                    if let Some(id) = id.as_deref() {
+                        self.controller.edit_draft(id, text.clone());
+                        self.input
+                            .update(cx, |input, cx| input.set_text(&text, w, cx));
+                        self.input.focus_handle(cx).focus(w, cx);
+                    }
                     vec![]
                 }
                 Action::Send => {
@@ -820,6 +850,7 @@ impl ChatView {
                     vec![]
                 }
                 Action::Models => {
+                    self.history_open = false;
                     self.models_open = !self.models_open;
                     if self.models_open {
                         self.model_filter.focus_handle(cx).focus(w, cx);
@@ -836,7 +867,12 @@ impl ChatView {
                     self.models_open = false;
                     self.controller.select(&s, selection).into_iter().collect()
                 }
+                Action::Modes => {
+                    self.modes_open = !self.modes_open;
+                    vec![]
+                }
                 Action::Mode(mode) => {
+                    self.modes_open = false;
                     if let Some(s) = id.as_deref() {
                         let _ = self.controller.set_mode(s, mode.clone());
                         self.save_mode(mode, cx);

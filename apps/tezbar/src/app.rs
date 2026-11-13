@@ -63,6 +63,8 @@ struct Owner {
     updater_paused: bool,
     production_plan: Option<production_launch::LaunchPlan>,
     pending_update: Option<(u64, tezbar_update::native::VerifiedArtifact)>,
+    #[cfg(target_os = "macos")]
+    staged_update: Option<tezbar_update::native::StagedMac>,
     installed_executable: Option<std::path::PathBuf>,
     layout_path: std::path::PathBuf,
     settings_close: windows::settings_close::CloseHandshake,
@@ -390,10 +392,12 @@ impl Owner {
         match cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(settings_bounds)),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Tezbar Settings".into()),
-                    ..Default::default()
-                }),
+                titlebar: None,
+                window_background: if cfg!(target_os = "macos") {
+                    WindowBackgroundAppearance::Blurred
+                } else {
+                    WindowBackgroundAppearance::Transparent
+                },
                 kind: WindowKind::Normal,
                 ..Default::default()
             },
@@ -529,6 +533,7 @@ impl Owner {
             let quit_started = std::time::Instant::now();
             let timer = cx.background_executor().timer(quit_budget::LIMIT);
             let committed = std::cell::Cell::new(false);
+            let refusal_source = std::cell::Cell::new(QuitRefusalSource::Durability);
             let prepared = {
             let prepare = async {
             for write in launcher_writes {
@@ -570,9 +575,11 @@ impl Owner {
             }
             // Quiesce extension work without destroying its view. A busy install
             // must reject quit before chat or terminal runs are cancelled.
+            refusal_source.set(QuitRefusalSource::ExtensionWork);
             let extension_drain=this.update(cx,|owner,cx|owner.launcher.update(cx,|view,_,cx|view.drain_extensions(cx)))
                 .map_err(|e|e.to_string())?.map_err(|e|e.to_string())?;
             gpui_tokio::Tokio::spawn(cx,extension_drain).await.map_err(|_|"Extension drain interrupted")??;
+            refusal_source.set(QuitRefusalSource::Durability);
             // Every unrelated durable barrier succeeded before any Cancel/dispose.
             let final_drains = this.update(cx, |owner, cx| {
                 if owner.m7.store.pending() || !owner.m7.barrier.is_clean() || owner.launcher.update(cx,|view,_,_|view.ui_durability_pending()).unwrap_or(true) {
@@ -597,6 +604,7 @@ impl Owner {
                     QuitPreparation::Refused("Settings changed while quitting; retry quit.".to_string())
                 } else { prepared };
                 if let QuitPreparation::Refused(error) = &prepared {
+                    let durable_failure = refusal_source.get() == QuitRefusalSource::Durability;
                     this.lifecycle.quitting = false;
                     this.core.resume_extensions();
                     this.defer_update(cx);
@@ -614,24 +622,26 @@ impl Owner {
                     this.flush();
                     let _ = this.log.write(
                         format!(
-                            "Could not drain Settings/window layout; quit cancelled: {error}\n"
+                            "Quit cancelled: {error}\n"
                         )
                         .as_bytes(),
                     );
-                    this.settings(cx); // Keep the durable-save error visible independently of launcher queries.
-                    if let Some(settings) = this.settings {
-                        let _ = settings.update(cx, |view, _, cx| {
-                            view.error = Some(format!(
-                                "Couldn't save changes; quit cancelled. Retry: {error}"
-                            ));
-                            cx.notify();
-                        });
+                    if durable_failure {
+                        this.settings(cx); // Keep durable-save failures visible across launcher queries.
+                        if let Some(settings) = this.settings {
+                            let _ = settings.update(cx, |view, _, cx| {
+                                view.error = Some(format!(
+                                    "Couldn't save changes; quit cancelled. Retry: {error}"
+                                ));
+                                cx.notify();
+                            });
+                        }
                     }
                     let _ = this.launcher.update(cx, |view, _, cx| {
                         view.error = Some(format!(
                             "Quit cancelled: {error}"
                         ));
-                        if view.onboarding_active {if let Some(onboarding)=&view.onboarding {onboarding.update(cx,|view,cx|{view.error=Some("Could not save changes; quit cancelled. Retry saved changes.".into());cx.notify();});}}
+                        if view.onboarding_active {if let Some(onboarding)=&view.onboarding {onboarding.update(cx,|view,cx|{view.error=Some(if durable_failure {"Could not save changes; quit cancelled. Retry saved changes.".into()} else {format!("Quit cancelled: {error}")});cx.notify();});}}
                         cx.notify();
                     });
                     windows::termination::complete(false);
@@ -1835,6 +1845,8 @@ fn run_app(
             updater_paused: false,
             production_plan: production.clone(),
             pending_update: None,
+            #[cfg(target_os = "macos")]
+            staged_update: None,
             installed_executable,
             layout_path: layouts_path,
             settings_close: Default::default(),
@@ -1897,6 +1909,11 @@ enum QuitPreparation {
     Saved,
     Refused(String),
     ForcedAfterCommit,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum QuitRefusalSource {
+    Durability,
+    ExtensionWork,
 }
 async fn quit_preparation<P, T>(
     prepare: P,

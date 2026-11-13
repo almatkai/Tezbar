@@ -5,16 +5,15 @@
   "description": "Tezbar",
   "license": "Apache-2.0",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "pnpm build:native && tauri build",
+    "dev": "node scripts/native/dev.mjs",
+    "build": "node scripts/native/build.mjs --release",
     "native:check": "node scripts/native/build.mjs --check",
     "native:build": "node scripts/native/build.mjs",
     "native:preview:package": "node scripts/native/build.mjs --local-preview",
     "build:windows": "node scripts/build-windows.mjs",
-    "release:build": "node scripts/build-release.mjs",
-    "release:test": "node --test scripts/release-policy.test.mjs scripts/embedding-runtime-policy.test.mjs scripts/macos-signing.test.mjs",
-    "build:frontend": "vite build",
-    "preview": "vite preview --config vite.config.ts",
+    "release:build": "node scripts/native/release.mjs",
+    "release:test": "node --test scripts/release-policy.test.mjs scripts/embedding-runtime-policy.test.mjs scripts/macos-signing.test.mjs scripts/native/release.test.mjs",
+    "preview": "node scripts/native/dev.mjs --release",
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
@@ -26,15 +25,12 @@
     "build:native:image-colors": "./native/image-colors/build.sh",
     "build:native": "node scripts/build-native.mjs",
     "dist": "pnpm build",
-    "tauri": "tauri",
     "build:backend": "pnpm exec tsx scripts/build-backend.ts",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "pnpm build",
-    "icons:generate": "tauri icon appIcon_simple.svg --ios-color transparent && node scripts/sync-icons.mjs"
+    "start": "node scripts/native/dev.mjs",
+    "ui:check": "node scripts/native/ui-policy.mjs --check",
+    "icons:sync": "node scripts/sync-icons.mjs"
   },
   "dependencies": {
-    "@ai-sdk/react": "4.0.147",
-    "ai": "7.0.143",
     "better-sqlite3": "^12.9.0",
     "esbuild": "^0.28.0",
     "fuse.js": "^7.3.0",
@@ -79,7 +75,9 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.3",
-    "vitest": "^3.1.2"
+    "vitest": "^3.1.2",
+    "@ai-sdk/react": "4.0.147",
+    "ai": "7.0.143"
   },
   "packageManager": "pnpm@11.17.0"
 }

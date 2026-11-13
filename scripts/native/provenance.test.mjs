@@ -13,7 +13,9 @@ test('real native build script rechecks dependency edits and refuses unattested 
   writeFileSync(join(root,'Cargo.toml'),'[workspace]\nmembers=["apps/tezbar","dependency"]\nresolver="2"\n')
   writeFileSync(join(root,'apps/tezbar/Cargo.toml'),'[package]\nname="native-provenance-fixture"\nversion="0.0.0"\nedition="2021"\n[dependencies]\ndependency={path="../../dependency"}\n')
   writeFileSync(join(root,'apps/tezbar/build.rs'),readFileSync(new URL('../../apps/tezbar/build.rs',import.meta.url)))
-  writeFileSync(join(root,'apps/tezbar/src/main.rs'),'fn main(){println!("{}:{}",env!("TEZBAR_NATIVE_DIRTY"),dependency::value());}')
+  // This toy intentionally has no GPUI; test Git attestation separately from
+  // the combined production flag, which must refuse that missing identity.
+  writeFileSync(join(root,'apps/tezbar/src/main.rs'),'fn main(){println!("{}:{}",env!("TEZBAR_NATIVE_SOURCE_DIRTY"),dependency::value());}')
   writeFileSync(join(root,'dependency/Cargo.toml'),'[package]\nname="dependency"\nversion="0.0.0"\nedition="2021"\n')
   writeFileSync(join(root,'dependency/src/lib.rs'),'pub fn value()->u8{1}')
   writeFileSync(join(root,'notes.md'),'private fixture notes\n')

@@ -500,6 +500,12 @@ impl ChatController {
     pub fn conversation(&self, id: &str) -> Option<&Conversation> {
         self.owners.get(id).filter(|c| c.deleted.is_none())
     }
+    /// Refresh a history popover without navigating away from its active conversation.
+    pub fn refresh_history(&mut self) -> Effect {
+        let token = self.token();
+        self.history_token = Some(token);
+        Effect::LoadHistory { token }
+    }
     pub fn edit_draft(&mut self, id: &str, text: String) {
         if let Some(c) = self.owners.get_mut(id) {
             c.draft = text;
@@ -1426,7 +1432,10 @@ pub fn format_error(raw: &str, provider: &str) -> String {
         );
     }
     if let Some(c) = re(r#"(?i)Model\s+["']([^"']+)["']\s+not found"#).captures(message) {
-        return format!("The selected model \"{}\" is unavailable. Choose another model in AI settings and try again.",&c[1]);
+        return format!(
+            "The selected model \"{}\" is unavailable. Choose another model in AI settings and try again.",
+            &c[1]
+        );
     }
     if let Some(detail) = detail {
         let status = re(r"(?i)\berror\s+(\d{3})\b")

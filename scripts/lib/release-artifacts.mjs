@@ -10,7 +10,9 @@ import {
 } from './release-policy.mjs'
 import { verifyUpdaterSignature } from '../verify-updater-signature.mjs'
 
-export const REQUIRED_PLATFORMS = ['windows-x86_64-nsis', 'darwin-aarch64', 'darwin-x86_64']
+// Current GPUI distribution targets. An Intel macOS artifact requires its own
+// native builder/runtime acceptance before it can enter a release manifest.
+export const REQUIRED_PLATFORMS = Object.freeze(['windows-x86_64-nsis', 'darwin-aarch64'])
 
 export function validateReceipt(receipt, directory, publicKey) {
   assertRelease(receipt.channel, receipt.version)

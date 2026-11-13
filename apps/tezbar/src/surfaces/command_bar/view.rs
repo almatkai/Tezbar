@@ -36,29 +36,162 @@ impl Launcher {
     pub(super) fn click(&mut self, generation: u64, id: String, cx: &mut Context<Self>) {
         self.dispatch(Input::Click { generation, id }, cx);
     }
+    /// Pointer moved during a pin-rail drag (React `movePinPointerDrag` /
+    /// `moveSearchResultPointerDrag`).
+    fn drag_moved(&mut self, pos: Point<Pixels>, cx: &mut Context<Self>) {
+        let rail = self.pin_bounds.get();
+        let items = self.pin_item_bounds.borrow().clone();
+        let trash = self.trash_bounds.get();
+        let Some(drag) = &mut self.drag else {
+            return;
+        };
+        if !drag.active {
+            // 6px for both, like React's SEARCH_RESULT_PIN_DRAG_THRESHOLD: a slightly
+            // shaky click on a pin must still run it.
+            let threshold = 6.;
+            let dx = f32::from(pos.x - drag.start.x);
+            let dy = f32::from(pos.y - drag.start.y);
+            if dx * dx + dy * dy < threshold * threshold {
+                return;
+            }
+            drag.active = true;
+        }
+        let in_rail = rail.is_some_and(|b| b.contains(&pos));
+        let insert = || {
+            items
+                .iter()
+                .position(|b| b.is_some_and(|b| pos.y < b.top() + b.size.height / 2.))
+                .unwrap_or(items.len())
+        };
+        let (target, unpin) = match drag.source {
+            DragSource::Pin => {
+                let past_last = items
+                    .iter()
+                    .rev()
+                    .find_map(|b| *b)
+                    .is_some_and(|b| pos.y > b.bottom() + px(8.));
+                let unpin = in_rail && (trash.is_some_and(|b| b.contains(&pos)) || past_last);
+                (in_rail.then(insert).filter(|_| !unpin), unpin)
+            }
+            DragSource::Result(_) => (in_rail.then(insert), false),
+        };
+        drag.target = target;
+        drag.unpin = unpin;
+        cx.notify();
+    }
+    /// Pointer released: commit the drop (React `commitPinDrop` / `pinSearchResultFromDrag`).
+    fn drag_released(&mut self, cx: &mut Context<Self>) {
+        let Some(drag) = self.drag.take() else {
+            return;
+        };
+        cx.notify();
+        if !drag.active {
+            return;
+        }
+        match drag.source {
+            DragSource::Pin => {
+                self.suppress_pin_click = true;
+                let title = self
+                    .state
+                    .pins
+                    .iter()
+                    .find(|p| p.id == drag.id)
+                    .map(|p| p.title.clone());
+                if drag.unpin {
+                    self.state.pins.retain(|p| p.id != drag.id);
+                    ui_state::normalize_pins(&mut self.state.pins);
+                    self.persist(cx);
+                    if let Some(title) = title {
+                        self.message(format!("Unpinned: {title}"), 2500, cx);
+                    }
+                } else if let Some(target) = drag.target {
+                    let before: Vec<_> = self.state.pins.iter().map(|p| p.id.clone()).collect();
+                    ui_state::reorder_pin(&mut self.state.pins, &drag.id, target);
+                    if self.state.pins.iter().map(|p| &p.id).ne(before.iter()) {
+                        self.persist(cx);
+                    }
+                }
+            }
+            DragSource::Result(row) => {
+                self.suppress_row_click = true;
+                let Some(target) = drag.target else {
+                    return;
+                };
+                if self.state.pins.iter().any(|p| p.id == row.id) {
+                    let before: Vec<_> = self.state.pins.iter().map(|p| p.id.clone()).collect();
+                    ui_state::reorder_pin(&mut self.state.pins, &row.id, target);
+                    if self.state.pins.iter().map(|p| &p.id).ne(before.iter()) {
+                        self.persist(cx);
+                        self.message(format!("Moved pin: {}", row.title), 2500, cx);
+                    }
+                } else if self.state.pins.len() >= ui_state::MAX_PINS {
+                    self.message(format!("Pin limit reached ({})", ui_state::MAX_PINS), 2500, cx);
+                } else {
+                    ui_state::insert_pin(&mut self.state.pins, &row, Some(target));
+                    self.persist(cx);
+                    self.message(format!("Pinned: {}", row.title), 2500, cx);
+                }
+            }
+        }
+    }
+    /// Footer hints per mode, mirroring the React launcher's `CommandSurfaceFooter`.
+    fn footer_hints(&self, mode: &Mode) -> Vec<(&'static str, String)> {
+        let key = |k: &str| k.to_owned();
+        if self.form.is_some() {
+            return vec![("Run", key("↵"))];
+        }
+        match mode {
+            Mode::Terminal => vec![
+                ("Stop", chord("X")),
+                ("Delete", chord("D")),
+                ("Pin / Unpin", chord("P")),
+                ("Settings", chord("K")),
+            ],
+            Mode::Ai => vec![
+                ("Providers", chord(",")),
+                ("Attach screen", chord("⇧S")),
+                ("Open chat", key("↵")),
+                ("New chat", chord("N")),
+                ("Close window", format!("Esc {}", chord(""))),
+            ],
+            Mode::Applications => vec![("Open", key("↵"))],
+            Mode::Path => vec![("Complete", key("↵")), ("Open", chord("↵"))],
+            Mode::Basic | Mode::Deep => {
+                let mut hints = vec![("Pin / Unpin", chord("P")), ("Save note", chord("N"))];
+                if *mode == Mode::Deep && !self.rows.is_empty() {
+                    hints.push((
+                        if self.deep_navigation { "Search input" } else { "Results" },
+                        key("Tab"),
+                    ));
+                }
+                if self
+                    .selected()
+                    .as_ref()
+                    .and_then(launcher::quick_look_path)
+                    .is_some()
+                {
+                    hints.push(("Quick Look", key("Space")));
+                }
+                hints
+            }
+        }
+    }
+    /// ⌘P parity with the React launcher: pin straight into the next ⌥ slot, or unpin.
     fn toggle_pin(&mut self, row: Row, cx: &mut Context<Self>) {
         if self.state.pins.iter().any(|p| p.id == row.id) {
             self.state.pins.retain(|p| p.id != row.id);
             ui_state::normalize_pins(&mut self.state.pins);
             self.persist(cx);
-            self.message("Unpinned".into(), 2500, cx);
+            self.message(format!("Unpinned: {}", row.title), 2500, cx);
         } else if !row.pinnable() || row.ephemeral {
             self.message("Temporary results can’t be pinned".into(), 2500, cx);
+        } else if self.state.pins.len() >= ui_state::MAX_PINS {
+            self.message(format!("Pin limit reached ({})", ui_state::MAX_PINS), 2500, cx);
         } else {
-            self.pin_picker = Some((row, self.state.pins.len().min(11)));
-            let focus = self.popover_focus.clone();
-            let window = self.window;
-            cx.defer(move |cx| {
-                let _ = window.update(cx, |_, w, cx| focus.focus(w, cx));
-            });
-            cx.notify();
+            ui_state::insert_pin(&mut self.state.pins, &row, None);
+            self.persist(cx);
+            self.message(format!("Pinned: {}", row.title), 2500, cx);
         }
-    }
-    fn pin_at(&mut self, row: Row, index: usize, cx: &mut Context<Self>) {
-        ui_state::insert_pin(&mut self.state.pins, &row, Some(index));
-        self.pin_picker = None;
-        self.persist(cx);
-        self.message("Pinned".into(), 2500, cx);
     }
     fn row_action(&mut self, row: Row, action: RowAction, cx: &mut Context<Self>) {
         self.menu = None;
@@ -132,11 +265,10 @@ impl Launcher {
         self.clear_argument_results(cx);
         self.execute_activation(a, cx);
     }
-    fn complete_path(&mut self, w: &mut Window, cx: &mut Context<Self>) {
-        let Some(row) = self.selected() else { return };
-        if let Some(path) = self.paths.get(&row.id).cloned() {
+    fn complete_path_for_id(&mut self, id: &str, w: &mut Window, cx: &mut Context<Self>) {
+        if let Some(path) = self.paths.get(id).cloned() {
             if path["kind"] == "file" || path["kind"] == "application" {
-                self.click(self.model.session.generation, row.id, cx);
+                self.click(self.model.session.generation, id.to_owned(), cx);
                 return;
             }
             if let Some(p) = path["path"].as_str() {
@@ -151,6 +283,10 @@ impl Launcher {
                 self.edit(value, w, cx);
             }
         }
+    }
+    fn complete_path(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        let Some(row) = self.selected() else { return };
+        self.complete_path_for_id(&row.id, w, cx);
     }
     pub(super) fn return_home(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         self.acknowledge_navigation(cx);
@@ -167,7 +303,6 @@ impl Launcher {
         self.form_activation = None;
         self.clear_argument_results(cx);
         self.menu = None;
-        self.pin_picker = None;
         self.history = false;
         self.retire_answer(cx);
         self.model.terminal_mode = false;
@@ -183,11 +318,6 @@ impl Launcher {
         }
         if self.form.is_some() {
             self.submit_form(cx);
-            return;
-        }
-        if let Some((row, slot)) = self.pin_picker.take() {
-            self.pin_at(row, slot, cx);
-            self.input.focus_handle(cx).focus(w, cx);
             return;
         }
         if let Some((row, selected)) = self.menu.take() {
@@ -241,6 +371,16 @@ impl Launcher {
                 self.deep_navigation = true;
                 cx.notify();
                 return;
+            }
+            if mode.mode == Mode::Path {
+                if let Some(row) = self.selected() {
+                    if let Some(path) = self.paths.get(&row.id) {
+                        if path["kind"] == "directory" {
+                            self.complete_path(w, cx);
+                            return;
+                        }
+                    }
+                }
             }
             self.dispatch(Input::Enter { repeat }, cx);
             return;
@@ -323,6 +463,24 @@ impl Launcher {
         }));
         let _ = w;
     }
+    fn application_arrow(&mut self, delta: isize, w: &mut Window, cx: &mut Context<Self>) -> bool {
+        if launcher::input_mode(&self.model.input, self.model.terminal_mode).mode
+            != Mode::Applications
+            || self.navigation.is_some()
+            || self.form.is_some()
+            || self.menu.is_some()
+            || self.model_menu
+            || self.input.read(cx).marked_range.is_some()
+            || !self.input.focus_handle(cx).is_focused(w)
+        {
+            return false;
+        }
+        self.deep_navigation = true;
+        self.dispatch(Input::Move(delta), cx);
+        tezbar_ui::virtual_list::reveal(&self.scroll, self.model.session.selected, 7);
+        self.schedule_icon_viewport(w, cx);
+        true
+    }
     pub(super) fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
         let key = e.keystroke.key.as_str();
         if key == "escape" && self.task_indicator.update(cx, |view, cx| view.dismiss(cx)) {
@@ -385,7 +543,6 @@ impl Launcher {
             && !self.input.focus_handle(cx).is_focused(w)
             && self.form.is_none()
             && self.menu.is_none()
-            && self.pin_picker.is_none()
             && !self.model_menu
         {
             return;
@@ -464,8 +621,6 @@ impl Launcher {
         }
         if key == "escape" {
             if let Some((_, _)) = self.menu.take() {
-                self.input.focus_handle(cx).focus(w, cx);
-            } else if self.pin_picker.take().is_some() {
                 self.input.focus_handle(cx).focus(w, cx);
             } else if let Some(form) = &mut self.form {
                 let index = form.args.selected;
@@ -603,25 +758,6 @@ impl Launcher {
             cx.stop_propagation();
             return;
         }
-        if let Some((_, slot)) = &mut self.pin_picker {
-            match key {
-                "left" | "up" => *slot = slot.saturating_sub(1),
-                "right" | "down" => *slot = (*slot + 1).min(11),
-                "tab" => {
-                    *slot = if shift {
-                        slot.saturating_sub(1)
-                    } else {
-                        (*slot + 1).min(11)
-                    }
-                }
-                "enter" => self.enter(e.is_held, false, w, cx),
-                _ => {}
-            }
-            cx.notify();
-            w.prevent_default();
-            cx.stop_propagation();
-            return;
-        }
         if alt
             && !primary
             && !e.is_held
@@ -716,12 +852,6 @@ impl Launcher {
             }
         }
         let mode = launcher::input_mode(&self.model.input, self.model.terminal_mode).mode;
-        if key == "backspace" && matches!(self.model.input.as_str(), "!" | "`" | ">") {
-            self.return_home(w, cx);
-            w.prevent_default();
-            cx.stop_propagation();
-            return;
-        }
         if key == "tab" && mode == Mode::Path {
             self.complete_path(w, cx);
             w.prevent_default();
@@ -772,7 +902,7 @@ impl Launcher {
             };
             self.deep_navigation = true;
             self.dispatch(Input::Move(delta), cx);
-            if mode == Mode::Path {
+            if mode != Mode::Applications {
                 self.path_list
                     .scroll_to_reveal_item(self.model.session.selected);
             } else {
@@ -806,7 +936,27 @@ impl Launcher {
         let title = row.title.clone();
         let image = self.icons.get(&id).cloned();
         let selected = index == self.model.session.selected;
-        let pin = self.state.pins.iter().any(|p| p.id == id);
+        let pin_slot = self
+            .state
+            .pins
+            .iter()
+            .position(|p| p.id == id)
+            .map(|i| i + 1);
+        let instant = !grid && matches!(row.category.as_str(), "calculator" | "color-converter");
+        let currency = row.id.starts_with("currency:");
+        let menu_row = row.clone();
+        // Path completion rows (React `completePath` list): two lines, mono title,
+        // text badge, and the neutral glass selection instead of the accent fill.
+        let path_meta = (!grid).then(|| self.paths.get(&id)).flatten();
+        let path = path_meta.is_some();
+        let path_badge: SharedString = path_meta
+            .and_then(|v| v["badge"].as_str())
+            .map(|badge| SharedString::from(badge.to_owned()))
+            .unwrap_or_else(|| match row.category.as_str() {
+                "directory" => "Folder".into(),
+                "application" => "Open With".into(),
+                _ => "File".into(),
+            });
         tezbar_ui::virtual_list::row(
             id.clone().into(),
             title.clone().into(),
@@ -816,11 +966,70 @@ impl Launcher {
             t,
         )
         .when(grid, |d| {
-            d.h(px(96. * t.zoom)).flex_col().justify_center().py(px(8.))
+            d.h(px(96. * t.zoom))
+                .flex_col()
+                .justify_center()
+                .px(px(4. * t.zoom))
+                .py(px(8. * t.zoom))
+                .overflow_hidden()
         })
-        .gap(px(10.))
+        .when(!grid, |d| d.px(px(8. * t.zoom)))
+        .when(instant, |d| d.h(px(52. * t.zoom)).px(px(8. * t.zoom)).py(px(6. * t.zoom)))
+        .gap(px(if grid { 8. } else { 10. } * t.zoom))
+        .when(path, |d| {
+            d.h_auto()
+                .min_h(px(36. * t.zoom))
+                .px(px(10. * t.zoom))
+                .py(px(6. * t.zoom))
+                .gap(px(12. * t.zoom))
+                .text_color(t.text2)
+                .bg(if selected { t.selected } else { transparent_black() })
+        })
+        // Pinned rows: a short amber tick on the leading edge (legacy launcher parity).
+        .when(pin_slot.is_some() && !grid, |d| {
+            d.relative().child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top_0()
+                    .bottom_0()
+                    .flex()
+                    .items_center()
+                    .child(div().w(px(2.)).h(px(14. * t.zoom)).rounded_full().bg(rgba(0xfcd34dcc))),
+            )
+        })
         .debug_selector(move || format!("result-{index}"))
-        .on_click(cx.listener(move |this, _, _, cx| {
+        .when(!grid && !instant && row.pinnable() && !row.ephemeral, |d| {
+            let drag_row = row.clone();
+            d.on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, e: &MouseDownEvent, _, _| {
+                    this.suppress_row_click = false;
+                    let mode = launcher::input_mode(&this.model.input, this.model.terminal_mode).mode;
+                    if matches!(mode, Mode::Basic | Mode::Deep) && this.navigation.is_none() {
+                        this.drag = Some(PinDrag {
+                            id: drag_row.id.clone(),
+                            start: e.position,
+                            active: false,
+                            target: None,
+                            unpin: false,
+                            source: DragSource::Result((*drag_row).clone()),
+                        });
+                    }
+                }),
+            )
+        })
+        .on_click(cx.listener(move |this, _, w, cx| {
+            // A drag that ended on this row is a drop, not an activation.
+            if std::mem::take(&mut this.suppress_row_click) {
+                return;
+            }
+            if let Some(path) = this.paths.get(&id) {
+                if path["kind"] == "directory" {
+                    this.complete_path_for_id(&id, w, cx);
+                    return;
+                }
+            }
             this.click(generation, id.clone(), cx);
         }))
         .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
@@ -838,29 +1047,27 @@ impl Launcher {
             MouseButton::Right,
             cx.listener(move |this, _, w, cx| {
                 if !this.model.session.pending() {
-                    this.menu = Some((row.as_ref().clone(), 0));
+                    this.menu = Some((menu_row.as_ref().clone(), 0));
                     this.popover_focus.focus(w, cx);
                     cx.notify();
                 }
             }),
         )
-        .child(if self.rows[index].category == "color-converter" {
-            let color = tezbar_core::instant::color::parse_color(&self.model.input);
-            div()
-                .size(px(22. * t.zoom))
-                .flex_shrink_0()
-                .rounded(px(6. * t.zoom))
-                .border_1()
-                .border_color(t.rim)
-                .when_some(color, |d, color| {
-                    d.bg(gpui::Rgba {
-                        r: color.r as f32 / 255.,
-                        g: color.g as f32 / 255.,
-                        b: color.b as f32 / 255.,
-                        a: color.a as f32,
-                    })
-                })
-                .into_any_element()
+        .child(if instant {
+            let glyph = if row.category == "color-converter" {
+                let raw = match &row.action { Action::CopyText { text } | Action::CopyAndPasteText { text } => text.as_str(), _ => self.model.input.as_str() };
+                let color = tezbar_core::instant::color::parse_color(raw);
+                div().size(px(14. * t.zoom)).rounded_full().border_1().border_color(rgba(0xffffff4d))
+                    .when_some(color, |d, color| d.bg(gpui::Rgba { r: color.r as f32 / 255., g: color.g as f32 / 255., b: color.b as f32 / 255., a: color.a as f32 })).into_any_element()
+            } else {
+                let data: &'static [u8] = if currency {
+                    br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="black" stroke-width="1.1" stroke-linecap="round"><circle cx="7" cy="7" r="5.25"/><path d="M9 5.25c-.4-.55-1.1-.95-2-.95-1.1 0-2 .55-2 1.4 0 2 4 1 4 3 0 .85-.9 1.4-2 1.4-.9 0-1.6-.4-2-.95M7 3.25v7.5"/></svg>"#
+                } else {
+                    br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="black" stroke-width="1.1"><rect x="2.5" y="1.5" width="9" height="11" rx="1.5"/><path d="M4.25 3.25h5.5v2h-5.5zM4.5 7.5h1M6.5 7.5h1M8.5 7.5h1M4.5 9.75h1M6.5 9.75h1M8.5 9.75h1"/></svg>"#
+                };
+                svg().data(data).size(px(14. * t.zoom)).text_color(rgb(0xffffff)).into_any_element()
+            };
+            div().size(px(22. * t.zoom)).flex_shrink_0().rounded(px(6. * t.zoom)).bg(rgb(0x71717a)).flex().items_center().justify_center().child(glyph).into_any_element()
         } else if let Some(image) = image {
             img(image)
                 .size(px(if grid { 40. } else { 22. } * t.zoom))
@@ -869,23 +1076,69 @@ impl Launcher {
         } else {
             icons::tile(&self.rows[index], if grid { 40. } else { 22. } * t.zoom).into_any_element()
         })
-        .child(
+        .when(path, |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(2. * t.zoom))
+                    .debug_selector(move || format!("result-text-{index}"))
+                    .child(
+                        div()
+                            .font_family(tezbar_ui::tokens::mono_family())
+                            .text_size(px(12.5 * t.zoom))
+                            .text_color(t.text1)
+                            .text_ellipsis()
+                            .child(title.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.5 * t.zoom))
+                            .text_color(t.text4)
+                            .text_ellipsis()
+                            .child(row.subtitle.clone()),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .ml(px(12. * t.zoom))
+                    .text_size(px(11. * t.zoom))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(t.text4)
+                    .debug_selector(move || format!("result-kind-{index}"))
+                    .child(path_badge.clone()),
+            )
+        })
+        .when(!path, |d| d.child(
             div()
                 .flex()
                 .items_baseline()
+                .when(instant, |d| d.flex_col().items_start().gap(px(2. * t.zoom)))
                 .when(grid, |d| d.justify_center())
                 .when(!grid, |d| d.flex_1())
                 .min_w_0()
                 .w_full()
-                .gap(px(8. * t.zoom))
+                .gap(px(if instant { 2. } else { 8. } * t.zoom))
                 .debug_selector(move || format!("result-text-{index}"))
                 .child(
                     div()
                         .min_w_0()
-                        .max_w(relative(if grid { 1. } else { 0.7 }))
-                        .flex_shrink_0()
+                        .max_w(relative(if grid || instant { 1. } else { 0.7 }))
+                        .when(!grid, |d| d.flex_shrink_0())
+                        .when(grid, |d| {
+                            d.w_full()
+                                .h(px(32. * t.zoom))
+                                .line_height(px(16. * t.zoom))
+                                .whitespace_normal()
+                                .line_clamp(2)
+                                .text_center()
+                        })
                         .text_size(px(13. * t.zoom))
                         .font_weight(FontWeight::MEDIUM)
+                        .when(instant, |d| d.font_family(tezbar_ui::tokens::mono_family()).text_size(px(14. * t.zoom)).font_weight(FontWeight::SEMIBOLD))
                         .text_ellipsis()
                         .child(title),
                 )
@@ -901,25 +1154,36 @@ impl Launcher {
                                 .min_w_0()
                                 .text_ellipsis()
                                 .text_size(px(12. * t.zoom))
-                                .text_color(if selected {
-                                    rgb(0xffffff).into()
-                                } else {
-                                    t.text3
-                                })
-                                .child(subtitle),
+                                .text_color(if selected && !instant { rgba(0xffffffb8).into() } else if instant { t.text3 } else { t.text4 })
+                                .when(instant, |d| d.font_family(tezbar_ui::tokens::mono_family()).text_size(px(11. * t.zoom)))
+                                .child(if instant { format!("{} · {subtitle}", if self.rows[index].category == "color-converter" { "Color" } else if currency { "Currency" } else { "Calculator" }) } else { subtitle }),
                         )
                     })
                 }),
-        )
-        .when(!grid, |d| {
+        ))
+        .when(instant, |d| d.child(div().flex().items_center().gap(px(6.)).text_size(px(10.)).font_family(tezbar_ui::tokens::mono_family()).text_color(t.text3).child(controls::keycap("↵", t)).child("copy")))
+        .when_some(pin_slot.filter(|_| !grid && !instant && !path), |d, slot| {
+            d.child(
+                div()
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .gap(px(2. * t.zoom))
+                    .debug_selector(move || format!("result-pin-slot-{index}"))
+                    .child(controls::keycap("⌥", t))
+                    .child(controls::keycap(ui_state::slot_key(slot), t)),
+            )
+        })
+        .when(!grid && !instant && !path, |d| {
             d.child(
                 div()
                     .flex_shrink_0()
                     .px(px(6. * t.zoom))
                     .py(px(2. * t.zoom))
                     .rounded(px(5. * t.zoom))
-                    .bg(if selected { t.pill_strong } else { t.pill })
+                    .bg(if selected { rgba(0xffffff29).into() } else { t.pill })
                     .text_size(px(10.5 * t.zoom))
+                    .line_height(px(14. * t.zoom))
                     .text_color(if selected {
                         rgb(0xffffff).into()
                     } else {
@@ -929,17 +1193,16 @@ impl Launcher {
                     .child(presentation::kind_label(&self.rows[index].category).to_owned()),
             )
         })
-        .when(pin, |d| d.child(div().text_size(px(11.)).child("⌖")))
     }
 }
 impl Render for Launcher {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.migration_pending() {
-            return div()
-                .size_full()
+            let t = tokens::tokens(w);
+            return controls::sheet(t)
+                .debug_selector(|| "preference-recovery-frame".into())
+                .font_family(tokens::font_family(cx, false))
                 .p_6()
-                .flex()
-                .flex_col()
                 .gap_4()
                 .child("Recover saved preferences")
                 .child(self.error.clone().unwrap_or_else(|| {
@@ -948,6 +1211,7 @@ impl Render for Launcher {
                 .child(
                     div()
                         .id("retry-legacy-preferences")
+                        .debug_selector(|| "retry-legacy-preferences".into())
                         .cursor_pointer()
                         .child("Retry saved changes")
                         .on_click(cx.listener(|this, _, _, _| {
@@ -1044,7 +1308,7 @@ impl Render for Launcher {
             .on_scroll(cx.listener(|this, _, w, cx| this.schedule_icon_viewport(w, cx)))
             .size_full()
             .into_any_element()
-        } else if mode == Mode::Path {
+        } else {
             list(
                 self.path_list.clone(),
                 cx.processor(move |this, index: usize, _, cx| {
@@ -1062,6 +1326,7 @@ impl Render for Launcher {
                         None
                     };
                     div()
+                        .w_full()
                         .flex()
                         .flex_col()
                         .when_some(heading, |d, heading| {
@@ -1071,36 +1336,36 @@ impl Render for Launcher {
                                     .debug_selector(move || format!("path-section-{index}"))
                                     .role(Role::Heading)
                                     .aria_label(heading)
+                                    .px(px(12. * t.zoom))
+                                    .pt(px(8. * t.zoom))
+                                    .pb(px(4. * t.zoom))
                                     .text_size(px(11. * t.zoom))
-                                    .text_color(t.text3)
-                                    .h(px(24. * t.zoom))
-                                    .px(px(10. * t.zoom))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(t.text4)
                                     .child(heading),
                             )
                         })
                         .child(this.row_element(index, false, t, cx))
+                        .when(index == 0, |d| d.pt(px(6. * t.zoom)))
+                        .when(index + 1 < this.rows.len(), |d| d.pb(px(2. * t.zoom)))
+                        .when(index + 1 == this.rows.len(), |d| {
+                            d.pb(px((tokens::FOOTER + 8.) * t.zoom))
+                        })
                         .into_any_element()
                 }),
             )
             .size_full()
             .into_any_element()
-        } else {
-            uniform_list(
-                "launcher-results",
-                self.rows.len(),
-                cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
-                    range
-                        .map(|index| this.row_element(index, false, t, cx))
-                        .collect::<Vec<_>>()
-                }),
-            )
-            .track_scroll(&self.scroll)
-            .on_scroll(cx.listener(|this, _, w, cx| this.schedule_icon_viewport(w, cx)))
-            .size_full()
-            .into_any_element()
         };
         let content = if let Some(utility) = utility {
-            div().flex_1().min_h_0().child(utility).into_any_element()
+            div()
+                .flex_1()
+                .min_w_0()
+                .w_full()
+                .max_w(relative(1.))
+                .min_h_0()
+                .child(utility)
+                .into_any_element()
         } else if let Some(n) = &self.navigation {
             div()
                 .flex_1()
@@ -1252,15 +1517,39 @@ impl Render for Launcher {
                 .into_any_element()
         } else {
             div()
-                .id("launcher-listbox")
+                .id("launcher-listbox").flex().flex_col()
                 .debug_selector(|| "launcher-listbox".into())
                 .min_w_0()
                 .role(if grid { Role::Grid } else { Role::ListBox })
                 .aria_label("Search results")
                 .flex_1()
                 .min_h_0()
-                .p(px(8.))
-                .child(list)
+                .px(px(6. * t.zoom))
+                // Lists scroll edge to edge under the header and footer; their first and
+                // last rows carry the breathing room instead of the clipping container.
+                .when(grid || self.rows.is_empty(), |d| d.pt(px(8.)))
+                .when(grid, |d| d.pb(px(tokens::FOOTER * t.zoom)))
+                .when(self.rows.is_empty() && (mode == Mode::Ai || mode == Mode::Terminal || (mode == Mode::Deep && self.model.session.pending())), |d| {
+                    let text = if mode == Mode::Ai {
+                        if self.model.session.pending() { "Loading conversations…" }
+                        else if !launcher::input_mode(&self.model.input, self.model.terminal_mode).ai_task.trim().is_empty() { "No matching conversations. Press Enter to ask AI as a new chat." }
+                        else { "No saved conversations yet. Type a question and press Enter to start one." }
+                    } else if mode == Mode::Terminal { "No saved terminal sessions yet. Press Enter to start a new terminal." } else { "Searching indexed files" };
+                    let mut state = div().id("launcher-empty-state").role(Role::Status).flex_1().flex().flex_col().items_center().justify_center().gap(px(8.)).p(px(24.)).text_size(px(12.)).text_color(t.text3).child(text);
+                    if mode == Mode::Deep {
+                        let skeleton = div().w_full().max_w(px(520. * t.zoom)).mt(px(20.)).flex().flex_col().gap(px(8.))
+                            .children([0.82, 0.68, 0.91].into_iter().map(|width| {
+                                div().flex().items_center().gap(px(12.)).rounded(px(tokens::ROW_RADIUS)).border_1().border_color(t.hairline).bg(t.bar).px(px(12.)).py(px(10.))
+                                    .child(div().size(px(32. * t.zoom)).rounded(px(tokens::ROW_RADIUS)).bg(t.pill))
+                                    .child(div().flex_1().flex().flex_col().gap(px(8.))
+                                        .child(div().w(relative(width)).h(px(8.)).rounded_full().bg(t.pill_strong))
+                                        .child(div().w(relative(width * 0.6)).h(px(6.)).rounded_full().bg(t.pill)))
+                            }));
+                        state = state.child(div().text_size(px(11.)).text_color(t.text4).child(format!("Matching text, OCR, and vector embeddings for “{}”", self.model.input.trim_start_matches('!').trim()))).child(skeleton);
+                    }
+                    d.child(state)
+                })
+                .when(!self.rows.is_empty(), |d| d.child(list))
                 .into_any_element()
         };
         let pin_bounds = self.pin_bounds.clone();
@@ -1270,31 +1559,71 @@ impl Render for Launcher {
         )
         .absolute()
         .size_full();
-        let mut pins = div()
-            .relative()
-            .id("pins")
-            .role(Role::Toolbar)
-            .aria_label("Pinned commands")
+        // Geometry is repainted every frame; stale bounds must not survive a hidden rail.
+        self.pin_bounds.set(None);
+        self.trash_bounds.set(None);
+        *self.pin_item_bounds.borrow_mut() = vec![None; self.state.pins.len()];
+        let accent: Hsla = rgb(0x5b5ef0).into();
+        let dragging_pin = self
+            .drag
+            .as_ref()
+            .filter(|d| d.active && matches!(d.source, DragSource::Pin));
+        let dragging_result = self
+            .drag
+            .as_ref()
+            .is_some_and(|d| d.active && matches!(d.source, DragSource::Result(_)));
+        let drop_index = self.drag.as_ref().filter(|d| d.active).and_then(|d| d.target);
+        let unpin_active = dragging_pin.is_some_and(|d| d.unpin);
+        let dragging_pin_id = dragging_pin.map(|d| d.id.clone());
+        let drop_line = move || {
+            div()
+                .absolute()
+                .left(px(4.))
+                .right(px(4.))
+                .h(px(2.))
+                .rounded_full()
+                .bg(accent)
+        };
+        let mut pin_list = div()
+            .id("pin-list")
             .flex()
             .flex_col()
-            .flex_shrink_0()
-            .w(px(44. * t.zoom))
+            .items_center()
+            .flex_1()
+            .min_h_0()
             .gap(px(4. * t.zoom))
-            .p(px(4. * t.zoom))
             .overflow_y_scroll()
-            .border_r_1()
-            .border_color(t.hairline)
-            .child(pin_geometry);
+            .when(self.state.pins.is_empty() && dragging_result, |d| {
+                d.child(
+                    div()
+                        .size(px(32. * t.zoom))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(8. * t.zoom))
+                        .border_1()
+                        .border_dashed()
+                        .border_color(Hsla { a: 0.6, ..accent })
+                        .bg(Hsla { a: 0.08, ..accent })
+                        .font_family(tezbar_ui::tokens::mono_family())
+                        .text_size(px(15. * t.zoom))
+                        .text_color(accent)
+                        .child("+"),
+                )
+            });
         if self.navigation.is_none() {
+            let count = self.state.pins.len();
             for (index, pin) in self.state.pins.iter().enumerate() {
                 let id = pin.id.clone();
                 let drag_id = id.clone();
+                let item_bounds = self.pin_item_bounds.clone();
+                let dimmed = dragging_pin_id.as_deref() == Some(id.as_str());
                 let tooltip = PinTooltip {
                     title: pin.title.clone(),
                     subtitle: pin.subtitle.clone(),
                     slot: index + 1,
                 };
-                pins = pins.child(
+                pin_list = pin_list.child(
                     div()
                         .id(SharedString::from(format!("pin-{id}")))
                         .role(Role::Button)
@@ -1311,8 +1640,25 @@ impl Render for Launcher {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .hover(|d| d.bg(t.selected))
-                        .tooltip(move |_, cx| cx.new(|_| tooltip.clone()).into())
+                        .cursor(CursorStyle::OpenHand)
+                        .when(dimmed, |d| d.opacity(0.45))
+                        .when(!dimmed, |d| d.hover(|d| d.bg(t.selected)))
+                        .child(
+                            canvas(|_, _, _| (), move |bounds, _, _, _| {
+                                if let Some(slot) = item_bounds.borrow_mut().get_mut(index) {
+                                    *slot = Some(bounds);
+                                }
+                            })
+                            .absolute()
+                            .size_full(),
+                        )
+                        .when(drop_index == Some(index), |d| d.child(drop_line().top(px(-3.))))
+                        .when(index + 1 == count && drop_index == Some(count), |d| {
+                            d.child(drop_line().bottom(px(-3.)))
+                        })
+                        .when(self.drag.is_none(), |d| {
+                            d.tooltip(move |_, cx| cx.new(|_| tooltip.clone()).into())
+                        })
                         .child(if let Some(image) = self.icons.get(&pin.id) {
                             img(image.clone()).size(px(22. * t.zoom)).into_any_element()
                         } else {
@@ -1340,14 +1686,11 @@ impl Render for Launcher {
                                     start: e.position,
                                     active: false,
                                     target: Some(index),
+                                    unpin: false,
+                                    source: DragSource::Pin,
                                 })
                             }),
                         )
-                        .on_mouse_move(cx.listener(move |this, _, _, _| {
-                            if let Some(drag) = &mut this.drag {
-                                drag.target = Some(index);
-                            }
-                        }))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if !this.suppress_pin_click
                                 && this.drag.as_ref().is_none_or(|d| !d.active)
@@ -1362,10 +1705,74 @@ impl Render for Launcher {
                 );
             }
         }
+        let trash_bounds = self.trash_bounds.clone();
+        let rose: Hsla = rgb(0xfb7185).into();
+        let pins = div()
+            .relative()
+            .id("pins")
+            .role(Role::Toolbar)
+            .aria_label("Pinned commands")
+            .flex()
+            .flex_col()
+            .items_center()
+            .flex_shrink_0()
+            .w(px(44. * t.zoom))
+            .px(px(4. * t.zoom))
+            .pt(px(6. * t.zoom))
+            // The footer floats over the bottom edge; keep the trash target above it.
+            .pb(px((tokens::FOOTER + 4.) * t.zoom))
+            .border_r_1()
+            .border_color(t.hairline)
+            .when(unpin_active, |d| {
+                d.border_color(Hsla { a: 0.35, ..rgb(0xfda4af).into() })
+                    .bg(Hsla { a: 0.04, ..rose })
+            })
+            .when(dragging_result, |d| {
+                d.border_color(Hsla { a: 0.4, ..accent }).bg(Hsla { a: 0.035, ..accent })
+            })
+            .child(pin_geometry)
+            .child(pin_list)
+            .when(dragging_pin.is_some(), |d| {
+                d.child(
+                    div()
+                        .debug_selector(|| "pin-unpin-target".into())
+                        .mt(px(4. * t.zoom))
+                        .h(px(32. * t.zoom))
+                        .w_full()
+                        .flex_shrink_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(8. * t.zoom))
+                        .border_1()
+                        .border_dashed()
+                        .when(unpin_active, |d| {
+                            d.border_color(Hsla { a: 0.55, ..rgb(0xfda4af).into() })
+                                .bg(Hsla { a: 0.15, ..rose })
+                                .text_color(rgb(0xfecdd3))
+                        })
+                        .when(!unpin_active, |d| {
+                            d.border_color(rgba(0xffffff1a))
+                                .bg(rgba(0xffffff06))
+                                .text_color(Hsla { a: 0.7, ..t.text4 })
+                        })
+                        .child(
+                            canvas(|_, _, _| (), move |bounds, _, _, _| trash_bounds.set(Some(bounds)))
+                                .absolute()
+                                .size_full(),
+                        )
+                        .child(
+                            svg()
+                                .data(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.25 4.25h7.5M5.25 4.25V3h3.5v1.25M4.25 4.25l.5 7h4.5l.5-7M6 6.25v3M8 6.25v3"/></svg>"#.as_slice())
+                                .size(px(14. * t.zoom))
+                                .text_color(if unpin_active { rgb(0xfecdd3).into() } else { Hsla { a: 0.7, ..t.text4 } }),
+                        ),
+                )
+            });
         let footer = if let Some(e) = &self.error {
             e.clone()
-        } else if let Some(n) = &self.notice {
-            n.clone()
+        } else if let Some(n) = self.footer_notice() {
+            n.to_owned()
         } else if !self.ready {
             "Starting search…".into()
         } else if self.model.session.pending() {
@@ -1392,18 +1799,13 @@ impl Render for Launcher {
                         } else {
                             let _ = this.update_pointer_gesture(w, cx);
                         }
-                        if let Some(drag) = &mut this.drag {
-                            let dx = f32::from(e.position.x - drag.start.x);
-                            let dy = f32::from(e.position.y - drag.start.y);
-                            if dx * dx + dy * dy >= 36. {
-                                drag.active = true;
-                            }
-                            if this
-                                .pin_bounds
-                                .get()
-                                .is_none_or(|b| !b.contains(&e.position))
-                            {
-                                drag.target = None;
+                        if this.drag.is_some() {
+                            if e.pressed_button == Some(MouseButton::Left) {
+                                this.drag_moved(e.position, cx);
+                            } else {
+                                // Released outside the window: cancel, never unpin.
+                                this.drag = None;
+                                cx.notify();
                             }
                         }
                     });
@@ -1420,77 +1822,60 @@ impl Render for Launcher {
                         if e.button != MouseButton::Left {
                             return;
                         }
-                        if let Some(drag) = this.drag.take() {
-                            if drag.active {
-                                this.suppress_pin_click = true;
-                                if let Some(target) = drag.target {
-                                    let from = this
-                                        .state
-                                        .pins
-                                        .iter()
-                                        .position(|p| p.id == drag.id)
-                                        .unwrap_or(0);
-                                    ui_state::reorder_pin(
-                                        &mut this.state.pins,
-                                        &drag.id,
-                                        if target > from { target + 1 } else { target },
-                                    );
-                                } else {
-                                    this.state.pins.retain(|p| p.id != drag.id);
-                                    ui_state::normalize_pins(&mut this.state.pins);
-                                }
-                                this.persist(cx);
-                                cx.notify();
-                            }
-                        }
+                        this.drag_released(cx);
                     });
                 });
             },
         )
         .absolute()
         .size_full();
-        controls::sheet(t)
+        // Utilities own the same sheet chrome as every other mounted screen.
+        // Wrapping them in another sheet doubles the translucent background,
+        // border and rounded corners compared with the main launcher.
+        let root = if utility_active {
+            div().size_full().flex().flex_col()
+        } else {
+            controls::sheet(t)
+        };
+        root
             .relative()
             .font_family(tokens::font_family(cx, false))
             .capture_key_down(cx.listener(|this, e, w, cx| this.key(e, w, cx)))
-            .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, w, cx| {
+            // TextInput consumes horizontal-arrow actions before key_down runs.
+            .capture_action(cx.listener(|this, _: &tezbar_ui::text_input::Left, w, cx| {
+                if this.application_arrow(-1, w, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .capture_action(cx.listener(|this, _: &tezbar_ui::text_input::Right, w, cx| {
+                if this.application_arrow(1, w, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            // The text field consumes Backspace as an action, so key_down never sees it.
+            // An empty mode query (`>`, `!`, `` ` ``) leaves the mode instead of doing nothing.
+            .capture_action(cx.listener(|this, _: &Backspace, w, cx| {
+                if this.navigation.is_none()
+                    && this.form.is_none()
+                    && this.menu.is_none()
+                    && !this.model_menu
+                    && !this.terminal_settings
+                    && this.input.focus_handle(cx).is_focused(w)
+                    && matches!(this.model.input.as_str(), "!" | "`" | ">")
+                {
+                    this.return_home(w, cx);
+                    cx.stop_propagation();
+                }
+            }))
+            .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, w, cx| {
                 if let Some(gesture) = this.resize {
                     let _ = gesture.update(w, this.zoom, cx);
-                }
-                if let Some(drag) = &mut this.drag {
-                    let dx = f32::from(e.position.x - drag.start.x);
-                    let dy = f32::from(e.position.y - drag.start.y);
-                    if dx * dx + dy * dy >= 36. {
-                        drag.active = true;
-                    }
                 }
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
+                cx.listener(|this, _, _, _| {
                     this.resize = None;
-                    if let Some(drag) = this.drag.take() {
-                        if drag.active {
-                            if let Some(target) = drag.target {
-                                let from = this
-                                    .state
-                                    .pins
-                                    .iter()
-                                    .position(|p| p.id == drag.id)
-                                    .unwrap_or(0);
-                                ui_state::reorder_pin(
-                                    &mut this.state.pins,
-                                    &drag.id,
-                                    if target > from { target + 1 } else { target },
-                                );
-                            } else {
-                                this.state.pins.retain(|p| p.id != drag.id);
-                                ui_state::normalize_pins(&mut this.state.pins);
-                            }
-                            this.persist(cx);
-                            cx.notify();
-                        }
-                    }
                     let _ = this.relay.send(Event::SnapEnd);
                 }),
             )
@@ -1498,12 +1883,8 @@ impl Render for Launcher {
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
                     this.resize = None;
-                    if let Some(drag) = this.drag.take() {
-                        if drag.active {
-                            this.state.pins.retain(|p| p.id != drag.id);
-                            ui_state::normalize_pins(&mut this.state.pins);
-                            this.persist(cx);
-                        }
+                    if this.drag.take().is_some() {
+                        cx.notify();
                     }
                 }),
             )
@@ -1544,12 +1925,98 @@ impl Render for Launcher {
                             },
                         )
                         .child(
-                            self.form
-                                .as_ref()
-                                .filter(|form| form.inline())
-                                .map(|form| form.inputs[0].clone())
-                                .unwrap_or_else(|| self.input.clone()),
+                            div()
+                                .relative()
+                                .flex()
+                                .items_center()
+                                .flex_1()
+                                .min_w_0()
+                                .child(
+                                    self.form
+                                        .as_ref()
+                                        .filter(|form| form.inline())
+                                        .map(|form| form.inputs[0].clone())
+                                        .unwrap_or_else(|| self.input.clone()),
+                                )
+                                // React `.path-command-hint`: an invisible copy of the query
+                                // pushes "› Open terminal" to sit right after the typed path.
+                                .when(mode == Mode::Path && self.form.is_none(), |d| {
+                                    let value = self.input.read(cx).content.clone();
+                                    d.child(
+                                        div()
+                                            .debug_selector(|| "path-command-hint".into())
+                                            .absolute()
+                                            .top_0()
+                                            .bottom_0()
+                                            .left_0()
+                                            .right_0()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(10. * t.zoom))
+                                            .overflow_hidden()
+                                            .text_size(px(15. * t.zoom))
+                                            .line_height(px(22. * t.zoom))
+                                            .child(div().flex_shrink_0().invisible().child(value))
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_shrink_0()
+                                                    .items_center()
+                                                    .h(px(20. * t.zoom))
+                                                    .px(px(7. * t.zoom))
+                                                    .rounded(px(6. * t.zoom))
+                                                    .border_1()
+                                                    .border_color(rgba(0xb4b1ff33))
+                                                    .bg(rgba(0x7f76e61a))
+                                                    .font_family(tezbar_ui::tokens::mono_family())
+                                                    .text_size(px(11. * t.zoom))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(t.accent_strong)
+                                                    .child(">"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .min_w_0()
+                                                    .text_ellipsis()
+                                                    .text_color(t.text4)
+                                                    .child("Open terminal"),
+                                            ),
+                                    )
+                                }),
                         )
+                        // React `.launcher-mode-chips` (`! Deep`, `> Terminal`, `Space AI`).
+                        .when(mode == Mode::Basic && self.form.is_none(), |d| {
+                            let chip = |mark: Option<&'static str>, label: &'static str| {
+                                div()
+                                    .flex()
+                                    .flex_shrink_0()
+                                    .items_center()
+                                    .gap(px(4. * t.zoom))
+                                    .h(px(20. * t.zoom))
+                                    .px(px(7. * t.zoom))
+                                    .rounded(px(6. * t.zoom))
+                                    .bg(t.pill)
+                                    .text_size(px(11. * t.zoom))
+                                    .text_color(t.text3)
+                                    .when_some(mark, |d, mark| {
+                                        d.child(div().font_family(tezbar_ui::tokens::mono_family()).child(mark))
+                                    })
+                                    .child(label)
+                            };
+                            d.child(
+                                div()
+                                    .debug_selector(|| "launcher-mode-chips".into())
+                                    .flex()
+                                    .flex_row_reverse()
+                                    .flex_shrink_0()
+                                    .h(px(20. * t.zoom))
+                                    .gap(px(6. * t.zoom))
+                                    .overflow_hidden()
+                                    .child(chip(None, "Space AI"))
+                                    .child(chip(Some(">"), "Terminal"))
+                                    .child(chip(Some("!"), "Deep")),
+                            )
+                        })
                         .when(mode == Mode::Ai, |d| {
                             d.child(
                                 controls::button(
@@ -1629,7 +2096,7 @@ impl Render for Launcher {
                     .min_w_0()
                     .min_h_0()
                     .when(
-                        !self.state.pins.is_empty()
+                        (!self.state.pins.is_empty() || dragging_result)
                             && matches!(mode, Mode::Basic | Mode::Deep)
                             && self.form.is_none()
                             && self.navigation.is_none()
@@ -1680,57 +2147,20 @@ impl Render for Launcher {
                         )),
                 )
             })
-            .when_some(self.pin_picker.clone(), |d, (row, selected)| {
-                d.child(
-                    controls::popover("pin-picker", "Choose pin slot", t)
-                        .role(Role::ListBox)
-                        .track_focus(&self.popover_focus)
-                        .on_mouse_down_out(cx.listener(|this, _, w, cx| {
-                            this.pin_picker = None;
-                            this.input.focus_handle(cx).focus(w, cx);
-                            cx.notify();
-                        }))
-                        .absolute()
-                        .right(px(12.))
-                        .bottom(px(36.))
-                        .w(px(280.))
-                        .child("Choose pin slot")
-                        .children((0..12).map(|index| {
-                            let row = row.clone();
-                            let title = self
-                                .state
-                                .pins
-                                .get(index)
-                                .map(|p| p.title.as_str())
-                                .unwrap_or("Empty");
-                            controls::button(
-                                SharedString::from(format!("pin-slot-{index}")),
-                                format!("⌥{}  {title}", ui_state::slot_key(index + 1)),
-                                if index == selected {
-                                    controls::ButtonTone::Primary
-                                } else {
-                                    controls::ButtonTone::Ghost
-                                },
-                                false,
-                                t,
-                            )
-                            .role(Role::ListBoxOption)
-                            .aria_selected(index == selected)
-                            .aria_position_in_set(index + 1)
-                            .aria_size_of_set(12)
-                            .when(index == selected, |d| d.aria_active_descendant())
-                            .on_click(cx.listener(
-                                move |this, _, w, cx| {
-                                    this.pin_at(row.clone(), index, cx);
-                                    this.input.focus_handle(cx).focus(w, cx);
-                                },
-                            ))
-                        })),
-                )
-            })
             .when(!utility_active, |d| {
+                // Full-width bar floating over the results (legacy `.launcher-footer`).
                 d.child(
                     controls::footer(t)
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .bottom_0()
+                        .bg(gpui::Hsla { a: 0.92, ..t.bar_float })
+                        // React `CommandSurfaceFooter`: pl-2 pr-3, gap-x-3, 11px hints.
+                        .pl(px(8. * t.zoom))
+                        .pr(px(12. * t.zoom))
+                        .gap(px(12. * t.zoom))
+                        .text_size(px(11. * t.zoom))
                         .child(
                             div()
                                 .id("launcher-status")
@@ -1756,32 +2186,38 @@ impl Render for Launcher {
                         })
                         .child(div().flex_1())
                         .child(self.task_indicator.clone())
-                        .child(if self.form.is_some() {
-                            "Run"
-                        } else if mode == Mode::Deep && !self.deep_navigation {
-                            "Navigate"
-                        } else if mode == Mode::Ai {
-                            "Start chat"
-                        } else if mode == Mode::Terminal {
-                            "Open terminal"
-                        } else {
-                            "Open"
-                        })
-                        .child(controls::keycap("↵", t))
-                        .when(mode == Mode::Path, |d| {
-                            d.child("Complete").child(controls::keycap("Tab", t))
-                        })
+                        .children(self.footer_hints(&mode).into_iter().map(|(label, keys)| {
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6. * t.zoom))
+                                .child(label)
+                                .child(kbd_group(keys, t))
+                        }))
                         .when(
-                            self.selected()
-                                .as_ref()
-                                .and_then(launcher::quick_look_path)
-                                .is_some(),
-                            |d| d.child("Quick Look").child(controls::keycap("Space", t)),
-                        )
-                        .child("Actions")
-                        .child(controls::keycap("⌘K", t))
-                        .child("Pin")
-                        .child(controls::keycap("⌘P", t)),
+                            self.form.is_none() && matches!(mode, Mode::Basic | Mode::Deep),
+                            |d| {
+                                d.child(
+                                    div()
+                                        .id("deep-search-hint")
+                                        .role(Role::Button)
+                                        .aria_label("Use Deep Search")
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6. * t.zoom))
+                                        .cursor_pointer()
+                                        .when(mode == Mode::Deep, |d| d.text_color(rgb(0x67e8f9)))
+                                        .when(mode != Mode::Deep, |d| d.hover(|d| d.text_color(t.text1)))
+                                        .child("Deep Search")
+                                        .child(kbd_group(chord("↵"), t))
+                                        .on_click(cx.listener(|this, _, w, cx| {
+                                            if launcher::input_mode(&this.model.input, this.model.terminal_mode).mode == Mode::Basic {
+                                                this.enter(false, true, w, cx);
+                                            }
+                                        })),
+                                )
+                            },
+                        ),
                 )
             })
             .child(tracker)
@@ -1790,4 +2226,30 @@ impl Render for Launcher {
             }))
             .into_any_element()
     }
+}
+
+/// Primary-modifier chord label: `⌘K` on macOS, `Ctrl+K` elsewhere.
+fn chord(key: &str) -> String {
+    if cfg!(target_os = "macos") {
+        format!("⌘{key}")
+    } else if key.is_empty() {
+        "Ctrl".into()
+    } else {
+        format!("Ctrl+{key}")
+    }
+}
+
+/// React `.kbd-group`: one pill per key combination, 10px keys in text-2.
+fn kbd_group(keys: impl Into<SharedString>, t: tokens::Tokens) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .h(px(16. * t.zoom))
+        .px(px(5. * t.zoom))
+        .rounded(px(5. * t.zoom))
+        .bg(t.pill_strong)
+        .text_size(px(10. * t.zoom))
+        .line_height(px(16. * t.zoom))
+        .text_color(t.text2)
+        .child(keys.into())
 }

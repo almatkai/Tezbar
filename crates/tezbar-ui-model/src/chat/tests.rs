@@ -28,6 +28,29 @@ fn last(c: &ChatController, id: &str) -> Arc<Turn> {
     c.owners[id].turns.back().unwrap().clone()
 }
 #[test]
+fn history_popover_refresh_preserves_active_run_draft_and_focus() {
+    let mut c = controller();
+    start(&mut c, "a", "r");
+    c.edit_draft("a", "Next question".into());
+    c.owners.get_mut("a").unwrap().focus = ApprovalFocus::Deny;
+    let generation = c.boot_generation;
+    let Effect::LoadHistory { token: old } = c.refresh_history() else {
+        panic!()
+    };
+    let Effect::LoadHistory { token: current } = c.refresh_history() else {
+        panic!()
+    };
+    c.history_result(old, vec![]);
+    assert!(c.history.is_none());
+    c.history_result(current, vec![]);
+    assert!(c.history.as_ref().unwrap().is_empty());
+    assert_eq!(c.active.as_deref(), Some("a"));
+    assert_eq!(c.boot_generation, generation);
+    assert!(c.conversation("a").unwrap().busy());
+    assert_eq!(c.conversation("a").unwrap().draft, "Next question");
+    assert_eq!(c.conversation("a").unwrap().focus, ApprovalFocus::Deny);
+}
+#[test]
 fn background_runs_and_unsaved_persistence_stay_with_owner() {
     let mut c = controller();
     start(&mut c, "a", "r-a");
@@ -53,22 +76,24 @@ fn background_runs_and_unsaved_persistence_stay_with_owner() {
     c.persisted("a", token, false);
     assert!(c.conversation("a").unwrap().unsaved());
     assert_eq!(last(&c, "a").text, "Private A");
-    assert!(c
-        .conversation("b")
-        .unwrap()
-        .response()
-        .unwrap()
-        .text
-        .is_empty());
-    assert!(c
-        .boot(
+    assert!(
+        c.conversation("b")
+            .unwrap()
+            .response()
+            .unwrap()
+            .text
+            .is_empty()
+    );
+    assert!(
+        c.boot(
             Boot::Resume {
                 session_id: "a".into()
             },
             Some("2".into())
         )
         .unwrap()
-        .is_empty());
+        .is_empty()
+    );
 }
 #[test]
 fn settled_persisted_conversation_reloads_after_owner_release() {
@@ -120,12 +145,13 @@ fn stop_preserves_partial_and_terminal_stage_and_ignores_late_events() {
     assert_eq!(turn.text, "Partial");
     assert_eq!(turn.stages[0].status, StageStatus::Failed);
     assert_eq!(turn.stages[0].output.as_deref(), Some("success"));
-    assert!(c
-        .event(Event::Answer {
+    assert!(
+        c.event(Event::Answer {
             run_id: "r".into(),
             text: "late".into()
         })
-        .is_empty());
+        .is_empty()
+    );
 }
 #[test]
 fn retry_reuses_assistant_id_and_canonical_stored_user() {
@@ -345,9 +371,10 @@ fn deletion_during_preparation_never_launches_and_failure_allows_fresh_send() {
     assert!(c.prepared("a", token, Ok(turn), 1).is_empty());
     c.delete_result("a", deletion, false);
     c.edit_draft("a", "fresh".into());
-    assert!(c
-        .send("a", "new".into(), "u2".into(), "s2".into(), 2)
-        .is_ok());
+    assert!(
+        c.send("a", "new".into(), "u2".into(), "s2".into(), 2)
+            .is_ok()
+    );
 }
 #[test]
 fn done_overtakes_delete_without_resurrection_and_failed_delete_recovers() {
@@ -366,14 +393,15 @@ fn done_overtakes_delete_without_resurrection_and_failed_delete_recovers() {
         c.delete_result("a", token, ok);
         assert_eq!(c.conversation("a").is_some(), !ok);
         if ok {
-            assert!(c
-                .boot(
+            assert!(
+                c.boot(
                     Boot::Resume {
                         session_id: "a".into()
                     },
                     None
                 )
-                .is_err());
+                .is_err()
+            );
         } else {
             assert_eq!(last(&c, "a").text, "partial");
         }
@@ -388,10 +416,11 @@ fn hidden_runs_and_background_approval_survive_until_actual_unmount() {
     c.set_visible(false);
     assert_eq!(c.background()[0].waiting_approval, true);
     assert!(c.owners["a"].busy());
-    assert!(c
-        .unmount()
-        .iter()
-        .any(|e| matches!(e,Effect::Cancel{run_id}if run_id=="r")));
+    assert!(
+        c.unmount()
+            .iter()
+            .any(|e| matches!(e,Effect::Cancel{run_id}if run_id=="r"))
+    );
 }
 #[test]
 fn tool_only_done_rejected_and_start_timeout_visible() {
@@ -488,7 +517,44 @@ fn chat_meta_eight_source_cases() {
     for s in [Some("chat"), Some(""), None] {
         assert!(!meta::is_emoji(s));
     }
-    for(p,t,i)in [("What is using the most CPU? compiler 2-4gb? wtf it just takes 2-4gb for idle or just once build the app?","CPU Usage & Compiler Memory","cpu"),("who is messi?","Lionel Messi","trophy"),("кто такой роналду","Cristiano Ronaldo","trophy"),("how to build a react hook in typescript?","Build a react hook in typescript","snippets"),("Can you please tell me what is the speed of light?","The speed of light","chat"),("Подскажи пожалуйста что такое квантовая запутанность?","Квантовая запутанность","chat"),("Скажи Порты открыты t3 code","Порты открыты t3 code","cpu"),("Скажи, какие порты открыты?","Порты открыты","cpu"),("MCP version 2 when it came out?","MCP Version 2","snippets"),("API Key как вообще генерить","API Key","key")]{assert_eq!(meta::heuristic(p,None),(t.into(),i.into()));}
+    for (p, t, i) in [
+        (
+            "What is using the most CPU? compiler 2-4gb? wtf it just takes 2-4gb for idle or just once build the app?",
+            "CPU Usage & Compiler Memory",
+            "cpu",
+        ),
+        ("who is messi?", "Lionel Messi", "trophy"),
+        ("кто такой роналду", "Cristiano Ronaldo", "trophy"),
+        (
+            "how to build a react hook in typescript?",
+            "Build a react hook in typescript",
+            "snippets",
+        ),
+        (
+            "Can you please tell me what is the speed of light?",
+            "The speed of light",
+            "chat",
+        ),
+        (
+            "Подскажи пожалуйста что такое квантовая запутанность?",
+            "Квантовая запутанность",
+            "chat",
+        ),
+        (
+            "Скажи Порты открыты t3 code",
+            "Порты открыты t3 code",
+            "cpu",
+        ),
+        ("Скажи, какие порты открыты?", "Порты открыты", "cpu"),
+        (
+            "MCP version 2 when it came out?",
+            "MCP Version 2",
+            "snippets",
+        ),
+        ("API Key как вообще генерить", "API Key", "key"),
+    ] {
+        assert_eq!(meta::heuristic(p, None), (t.into(), i.into()));
+    }
     for (a, b) in [
         ("⚡", "snippets"),
         ("💻", "cpu"),
@@ -506,8 +572,11 @@ fn chat_meta_eight_source_cases() {
 }
 #[test]
 fn llm_error_source_cases() {
-    let raw="OpenAI error 400: {\"error\":{\"message\":\"The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed gemini-2.0-flash.\"}}";
-    assert_eq!(format_error(raw,"AI provider"),"Model \"gemini-2.0-flash\" is not supported by this provider. Choose deepseek-v4-pro or deepseek-v4-flash and try again.");
+    let raw = "OpenAI error 400: {\"error\":{\"message\":\"The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed gemini-2.0-flash.\"}}";
+    assert_eq!(
+        format_error(raw, "AI provider"),
+        "Model \"gemini-2.0-flash\" is not supported by this provider. Choose deepseek-v4-pro or deepseek-v4-flash and try again."
+    );
     assert_eq!(
         format_error(
             "Gemini error 401: {\"error\":{\"message\":\"API key is invalid.\"}}",
@@ -515,7 +584,13 @@ fn llm_error_source_cases() {
         ),
         "Gemini request failed (401): API key is invalid."
     );
-    assert_eq!(format_error("Native model: startup failed:\nError: Model \"tezbar/deepseek-v4-pro\" not found.","AI provider"),"The selected model \"tezbar/deepseek-v4-pro\" is unavailable. Choose another model in AI settings and try again.");
+    assert_eq!(
+        format_error(
+            "Native model: startup failed:\nError: Model \"tezbar/deepseek-v4-pro\" not found.",
+            "AI provider"
+        ),
+        "The selected model \"tezbar/deepseek-v4-pro\" is unavailable. Choose another model in AI settings and try again."
+    );
     for raw in [
         "Failed to write to backend runner process; recovery is in progress",
         "Backend runner is still recovering",
@@ -811,11 +886,12 @@ fn failed_delete_returns_every_dirty_persistence_intent_and_fences_tokens() {
         run_id: "two".into(),
         delta: "partial private text".into(),
     });
-    assert!(c
-        .event(Event::Done {
+    assert!(
+        c.event(Event::Done {
             run_id: "two".into()
         })
-        .is_empty());
+        .is_empty()
+    );
     assert!(c.delete_result("a", token + 1, false).is_empty());
     let effects = c.delete_result("a", token, false);
     assert_eq!(effects.len(), 2);

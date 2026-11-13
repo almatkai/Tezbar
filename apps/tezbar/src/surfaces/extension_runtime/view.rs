@@ -398,7 +398,7 @@ impl RuntimeView {
             .into_any_element()
     }
     fn grid_row(&self, rows: &[Row], t: Tokens, cx: &mut Context<Self>) -> AnyElement {
-        let mut d = div().flex().gap(px(8.)).h(px(148. * t.zoom));
+        let mut d = div().flex().gap(px(12. * t.zoom)).h(px(156. * t.zoom));
         for row in rows {
             let id = row.id.clone();
             let owner = cx.entity().downgrade();
@@ -410,8 +410,10 @@ impl RuntimeView {
                 .tab_index(0)
                 .flex_1()
                 .h_full()
-                .p(px(8.))
-                .rounded(px(8.))
+                .p(px(12. * t.zoom))
+                .rounded(px(10. * t.zoom))
+                .border_1()
+                .border_color(t.hairline)
                 .bg(if selected {
                     t.selected
                 } else {
@@ -530,35 +532,81 @@ impl RuntimeView {
             let mut formats = div()
                 .flex()
                 .flex_col()
-                .gap(px(8.))
-                .flex_1()
+                .w(relative(0.45))
+                .max_w(px(320. * t.zoom))
                 .min_w_0()
-                .child("Color Formats");
+                .rounded(px(tokens::ROW_RADIUS))
+                .border_1()
+                .border_color(t.hairline)
+                .bg(t.bar)
+                .overflow_hidden()
+                .child(
+                    div()
+                        .border_b_1()
+                        .border_color(t.hairline)
+                        .px(px(16.))
+                        .py(px(12.))
+                        .text_size(px(13.))
+                        .child("Color Formats"),
+                );
             for row in self.color_formats() {
                 let owner = cx.entity().downgrade();
                 let key = row.key;
                 formats = formats.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(controls::action_button(
-                            format!("color-format-{key}"),
-                            row.title,
-                            ButtonTone::Quiet,
-                            false,
-                            t,
-                            move |_, cx| {
-                                let _ = owner.update(cx, |v, cx| v.copy_color_format(key, cx));
-                            },
-                        ))
-                        .child(div().font_family("monospace").child(row.value)),
+                    controls::action_button(
+                        format!("color-format-{key}"),
+                        "",
+                        ButtonTone::Ghost,
+                        false,
+                        t,
+                        move |_, cx| {
+                            let _ = owner.update(cx, |v, cx| v.copy_color_format(key, cx));
+                        },
+                    )
+                    .aria_label(format!("Copy {}", row.title))
+                    .px(px(12.))
+                    .py(px(10.))
+                    .w_full()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_start()
+                            .gap(px(4.))
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(t.text4)
+                                    .child(row.title),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_family(tezbar_ui::tokens::mono_family())
+                                    .child(row.value),
+                            ),
+                    ),
                 );
             }
             return div()
                 .flex()
                 .gap(px(16.))
                 .p(px(16.))
-                .child(self.wheel(cx))
+                .h(px(420. * t.zoom))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .rounded(px(tokens::ROW_RADIUS))
+                        .border_1()
+                        .border_color(t.hairline)
+                        .bg(t.bar)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .p(px(24.))
+                        .child(self.wheel(cx)),
+                )
                 .child(formats)
                 .into_any_element();
         }
@@ -574,7 +622,10 @@ impl RuntimeView {
         }) {
             d = d.child(
                 div()
-                    .w(px(200. * t.zoom))
+                    .w(px(280. * t.zoom))
+                    .border_l_1()
+                    .border_color(t.hairline)
+                    .pl(px(16. * t.zoom))
                     .child(self.metadata(metadata, t, cx)),
             );
         }
@@ -652,10 +703,63 @@ impl RuntimeView {
                 let mut options = vec![];
                 n.visit(&mut options);
                 options.extend(data.iter());
-                let mut d = div().flex().flex_col().gap(px(4.));
+                let open = self.field_picker.as_deref() == Some(&id);
+                let title = if n.kind == NodeKind::TagPicker {
+                    value
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                } else {
+                    options
+                        .iter()
+                        .find(|n| n.string("value") == value.as_str())
+                        .and_then(|n| n.string("title"))
+                        .or(value.as_str())
+                        .unwrap_or("Choose…")
+                        .to_owned()
+                };
+                let owner = cx.entity().downgrade();
+                let field = id.clone();
+                let trigger = controls::action_button(
+                    format!("field-picker-{id}"),
+                    format!("{title}  ⌄"),
+                    ButtonTone::Quiet,
+                    false,
+                    t,
+                    move |_, cx| {
+                        let _ = owner.update(cx, |v, cx| {
+                            v.field_picker = if v.field_picker.as_deref() == Some(&field) {
+                                None
+                            } else {
+                                Some(field.clone())
+                            };
+                            cx.notify();
+                        });
+                    },
+                )
+                .aria_expanded(open)
+                .aria_label(n.string("title").unwrap_or(&id).to_owned());
+                let mut d = div()
+                    .relative()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(trigger);
+                let mut choices = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(t.hairline)
+                    .bg(t.popover_solid)
+                    .p(px(6.));
                 for (i, option) in options.iter().enumerate() {
                     if matches!(option.kind, NodeKind::DropdownSection) {
-                        d = d.child(
+                        choices = choices.child(
                             div()
                                 .text_color(t.text3)
                                 .child(option.string("title").unwrap_or("").to_owned()),
@@ -688,7 +792,7 @@ impl RuntimeView {
                     } else {
                         json!(v)
                     };
-                    d = d.child(self.button(
+                    choices = choices.child(self.button(
                         format!("option-{id}-{i}"),
                         format!(
                             "{}{}",
@@ -703,6 +807,9 @@ impl RuntimeView {
                         cx,
                     ));
                 }
+                if open {
+                    d = d.child(choices);
+                }
                 d.into_any_element()
             }
             NodeKind::Description => div()
@@ -714,29 +821,37 @@ impl RuntimeView {
         };
         div()
             .flex()
-            .flex_col()
-            .gap(px(6.))
-            .py(px(8.))
-            .child(div().text_size(px(12.)).child(title))
-            .child(control)
-            .when(n.string("error").is_some(), |d| {
-                d.child(
-                    div()
-                        .id(format!("field-error-{id}"))
-                        .role(Role::Alert)
-                        .text_color(t.danger)
-                        .child(n.string("error").unwrap_or("").to_owned()),
-                )
-            })
-            .when(n.kind == NodeKind::DatePicker, |d| {
-                d.child(div().text_color(t.text3).text_size(px(11.)).child(
-                    if n.string("type") == Some("datetime") {
-                        "Date and time (YYYY-MM-DDTHH:MM)"
-                    } else {
-                        "Date (YYYY-MM-DD)"
-                    },
-                ))
-            })
+            .items_start()
+            .gap(px(20. * t.zoom))
+            .py(px(8. * t.zoom))
+            .child(
+                div()
+                    .w(px(132. * t.zoom))
+                    .flex_shrink_0()
+                    .py(px(8.))
+                    .text_size(px(12.))
+                    .text_color(t.text3)
+                    .child(title),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .child(control)
+                    .when(n.string("error").is_some(), |d| {
+                        d.child(
+                            div()
+                                .id(format!("field-error-{id}"))
+                                .role(Role::Alert)
+                                .text_size(px(11.))
+                                .text_color(t.danger)
+                                .child(n.string("error").unwrap_or("").to_owned()),
+                        )
+                    }),
+            )
             .into_any_element()
     }
     fn menu(&self, n: &Node, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
@@ -784,7 +899,14 @@ impl RuntimeView {
     fn form(&self, n: &Node, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
         let mut nodes = vec![];
         n.visit(&mut nodes);
-        let mut d = div().p(px(16.)).flex().flex_col();
+        let mut d = div()
+            .w_full()
+            .max_w(px(704. * t.zoom))
+            .mx_auto()
+            .px(px(32. * t.zoom))
+            .py(px(20. * t.zoom))
+            .flex()
+            .flex_col();
         let mut field_index = 0;
         for n in nodes {
             let id = field_id(n, field_index);
@@ -816,7 +938,7 @@ impl RuntimeView {
                                     t,
                                     cx,
                                 ))
-                                .child(div().font_family("monospace").child(value.to_owned())),
+                                .child(div().font_family(tezbar_ui::tokens::mono_family()).child(value.to_owned())),
                         );
                     }
                 }
@@ -833,22 +955,43 @@ impl RuntimeView {
                     .into_any_element();
             }
         }
-        d.child(self.button(
-            "submit-form".into(),
-            "Submit".into(),
-            UiEvent::Primary,
-            t,
-            cx,
-        ))
+        d.child(
+            self.button(
+                "submit-form".into(),
+                self.active_actions(cx)
+                    .first()
+                    .map(|a| a.title.clone())
+                    .unwrap_or_else(|| "Submit".into()),
+                UiEvent::Primary,
+                t,
+                cx,
+            ),
+        )
         .into_any_element()
     }
     fn setup(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
-        let mut d = div()
-            .p(px(16.))
-            .flex()
-            .flex_col()
-            .gap(px(12.))
-            .child(div().text_size(px(15.)).child("Extension preferences"));
+        let title = self
+            .session
+            .as_ref()
+            .and_then(|s| {
+                s.root
+                    .string("title")
+                    .or_else(|| s.root.string("navigationTitle"))
+            })
+            .unwrap_or("Extension");
+        let mut d = div().w_full().max_w(px(760. * t.zoom)).mx_auto()
+            .px(px(32. * t.zoom)).py(px(24. * t.zoom)).flex().flex_col().gap(px(12.))
+            .child(div().flex().items_start().gap(px(16.)).mb(px(12.))
+                .child(div().size(px(56. * t.zoom)).rounded(px(14.)).border_1().border_color(t.hairline).bg(t.pill)
+                    .flex().items_center().justify_center().text_size(px(18.)).text_color(t.text3)
+                    .child(title.chars().next().unwrap_or(' ').to_uppercase().to_string()))
+                .child(div().flex_1().flex().flex_col().gap(px(6.))
+                    .child(div().text_size(px(11.)).text_color(t.accent_strong).child("One-time setup"))
+                    .child(div().text_size(px(22. * t.zoom)).child(format!("Welcome to {title}")))
+                    .child(div().text_size(px(12.)).text_color(t.text3).child("Add the settings below to start using this extension. You can change them later from Extensions in Settings."))))
+            .child(div().border_b_1().border_color(t.hairline).px(px(16.)).py(px(12.))
+                .child(div().text_size(px(12.)).child("Configuration"))
+                .child(div().text_size(px(10.5)).text_color(t.text4).child("Required fields are marked with an asterisk.")));
         for f in &self.preference.model.fields {
             let key = f.key();
             let schema = self.preference.schema.iter().find(|v| v["name"] == f.name);
@@ -856,7 +999,25 @@ impl RuntimeView {
                 .and_then(|v| v["title"].as_str())
                 .unwrap_or(&f.name)
                 .to_owned();
-            let mut row = div().flex().flex_col().gap(px(6.)).child(label.clone());
+            let mut row = div()
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .px(px(16.))
+                .py(px(10.))
+                .text_size(px(12.))
+                .child(label.clone());
+            if let Some(description) = schema
+                .and_then(|v| v["description"].as_str())
+                .filter(|v| !v.is_empty())
+            {
+                row = row.child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text4)
+                        .child(description.to_owned()),
+                );
+            }
             let value = self
                 .preference
                 .values
@@ -1058,6 +1219,11 @@ impl RuntimeView {
     }
     pub(super) fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
         let key = e.keystroke.key.as_str();
+        if key == "escape" && self.field_picker.take().is_some() {
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
         let m = e.keystroke.modifiers;
         let primary = if cfg!(target_os = "macos") {
             m.platform
@@ -1534,12 +1700,9 @@ impl Render for RuntimeView {
             .and_then(|n| n.string("navigationTitle").or_else(|| n.string("title")))
             .unwrap_or("Extension")
             .to_owned();
-        let mut header = controls::header(t).gap(px(8.)).child(self.button(
-            "extension-back".into(),
-            "Back".into(),
-            UiEvent::Back,
+        let mut header = controls::header(t).gap(px(8.)).child(controls::back_button(
+            self.button("extension-back".into(), "Back".into(), UiEvent::Back, t, cx),
             t,
-            cx,
         ));
         if root.as_ref().is_some_and(|root| shows_search(root)) {
             header = header
@@ -1580,7 +1743,12 @@ impl Render for RuntimeView {
                     } else {
                         self.rows.len()
                     };
-                    let mut body = div().flex().flex_1().min_h_0();
+                    let mut body = div()
+                        .flex()
+                        .flex_1()
+                        .min_h_0()
+                        .p(px(8. * t.zoom))
+                        .gap(px(8. * t.zoom));
                     if count == 0 {
                         let mut all = vec![];
                         root.visit(&mut all);
@@ -1589,7 +1757,14 @@ impl Render for RuntimeView {
                             .find(|n| matches!(n.kind, NodeKind::ListEmpty | NodeKind::GridEmpty));
                         body = body.child(
                             div()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(8.))
                                 .p(px(24.))
+                                .text_size(px(12. * t.zoom))
                                 .text_color(t.text3)
                                 .child(
                                     empty
@@ -1641,6 +1816,9 @@ impl Render for RuntimeView {
                                     div()
                                         .id("extension-item-detail")
                                         .w(relative(0.5))
+                                        .min_w_0()
+                                        .border_l_1()
+                                        .border_color(t.hairline)
                                         .overflow_y_scroll()
                                         .child(self.detail(&detail, t, cx)),
                                 );
@@ -1685,6 +1863,8 @@ impl Render for RuntimeView {
             });
         controls::sheet(t)
             .id("extension-runtime")
+            .font_family(tezbar_ui::tokens::font_family(cx, false))
+            .relative()
             .track_focus(&self.focus)
             .capture_action(cx.listener(|v, _: &tezbar_ui::text_input::Newline, w, cx| {
                 v.bound_key("enter", w, cx)
@@ -1706,6 +1886,37 @@ impl Render for RuntimeView {
             )
             .capture_key_down(cx.listener(|v, e, w, cx| v.key(e, w, cx)))
             .child(header)
+            .when(
+                root.as_ref()
+                    .is_some_and(|n| n.props.get("isLoading") == Some(&json!(true))),
+                |d| {
+                    d.child(
+                        div()
+                            .id("extension-loading")
+                            .role(Role::ProgressIndicator)
+                            .aria_label("Loading extension")
+                            .h(px(2.))
+                            .w_full()
+                            .bg(t.accent_strong),
+                    )
+                },
+            )
+            .when(self.error.is_some(), |d| {
+                d.child(
+                    div()
+                        .id("extension-error")
+                        .role(Role::Alert)
+                        .mx(px(12.))
+                        .my(px(8.))
+                        .p(px(12.))
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(t.hairline)
+                        .text_size(px(12.))
+                        .text_color(t.danger)
+                        .child(self.error.unwrap_or("")),
+                )
+            })
             .child(body)
             .child(
                 controls::footer(t)
@@ -1717,20 +1928,29 @@ impl Render for RuntimeView {
                             .child(status),
                     )
                     .when_some(self.footer.clone(), |d, footer| d.child(footer))
-                    .child(self.button(
-                        "extension-primary".into(),
-                        "Run".into(),
-                        UiEvent::Primary,
-                        t,
-                        cx,
-                    ))
-                    .child(self.button(
-                        "extension-actions-toggle".into(),
-                        "Actions".into(),
-                        UiEvent::OpenActions,
-                        t,
-                        cx,
-                    )),
+                    .when(!self.active_actions(cx).is_empty(), |d| {
+                        d.child(self.button(
+                            "extension-primary".into(),
+                            self.active_actions(cx)[0].title.clone(),
+                            UiEvent::Primary,
+                            t,
+                            cx,
+                        ))
+                        .child(
+                            self.button(
+                                "extension-actions-toggle".into(),
+                                if cfg!(target_os = "macos") {
+                                    "Actions  ⌘K"
+                                } else {
+                                    "Actions  Ctrl+K"
+                                }
+                                .into(),
+                                UiEvent::OpenActions,
+                                t,
+                                cx,
+                            ),
+                        )
+                    }),
             )
             .when(self.session.as_ref().is_some_and(|s| s.action_panel), |d| {
                 d.child(

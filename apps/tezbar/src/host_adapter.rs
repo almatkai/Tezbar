@@ -146,6 +146,11 @@ impl Host for GpuiHost {
     fn desktop_services(&self) -> bool {
         self.production
     }
+    fn native_terminal(&self) -> bool {
+        // Preview is a native desktop application too, with its own CorePaths.
+        // Only this local PTY capability is shared with production.
+        true
+    }
     fn capture_active_display(&self) -> HostFuture<Vec<u8>> {
         let relay = self.relay.clone();
         Box::pin(async move {

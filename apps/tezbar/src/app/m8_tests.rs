@@ -91,6 +91,8 @@ pub(in crate::app) fn owner(
                 updater_paused: false,
                 production_plan: None,
                 pending_update: None,
+                #[cfg(target_os = "macos")]
+                staged_update: None,
                 installed_executable: None,
                 layout_path: root.path().join("config/launcher-layouts-v1.json"),
                 m7,

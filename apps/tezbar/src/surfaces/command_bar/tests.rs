@@ -62,6 +62,8 @@ fn seed(v: &mut Launcher, rows: Vec<Row>) {
         9,
     );
     v.rows = v.model.display_rows();
+    v.path_list_len = v.rows.len();
+    v.path_list.reset(v.path_list_len);
 }
 #[gpui::test]
 fn launcher_rows_fill_the_viewport_without_descriptions_pushing_out_accessories(
@@ -89,7 +91,8 @@ fn launcher_rows_fill_the_viewport_without_descriptions_pushing_out_accessories(
     let second = cx.debug_bounds("result-1").unwrap();
     assert_eq!(first.size.height, px(36.));
     assert_eq!(second.size.height, px(36.));
-    assert_eq!(first.size.width, viewport.width - px(18.));
+    // React `.glass-card px-1.5`: 6px list inset on each side, plus the 1px sheet border.
+    assert_eq!(first.size.width, viewport.width - px(14.));
     assert_eq!(second.size.width, first.size.width);
     for (text, kind) in [
         ("result-text-0", "result-kind-0"),
@@ -230,7 +233,7 @@ fn native_argument_fields_validate_and_tab_without_executing(cx: &mut TestAppCon
     assert!(view.read_with(cx, |v, _| v.form.is_none()));
 }
 #[gpui::test]
-fn native_grid_arrows_and_pin_picker_have_authoritative_identity(cx: &mut TestAppContext) {
+fn native_grid_arrows_and_cmd_p_pin_have_authoritative_identity(cx: &mut TestAppContext) {
     let _runtime = runtime(cx);
     let adapter = Arc::new(Fixture::default());
     let (relay, _rx) = Relay::new();
@@ -268,8 +271,6 @@ fn native_grid_arrows_and_pin_picker_have_authoritative_identity(cx: &mut TestAp
             )
         })
     });
-    assert!(view.read_with(cx, |v, _| v.pin_picker.is_some()));
-    cx.simulate_keystrokes("enter");
     assert_eq!(
         view.read_with(cx, |v, _| v.state.pins[0].id.clone()),
         "command:app-8"
@@ -460,7 +461,15 @@ impl RequestAdapter for Loopback {
             "search:all" => json!([Row::command("synthetic", "Synthetic result")]),
             "query" => json!({"type":"answer"}),
             "path:complete" => {
-                json!([{"id":"path:fixture","title":"Folder","subtitle":"/fixture/","kind":"directory","path":"/fixture","value":"/fixture/","score":1}])
+                let query = args.get(0).and_then(|v| v.as_str()).unwrap_or("");
+                if query.ends_with(' ') {
+                    json!([
+                        {"id":"path-default","title":"Open in Finder","subtitle":"/fixture/","kind":"application","path":"/fixture","applicationAction":"open-with","score":1},
+                        {"id":"path:cursor","title":"Cursor","subtitle":"Open /fixture/ in Cursor","kind":"application","path":"/fixture","appPath":"/Applications/Cursor.app","appName":"Cursor","applicationAction":"open-with","score":2}
+                    ])
+                } else {
+                    json!([{"id":"path:fixture","title":"Folder","subtitle":"/fixture/","kind":"directory","path":"/fixture","value":"/fixture/","score":1}])
+                }
             }
             "chat:list" => json!([{"id":"chat-fixture","title":"Saved chat"}]),
             "terminal:get-prompt-info" => json!({"user":"fixture","host":"synthetic","dir":"~"}),
@@ -742,7 +751,7 @@ fn composition_start_cancels_pending_enter_before_result_arrives(cx: &mut TestAp
     );
 }
 #[gpui::test]
-fn pin_drag_requires_six_pixels_reorders_and_unpins_outside(cx: &mut TestAppContext) {
+fn pin_drag_requires_six_pixels_reorders_and_unpins_only_on_trash(cx: &mut TestAppContext) {
     let _rt = runtime(cx);
     let adapter = Arc::new(Fixture::default());
     let (relay, _rx) = Relay::new();
@@ -779,21 +788,64 @@ fn pin_drag_requires_six_pixels_reorders_and_unpins_outside(cx: &mut TestAppCont
             .collect::<Vec<_>>()),
         ["command:b", "command:a"]
     );
+    let ids = |view: &Entity<Launcher>, cx: &mut VisualTestContext| {
+        view.read_with(cx, |v, _| v.state.pins.iter().map(|p| p.id.clone()).collect::<Vec<_>>())
+    };
+    // Dropping outside the rail cancels (React parity): nothing is unpinned.
     let first = cx.debug_bounds("pin-0").unwrap().center();
     let outside = first + point(px(120.), px(0.));
     cx.simulate_mouse_down(first, MouseButton::Left, Modifiers::default());
     cx.simulate_mouse_move(outside, Some(MouseButton::Left), Modifiers::default());
     cx.simulate_mouse_up(outside, MouseButton::Left, Modifiers::default());
-    assert_eq!(
-        view.read_with(cx, |v, _| v
-            .state
-            .pins
-            .iter()
-            .map(|p| p.id.clone())
-            .collect::<Vec<_>>()),
-        ["command:a"]
-    );
+    cx.run_until_parked();
+    assert_eq!(ids(&view, cx), ["command:b", "command:a"]);
+    // The trash target only appears while a pin is dragged; dropping on it unpins.
+    assert!(cx.debug_bounds("pin-unpin-target").is_none());
+    let first = cx.debug_bounds("pin-0").unwrap().center();
+    cx.simulate_mouse_down(first, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(first + point(px(0.), px(8.)), Some(MouseButton::Left), Modifiers::default());
+    cx.run_until_parked();
+    let trash = cx.debug_bounds("pin-unpin-target").expect("trash target while dragging").center();
+    cx.simulate_mouse_move(trash, Some(MouseButton::Left), Modifiers::default());
+    assert!(view.read_with(cx, |v, _| v.drag.as_ref().unwrap().unpin));
+    cx.simulate_mouse_up(trash, MouseButton::Left, Modifiers::default());
+    cx.run_until_parked();
+    assert_eq!(ids(&view, cx), ["command:a"]);
+    assert!(cx.debug_bounds("pin-unpin-target").is_none());
     assert!(adapter.calls.lock().unwrap().is_empty());
+}
+#[gpui::test]
+fn dragging_a_result_onto_the_rail_pins_it_at_the_drop_line(cx: &mut TestAppContext) {
+    let _rt = runtime(cx);
+    let adapter = Arc::new(Fixture::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    view.update(cx, |v, cx| {
+        let a = Row::command("a", "First");
+        let b = Row::command("b", "Second");
+        seed(v, vec![a.clone(), b.clone()]);
+        v.model.input.clear();
+        ui_state::insert_pin(&mut v.state.pins, &a, None);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    let row = cx.debug_bounds("result-1").unwrap().center();
+    let pin = cx.debug_bounds("pin-0").unwrap();
+    cx.simulate_mouse_down(row, MouseButton::Left, Modifiers::default());
+    cx.simulate_mouse_move(row + point(px(-20.), px(0.)), Some(MouseButton::Left), Modifiers::default());
+    // Above the first pin's midpoint: insert before it.
+    let above = point(pin.center().x, pin.top() + px(4.));
+    cx.simulate_mouse_move(above, Some(MouseButton::Left), Modifiers::default());
+    assert_eq!(view.read_with(cx, |v, _| v.drag.as_ref().unwrap().target), Some(0));
+    cx.simulate_mouse_up(above, MouseButton::Left, Modifiers::default());
+    cx.run_until_parked();
+    assert_eq!(
+        view.read_with(cx, |v, _| v.state.pins.iter().map(|p| p.id.clone()).collect::<Vec<_>>()),
+        ["command:b", "command:a"]
+    );
+    // The drop must not also activate the row it started on.
+    assert!(!adapter.calls.lock().unwrap().iter().any(|(c, _)| c == "search:execute"));
 }
 
 #[gpui::test]
@@ -1571,7 +1623,10 @@ fn native_result_menu_quicklook_uses_clicked_row_and_list_scroll_keeps_selection
     cx.simulate_mouse_move(third, None, Modifiers::default());
     assert_eq!(view.read_with(cx, |v, _| v.model.session.selected), 2);
     view.update(cx, |v, cx| {
-        v.scroll.scroll_to_item(200, ScrollStrategy::Top);
+        v.path_list.scroll_to(gpui::ListOffset {
+            item_ix: 200,
+            offset_in_item: px(0.),
+        });
         cx.notify();
     });
     cx.run_until_parked();
@@ -1611,7 +1666,8 @@ fn native_path_sections_keep_row_height_and_keyboard_identity(cx: &mut TestAppCo
         .debug_bounds("path-section-0")
         .expect("completion section heading");
     let row = cx.debug_bounds("result-0").unwrap();
-    assert_eq!(row.size.height, px(36.));
+    // React completion row: py-1.5 around a 12.5px mono title and a 10.5px path line.
+    assert_eq!(row.size.height, px(48.));
     assert!(row.origin.y >= heading.bottom());
     cx.simulate_keystrokes("tab");
     assert_eq!(
@@ -1646,6 +1702,11 @@ fn native_command_ids_route_and_record_usage_once(cx: &mut TestAppContext) {
         ("start-onboarding", Surface::Onboarding),
         ("show-updated-version", Surface::ReleaseNotes),
         ("show-system-monitor", Surface::SystemMonitor),
+        ("show-cpu-info", Surface::SystemMonitor),
+        ("show-macos-version", Surface::SystemMonitor),
+        ("show-memory-info", Surface::SystemMonitor),
+        ("show-disk-usage", Surface::SystemMonitor),
+        ("show-battery-status", Surface::SystemMonitor),
         ("open-clipboard-history", Surface::Clipboard),
     ] {
         cx.update(|w, cx| {
@@ -1953,6 +2014,7 @@ fn native_action_variants_keep_the_canonical_execute_envelope(cx: &mut TestAppCo
         Action::OpenWithApp {
             path: "/synthetic/file.txt".into(),
             app_name: Some("Synthetic App".into()),
+            app_path: None,
         },
         Action::CopyText {
             text: "Synthetic snippet".into(),
@@ -2261,7 +2323,10 @@ fn icon_requests_follow_virtual_viewport_past_initial_cap_and_stop_while_idle(
     });
     settle(&rt, cx);
     view.update(cx, |v, cx| {
-        v.scroll.scroll_to_item(200, ScrollStrategy::Top);
+        v.path_list.scroll_to(gpui::ListOffset {
+            item_ix: 200,
+            offset_in_item: px(0.),
+        });
         v.defer_icon_viewport(cx);
         cx.notify();
     });
@@ -2312,3 +2377,135 @@ fn icon_requests_follow_virtual_viewport_past_initial_cap_and_stop_while_idle(
 }
 
 include!("review_regressions.rs");
+#[gpui::test]
+fn pinned_result_shows_its_option_slot(cx: &mut TestAppContext) {
+    let _rt = runtime(cx);
+    let adapter = Arc::new(Fixture::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    cx.update(|_, cx| {
+        view.update(cx, |v, cx| {
+            seed(v, vec![Row::command("plain", "Plain"), Row::command("saved", "Saved")]);
+            ui_state::insert_pin(&mut v.state.pins, &Row::command("saved", "Saved"), None);
+            cx.notify();
+        })
+    });
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("result-pin-slot-0").is_none());
+    let slot = cx.debug_bounds("result-pin-slot-1").expect("pinned slot keycaps");
+    let row = cx.debug_bounds("result-1").unwrap();
+    assert!(slot.right() <= row.right());
+}
+#[gpui::test]
+fn slash_input_shows_two_line_directory_completions_and_terminal_hint(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let adapter = Arc::new(Loopback::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.ready = true;
+            v.visible = true;
+            v.model.visible = true;
+            v.input.focus_handle(cx).focus(w, cx);
+        })
+    });
+    cx.simulate_input("/");
+    cx.executor().advance_clock(Duration::from_millis(8));
+    settle(&rt, cx);
+    assert!(adapter.calls.lock().unwrap().iter().any(|c| c.0 == "path:complete"));
+    assert!(cx.debug_bounds("path-command-hint").is_some());
+    assert!(cx.debug_bounds("launcher-mode-chips").is_none());
+    let row = cx.debug_bounds("result-0").expect("directory completion row");
+    // Mono title over the path: taller than a single-line result.
+    assert!(row.size.height > px(36.), "{:?}", row.size);
+    assert!(cx.debug_bounds("result-kind-0").is_some());
+}
+#[gpui::test]
+fn backtick_launchpad_renders_completion_grid(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let adapter = Arc::new(Loopback::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.ready = true;
+            v.visible = true;
+            v.model.visible = true;
+            v.input.focus_handle(cx).focus(w, cx);
+        })
+    });
+    cx.simulate_input("`");
+    cx.executor().advance_clock(Duration::from_millis(8));
+    settle(&rt, cx);
+    let calls = adapter.calls.lock().unwrap().clone();
+    assert!(calls.iter().any(|c| c.0 == "path:complete" && c.1[0] == "`"), "{calls:?}");
+    assert_eq!(view.read_with(cx, |v, _| v.rows.len()), 1);
+    let cell = cx.debug_bounds("result-0").expect("launchpad cell");
+    assert!(cell.size.height > px(80.), "{:?}", cell.size);
+}
+
+#[gpui::test]
+fn slash_directory_enter_completes_path_and_space_shows_open_with(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let adapter = Arc::new(Loopback::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.ready = true;
+            v.visible = true;
+            v.model.visible = true;
+            v.input.focus_handle(cx).focus(w, cx);
+        })
+    });
+    // 1. Type "/fix"
+    cx.simulate_input("/fix");
+    cx.executor().advance_clock(Duration::from_millis(8));
+    settle(&rt, cx);
+    assert_eq!(view.read_with(cx, |v, _| v.rows.len()), 1);
+    assert_eq!(view.read_with(cx, |v, _| v.rows[0].title.clone()), "Folder");
+
+    // 2. Press Enter on the directory row:
+    // It MUST complete the path into the text input, NOT execute OpenFile / Finder immediately!
+    cx.simulate_keystrokes("enter");
+    cx.executor().advance_clock(Duration::from_millis(8));
+    settle(&rt, cx);
+    assert_eq!(
+        view.read_with(cx, |v, _| v.model.input.clone()),
+        "/fixture/"
+    );
+    // Verify search:execute was NOT called
+    assert!(!adapter.calls.lock().unwrap().iter().any(|c| c.0 == "search:execute"));
+
+    // 3. Press Space after the completed directory path: "/fixture/ "
+    cx.simulate_input(" ");
+    cx.executor().advance_clock(Duration::from_millis(8));
+    settle(&rt, cx);
+    assert_eq!(
+        view.read_with(cx, |v, _| v.model.input.clone()),
+        "/fixture/ "
+    );
+
+    // 4. Verify open-with options are shown: "Open in Finder" and "Cursor"
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.rows.len(), 2);
+        assert_eq!(v.rows[0].title, "Open in Finder");
+        assert_eq!(v.rows[1].title, "Cursor");
+        assert!(matches!(&v.rows[1].action, Action::OpenWithApp { path, app_name, .. } if path == "/fixture" && app_name.as_deref() == Some("Cursor")));
+    });
+
+    // 5. Select "Cursor" and press Enter to launch Cursor opening that folder
+    cx.simulate_keystrokes("down enter");
+    settle(&rt, cx);
+    let calls = adapter.calls.lock().unwrap();
+    let executed = calls.iter().find(|(c, _)| c == "search:execute").expect("open-with action executed");
+    assert_eq!(executed.1[0]["action"]["type"], "open-with-app");
+    assert_eq!(executed.1[0]["action"]["appName"], "Cursor");
+    assert_eq!(executed.1[0]["action"]["appPath"], "/Applications/Cursor.app");
+}
+

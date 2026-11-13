@@ -94,10 +94,9 @@ impl Render for Settings {
     fn render(&mut self, w: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(content) = &self.content {
             let t = tezbar_ui::tokens::tokens(w);
-            return div()
-                .size_full()
-                .flex()
-                .flex_col()
+            // The window owns the frame; SettingsContent also embeds inside
+            // onboarding, where adding another sheet would double its border.
+            return tezbar_ui::controls::sheet(t)
                 .child(div().flex_1().min_h(px(0.)).child(content.clone()))
                 .when_some(self.error.clone(), |d, error| {
                     let content = content.clone();

@@ -1,32 +1,33 @@
 # Rust core and extension compatibility worker
 
-Tezbar's built-in backend runs inside the Tauri Rust process. The renderer keeps
-its existing IPC/event contracts. A separate Bun process is used only for the
-JavaScript extension ecosystem; there is no general TypeScript backend fallback.
+Tezbar's application services run in Rust, with every window and extension view
+rendered by GPUI. The isolated Bun worker provides JavaScript/Raycast extension
+compatibility only; it starts on explicit extension use, not application startup.
+Node and pnpm are build/test tools, not application processes.
 
 ## Ownership
 
 | Component                                                                             | Owner                                   |
 | ------------------------------------------------------------------------------------- | --------------------------------------- |
-| IPC dispatch, startup, shutdown, native windows and shortcuts                         | Rust / Tauri                            |
-| Launcher ranking, application/file index, notes, snippets, clipboard history          | `native_core/launcher`                  |
-| Provider requests, agent lifecycle/events, chat persistence, voice and CLI adapters   | `native_core/ai`                        |
-| Document extraction, durable indexing queue, SQLite FTS/vector data, local embeddings | `native_core/knowledge`                 |
-| Commands, permissions, safety confirmations/audit, system data and background status  | `native_core/system`                    |
+| IPC dispatch, startup, shutdown, native windows and shortcuts                         | Rust / GPUI                            |
+| Launcher ranking, application/file index, notes, snippets, clipboard history          | `crates/tezbar-core/src/launcher`                  |
+| Provider requests, agent lifecycle/events, chat persistence, voice and CLI adapters   | `crates/tezbar-core/src/ai`                        |
+| Document extraction, durable indexing queue, SQLite FTS/vector data, local embeddings | `crates/tezbar-core/src/knowledge`                 |
+| Commands, permissions, safety confirmations/audit, system data and background status  | `crates/tezbar-core/src/system`                    |
 | OS opening, capture, input, settings windows and paste                                | Native platform adapters                |
-| PTY / ConPTY sessions, output, resize and termination                                 | `native_terminal` and `terminal_bridge` |
-| Installed extension metadata, preferences and catalog                                 | `native_core/extensions`                |
-| Ported extension commands (first pilot: Perplexity)                                    | `native_core/extensions`                |
+| PTY / ConPTY sessions, output, resize and termination                                 | `tezbar-core/terminal` and `terminal_bridge` |
+| Installed extension metadata, preferences and catalog                                 | `crates/tezbar-core/src/extensions`                |
+| Ported extension commands (first pilot: Perplexity)                                    | `crates/tezbar-core/src/extensions`                |
 | Extension installation/build and Raycast JavaScript execution                         | Isolated extension worker               |
 
 External tools remain external: user-added MCP programs, local speech engines, document
 converters, optional llama.cpp inference and macOS Swift helpers are launched
 when their features need them. Moving orchestration to Rust does not rewrite
-those third-party tools or the React frontend.
+those third-party tools. Application presentation remains GPUI.
 
 ## IPC and process lifecycle
 
-Renderer requests enter the native dispatcher directly. Internal `core:*` routes
+GPUI requests enter the native dispatcher directly. Internal `core:*` routes
 are rejected at the renderer boundary. A frozen inventory of 155 pre-migration
 IPC channels checks that every old route has an owner; this verifies coverage,
 while service fixtures verify payloads and behavior.
@@ -41,12 +42,15 @@ deadlines, and an explicit host-service allowlist. Logs go to stderr. Worker
 failure rejects pending calls; a later request can start a replacement. App
 shutdown stops the worker and its process tree. After first use, the worker stays
 alive until shutdown or restart so extension timers and sessions remain valid.
+Session refresh/action/search/load/dispose and status controls continue only owned
+sessions on a live worker. Delayed controls after disposal or a crash never start
+or restart Bun; a fresh explicit execution can recover it.
 
 The worker is process isolation, not an OS security sandbox. Extensions can run
 JavaScript and subprocesses with the user's permissions. Core functionality does
 not import or execute the legacy TypeScript services.
 
-Native startup/retry state still drives the renderer's existing recovery UI.
+Native startup/retry state drives the GPUI recovery screen.
 Knowledge initialization and its first migration resume in the background;
 launcher readiness does not await a large or locked Knowledge database. Requests
 to Knowledge itself await its serialized initialization.
@@ -60,7 +64,7 @@ locations. Native migrations preserve rows and additive/unknown configuration
 fields; writes use atomic replacement or database transactions. Invalid JSON is
 reported rather than silently replacing the profile with defaults.
 
-- Data defaults to Tauri's platform app-local-data directory.
+- Production data keeps the established platform app-local-data directory.
 - Configuration defaults to `~/.openray`.
 - `TEZBAR_DATA_DIR` and `TEZBAR_CONFIG_DIR` select isolated data/config directories
   for testing. Use both to keep a smoke run independent of a real profile.
@@ -71,32 +75,31 @@ reported rather than silently replacing the profile with defaults.
 
 Agent and completion execution now uses native Rust protocol adapters, with no
 Pi/Node/OpenCode execution fallback. Canonical conversation history and AI
-Extensions are owned by `native_core/ai`. Five wire protocols retain signed and
+Extensions are owned by `crates/tezbar-core/src/ai`. Five wire protocols retain signed and
 image-bearing history; all built-in providers, tools, catalogs/auth and explicitly
-connected MCP extensions execute through Rust. React owns presentation. Community
+connected MCP extensions execute through Rust. GPUI owns presentation. Community
 Pi JavaScript packages no longer load; MCP is the language-independent replacement
 seam. [Native agent runtime](NATIVE_AGENT_RUNTIME.md) describes the modules,
-permissions, compatibility and verification limits. The coordinator's required
-Claude Opus 5.5 review remains a separate step before acceptance.
+permissions, compatibility and verification limits. Historical migration reviews remain evidence for their original revisions.
 
 ## Build and checks
 
-Use Node.js 22+, the repository's pnpm version, and Rust 1.85+. Bun 1.2.5 is the
-pinned bootstrapped extension runtime. Node/pnpm are build tools, not dependencies
+Use Node.js 22+, the repository's pnpm version, and pinned Rust 1.98.1 for GPUI.
+Bun 1.2.5 is the pinned bootstrapped extension runtime. Node/pnpm are build tools, not dependencies
 of the installed Rust core.
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm test
-cargo test --manifest-path src-tauri/Cargo.toml --lib --locked
+cargo +1.98.1 test --locked --offline -j2 -p tezbar-core --lib
 node scripts/check-backend-lifecycle.mjs
 pnpm build:native
 pnpm test:extension-worker
-pnpm build:frontend
+pnpm ui:check --target host
 # Requires the built worker and an installed Bun; missing prerequisites fail.
-cargo test --manifest-path src-tauri/Cargo.toml --lib --locked \
-  native_core::extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination \
+cargo +1.98.1 test --locked --offline -j2 -p tezbar-core --lib \
+  extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination \
   -- --ignored --exact
 ```
 
@@ -126,7 +129,10 @@ executable. With `cargo test --release`, `TEZBAR_TEST_RESOURCES` can select an
 actual package's resource directory (on macOS, `Tezbar.app/Contents/Resources`)
 to exercise the production worker/resource lookup.
 
-## Validation scope
+## Historical validation scope
+
+The results below describe the earlier Rust-core migration before the GPUI source
+cutover. They do not establish current native release or cross-platform acceptance.
 
 Local macOS validation includes Rust 1.85 compilation, native and TypeScript
 fixtures, the built Bun worker with 1.2.5 and 1.4.0, native helpers and desktop

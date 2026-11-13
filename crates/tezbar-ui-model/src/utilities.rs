@@ -830,6 +830,9 @@ impl<T> UtilityPoll<T> {
     pub fn refresh(&mut self, now: u64) {
         self.due = now;
     }
+    pub fn refreshing(&self) -> bool {
+        self.flight.is_some()
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -1320,7 +1323,7 @@ pub struct EmojiPicker {
 }
 impl EmojiPicker {
     pub fn visible(&self) -> Vec<&str> {
-        use tezbar_core::instant::emoji::{search, DATA};
+        use tezbar_core::instant::emoji::{DATA, search};
         let mut v = vec![];
         if self.query.trim().is_empty() && self.category.as_deref().is_none_or(|s| s == "All") {
             v.extend(
@@ -1380,9 +1383,10 @@ mod lifecycle_tests {
             },
         });
         assert_eq!(c.preview_text(), Some("Secure item".into()));
-        assert!(c
-            .convert(tezbar_core::instant::transform::ClipboardAction::Base64)
-            .is_none());
+        assert!(
+            c.convert(tezbar_core::instant::transform::ClipboardAction::Base64)
+                .is_none()
+        );
         assert!(c.qr_export().is_err());
     }
     #[test]

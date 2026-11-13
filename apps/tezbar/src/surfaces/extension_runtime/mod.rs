@@ -80,6 +80,7 @@ pub struct RuntimeView {
     action_signature: Vec<String>,
     action_index: usize,
     action_scroll: UniformListScrollHandle,
+    field_picker: Option<String>,
     dropdown_open: bool,
     dropdown_value: Option<String>,
     dropdown_focus: FocusHandle,
@@ -136,18 +137,20 @@ impl RuntimeView {
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let search = cx.new(TextInput::new);
+        let search = cx.new(TextInput::new_native);
         search.update(cx, |f, _| {
             f.configure(FieldOptions {
                 name: "Search extension".into(),
+                border: false,
                 placeholder: "Search".into(),
                 ..Default::default()
             })
         });
-        let action_search = cx.new(TextInput::new);
+        let action_search = cx.new(TextInput::new_native);
         action_search.update(cx, |f, _| {
             f.configure(FieldOptions {
                 name: "Search actions".into(),
+                border: false,
                 placeholder: "Search actions".into(),
                 ..Default::default()
             })
@@ -189,6 +192,7 @@ impl RuntimeView {
             action_signature: Vec::new(),
             action_index: 0,
             action_scroll: UniformListScrollHandle::new(),
+            field_picker: None,
             dropdown_open: false,
             dropdown_value: None,
             dropdown_focus: cx.focus_handle(),
@@ -504,6 +508,9 @@ impl RuntimeView {
             return;
         }
         self.error = None;
+        if matches!(event, UiEvent::ChangeField { .. }) {
+            self.field_picker = None;
+        }
         let open_actions = matches!(event, UiEvent::OpenActions);
         let close_actions = matches!(event, UiEvent::CloseActions);
         let result = self.session.as_mut().map(|s| {
@@ -527,6 +534,7 @@ impl RuntimeView {
             self.action_index = 0;
             self.action_scroll.scroll_to_item(0, ScrollStrategy::Top);
             self.dropdown_open = false;
+            self.field_picker = None;
             self.action_search.focus_handle(cx).focus(w, cx);
         } else if close_actions {
             self.focus_content(w, cx);
@@ -887,6 +895,7 @@ impl RuntimeView {
         self.search.update(cx, |f, _| {
             f.configure(FieldOptions {
                 name: "Search extension".into(),
+                border: false,
                 placeholder: root
                     .string("searchBarPlaceholder")
                     .unwrap_or("Search")
@@ -922,7 +931,7 @@ impl RuntimeView {
                 continue;
             }
             if !self.fields.contains_key(&id) {
-                let input = cx.new(TextInput::new);
+                let input = cx.new(TextInput::new_native);
                 let field = id.clone();
                 let subscription = cx.subscribe_in(&input, w, move |v, _, e: &Committed, w, cx| {
                     v.event(

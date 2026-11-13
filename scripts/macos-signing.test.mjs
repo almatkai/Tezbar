@@ -12,8 +12,11 @@ import {
   verifyMacOSResources,
 } from './lib/macos-signing.mjs'
 
+import { resolveBuildMode } from './lib/release-policy.mjs'
+import { RESOURCE_ROOTS } from './native/package-macos.mjs'
+
 const policy = JSON.parse(
-  readFileSync(new URL('../src-tauri/macos-signing.json', import.meta.url), 'utf8')
+  readFileSync(new URL('../packaging/macos-signing.json', import.meta.url), 'utf8')
 )
 const metadata = (hash = 'a'.repeat(40)) => `Identifier=${policy.identifier}
 Authority=Apple Development: fixture
@@ -53,66 +56,16 @@ test('ad-hoc, different-team, different-app, and changed requirements fail close
   )
 })
 
-test(
-  'beta build preview preserves certificate signing even with --allow-unsigned',
-  {
-    skip: process.platform !== 'darwin',
-  },
-  () => {
-    const directory = mkdtempSync(join(tmpdir(), 'tezbar-signing-policy-'))
-    try {
-      execFileSync(process.execPath, [
-        'scripts/build-release.mjs',
-        '--channel',
-        'beta',
-        '--version',
-        '0.3.0-beta.3',
-        '--notes',
-        'docs/releases/0.3.0-beta.3.md',
-        '--allow-unsigned',
-        '--dry-run',
-        '--output',
-        directory,
-      ])
-      const config = JSON.parse(readFileSync(join(directory, 'tauri-release.json'), 'utf8'))
-      assert.notEqual(
-        config.bundle.macOS.signingIdentity,
-        '-',
-        'A distributed beta must retain a certificate identity across updates'
-      )
-      for (const helper of policy.nativeHelpers)
-        assert.equal(config.bundle.resources[`../${helper}`], helper)
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
-  }
-)
+test('native beta resource policy preserves the certificate and all pinned helpers', () => {
+  const config = JSON.parse(readFileSync(new URL('../packaging/legacy-app-policy.json', import.meta.url)))
+  const mode = resolveBuildMode('beta', { allowUnsigned: true })
+  assert.equal(macOSSigningIdentity({ ...mode, identity: config.bundle.macOS.signingIdentity }), config.bundle.macOS.signingIdentity)
+  for (const helper of policy.nativeHelpers)
+    assert.ok(RESOURCE_ROOTS.some(([, destination]) => destination === helper), `Missing native resource ${helper}`)
+})
 
-test(
-  'distributed macOS builds reject an explicit ad-hoc override before building',
-  {
-    skip: process.platform !== 'darwin',
-  },
-  () => {
-    assert.throws(
-      () =>
-        execFileSync(
-          process.execPath,
-          [
-            'scripts/build-release.mjs',
-            '--channel',
-            'beta',
-            '--version',
-            '0.3.0-beta.3',
-            '--allow-unsigned',
-            '--dry-run',
-          ],
-          { env: { ...process.env, APPLE_SIGNING_IDENTITY: '-' }, stdio: 'pipe' }
-        ),
-      /persistent signing certificate/
-    )
-  }
-)
+// Native release command guards (including explicit ad-hoc overrides) are tested
+// through nativeRelease's injected build/sign adapters in native/release.test.mjs.
 
 test(
   'two real certificate-signed builds satisfy the pinned identity, while ad-hoc does not',

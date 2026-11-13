@@ -137,7 +137,7 @@ impl Onboarding {
             splash: true,
             icon: std::sync::Arc::new(Image::from_bytes(
                 ImageFormat::Png,
-                include_bytes!("../../../../src/renderer/assets/app-icon.png").to_vec(),
+                include_bytes!("../../../../resources/app-icons/app-icon.png").to_vec(),
             )),
         }
     }

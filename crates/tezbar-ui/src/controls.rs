@@ -26,10 +26,15 @@ pub fn button(
         })
         .aria_label(label.clone())
         .tab_index(0)
-        .px(px(10. * t.zoom))
-        .py(px(5. * t.zoom))
-        .rounded(px(7. * t.zoom))
+        .flex()
+        .items_center()
+        .justify_center()
+        .px(px(13.6 * t.zoom))
+        .py(px(6.4 * t.zoom))
+        .rounded(px(8. * t.zoom))
         .text_size(px(12. * t.zoom))
+        .line_height(px(12. * t.zoom))
+        .font_weight(FontWeight::MEDIUM)
         .text_color(if disabled {
             t.text4
         } else if matches!(tone, ButtonTone::Primary) {
@@ -50,14 +55,36 @@ pub fn button(
 }
 pub fn keycap(label: impl Into<SharedString>, t: Tokens) -> Div {
     div()
+        .h(px(16. * t.zoom))
+        .min_w(px(16. * t.zoom))
         .px(px(4. * t.zoom))
-        .rounded(px(5. * t.zoom))
-        .border_1()
-        .border_color(t.hairline)
+        .rounded(px(4. * t.zoom))
         .bg(t.pill_strong)
-        .text_size(px(10.5 * t.zoom))
+        .line_height(px(16. * t.zoom))
+        .text_size(px(9.5 * t.zoom))
         .text_color(t.text3)
         .child(label.into())
+}
+/// Keep an existing Back action's listeners and accessibility while showing a compact chevron.
+pub fn back_button(control: Stateful<Div>, t: Tokens) -> Stateful<Div> {
+    control
+        .aria_label("Back")
+        .text_size(px(0.))
+        .size(px(24. * t.zoom))
+        .ml(px(-4. * t.zoom))
+        .mr(px(-6. * t.zoom))
+        .p_0()
+        .flex()
+        .items_center()
+        .justify_center()
+        .flex_shrink_0()
+        .rounded(px(7. * t.zoom))
+        .border_1()
+        .border_color(transparent_black())
+        .bg(transparent_black())
+        .cursor_pointer()
+        .child(svg().data(b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"black\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m15 18-6-6 6-6\"/></svg>" as &[u8])
+            .size(px(14. * t.zoom)).text_color(t.text2))
 }
 pub fn checkbox(
     id: impl Into<ElementId>,
@@ -77,17 +104,29 @@ pub fn checkbox(
         })
         .tab_index(0)
         .flex()
+        .items_center()
         .gap(px(8. * t.zoom))
         .text_size(px(12. * t.zoom))
         .text_color(t.text1)
         .child(
             div()
                 .size(px(14. * t.zoom))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
                 .rounded(px(3. * t.zoom))
                 .border_1()
                 .border_color(t.rim)
                 .bg(if checked { t.accent_strong } else { t.field })
-                .child(if checked { "✓" } else { "" }),
+                .when(checked, |d| {
+                    d.child(
+                        svg()
+                            .data(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 6 2.5 2.5 4.5-5"/></svg>"#.as_slice())
+                            .size(px(12. * t.zoom))
+                            .text_color(rgb(0xffffff)),
+                    )
+                }),
         )
         .child(label)
 }
@@ -128,6 +167,7 @@ pub fn switch(
 }
 pub fn sheet(t: Tokens) -> Div {
     div()
+        .line_height(relative(1.5))
         .size_full()
         .flex()
         .flex_col()
@@ -140,16 +180,18 @@ pub fn sheet(t: Tokens) -> Div {
 }
 pub fn header(t: Tokens) -> Div {
     div()
+        .debug_selector(|| "surface-header".into())
         .flex()
         .items_center()
         .h(px(tokens::HEADER * t.zoom))
         .flex_shrink_0()
-        .px(px(16. * t.zoom))
+        .px(px(14. * t.zoom))
         .border_b_1()
         .border_color(t.hairline)
 }
 pub fn footer(t: Tokens) -> Div {
     div()
+        .debug_selector(|| "surface-footer".into())
         .flex()
         .items_center()
         .gap(px(8. * t.zoom))

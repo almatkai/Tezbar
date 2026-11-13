@@ -165,3 +165,75 @@ fn visible_event_refresh_coalesces_hides_and_recovers_on_show() {
     v.stop();
     assert!(!v.tick(90_000));
 }
+
+#[test]
+fn paging_guards_retry_stale_queries_and_no_progress() {
+    let mut c = Catalog::default();
+    c.search("old".into(), false);
+    assert!(c.search("old".into(), true).is_none());
+    c.loaded(1, Ok((vec![entry("a")], vec![], 100, true)), false);
+    c.selected = Some("a".into());
+    assert_eq!(
+        c.search("old".into(), true),
+        Some(Effect::Search {
+            token: 2,
+            query: "old".into(),
+            offset: 1,
+            limit: 25,
+        })
+    );
+    assert!(c.search("old".into(), true).is_none());
+    c.loaded(2, Err("offline".into()), false);
+    assert!(c.pagination_failed);
+    c.search("old".into(), true);
+    assert!(!c.pagination_failed);
+    c.loaded(
+        3,
+        Ok((vec![entry("a"), entry("b")], vec![], 100, true)),
+        false,
+    );
+    assert_eq!(c.store.len(), 2);
+    assert_eq!(c.selected.as_deref(), Some("a"));
+    assert!(c.message.is_none());
+    assert!(matches!(
+        c.search("old".into(), true),
+        Some(Effect::Search { offset: 3, .. })
+    ));
+    c.search("new".into(), false);
+    c.loaded(4, Err("stale failure".into()), false);
+    assert!(c.loading);
+    assert!(!c.pagination_failed);
+    c.loaded(5, Ok((vec![entry("new")], vec![], 100, true)), false);
+    c.search("new".into(), true);
+    c.loaded(6, Ok((vec![entry("new")], vec![], 100, true)), false);
+    assert!(!c.has_more);
+    assert_eq!(c.store.len(), 1);
+    assert!(c.search("new".into(), true).is_none());
+}
+
+#[test]
+fn empty_next_page_stops_even_when_server_claims_more() {
+    let mut c = Catalog::default();
+    c.search("".into(), false);
+    c.loaded(1, Ok((vec![entry("a")], vec![], 100, true)), false);
+    c.search("".into(), true);
+    c.loaded(2, Ok((vec![], vec![], 100, true)), false);
+    assert!(!c.has_more);
+}
+
+#[test]
+fn failed_replacement_query_cannot_page_old_rows() {
+    let mut c = Catalog::default();
+    c.search("old".into(), false);
+    c.loaded(1, Ok((vec![entry("old")], vec![], 100, true)), false);
+    c.search("new".into(), false);
+    c.loaded(2, Err("offline".into()), false);
+    assert!(!c.has_more);
+    assert!(c.search("new".into(), true).is_none());
+    c.search("new".into(), false);
+    c.loaded(3, Ok((vec![entry("new")], vec![], 100, true)), false);
+    assert!(matches!(
+        c.search("new".into(), true),
+        Some(Effect::Search { offset: 1, .. })
+    ));
+}

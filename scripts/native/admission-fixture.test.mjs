@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {spawnSync} from 'node:child_process'
-import {captureBuildMetadata,metadataRecord,GPUI_REV} from './build-metadata.mjs'
+import {captureBuildMetadata,metadataRecord,GPUI_REV,RUST_VERSION} from './build-metadata.mjs'
 import {runCargo} from './cargo-artifact.mjs'
 
 test('static metadata capture handles chunk boundaries, duplicates, truncation and missing records without execution',async()=>{
@@ -34,11 +34,11 @@ test('real production payload and quit-budget sources pass in a private toy crat
     writeFileSync(join(root,'src/main.rs'),'mod build_metadata; mod bundle_validation; mod quit_budget; fn main(){println!("{}",serde_json::to_string(&build_metadata::current()).unwrap());}')
     const manifest=join(root,'Cargo.toml')
     writeFileSync(manifest,'[package]\nname="tezbar-native"\nversion="9.8.7-beta.1"\nedition="2021"\n[[bin]]\nname="tezbar"\npath="src/main.rs"\n[features]\nruntime-shaders=[]\nbench-control=[]\n[dependencies]\nserde={version="1",features=["derive"]}\nserde_json="1"\nsha2="0.10"\n[dev-dependencies]\ntempfile="3.27"\n')
-    const env={...process.env,CARGO_TARGET_DIR:join(root,'private-target'),CARGO_INCREMENTAL:'0',TEZBAR_NATIVE_GIT_SHA:'b'.repeat(40),TEZBAR_NATIVE_DIRTY:'false'}
+    const env={...process.env,CARGO_TARGET_DIR:join(root,'private-target'),CARGO_INCREMENTAL:'0',TEZBAR_NATIVE_GIT_SHA:'b'.repeat(40),TEZBAR_NATIVE_DIRTY:'false',TEZBAR_NATIVE_GPUI_REV:GPUI_REV,TEZBAR_NATIVE_GPUI_POLICY_REV:GPUI_REV,TEZBAR_NATIVE_RUST_VERSION:RUST_VERSION,TEZBAR_NATIVE_RUST_POLICY_VERSION:RUST_VERSION}
     const run=args=>{const r=spawnSync('cargo',args,{cwd:root,env,encoding:'utf8',maxBuffer:4*1024*1024});assert.equal(r.status,0,r.stdout+'\n'+r.stderr);return r.stdout}
     run(['+1.98.1','generate-lockfile','--offline'])
     const tests=run(['+1.98.1','test','--locked','--offline','-j2','--features','runtime-shaders'])
-    assert.match(tests,/6 passed; 0 failed/)
+    assert.match(tests,/7 passed; 0 failed/)
     const args=['+1.98.1','build','--release','--locked','--offline','-j2','--message-format=json','--features','runtime-shaders']
     const exe=await runCargo('cargo',args,{cwd:root,manifest,env})
     const first=await captureBuildMetadata(exe)

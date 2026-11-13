@@ -1,5 +1,11 @@
 use super::*;
 use model::ClipboardEffect as E;
+#[derive(Default)]
+pub(super) struct ConversionUi {
+    pub owner: Option<String>,
+    pub active: Option<tezbar_core::instant::transform::ClipboardAction>,
+    pub pending: Option<u64>,
+}
 impl Utilities {
     pub(super) fn clipboard_effect(&mut self, e: E, cx: &mut Context<Self>) {
         let request = match &e {
@@ -38,9 +44,16 @@ impl Utilities {
                 ..
             } => {
                 let (request, action, text) = (*request, *action, text.clone());
+                self.clipboard_ui.owner = self
+                    .clipboard
+                    .selected_entry()
+                    .map(|entry| entry.id.clone());
+                self.clipboard_ui.active = Some(action);
+                self.clipboard_ui.pending = Some(request);
                 let epoch = self.epoch;
                 let formatter = self.presentation.clone();
                 if self.jobs.len() >= 16 {
+                    self.clipboard_ui.pending = None;
                     self.clipboard.conversion_complete(
                         request,
                         Err("Too many pending requests. Try again.".into()),
@@ -71,7 +84,11 @@ impl Utilities {
                     let _ = this.update(cx, |this, cx| {
                         this.jobs.remove(&id);
                         if this.epoch == epoch {
-                            if this.clipboard.conversion_complete(request, result)
+                            let accepted = this.clipboard.conversion_complete(request, result);
+                            if this.clipboard_ui.pending == Some(request) {
+                                this.clipboard_ui.pending = None;
+                            }
+                            if accepted
                                 && matches!(
                                     action,
                                     tezbar_core::instant::transform::ClipboardAction::Qr
@@ -156,6 +173,10 @@ impl Utilities {
             self.preview_image = None;
             self.qr_image = None;
         }
+        let selection_before = self
+            .clipboard
+            .selected_entry()
+            .map(|entry| entry.id.clone());
         let e = match a {
             Action::Select(i) => self.clipboard.select(i),
             Action::Activate => self.clipboard.restore(),
@@ -186,6 +207,14 @@ impl Utilities {
                 .map(|s| E::WriteText(s.into())),
             _ => None,
         };
+        if selection_before
+            != self
+                .clipboard
+                .selected_entry()
+                .map(|entry| entry.id.clone())
+        {
+            self.clipboard_ui = Default::default();
+        }
         if let Some(e) = e {
             self.clipboard_effect(e, cx);
         }

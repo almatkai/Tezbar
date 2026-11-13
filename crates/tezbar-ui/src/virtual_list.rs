@@ -122,7 +122,7 @@ pub fn grid<V: 'static>(
                 .map(|row_index| {
                     // Layout-only row containers have no element IDs. Cells keep their global
                     // identity even when a reorder moves them across virtual rows.
-                    div().flex().w_full().children(
+                    div().flex().w_full().min_w_0().children(
                         (row_index * columns..((row_index + 1) * columns).min(total)).map(
                             |index| {
                                 div()
@@ -132,7 +132,9 @@ pub fn grid<V: 'static>(
                                     .aria_position_in_set(index + 1)
                                     .aria_size_of_set(total)
                                     .aria_column_index(index % columns + 1)
-                                    .flex_1()
+                                    .w(relative(1. / columns as f32))
+                                    .min_w_0()
+                                    .flex_shrink_0()
                                     .child(cell(view, index, w, cx))
                             },
                         ),

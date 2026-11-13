@@ -1,9 +1,154 @@
-//! Opt-in tests of the real Rust supervisor and the built Bun compatibility worker.
+//! Isolated supervisor tests plus opt-in tests of the built Bun compatibility worker.
 use super::*;
 use crate::common::CorePaths;
 use std::sync::atomic::AtomicUsize;
 
 const WAIT: Duration = Duration::from_secs(10);
+
+const CONTROLS: &[&str] = &[
+    "extension:refresh-session",
+    "extension:invoke-action",
+    "extension:search-text-changed",
+    "extension:load-more",
+    "extension:dispose-session",
+    "core:extension-status-action",
+];
+
+fn cold_fixture() -> (tempfile::TempDir, ExtensionWorker, Arc<AtomicUsize>) {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = CorePaths {
+        data_dir: dir.path().join("data"),
+        config_dir: dir.path().join("config"),
+        resource_dir: dir.path().join("resources"),
+        temp_dir: dir.path().join("temp"),
+        home_dir: dir.path().join("home"),
+    };
+    let count = Arc::new(AtomicUsize::new(0));
+    let spy = count.clone();
+    let ctx = CoreContext::headless(paths).with_event_sink(Arc::new(move |channel, value| {
+        if channel == "extension-worker-status" && value["phase"] == "starting" {
+            spy.fetch_add(1, Ordering::SeqCst);
+        }
+    }));
+    // A regression can attempt spawn, but cannot discover/download any runtime.
+    let executable = dir.path().join("non-executable-fixture");
+    std::fs::write(&executable, b"not executable").unwrap();
+    std::fs::write(dir.path().join("extension-worker.js"), b"not a worker").unwrap();
+    let launch = WorkerLaunch::new(executable, dir.path().to_owned()).unwrap();
+    (dir, ExtensionWorker::with_launch(ctx, launch), count)
+}
+
+#[tokio::test]
+async fn controls_never_activate_cold_or_dead_workers_even_with_cleanup_ownership() {
+    for dead_process in [false, true] {
+        for owned in [false, true] {
+            for channel in CONTROLS {
+                let (_dir, worker, count) = cold_fixture();
+                if owned {
+                    // Explicit supervisor-cleanup race fixture: ownership has not
+                    // been drained yet, but there is no live runtime to continue.
+                    worker.sessions.lock().unwrap().insert(
+                        "s".into(),
+                        ("raycast.fixture".into(), "view".into(), "scope".into()),
+                    );
+                }
+                if dead_process {
+                    let (sender, _) = mpsc::channel(1);
+                    *worker.process.lock().await = Some(Process {
+                        sender,
+                        pending: Default::default(),
+                        alive: Arc::new(AtomicBool::new(false)),
+                        stop: None,
+                        finished: tokio::spawn(async {}),
+                    });
+                }
+                let result = bounded(worker.request(
+                    channel,
+                    vec![json!({
+                        "sessionId":"s", "actionId":"action", "searchText":"query"
+                    })],
+                ))
+                .await;
+                assert_eq!(count.load(Ordering::SeqCst), 0, "{channel}: {result:?}");
+                if *channel == "extension:dispose-session" && !owned {
+                    assert_eq!(result.unwrap(), false);
+                } else {
+                    assert!(result.is_err(), "{channel}: {result:?}");
+                }
+                bounded(worker.shutdown()).await;
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn explicit_execution_and_acquisition_keep_cold_launch_permission() {
+    for (channel, args) in [
+        (
+            "extension:run-command",
+            vec![json!({"extensionId":"raycast.fixture","commandName":"run"})],
+        ),
+        ("extension:install", vec![json!("raycast.fixture")]),
+        ("extensions:install", vec![json!("raycast.fixture")]),
+        ("extensions:reinstall", vec![json!("raycast.fixture")]),
+    ] {
+        let (_dir, worker, count) = cold_fixture();
+        let error = bounded(worker.request(channel, args)).await.unwrap_err();
+        assert!(
+            error.contains("Could not start Extension Worker"),
+            "{error}"
+        );
+        assert_eq!(count.load(Ordering::SeqCst), 1, "{channel}");
+        assert!(!worker.is_running().await);
+    }
+}
+
+#[tokio::test]
+async fn owned_live_controls_continue_on_existing_transport_without_activation() {
+    for channel in CONTROLS {
+        let (_dir, worker, count) = cold_fixture();
+        worker.sessions.lock().unwrap().insert(
+            "s".into(),
+            ("raycast.fixture".into(), "view".into(), "scope".into()),
+        );
+        let (sender, mut receiver) = mpsc::channel::<Value>(1);
+        let pending: Pending = Default::default();
+        let replies = pending.clone();
+        let expected_channel = channel.to_string();
+        // Explicit fake protocol transport; the real Bun test below separately
+        // verifies executable launch, crash recovery and OS process ownership.
+        let responder = tokio::spawn(async move {
+            let frame = receiver.recv().await.unwrap();
+            assert_eq!(frame["channel"], expected_channel);
+            assert_eq!(frame["payload"][0]["sessionId"], "s");
+            let reply = replies
+                .lock()
+                .unwrap()
+                .remove(frame["id"].as_str().unwrap())
+                .unwrap();
+            reply.send(Ok(json!({"ok":true}))).unwrap();
+        });
+        *worker.process.lock().await = Some(Process {
+            sender,
+            pending,
+            alive: Arc::new(AtomicBool::new(true)),
+            stop: None,
+            finished: tokio::spawn(async {}),
+        });
+        let result = bounded(worker.request(
+            channel,
+            vec![json!({
+                "sessionId":"s", "actionId":"action", "searchText":"query"
+            })],
+        ))
+        .await
+        .unwrap();
+        assert_eq!(result["ok"], true);
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+        responder.await.unwrap();
+        bounded(worker.shutdown()).await;
+    }
+}
 
 async fn bounded<T>(future: impl std::future::Future<Output = T>) -> T {
     tokio::time::timeout(WAIT, future)
@@ -269,6 +414,36 @@ async fn real_rust_host_bun_roundtrip_and_termination() {
     assert!(pending.lock().unwrap().is_empty());
     #[cfg(unix)]
     assert!(!process_exists(pids[0]), "crashed worker must be reaped");
+    let attempts = || {
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(channel, value)| {
+                channel == "extension-worker-status" && value["phase"] == "starting"
+            })
+            .count()
+    };
+    assert_eq!(
+        attempts(),
+        1,
+        "all requests before the crash share one launch"
+    );
+    for channel in CONTROLS {
+        let result = bounded(worker.request(
+            channel,
+            vec![json!({
+                "sessionId":"before-crash", "actionId":"stale"
+            })],
+        ))
+        .await;
+        if *channel == "extension:dispose-session" {
+            assert_eq!(result.unwrap(), false);
+        } else {
+            assert!(result.is_err());
+        }
+        assert_eq!(attempts(), 1, "stale {channel} restarted a crashed worker");
+    }
 
     block_read.store(false, Ordering::SeqCst);
     writes.lock().unwrap().clear();
@@ -284,6 +459,7 @@ async fn real_rust_host_bun_roundtrip_and_termination() {
         .parse()
         .unwrap();
     assert_ne!(restarted_pid, pids[0]);
+    assert_eq!(attempts(), 2, "explicit execution recovers from a crash");
     block_read.store(true, Ordering::SeqCst);
     let caller = tokio::spawn({
         let worker = worker.clone();

@@ -29,7 +29,7 @@ test('actual disposable unsealed assembly copies pinned bytes and fails closed o
   const {inventoryResources,assembleMacos,RESOURCE_ROOTS,GPUI_REV}=await import('./package-macos.mjs')
   const root=await mkdtemp(path.join(await realpath(tmpdir()),'tezbar-m11-package-'));const source=path.join(root,'source');await mkdir(source)
   try {
-    const policy=JSON.parse(await readFile(new URL('../../src-tauri/macos-signing.json',import.meta.url)))
+    const policy=JSON.parse(await readFile(new URL('../../packaging/macos-signing.json',import.meta.url)))
     const native=Buffer.from('cffaedfe01000000','hex'), payload=Buffer.from('private dummy runtime, never executed')
     for(const [from]of RESOURCE_ROOTS){const file=path.join(source,from,/node_modules$|resources$|icons$|@esbuild$|esbuild$/.test(from)?'fixture':'');await mkdir(path.dirname(file),{recursive:true});await writeFile(file,policy.nativeHelpers.includes(from)?native:from==='build/embedding-runtime/resources'?payload:Buffer.from('fixture'))}
     // Runtime ZIP and executable use explicit private dummy bytes.

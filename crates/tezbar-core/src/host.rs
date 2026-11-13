@@ -165,6 +165,11 @@ pub trait Host: Send + Sync + 'static {
     fn status_items(&self) -> &dyn StatusItems;
     fn capture_active_display(&self) -> HostFuture<Vec<u8>>;
     fn desktop_services(&self) -> bool;
+    /// Explicit first-party local PTY capability. It does not authorize clipboard,
+    /// global shortcuts, authentication, tray integration or background services.
+    fn native_terminal(&self) -> bool {
+        self.desktop_services()
+    }
     fn notify(&self, _spec: NotificationSpec) -> HostFuture<()> {
         Box::pin(async { Ok(()) })
     }

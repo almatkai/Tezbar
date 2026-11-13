@@ -433,6 +433,84 @@ fn review_followup_svg_descendant_selectors_are_bounded_before_matching() {
     assert!(svg_preflight(svg.as_bytes()).is_err());
 }
 #[test]
+fn review_css_bound_covers_quote_roundtrip_that_ends_without_error() {
+    let selector = format!(r#"[data-name="'],"] {}"#, "g ".repeat(12));
+    let css = format!("{selector} {{fill:red}}");
+    let sheet = simplecss::StyleSheet::parse(&css);
+    assert_eq!(sheet.rules.len(), 1);
+    let printed = sheet.rules[0].selector.to_string();
+    let tokens = simplecss::SelectorTokenizer::from(printed.as_str())
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    // The unescaped quote makes the tokenizer stop at the value's comma,
+    // silently losing all twelve descendant combinators from the real rule.
+    assert!(
+        !tokens
+            .iter()
+            .any(|t| matches!(t, simplecss::SelectorToken::DescendantCombinator))
+    );
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{css}</style>{}<rect width="1" height="1"/>{}</svg>"#,
+        "<g>".repeat(30),
+        "</g>".repeat(30)
+    );
+    assert_eq!(
+        svg_preflight(svg.as_bytes()).unwrap_err(),
+        "SVG stylesheet exceeds matching work budget"
+    );
+}
+#[test]
+fn review_css_bound_charges_class_attribute_scan_bytes() {
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg"><style>.missing {{fill:red}}</style><rect class="{}" width="1" height="1"/></svg>"#,
+        "x ".repeat(1 << 19)
+    );
+    // A class selector's ~= check scans the full class value. Reject before
+    // usvg invokes the matcher even though the selector has only one step.
+    assert_eq!(
+        svg_preflight(svg.as_bytes()).unwrap_err(),
+        "SVG stylesheet exceeds matching work budget"
+    );
+}
+#[test]
+fn review_css_declaration_copies_are_bounded_before_usvg() {
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg"><style>*{{marker:url(#{})}}</style>{}</svg>"#,
+        "a".repeat(32_000),
+        "<g/>".repeat(2048)
+    );
+    // Never run the allocation amplifier: admission itself must refuse it.
+    assert_eq!(
+        svg_preflight(svg.as_bytes()).unwrap_err(),
+        "SVG stylesheet exceeds declaration copy budget"
+    );
+}
+#[test]
+fn review_inline_css_copies_include_expanded_use_nodes() {
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg"><defs><g id="s" style="marker:url(#{})"/></defs>{}</svg>"##,
+        "a".repeat(3000),
+        r##"<use href="#s"/>"##.repeat(1000)
+    );
+    assert_eq!(
+        svg_preflight(svg.as_bytes()).unwrap_err(),
+        "SVG stylesheet exceeds declaration copy budget"
+    );
+}
+#[test]
+fn review_css_quote_delimiter_variants_are_refused_before_matching() {
+    for prefix in [r#"[a="x'],"]"#, r#"[a="x']{"]"#, r#"[a="x']/"]"#] {
+        let css = format!("{prefix} {} {{fill:red}}", "g ".repeat(30));
+        assert_eq!(simplecss::StyleSheet::parse(&css).rules.len(), 1);
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><style>{css}</style>{}<rect width="1" height="1"/>{}</svg>"#,
+            "<g>".repeat(60),
+            "</g>".repeat(60)
+        );
+        assert!(svg_preflight(svg.as_bytes()).is_err(), "{prefix}");
+    }
+}
+#[test]
 fn review_followup_svg_clip_mask_and_opacity_keep_ordinary_icon_pixels() {
     for layers in [
         r#"<g clip-path="url(#c)"><g mask="url(#m)"><path d="M0 0H24V24H0Z" fill="red"/></g></g>"#,

@@ -22,9 +22,10 @@ Welcome to the Tezbar project! This document outlines general guidelines and poi
 ---
 
 ## 1. Core Architecture & Stack
-- **Framework**: Tauri v2 (Rust backend in `src-tauri/`) with Web frontend (`src/renderer/`).
-- **Runtime / Package Manager**: Node.js 22+ with `pnpm`.
-- **Bundler & UI**: Vite, React 18, TypeScript, Tailwind CSS.
+- **Application**: Rust core with native GPUI rendering for every screen and extension view.
+- **JavaScript compatibility**: Start the isolated Bun worker only for JS/Raycast extension use. Startup, built-in services, installed-extension metadata and settings stay in Rust.
+- **Tooling**: Node.js and `pnpm` build/test tools. The retired React renderer is a regression oracle under `tests/oracles/legacy-renderer`; the Tauri host is archived under `docs/native-m11/legacy-tauri-archive`. Keep both outside application entrypoints.
+- **Native build and packaging**: Read `scripts/native/README.md` before changing startup/build routes. Signing pins and resource policies live in `packaging/`.
 
 ---
 

@@ -19,6 +19,21 @@ fn capture(text: &str, pattern: &str) -> Vec<String> {
         })
         .unwrap_or_default()
 }
+// Parse named sysctl fields exactly: "usec" is not the boot Unix seconds.
+fn mac_uptime_seconds(boot: &str, now_seconds: u64) -> Option<u64> {
+    let seconds = boot.split(['{', '}', ',']).find_map(|field| {
+        let (key, value) = field.split_once('=')?;
+        (key.trim() == "sec")
+            .then(|| value.trim().parse::<u64>().ok())
+            .flatten()
+    })?;
+    Some(now_seconds.saturating_sub(seconds))
+}
+// getifaddr returns one address; never accept an arbitrary entry from a summary.
+fn mac_local_ipv4(raw: &str) -> Option<String> {
+    let address = raw.trim().parse::<std::net::Ipv4Addr>().ok()?;
+    (!address.is_unspecified() && address.octets()[0] < 224).then(|| address.to_string())
+}
 fn n(s: Option<&String>) -> Value {
     s.and_then(|s| s.parse::<f64>().ok())
         .map_or(Value::Null, |n| json!(n))
@@ -135,10 +150,8 @@ impl SystemCore {
         let total = total.parse::<f64>().ok().map_or(Value::Null, |n| json!(n));
         let free = live["memory"]["freeBytes"].clone();
         fixed["device"]["osVersion"] = nullable(&version);
-        let sec = n(capture(&boot, r"sec\s*=\s*(\d+)").first());
-        fixed["device"]["uptimeSeconds"] = sec
-            .as_f64()
-            .map(|s| json!((now_ms() as f64 / 1000.0 - s).max(0.0)))
+        fixed["device"]["uptimeSeconds"] = mac_uptime_seconds(&boot, now_ms() / 1000)
+            .map(|seconds| json!(seconds))
             .unwrap_or(Value::Null);
         for (key, v) in live["cpu"].as_object().unwrap() {
             fixed["cpu"][key] = v.clone();
@@ -188,10 +201,15 @@ impl SystemCore {
             .first()
             .cloned()
             .unwrap_or_default();
-        let summary = if iface.is_empty() {
-            String::new()
+        let (summary, address) = if iface.is_empty() {
+            (String::new(), String::new())
         } else {
-            optional("ipconfig", &["getsummary", &iface]).await
+            let summary_args = ["getsummary", iface.as_str()];
+            let address_args = ["getifaddr", iface.as_str()];
+            tokio::join!(
+                optional("ipconfig", &summary_args),
+                optional("ipconfig", &address_args),
+            )
         };
         let summary_value = |key: &str| {
             let v = capture(
@@ -207,7 +225,7 @@ impl SystemCore {
                 nullable(v.trim())
             }
         };
-        fixed["network"] = json!({"interface":nullable(&iface),"connectionType":summary_value("InterfaceType"),"ssid":summary_value("SSID"),"localIp":nullable(capture(&summary,r"(?m)^\s*0\s*:\s*((?:\d{1,3}\.){3}\d{1,3})\s*$").first().map(String::as_str).unwrap_or("")),"downloadBytesPerSecond":null,"uploadBytesPerSecond":null});
+        fixed["network"] = json!({"interface":nullable(&iface),"connectionType":summary_value("InterfaceType"),"ssid":summary_value("SSID"),"localIp":mac_local_ipv4(&address).map_or(Value::Null, |address| json!(address)),"downloadBytesPerSecond":null,"uploadBytesPerSecond":null});
         if let Some((rx, tx)) = mac_network(&network, &iface) {
             network_rates(state, &mut fixed["network"], iface, rx, tx);
         }
@@ -377,3 +395,7 @@ pub(super) fn cpu_between(previous: [f64; 3], current: [f64; 3]) -> Option<[f64;
     }
     Some(delta.map(|n| n / sum * 100.0))
 }
+
+#[cfg(test)]
+#[path = "stats_parser_tests.rs"]
+mod parser_tests;

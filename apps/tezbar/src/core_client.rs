@@ -728,3 +728,7 @@ mod m9_admission_tests {
 #[cfg(test)]
 #[path = "core_client_command_tests.rs"]
 mod command_tests;
+
+#[cfg(all(test, unix))]
+#[path = "preview_terminal_tests.rs"]
+mod preview_terminal_tests;

@@ -68,7 +68,7 @@ impl Bundle {
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         return Some(Self {
             root: data.join("knowledge/runtimes"),
-            catalog: include_str!("../../../../src-tauri/runtime/embedding-macos-arm64.json"),
+            catalog: include_str!("../../../../packaging/runtime/embedding-macos-arm64.json"),
             archive: archive_path(
                 resources,
                 &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
@@ -316,7 +316,7 @@ mod tests {
         let selected = archive_path(&resources, &source, true);
         let bytes = fs::read(&selected).expect("build hook must stage the actual development ZIP");
         let catalog: Catalog =
-            serde_json::from_str(include_str!("../../../../src-tauri/runtime/embedding-macos-arm64.json"))
+            serde_json::from_str(include_str!("../../../../packaging/runtime/embedding-macos-arm64.json"))
                 .unwrap();
         assert_eq!(bytes.len() as u64, catalog.archive_bytes);
         assert_eq!(

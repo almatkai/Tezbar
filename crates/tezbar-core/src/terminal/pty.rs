@@ -658,6 +658,8 @@ fn native_terminal_create_inner(
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
     command.env("TERM_PROGRAM", "Tezbar");
+    #[cfg(unix)]
+    super::shell_colors::configure(&mut command, &shell, &ctx.paths.config_dir);
 
     let command = fixture.unwrap_or(command);
     let mut child = pair

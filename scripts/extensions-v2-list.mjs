@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 
-const executable = process.env.TEZBAR_NATIVE_CORE_CLI || resolve('src-tauri/target/debug/tezbar')
+const executable = process.env.TEZBAR_NATIVE_CORE_CLI || resolve(`target/debug/tezbar${process.platform === 'win32' ? '.exe' : ''}`)
 const result = spawnSync(executable, ['--extensions-v2-list', '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 if (result.error || result.status !== 0) {
   console.error(result.error?.message || result.stderr.trim() || `Native CLI exited ${result.status}`)

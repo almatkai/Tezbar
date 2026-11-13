@@ -403,11 +403,12 @@ impl Owner {
         self.launcher
             .update(cx, |view, w, cx| {
                 let display = w.display(cx)?;
+                let bounds = native::requested_bounds(w, cx);
                 Some((
                     format!("Display {:?}", display.id()),
                     Profile {
-                        width: f64::from(w.bounds().size.width),
-                        height: f64::from(w.bounds().size.height),
+                        width: f64::from(bounds.size.width),
+                        height: f64::from(bounds.size.height),
                         zoom: view.zoom as f64,
                     },
                 ))
@@ -485,32 +486,39 @@ impl Owner {
         };
         let result = self
             .launcher
-            .update(cx, |view, w, cx| -> Result<(), String> {
+            .update(cx, |view, w, cx| -> Result<(String, Profile), String> {
                 let display = w.display(cx).ok_or("Launcher display is unavailable")?;
                 let work = display.visible_bounds();
+                let requested = native::requested_bounds(w, cx);
                 let mut profile = if reset {
                     Profile::default()
                 } else {
                     Profile {
-                        width: width.unwrap_or(f64::from(w.bounds().size.width)),
-                        height: height.unwrap_or(f64::from(w.bounds().size.height)),
+                        width: width.unwrap_or(f64::from(requested.size.width)),
+                        height: height.unwrap_or(f64::from(requested.size.height)),
                         zoom: zoom.unwrap_or(view.zoom as f64),
                     }
                 };
                 profile = profile.fit((f64::from(work.size.width), f64::from(work.size.height)));
-                let mut bounds = w.bounds();
+                let mut bounds = requested;
                 bounds.size = size(px(profile.width as f32), px(profile.height as f32));
                 view.zoom = profile.zoom as f32;
-                native::place_scaled(w, bounds, native::display_scale(display.as_ref()))?;
+                native::place_scaled(w, bounds, native::display_scale(display.as_ref()), cx)?;
                 cx.notify();
-                Ok(())
+                Ok((native::monitor_key(display.as_ref()), profile))
             })
             .map_err(|_| "Launcher window is unavailable".to_string())
             .and_then(|r| r);
-        if result.is_err() {
-            self.m7_finish_effect(id, "layout", ticket, result, cx);
-            return;
-        }
+        let (monitor, profile) = match result {
+            Ok(target) => target,
+            Err(error) => {
+                self.m7_finish_effect(id, "layout", ticket, Err(error), cx);
+                return;
+            }
+        };
+        // Persist the accepted target, never the old OS bounds while placement
+        // waits for its foreground tick. Position/monitor snapshots wait for Bounds.
+        self.layouts.insert(monitor, profile);
         self.snapshot(cx);
         if let Err(error) = self
             .writer

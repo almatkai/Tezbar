@@ -53,6 +53,7 @@ pub struct StoreView {
     start: Instant,
     epoch: u64,
     query_revision: u64,
+    pagination_scheduled: bool,
     search_job: Option<Task<()>>,
     debounce: Option<Task<()>>,
     timer: Option<Task<()>>,
@@ -82,10 +83,11 @@ impl StoreView {
         w: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let search = cx.new(TextInput::new);
+        let search = cx.new(TextInput::new_native);
         search.update(cx, |v, _| {
             v.configure(FieldOptions {
                 name: "Search extensions".into(),
+                border: false,
                 placeholder: "Search extensions or paste a GitHub URL".into(),
                 ..Default::default()
             })
@@ -120,6 +122,7 @@ impl StoreView {
             start: Instant::now(),
             epoch: 0,
             query_revision: 0,
+            pagination_scheduled: false,
             search_job: None,
             debounce: None,
             timer: None,
@@ -175,6 +178,7 @@ impl StoreView {
             self.search_job = None;
             self.search.update(cx, |v, cx| v.cancel_composition(w, cx));
             self.release_artwork(cx);
+            self.release_row_icons(cx);
             self.epoch += 1;
             self.remove = None;
         }
@@ -241,6 +245,7 @@ impl StoreView {
         self.disposed = true;
         self.visible = false;
         self.release_artwork(cx);
+        self.release_row_icons(cx);
         self.refresh.stop();
         self.timer = None;
         self.debounce = None;
@@ -285,8 +290,52 @@ impl StoreView {
         }
     }
     fn more(&mut self, cx: &mut Context<Self>) {
+        if !self.visible || self.disposed || self.remove.is_some() {
+            return;
+        }
         if let Some(e) = self.catalog.search(self.catalog.query.clone(), true) {
             self.search_effect(e, cx);
+            cx.notify();
+        }
+    }
+    fn schedule_visible_range(
+        &mut self,
+        range: std::ops::Range<usize>,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.pagination_scheduled
+            || !self.visible
+            || self.disposed
+            || self.remove.is_some()
+            || !self.catalog.has_more
+            || self.catalog.loading
+            || self.catalog.loading_more
+            || self.catalog.pagination_failed
+            || range.is_empty()
+            || range.end.saturating_add(3) < self.rows.len()
+        {
+            return;
+        }
+        self.pagination_scheduled = true;
+        let epoch = self.epoch;
+        let revision = self.query_revision;
+        let owner = cx.entity().downgrade();
+        w.on_next_frame(move |_, cx| {
+            let _ = owner.update(cx, |v, cx| {
+                v.pagination_scheduled = false;
+                if v.epoch == epoch && v.query_revision == revision {
+                    v.visible_range(range, cx);
+                }
+            });
+        });
+    }
+    fn visible_range(&mut self, range: std::ops::Range<usize>, cx: &mut Context<Self>) {
+        if !range.is_empty()
+            && range.end.saturating_add(3) >= self.rows.len()
+            && !self.catalog.pagination_failed
+        {
+            self.more(cx);
         }
     }
     fn search_effect(&mut self, e: Effect, cx: &mut Context<Self>) {
@@ -301,6 +350,7 @@ impl StoreView {
         };
         let t = self.transport.clone();
         let epoch = self.epoch;
+        let revision = self.query_revision;
         self.search_job = Some(cx.spawn(async move |this, cx| {
             let result = gpui_tokio::Tokio::spawn(cx, async move {
                 let page = t
@@ -326,7 +376,7 @@ impl StoreView {
             .await
             .unwrap_or_else(|_| Err("Interrupted".into()));
             let _ = this.update(cx, |v, cx| {
-                if v.epoch != epoch || !v.visible {
+                if v.epoch != epoch || v.query_revision != revision || !v.visible {
                     return;
                 }
                 v.search_job = None;

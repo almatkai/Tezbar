@@ -516,7 +516,10 @@ pub fn element(
         .child(
             canvas(
                 move |bounds, w, cx| {
-                    let font = font("SFMono-Regular");
+                    // Resolve an installed monospace family. SFMono-Regular is a
+                    // face name, so GPUI can silently fall back to proportional UI
+                    // text and leave gaps between differently colored cell runs.
+                    let font = font(crate::tokens::font_family(cx, true));
                     let probe = w.text_system().shape_line(
                         "M".into(),
                         px(font_size as f32),

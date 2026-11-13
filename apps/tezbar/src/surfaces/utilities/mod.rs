@@ -115,12 +115,6 @@ enum Completion {
     Permissions(u64),
     Permission(u64),
     Vault(vault::Completion),
-    Paste(
-        WeakEntity<TextInput>,
-        u64,
-        tezbar_ui::text_input::ByteSelection,
-    ),
-    NotePaste(Option<u64>, tezbar_ui::text_input::ByteSelection),
     Simple,
 }
 struct Job {
@@ -137,6 +131,7 @@ pub struct Utilities {
     pub surface: Surface,
     pub visible: bool,
     pub clipboard: model::Clipboard,
+    clipboard_ui: clipboard::ConversionUi,
     pub snippets: model::Crud,
     pub notes: note_model::Notes,
     pub emoji: model::EmojiPicker,
@@ -195,6 +190,7 @@ impl Utilities {
             let mut v = TextInput::new(cx);
             v.configure(FieldOptions {
                 name: "Search utilities".into(),
+                border: false,
                 placeholder: "Search".into(),
                 ..Default::default()
             });
@@ -215,17 +211,27 @@ impl Utilities {
         let edit_sub = cx.subscribe(&editor, |this, _, e: &tezbar_ui::rich_text::Edit, cx| {
             this.edit_note(e.clone(), cx)
         });
-        let rich_clip = cx.subscribe(
+        let rich_clip = cx.subscribe_in(
             &editor,
-            |this, _, e: &tezbar_ui::rich_text::Clipboard, cx| match e {
+            window,
+            |this, editor, e: &tezbar_ui::rich_text::Clipboard, w, cx| match e {
                 tezbar_ui::rich_text::Clipboard::Read { owner } => {
-                    let selection = this.editor.read(cx).input.read(cx).selection_bytes();
-                    this.request(
-                        UtilityRequest::ReadText,
-                        Completion::NotePaste(*owner, selection),
-                        false,
-                        cx,
-                    );
+                    if !this.visible || *owner != this.notes.selected {
+                        return;
+                    }
+                    let input = editor.read(cx).input.clone();
+                    if !input.focus_handle(cx).is_focused(w) {
+                        return;
+                    }
+                    let selection = input.read(cx).selection_bytes();
+                    if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+                        editor.update(cx, |editor, cx| {
+                            if editor.input.read(cx).selection_bytes() == selection {
+                                // RichText still validates its note owner and escapes plain text.
+                                editor.paste_text(*owner, &text, w, cx);
+                            }
+                        });
+                    }
                 }
                 tezbar_ui::rich_text::Clipboard::Write(s) => this.request(
                     UtilityRequest::WriteText(s.clone()),
@@ -235,11 +241,12 @@ impl Utilities {
                 ),
             },
         );
-        let search_clip = Self::clipboard_subscription(&search, cx);
+        let search_clip = Self::clipboard_subscription(&search, window, cx);
         Self {
             surface: Surface::Clipboard,
             visible: false,
             clipboard: Default::default(),
+            clipboard_ui: Default::default(),
             snippets: model::Crud::new(model::CrudKind::Snippet),
             notes: Default::default(),
             emoji: model::EmojiPicker {
@@ -331,12 +338,36 @@ impl Utilities {
             self.release.version = None;
         }
         self.epoch += 1;
+        self.clipboard_ui = Default::default();
         self.confirmation = None;
         self.fields.clear();
         self.field_subscriptions.clear();
         self.message = None;
         self.error = None;
-        self.search.update(cx, |s, cx| s.clear_silently(window, cx));
+        let vault = self.surface == Surface::Vault;
+        let placeholder = match self.surface {
+            Surface::Clipboard => "Search clipboard history…",
+            Surface::Notes => "Search notes...",
+            Surface::Snippets => "Search snippets…",
+            Surface::Emoji => "Search emojis by name, mood, or slang...",
+            Surface::Indexing => "Filter indexed files by name or path…",
+            Surface::Vault => "Search vault…",
+            _ => "Search",
+        };
+        self.search.update(cx, |s, cx| {
+            s.configure(FieldOptions {
+                name: if vault {
+                    "Search vault"
+                } else {
+                    "Search utilities"
+                }
+                .into(),
+                placeholder: placeholder.into(),
+                border: false,
+                ..Default::default()
+            });
+            s.clear_silently(window, cx);
+        });
         self.requested_note = match &navigation.payload {
             Payload::Note { created_at } => Some(*created_at),
             _ => None,
@@ -345,6 +376,8 @@ impl Utilities {
             self.vault.requested = Some(item_id.clone());
         }
         if self.surface == Surface::Vault {
+            self.vault.query.clear();
+            self.vault.kind = None;
             if let Some((id, text)) = self.pending_vault_seed.take() {
                 self.vault.model.paste_draft(text);
                 if let Some(d) = &mut self.vault.model.draft {
@@ -358,6 +391,10 @@ impl Utilities {
         }
         if let Some(first) = self.fields.first() {
             first.focus_handle(cx).focus(window, cx);
+        } else if self.surface == Surface::SystemMonitor
+            || (self.surface == Surface::Vault && !self.vault.model.unlocked)
+        {
+            window.focus(&self.focus, cx);
         } else {
             window.focus(&self.search.focus_handle(cx), cx);
         }
@@ -601,45 +638,6 @@ impl Utilities {
                 }
             }
             Completion::Vault(c) => self.vault_complete(c, r, cx),
-            Completion::Paste(field, epoch, selection) => {
-                if epoch == self.epoch {
-                    match r.and_then(decode::<String>) {
-                        Ok(text) => {
-                            let window = self.window;
-                            cx.defer(move |cx| {
-                                let _ = window.update(cx, |_, w, cx| {
-                                    let _ = field.update(cx, |f, cx| {
-                                        if f.selection_bytes() == selection {
-                                            f.paste_text(&text, w, cx);
-                                        }
-                                    });
-                                });
-                            });
-                        }
-                        Err(e) => self.error = Some(e),
-                    }
-                }
-            }
-            Completion::NotePaste(owner, selection) => {
-                if owner == self.notes.selected {
-                    match r.and_then(decode::<String>) {
-                        Ok(text) => {
-                            let editor = self.editor.downgrade();
-                            let window = self.window;
-                            cx.defer(move |cx| {
-                                let _ = window.update(cx, |_, w, cx| {
-                                    let _ = editor.update(cx, |e, cx| {
-                                        if e.input.read(cx).selection_bytes() == selection {
-                                            e.paste_text(owner, &text, w, cx);
-                                        }
-                                    });
-                                });
-                            });
-                        }
-                        Err(e) => self.error = Some(e),
-                    }
-                }
-            }
             Completion::Simple => match r.and_then(success) {
                 Ok(()) => self.message = Some("Done".into()),
                 Err(e) => self.error = Some(e),
@@ -663,7 +661,10 @@ impl Utilities {
                 self.emoji.query = q;
                 self.emoji.selected = 0;
             }
-            Surface::Vault => self.vault.query = q,
+            Surface::Vault => {
+                self.vault.query = q;
+                self.vault_select_first(cx);
+            }
             Surface::Indexing => self.indexing.search(q, self.now()),
             Surface::SystemMonitor => self.monitor.query = q,
             _ => {}
@@ -817,3 +818,6 @@ impl Utilities {
         });
     }
 }
+
+#[cfg(test)]
+mod native_paste_tests;

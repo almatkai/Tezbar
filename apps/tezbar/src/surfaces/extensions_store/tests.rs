@@ -135,3 +135,249 @@ fn review_m9_store_disposes_run_reply_after_hiding(cx: &mut TestAppContext) {
                 && args[0]["sessionId"] == "late-store-session")
     );
 }
+
+struct PagingTransport {
+    searches: Mutex<Vec<(usize, usize)>>,
+    replies: Mutex<std::collections::VecDeque<Result<Value, String>>>,
+}
+impl ExtensionTransport for PagingTransport {
+    fn send(&self, request: ExtensionRequest) -> ExtensionFuture {
+        let reply = match request {
+            ExtensionRequest::Search { offset, limit, .. } => {
+                self.searches.lock().unwrap().push((offset, limit));
+                self.replies
+                    .lock()
+                    .unwrap()
+                    .pop_front()
+                    .expect("unexpected page")
+            }
+            ExtensionRequest::List => Ok(json!([])),
+            _ => panic!("unexpected request"),
+        };
+        Box::pin(async move { reply })
+    }
+    fn drain(&self) -> ExtensionFuture {
+        Box::pin(async { Ok(json!(true)) })
+    }
+}
+
+#[gpui::test]
+fn virtual_range_paging_guards_failure_retry_and_append(cx: &mut TestAppContext) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    cx.update(|cx| gpui_tokio::init_from_handle(cx, rt.handle().clone()));
+    let fake = Arc::new(PagingTransport {
+        searches: Default::default(),
+        replies: Mutex::new(
+            [
+                Err("offline".into()),
+                Ok(json!({"items":[{"id":"next","name":"Next"}],"total":100,"hasMore":true})),
+                Ok(json!({"items":[],"total":100,"hasMore":true})),
+            ]
+            .into(),
+        ),
+    });
+    let (view, cx) = cx.add_window_view(|w, cx| StoreView::new(fake.clone(), w, cx));
+    view.update(cx, |v, cx| {
+        v.catalog.search("".into(), false);
+        let items = (0..25)
+            .map(|i| {
+                serde_json::from_value(json!({"id":i.to_string(),"name":i.to_string()})).unwrap()
+            })
+            .collect();
+        v.catalog.loaded(1, Ok((items, vec![], 100, true)), false);
+        v.catalog.selected = Some("4".into());
+        v.rebuild(cx);
+        v.visible_range(21..25, cx); // hidden
+        assert!(!v.catalog.loading_more);
+        v.visible = true;
+        v.disposed = true;
+        v.visible_range(21..25, cx);
+        assert!(!v.catalog.loading_more);
+        v.disposed = false;
+        v.remove = Some("4".into());
+        v.visible_range(21..25, cx);
+        assert!(!v.catalog.loading_more);
+        v.remove = None;
+        v.visible_range(0..1, cx); // uniform_list's measurement pass
+        assert!(!v.catalog.loading_more);
+        v.visible_range(21..25, cx);
+        v.visible_range(21..25, cx);
+        assert!(v.catalog.loading_more);
+    });
+    rt.block_on(async {
+        for _ in 0..64 {
+            cx.run_until_parked();
+            tokio::task::yield_now().await;
+        }
+    });
+    view.update(cx, |v, cx| {
+        assert!(v.catalog.pagination_failed);
+        for _ in 0..3 {
+            v.visible_range(21..25, cx);
+        }
+        assert!(!v.catalog.loading_more);
+    });
+    assert_eq!(*fake.searches.lock().unwrap(), vec![(25, 25)]);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.action(view::Action::More, w, cx)));
+    rt.block_on(async {
+        for _ in 0..64 {
+            cx.run_until_parked();
+            tokio::task::yield_now().await;
+        }
+    });
+    view.update(cx, |v, cx| {
+        assert_eq!(v.rows.len(), 26);
+        assert_eq!(v.catalog.selected.as_deref(), Some("4"));
+        assert!(!v.catalog.pagination_failed);
+        v.visible_range(23..26, cx);
+    });
+    rt.block_on(async {
+        for _ in 0..64 {
+            cx.run_until_parked();
+            tokio::task::yield_now().await;
+        }
+    });
+    view.update(cx, |v, cx| {
+        assert!(!v.catalog.has_more);
+        v.visible_range(23..26, cx);
+        v.more(cx);
+    });
+    assert_eq!(
+        *fake.searches.lock().unwrap(),
+        vec![(25, 25), (25, 25), (26, 25)]
+    );
+}
+
+#[gpui::test]
+fn scrolling_the_rendered_list_requests_a_page_without_moving_selection(cx: &mut TestAppContext) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    cx.update(|cx| gpui_tokio::init_from_handle(cx, rt.handle().clone()));
+    let fake = Arc::new(PagingTransport {
+        searches: Default::default(),
+        replies: Mutex::new(
+            [Ok(
+                json!({"items":[{"id":"next","name":"Next"}],"total":26,"hasMore":false}),
+            )]
+            .into(),
+        ),
+    });
+    let (view, cx) = cx.add_window_view(|w, cx| StoreView::new(fake.clone(), w, cx));
+    view.update(cx, |v, cx| {
+        v.catalog.search("".into(), false);
+        let items = (0..25)
+            .map(|i| {
+                serde_json::from_value(json!({"id":i.to_string(),"name":i.to_string()})).unwrap()
+            })
+            .collect();
+        v.catalog.loaded(1, Ok((items, vec![], 26, true)), false);
+        v.visible = true;
+        v.catalog.selected = Some("4".into());
+        v.rebuild(cx);
+        cx.notify();
+    });
+    cx.update(|w, cx| {
+        w.draw(cx).clear(cx);
+        w.simulate_next_frame(cx);
+    });
+    assert!(fake.searches.lock().unwrap().is_empty());
+    view.update(cx, |v, cx| {
+        v.scroll.scroll_to_item(24, ScrollStrategy::Nearest);
+        cx.notify();
+    });
+    cx.update(|w, cx| {
+        w.draw(cx).clear(cx);
+        w.simulate_next_frame(cx);
+    });
+    let before = view.read_with(cx, |v, _| v.scroll.logical_scroll_top_index());
+    rt.block_on(async {
+        for _ in 0..64 {
+            cx.run_until_parked();
+            tokio::task::yield_now().await;
+        }
+    });
+    cx.update(|w, cx| {
+        w.draw(cx).clear(cx);
+        w.simulate_next_frame(cx);
+    });
+    assert_eq!(*fake.searches.lock().unwrap(), vec![(25, 25)]);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.rows.len(), 26);
+        assert_eq!(v.catalog.selected.as_deref(), Some("4"));
+        assert_eq!(v.scroll.logical_scroll_top_index(), before);
+    });
+}
+
+#[gpui::test]
+fn deferred_page_is_invalidated_by_query_and_hide_and_keyboard_still_pages(
+    cx: &mut TestAppContext,
+) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    cx.update(|cx| gpui_tokio::init_from_handle(cx, rt.handle().clone()));
+    let fake = Arc::new(PagingTransport {
+        searches: Default::default(),
+        replies: Mutex::new([Ok(json!({"items":[],"total":25,"hasMore":false}))].into()),
+    });
+    let (view, cx) = cx.add_window_view(|w, cx| StoreView::new(fake.clone(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let items = || {
+                (0..25)
+                    .map(|i| {
+                        serde_json::from_value(json!({"id":i.to_string(),"name":i.to_string()}))
+                            .unwrap()
+                    })
+                    .collect()
+            };
+            v.visible = true;
+            v.catalog.search("old".into(), false);
+            v.catalog.loaded(1, Ok((items(), vec![], 100, true)), false);
+            v.rebuild(cx);
+            v.schedule_visible_range(21..25, w, cx);
+            v.schedule_visible_range(21..25, w, cx);
+            assert!(!v.catalog.loading_more); // admission waits until the next frame
+            v.query("new".into(), cx);
+            v.debounce = None;
+            v.catalog.loaded(2, Ok((items(), vec![], 100, true)), false);
+            v.rebuild(cx);
+        })
+    });
+    cx.update(|w, cx| {
+        w.simulate_next_frame(cx);
+    });
+    view.read_with(cx, |v, _| assert!(!v.catalog.loading_more));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.schedule_visible_range(21..25, w, cx);
+            v.set_visible(false, w, cx);
+        })
+    });
+    cx.update(|w, cx| {
+        w.simulate_next_frame(cx);
+    });
+    view.read_with(cx, |v, _| assert!(!v.catalog.loading_more));
+    assert!(fake.searches.lock().unwrap().is_empty());
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.visible = true;
+            v.catalog.selected = Some("24".into());
+            v.search.focus_handle(cx).focus(w, cx);
+        })
+    });
+    cx.simulate_keystrokes("down down");
+    rt.block_on(async {
+        for _ in 0..64 {
+            cx.run_until_parked();
+            tokio::task::yield_now().await;
+        }
+    });
+    assert_eq!(*fake.searches.lock().unwrap(), vec![(25, 25)]);
+}

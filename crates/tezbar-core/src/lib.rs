@@ -17,12 +17,14 @@ pub mod vault;
 mod performance;
 #[cfg(test)]
 mod performance_alloc;
+#[cfg(test)]
+mod startup_demand_tests;
 
 use common::{CoreContext, CoreResult};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 
 /// Optional background startup is explicit so an isolated native preview can
@@ -219,7 +221,12 @@ impl NativeCore {
             "open-vault" => Some("vault"),
             "open-clipboard-history" => Some("clipboard"),
             "open-emoji-picker" => Some("emoji-picker"),
-            "show-system-monitor" => Some("system-monitor"),
+            "show-system-monitor"
+            | "show-cpu-info"
+            | "show-macos-version"
+            | "show-memory-info"
+            | "show-disk-usage"
+            | "show-battery-status" => Some("system-monitor"),
             "start-onboarding" => Some("onboarding"),
             "open-settings" | "check-for-updates" => Some("settings"),
             "open-extensions-settings" => Some("settings-extensions"),

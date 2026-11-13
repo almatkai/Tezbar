@@ -34,7 +34,7 @@ impl Launcher {
         let mode = launcher::input_mode(&self.model.input, self.model.terminal_mode).mode;
         let columns = if mode == Mode::Applications { 7 } else { 1 };
         let row_height = if columns == 7 { 96. } else { 36. } * self.zoom;
-        let (top, height) = if mode == Mode::Path {
+        let (top, height) = if mode != Mode::Applications {
             (
                 self.path_list.logical_scroll_top().item_ix,
                 f32::from(self.path_list.viewport_bounds().size.height),

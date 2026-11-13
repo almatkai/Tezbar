@@ -1,7 +1,11 @@
-import { createReadStream } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import { lstat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-export const GPUI_REV = 'c84af5b99cbc366d675064e52b23664a015b6e35'
+const manifest = readFileSync(new URL('../../apps/tezbar/Cargo.toml', import.meta.url), 'utf8')
+const toolchain = readFileSync(new URL('../../rust-toolchain.toml', import.meta.url), 'utf8')
+export const GPUI_REV = /^gpui = \{[^\n]*\brev = "([a-f0-9]{40})"/m.exec(manifest)?.[1]
+export const RUST_VERSION = /^channel = "([^"]+)"/m.exec(toolchain)?.[1]
+if (!GPUI_REV || !RUST_VERSION) throw Error('Native build identity policy missing')
 const start = Buffer.from('\0TEZBAR_NATIVE_BUILD_V2\0'), end = Buffer.from('\0TEZBAR_NATIVE_BUILD_END\0')
 export function metadataRecord(metadata) {
   return Buffer.concat([start, Buffer.from(JSON.stringify(metadata)), end])
@@ -31,7 +35,7 @@ export async function captureBuildMetadata(executable) {
           metadata.schema !== 2 || !/^[0-9a-f]{40}$/i.test(metadata.sourceCommit) ||
           !/^\d+\.\d+\.\d+(?:-(?:alpha|beta)\.\d+)?$/.test(metadata.version) ||
           typeof metadata.dirty !== 'boolean' || typeof metadata.benchControl !== 'boolean' ||
-          typeof metadata.runtimeShaders !== 'boolean' || metadata.gpuiRev !== GPUI_REV || metadata.rustVersion !== '1.98.1')
+          typeof metadata.runtimeShaders !== 'boolean' || metadata.gpuiRev !== GPUI_REV || metadata.rustVersion !== RUST_VERSION)
         throw Error('Invalid native binary metadata')
       captured = {metadata, sha256:createHash('sha256').update(json).digest('hex')}
       pending = pending.subarray(stop + end.length)

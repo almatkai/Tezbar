@@ -414,6 +414,15 @@ impl VerifiedArtifact {
     }
     #[cfg(unix)]
     pub fn stage_macos(mut self, cache: &Path) -> Result<StagedMac, String> {
+        self.prepare_macos(cache)
+    }
+    /// Stage without consuming the verified download, so a pre-quit admission
+    /// refusal or cancelled quit can return the same artifact to the updater.
+    #[cfg(unix)]
+    pub fn prepare_macos(&mut self, cache: &Path) -> Result<StagedMac, String> {
+        self.file
+            .seek(SeekFrom::Start(0))
+            .map_err(|e| e.to_string())?;
         let directory = tempfile::Builder::new()
             .prefix("tezbar-stage-")
             .tempdir_in(cache)
@@ -488,7 +497,7 @@ impl StagedMac {
 /// Shared identity verifier for admission and staged installs.
 #[cfg(unix)]
 pub fn verify_macos_bundle_identity(bundle: &Path) -> Result<(), String> {
-    let pin: Value = serde_json::from_str(include_str!("../../../src-tauri/macos-signing.json"))
+    let pin: Value = serde_json::from_str(include_str!("../../../packaging/macos-signing.json"))
         .map_err(|e| e.to_string())?;
     let requirement = pin["designatedRequirement"]
         .as_str()
@@ -916,6 +925,21 @@ mod tests {
         );
         drop(staged);
         assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 0);
+    }
+    #[test]
+    #[cfg(unix)]
+    fn prepare_keeps_verified_download_for_cancel_and_retry() {
+        let root = tempfile::tempdir().unwrap();
+        let mut download = artifact(include_bytes!("../tests/fixtures/fixture.tar.gz")).unwrap();
+        for _ in 0..2 {
+            let staged = download.prepare_macos(root.path()).unwrap();
+            assert_eq!(
+                std::fs::read(staged.bundle.join("Contents/MacOS/tezbar")).unwrap(),
+                b"fixture executable, never run"
+            );
+            drop(staged);
+            assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+        }
     }
     #[test]
     fn bundle_paths_reject_traversal_absolute_and_other_products() {

@@ -70,7 +70,21 @@ pub enum SettingsRequest {
         values: Value,
     },
     Uninstall(String),
+    /// User-supplied links: the core only opens GitHub HTTPS pages here.
     OpenUrl(String),
+    /// Targets Tezbar produced itself: an OAuth authorize URL returned by the core's own
+    /// sign-in start, or a fixed OS settings deep link. Built only via [`trusted_open`].
+    OpenTrusted(String),
+}
+/// Admit a URL for [`SettingsRequest::OpenTrusted`]: HTTPS sign-in pages and OS settings
+/// deep links only, never `file:`, `javascript:` or arbitrary schemes.
+pub fn trusted_open(url: &str) -> Option<SettingsRequest> {
+    let allowed = if let Some(rest) = url.strip_prefix("https://") {
+        !rest.is_empty() && !url.contains(char::is_whitespace)
+    } else {
+        url.starts_with("x-apple.systempreferences:") || url.starts_with("ms-settings:")
+    };
+    allowed.then(|| SettingsRequest::OpenTrusted(url.to_owned()))
 }
 impl std::fmt::Debug for SettingsRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -298,6 +312,7 @@ impl SettingsRequest {
             ),
             Self::Uninstall(id) => ("extension:uninstall", vec![json!(id)]),
             Self::OpenUrl(url) => ("open-external-url", vec![json!(url)]),
+            Self::OpenTrusted(url) => ("shell:open", vec![json!(url)]),
         }
     }
 }

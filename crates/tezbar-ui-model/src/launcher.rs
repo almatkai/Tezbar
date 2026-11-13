@@ -27,6 +27,8 @@ pub enum Action {
         path: String,
         #[serde(rename = "appName", default)]
         app_name: Option<String>,
+        #[serde(rename = "appPath", default)]
+        app_path: Option<String>,
     },
     CopyText {
         text: String,
@@ -172,6 +174,8 @@ pub fn input_mode(value: &str, terminal: bool) -> InputMode {
         is_completion_input: !terminal && !ai && (slash || app),
         query: if deep {
             value[1..].trim().into()
+        } else if slash {
+            value.trim_start().into()
         } else {
             value.trim().into()
         },
@@ -229,6 +233,8 @@ pub fn request_input(s: &str) -> String {
     let m = input_mode(s, false);
     if m.mode == Mode::Deep {
         format!("!{}", m.query)
+    } else if m.mode == Mode::Path {
+        s.trim_start().into()
     } else {
         s.trim().into()
     }
@@ -764,6 +770,14 @@ mod notes_row_tests {
             release_notes_row(&mut r, q, false, "1");
             assert_eq!(r[0].title, "Release Notes");
         }
+    }
+    #[test]
+    fn path_mode_preserves_trailing_space() {
+        assert_eq!(request_input("/Desktop/ "), "/Desktop/ ");
+        assert_eq!(request_input("/Desktop "), "/Desktop ");
+        let m = input_mode("/Desktop/ ", false);
+        assert_eq!(m.mode, Mode::Path);
+        assert_eq!(m.query, "/Desktop/ ");
     }
     #[test]
     fn unrelated_file_deep_app_queries_unchanged() {

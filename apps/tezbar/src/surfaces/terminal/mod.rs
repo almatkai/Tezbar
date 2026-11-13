@@ -25,6 +25,7 @@ pub struct TerminalView {
     state: State,
     transport: Arc<dyn TerminalTransport>,
     focus: FocusHandle,
+    window: AnyWindowHandle,
     job: Option<Task<()>>,
     blink: Option<Task<()>>,
     cwd_timer: Option<Task<()>>,
@@ -51,7 +52,7 @@ impl TerminalView {
         let defaults =
             Defaults::from_legacy(&serde_json::to_value(&ui.terminal_defaults).unwrap_or_default());
         let focus = cx.focus_handle();
-        let name = cx.new(TextInput::new);
+        let name = cx.new(TextInput::new_native);
         name.update(cx, |field, _| field.options.name = "Session name".into());
         let name_sub = cx.subscribe(&name, |this, _, event: &Committed, _| {
             if let Some(c) = &mut this.state.configure {
@@ -76,6 +77,7 @@ impl TerminalView {
             state,
             transport,
             focus,
+            window: w.window_handle(),
             job: None,
             blink: None,
             cwd_timer: None,
@@ -308,12 +310,34 @@ impl TerminalView {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 this.job = None;
+                let configuring = this.state.configure.is_some();
                 this.state.complete(work, result);
+                if configuring && this.state.configure.is_none() {
+                    this.restore_terminal_focus(cx);
+                }
                 this.pump(cx);
                 this.sync_blink(cx);
                 this.changed(cx);
             });
         }));
+    }
+    fn restore_terminal_focus(&self, cx: &mut Context<Self>) {
+        let view = cx.entity().downgrade();
+        let window = self.window;
+        let generation = self.state.generation;
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, w, cx| {
+                let _ = view.update(cx, |this, cx| {
+                    if this.state.visible
+                        && !this.state.disposed
+                        && this.state.generation == generation
+                        && this.state.configure.is_none()
+                    {
+                        this.focus.focus(w, cx);
+                    }
+                });
+            });
+        });
     }
     fn wants_blink(&self) -> bool {
         self.state.visible
@@ -408,7 +432,11 @@ impl TerminalView {
         cx.stop_propagation();
         w.prevent_default();
         let configure = matches!(result, input::KeyResult::Configure);
+        let configuring = self.state.configure.is_some();
         self.state.handle_key(result);
+        if configuring && self.state.configure.is_none() {
+            self.restore_terminal_focus(cx);
+        }
         if configure {
             if let Some(c) = &self.state.configure {
                 self.name.update(cx, |n, cx| n.set_text(&c.name, w, cx));

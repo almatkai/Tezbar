@@ -1,7 +1,11 @@
 use super::super::*;
 use sha2::{Digest, Sha256};
 pub fn hash(v: &Value) -> String {
-    format!("{:x}", Sha256::digest(v.to_string().as_bytes()))
+    // GPUI enables serde_json/preserve_order. Trust must depend on JSON values,
+    // not insertion order or swap-removal of transient discovery metadata.
+    let mut canonical = v.clone();
+    canonical.sort_all_objects();
+    format!("{:x}", Sha256::digest(canonical.to_string().as_bytes()))
 }
 pub fn parse(text: &str) -> CoreResult {
     if text.len() > 256 * 1024 {

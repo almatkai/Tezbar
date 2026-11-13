@@ -19,8 +19,9 @@ pub fn ids(raw: &Value) -> Vec<String> {
     if let Some(custom) = raw["customProviders"].as_array() {
         for p in custom {
             let id = s(&p["id"]).trim();
+            // Early native Settings builds saved `name` instead of React's `title`.
             if id.starts_with("custom:")
-                && !s(&p["title"]).trim().is_empty()
+                && !(s(&p["title"]).trim().is_empty() && s(&p["name"]).trim().is_empty())
                 && !ids.contains(&id.to_string())
             {
                 ids.push(id.to_string());
@@ -130,6 +131,21 @@ pub fn selected(raw: &Value, task: Option<&str>, explicit: Option<&str>) -> Valu
             } else {
                 None
             }
+        });
+        // ...and kept `baseURL`/`protocol` on the definition instead of `providerConfigs`.
+        let value = value.or_else(|| {
+            matches!(key, "baseURL" | "openaiCompatibleBaseURL" | "protocol")
+                .then(|| {
+                    raw["customProviders"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .find(|p| p["id"] == provider && p.get("_extensionId").is_none())
+                        .and_then(|p| {
+                            p[if key == "protocol" { "protocol" } else { "baseURL" }].as_str()
+                        })
+                })
+                .flatten()
         });
         cfg.as_object_mut().unwrap().remove(key);
         if let Some(value) = value {
@@ -242,6 +258,27 @@ fn normalize_models(cfg: &mut Value) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn custom_providers_resolve_in_react_and_early_native_shapes() {
+        let raw = json!({
+            "provider": "custom:react",
+            "customProviders": [
+                {"id": "custom:react", "title": "React", "subtitle": "Custom OpenAI-compatible endpoint"},
+                {"id": "custom:early", "name": "Early", "baseURL": "http://127.0.0.1:1234/v1", "protocol": "openai-chat"}
+            ],
+            "providerConfigs": {"custom:react": {"baseURL": "http://127.0.0.1:9/v1"}}
+        });
+        let all = ids(&raw);
+        assert!(all.iter().any(|id| id == "custom:react"));
+        assert!(all.iter().any(|id| id == "custom:early"));
+        assert!(validate_selection(&raw, None, Some("custom:early")).is_ok());
+        assert_eq!(selected(&raw, None, Some("custom:react"))["baseURL"], "http://127.0.0.1:9/v1");
+        let early = selected(&raw, None, Some("custom:early"));
+        assert_eq!(early["baseURL"], "http://127.0.0.1:1234/v1");
+        assert_eq!(early["openaiCompatibleBaseURL"], "http://127.0.0.1:1234/v1");
+        assert_eq!(early["protocol"], "openai-chat");
+    }
+
     use super::*;
     #[test]
     fn credentials_are_not_leaked_to_other_providers() {

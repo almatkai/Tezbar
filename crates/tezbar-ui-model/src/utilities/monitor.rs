@@ -1,6 +1,16 @@
 //! Structured system-stat presentation, matching the former SystemMonitorView helpers.
 use serde_json::Value;
 use tezbar_core::instant::transform::PresentationFormatter;
+pub fn updated_at(snapshot: &Value) -> Option<String> {
+    chrono::DateTime::parse_from_rfc3339(snapshot["collectedAt"].as_str()?)
+        .ok()
+        .map(|stamp| {
+            stamp
+                .with_timezone(&chrono::Local)
+                .format("%H:%M:%S")
+                .to_string()
+        })
+}
 pub struct Row {
     pub id: String,
     pub section: &'static str,
@@ -322,12 +332,15 @@ mod tests {
             "overview",
             &tezbar_core::instant::transform::EnglishFormatter,
         );
-        assert!(rows
-            .iter()
-            .any(|r| r.id == "memory.usedBytes" && r.value == "8.00 GB" && r.percent == Some(50.)));
-        assert!(rows
-            .iter()
-            .any(|r| r.section == "battery" && r.value == "No internal battery detected"));
+        assert!(
+            rows.iter().any(|r| r.id == "memory.usedBytes"
+                && r.value == "8.00 GB"
+                && r.percent == Some(50.))
+        );
+        assert!(
+            rows.iter()
+                .any(|r| r.section == "battery" && r.value == "No internal battery detected")
+        );
         assert!(!rows.iter().any(|r| r.value.contains("totalBytes")));
     }
 }

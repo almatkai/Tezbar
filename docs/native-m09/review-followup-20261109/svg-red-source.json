@@ -1,0 +1,23 @@
+{
+  "production_preflight_sha256": "7563a377b26cee15939e6b82cdb431d3a766e70cd9059b1c6f87f3ea8d5ac539",
+  "source_sha256": "4184cd3d5bb69d50a14f4ef832be8ba06c68fa9d5dc607f8dcab37030e57ba87",
+  "command": [
+    "/Users/almat/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc",
+    "--edition=2024",
+    "--test",
+    "/tmp/tezbar-m9-svg-followup-20261109/svg-red.rs",
+    "-o",
+    "/tmp/tezbar-m9-svg-followup-20261109/svg-red",
+    "-L",
+    "dependency=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps",
+    "--extern",
+    "resvg=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libresvg-72e0428f81ac455e.rlib",
+    "--extern",
+    "simplecss=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libsimplecss-6ff443fc4bbbb94f.rlib"
+  ],
+  "tests": [
+    "review_css_declaration_copies_are_bounded_before_usvg",
+    "review_inline_css_copies_include_expanded_use_nodes",
+    "review_css_quote_delimiter_variants_are_refused_before_matching"
+  ]
+}

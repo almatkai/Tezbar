@@ -601,6 +601,7 @@ fn explicit_cwd_rejects_relative_paths() {
 
 #[derive(Default)]
 struct Fixture {
+    reject_update: std::sync::atomic::AtomicBool,
     calls: Mutex<Vec<(&'static str, Vec<Value>)>>,
 }
 impl TerminalTransport for Fixture {
@@ -610,9 +611,14 @@ impl TerminalTransport for Fixture {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Reply> + Send>> {
         let (channel, args) = r.wire();
         self.calls.lock().unwrap().push((channel, args.clone()));
+        if channel == "terminal:update" && self.reject_update.load(std::sync::atomic::Ordering::SeqCst) {
+            return Box::pin(async { Err("Synthetic update failure".into()) });
+        }
         let value = match channel {
             "terminal:list" => json!([summary("a", true)]),
-            "core:terminal:stream-attach" => attached("a", "fixture\r\n"),
+            "terminal:update" => summary("a", true),
+            "terminal:create" => attached("b", "fixture\r\n"),
+            "core:terminal:stream-attach" => attached(args[0]["sessionId"].as_str().unwrap(), "fixture\r\n"),
             "core:terminal:replay-read" => {
                 let at = args[0]["position"].as_u64().unwrap();
                 replay_value(at, &b"fixture\r\n"[at as usize..], 9)
@@ -934,6 +940,11 @@ fn actual_gpui_focus_key_dispatch_resize_and_key_up_do_not_duplicate(cx: &mut Te
         .map(|(_, a)| STANDARD.decode(a[0]["bytes"].as_str().unwrap()).unwrap())
         .collect::<Vec<_>>();
     assert_eq!(writes, vec![b"\x1b[A".to_vec()]);
+    // The session configuration is an overlay and must not resize the PTY.
+    // Exercise an actual window resize instead of relying on the former drawer.
+    let window = cx.update(|w, _| w.window_handle());
+    cx.simulate_window_resize(window, size(px(1200.), px(800.)));
+    settle(&rt, cx);
     assert!(
         f.calls
             .lock()
@@ -1272,3 +1283,5 @@ fn review_m10_f8_replay_failure_refuses_queued_input_visibly() {
 
 #[path = "m810_review_regressions.rs"]
 mod m810_review_regressions;
+
+include!("native_input_tests.rs");

@@ -392,7 +392,7 @@ impl SettingsStore {
         }
         s.results.insert(
             id,
-            result.map_err(|_| "Could not complete Settings action. Retry.".into()),
+            result.map_err(|e| user_error(&e)),
         );
         drop(s);
         self.completion.notify_waiters();
@@ -643,4 +643,34 @@ impl Drop for OwnerWaiter {
         drop(state);
         self.store.completion.notify_waiters();
     }
+}
+
+/// Show the core's own short, user-facing reason ("Port 51121 is already in use…",
+/// "No device session. Start sign-in again."). Anything that could carry request detail
+/// (URLs may hold API keys in their query) or is not a sentence falls back to the generic text.
+pub(crate) fn user_error(error: &str) -> String {
+    let error = error.trim();
+    if error.is_empty()
+        || error.chars().count() > 200
+        || error.contains("://")
+        || error.contains('\n')
+        || error.contains('{')
+    {
+        "Could not complete Settings action. Retry.".into()
+    } else {
+        error.to_owned()
+    }
+}
+#[cfg(test)]
+#[test]
+fn user_error_keeps_short_reasons_and_hides_request_detail() {
+    assert_eq!(
+        user_error("Port 51121 is already in use. Close the program using it and try again."),
+        "Port 51121 is already in use. Close the program using it and try again."
+    );
+    let generic = "Could not complete Settings action. Retry.";
+    assert_eq!(user_error(""), generic);
+    assert_eq!(user_error("error sending request for url (https://x.invalid/?key=secret)"), generic);
+    assert_eq!(user_error("{\"error\":\"bad\"}"), generic);
+    assert_eq!(user_error(&"x".repeat(201)), generic);
 }

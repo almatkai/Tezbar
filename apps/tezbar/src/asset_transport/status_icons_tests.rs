@@ -1,4 +1,5 @@
 use super::*;
+use ::core::prelude::v1::test;
 use std::{
     path::PathBuf,
     sync::{
@@ -11,6 +12,74 @@ use tezbar_core::host::Host;
 #[path = "../../../../tests/fixtures/extensions/native_harness.rs"]
 mod native_harness;
 const EXTENSION: &str = "raycast.m09-native-fixtures";
+
+#[test]
+fn sdk_and_css_tints_preserve_rgba_and_unknown_tints_keep_the_icon() {
+    for (name, expected) in [
+        ("Red", [255, 0, 0, 255]),
+        ("Orange", [255, 165, 0, 255]),
+        ("Yellow", [255, 255, 0, 255]),
+        ("Green", [0, 128, 0, 255]),
+        ("Blue", [0, 0, 255, 255]),
+        ("Purple", [128, 0, 128, 255]),
+        ("Magenta", [255, 0, 255, 255]),
+        ("PrimaryText", [128, 128, 128, 255]),
+        ("SecondaryText", [128, 128, 128, 255]),
+        ("#f00", [255, 0, 0, 255]),
+        ("#f008", [255, 0, 0, 136]),
+        ("#ff000080", [255, 0, 0, 128]),
+        ("rgb(255, 0, 0)", [255, 0, 0, 255]),
+        ("pink", [255, 192, 203, 255]),
+        ("rgba(255, 0, 0, .5)", [255, 0, 0, 128]),
+    ] {
+        assert_eq!(tint(Some(&json!(name))), expected, "{name}");
+    }
+    assert_eq!(
+        tint(Some(&json!({"dark":"Magenta","light":"Blue"}))),
+        [255, 0, 255, 255]
+    );
+    for invalid in [
+        json!("future-color"),
+        json!({"other":"Blue"}),
+        json!(42),
+        json!("x".repeat(1000)),
+    ] {
+        assert_eq!(tint(Some(&invalid)), [128, 128, 128, 255]);
+    }
+}
+
+#[tokio::test]
+async fn bare_sdk_assets_and_magenta_cross_the_real_scope_and_decoder() {
+    let f = fixture().await;
+    let resolve = |icon| f.host.resolve_sdk_status_icon(EXTENSION.into(), icon);
+    for icon in [
+        json!("pixel.png"),
+        json!({"source":"pixel.png"}),
+        json!("./assets/pixel.png"),
+    ] {
+        assert_eq!(resolve(icon).await.unwrap(), (vec![16, 32, 48, 255], 1, 1));
+    }
+    let magenta = resolve(json!({"source":"Checkmark","tintColor":"Magenta"}))
+        .await
+        .unwrap();
+    assert_eq!((magenta.1, magenta.2), (24, 24));
+    assert!(magenta.0.chunks_exact(4).any(|p| p == [255, 0, 255, 255]));
+    let alpha = resolve(json!({"source":"Gear","tintColor":"#ff000080"}))
+        .await
+        .unwrap();
+    assert!(alpha.0.chunks_exact(4).any(|p| p == [255, 0, 0, 128]));
+    let fallback = resolve(json!({"source":"Checkmark","tintColor":"future-color"}))
+        .await
+        .unwrap();
+    assert_eq!((fallback.1, fallback.2), (24, 24));
+    assert!(
+        fallback
+            .0
+            .chunks_exact(4)
+            .any(|p| p == [128, 128, 128, 255])
+    );
+    f.transport.shutdown().await;
+}
 
 async fn fixture() -> native_harness::Fixture {
     let prepared =
@@ -148,6 +217,7 @@ async fn status_icons_data_adaptive_and_refused_paths_use_canonical_registry() {
         )
         .unwrap();
         assert!(resolve(json!("assets/escape.png")).await.is_err());
+        assert!(resolve(json!("escape.png")).await.is_err());
     }
     f.transport.shutdown().await;
 }

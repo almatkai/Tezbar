@@ -26,7 +26,7 @@ pub(crate) fn resolve_icon(
         let source = resolve(&raw, &scope.extension_root, &scope.allowed_legacy)?;
         let pixels = match source {
             Source::Builtin(name) => {
-                let color = tint(icon.get("tintColor"))?;
+                let color = tint(icon.get("tintColor"));
                 let name = name
                     .strip_prefix("raycast-")
                     .or_else(|| name.strip_prefix("tezbar-"))
@@ -35,14 +35,21 @@ pub(crate) fn resolve_icon(
                 let permit = core.assets.decode_permit().await?;
                 tokio::task::spawn_blocking(move || -> Result<StatusIcon, String> {
                     let _permit = permit;
-                    if name == "gear" {
-                        return Ok(gear(color));
+                    let rgb = [color[0], color[1], color[2]];
+                    let mut icon = if name == "gear" {
+                        gear(rgb)
+                    } else {
+                        let svg = symbol_svg(&name, rgb)?;
+                        let mut bitmap =
+                            decode_preview(svg.as_bytes(), 24, ASSET_BYTES, ASSET_BYTES)?;
+                        tezbar_ui::image_cache::rgba_to_bgra(bitmap.as_mut()); // BGRA -> straight RGBA
+                        let (w, h) = bitmap.dimensions();
+                        (bitmap.into_raw(), w, h)
+                    };
+                    for pixel in icon.0.chunks_exact_mut(4) {
+                        pixel[3] = ((u16::from(pixel[3]) * u16::from(color[3]) + 127) / 255) as u8;
                     }
-                    let svg = symbol_svg(&name, color)?;
-                    let mut bitmap = decode_preview(svg.as_bytes(), 24, ASSET_BYTES, ASSET_BYTES)?;
-                    tezbar_ui::image_cache::rgba_to_bgra(bitmap.as_mut()); // BGRA -> straight RGBA
-                    let (w, h) = bitmap.dimensions();
-                    Ok((bitmap.into_raw(), w, h))
+                    Ok(icon)
                 })
                 .await
                 .map_err(|_| "Status icon decoding failed")??
@@ -147,35 +154,28 @@ fn source(icon: &Value, depth: usize) -> Option<String> {
         .or_else(|| icon.get("light"))
         .and_then(|v| source(v, depth + 1))
 }
-fn tint(value: Option<&Value>) -> Result<[u8; 3], String> {
+fn tint(value: Option<&Value>) -> [u8; 4] {
+    const DEFAULT: [u8; 4] = [128, 128, 128, 255];
     let Some(value) = value else {
-        return Ok([128; 3]);
+        return DEFAULT;
     };
-    let raw = value
-        .as_str()
-        .or_else(|| {
-            value
-                .get("dark")
-                .or_else(|| value.get("light"))
-                .and_then(Value::as_str)
-        })
-        .ok_or("Unsupported status icon tint")?;
-    let color = match raw.to_lowercase().as_str() {
-        "red" => [255, 0, 0],
-        "green" => [0, 128, 0],
-        "blue" => [0, 0, 255],
-        "yellow" => [255, 255, 0],
-        "orange" => [255, 165, 0],
-        "purple" => [128, 0, 128],
-        "primarytext" | "secondarytext" => [128; 3],
-        _ if raw.len() == 7 && raw.starts_with('#') => {
-            let n =
-                u32::from_str_radix(&raw[1..], 16).map_err(|_| "Unsupported status icon tint")?;
-            [(n >> 16) as u8, (n >> 8) as u8, n as u8]
-        }
-        _ => return Err("Unsupported status icon tint".into()),
+    let raw = value.as_str().or_else(|| {
+        value
+            .get("dark")
+            .or_else(|| value.get("light"))
+            .and_then(Value::as_str)
+    });
+    let Some(raw) = raw.filter(|s| s.len() <= 256) else {
+        return DEFAULT;
     };
-    Ok(color)
+    if raw.eq_ignore_ascii_case("primarytext") || raw.eq_ignore_ascii_case("secondarytext") {
+        return DEFAULT;
+    }
+    // Reuse the already-locked SVG CSS colour parser. Invalid tints degrade to
+    // current/default colour while preserving the supported declared icon.
+    raw.parse::<svgtypes::Color>()
+        .map(|c| [c.red, c.green, c.blue, c.alpha])
+        .unwrap_or(DEFAULT)
 }
 fn gear(color: [u8; 3]) -> StatusIcon {
     let mut rgba = vec![0; 16 * 16 * 4];

@@ -38,6 +38,68 @@ fn main() {
         .find_map(|line| line.strip_prefix("commit-hash: "))
         .expect("compiler commit");
     println!("cargo:rustc-env=TEZBAR_NATIVE_RUSTC={commit}");
+    let rust_version = compiler
+        .lines()
+        .find_map(|line| line.strip_prefix("release: "))
+        .expect("compiler release");
+    let quoted = |line: &str, key: &str| -> Option<String> {
+        line.trim()
+            .strip_prefix(key)?
+            .trim_start()
+            .strip_prefix('=')?
+            .trim_start()
+            .strip_prefix('"')?
+            .split_once('"')
+            .map(|(value, _)| value.to_owned())
+    };
+    let rust_policy = std::fs::read_to_string(workspace.join("rust-toolchain.toml"))
+        .ok()
+        .and_then(|s| s.lines().find_map(|line| quoted(line, "channel")))
+        .unwrap_or_else(|| "unavailable".into());
+    let gpui_policy = std::fs::read_to_string(workspace.join("apps/tezbar/Cargo.toml"))
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|line| line.trim().starts_with("gpui = {"))
+                .and_then(|line| {
+                    line.split_once("rev = \"")
+                        .and_then(|(_, tail)| tail.split_once('"'))
+                        .map(|(rev, _)| rev.to_owned())
+                })
+        })
+        .unwrap_or_else(|| "unavailable".into());
+    let gpui_sources: Vec<_> = std::fs::read_to_string(workspace.join("Cargo.lock"))
+        .unwrap_or_default()
+        .split("[[package]]")
+        .filter(|block| {
+            block
+                .lines()
+                .any(|line| quoted(line, "name").as_deref() == Some("gpui"))
+        })
+        .filter_map(|block| block.lines().find_map(|line| quoted(line, "source")))
+        .collect();
+    let gpui_rev = gpui_sources
+        .first()
+        .filter(|_| gpui_sources.len() == 1)
+        .and_then(|source| source.strip_prefix("git+https://github.com/zed-industries/zed?"))
+        .and_then(|s| s.rsplit_once('#'))
+        .map(|(_, rev)| rev)
+        .filter(|rev| rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit()))
+        .unwrap_or("unavailable");
+    let identity_attested =
+        rust_version == rust_policy && gpui_rev == gpui_policy && gpui_rev.len() == 40;
+    println!("cargo:rustc-env=TEZBAR_NATIVE_IDENTITY_ATTESTED={identity_attested}");
+    println!("cargo:rustc-env=TEZBAR_NATIVE_RUST_VERSION={rust_version}");
+    println!("cargo:rustc-env=TEZBAR_NATIVE_GPUI_REV={gpui_rev}");
+    println!("cargo:rustc-env=TEZBAR_NATIVE_RUST_POLICY_VERSION={rust_policy}");
+    println!("cargo:rustc-env=TEZBAR_NATIVE_GPUI_POLICY_REV={gpui_policy}");
+    for path in [
+        "rust-toolchain.toml",
+        "Cargo.lock",
+        "apps/tezbar/Cargo.toml",
+    ] {
+        println!("cargo:rerun-if-changed={}", workspace.join(path).display());
+    }
     println!("cargo:rerun-if-env-changed=TEZBAR_NATIVE_SOURCE_SHA");
     // Cargo's ordinary dependency rebuild does not rerun this package's build
     // script. Re-evaluate Git provenance for EVERY Cargo invocation, including
@@ -93,13 +155,15 @@ fn main() {
         }
     }
     println!("cargo:rustc-env=TEZBAR_NATIVE_GIT_SHA={sha}");
+    let source_dirty = !own_repository
+        || !tracked_notes
+        || git(&["status", "--porcelain"])
+            .map(|v| !v.is_empty())
+            .unwrap_or(true)
+        || observed_sha.as_deref() != Some(sha.as_str());
+    println!("cargo:rustc-env=TEZBAR_NATIVE_SOURCE_DIRTY={source_dirty}");
     println!(
         "cargo:rustc-env=TEZBAR_NATIVE_DIRTY={}",
-        !own_repository
-            || !tracked_notes
-            || git(&["status", "--porcelain"])
-                .map(|v| !v.is_empty())
-                .unwrap_or(true)
-            || observed_sha.as_deref() != Some(sha.as_str())
+        source_dirty || !identity_attested
     );
 }

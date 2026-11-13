@@ -45,7 +45,7 @@ use tezbar_ui::{
     controls,
     image_cache::ImageCache,
     markdown::{DocumentEffect, MarkdownView},
-    text_input::{ClipboardEffect, Committed, FieldOptions, TextInput},
+    text_input::{Backspace, ClipboardEffect, Committed, FieldOptions, TextInput},
     tokens,
 };
 use tezbar_ui_model::{
@@ -86,11 +86,22 @@ enum IconSource {
     Data(String),
     Asset { kind: String, path: String },
 }
+/// What is being dragged toward the pin rail.
+enum DragSource {
+    /// A rail pin: reorder it, or drop it on the trash target to unpin.
+    Pin,
+    /// A search result: drop it on the rail to pin it at that position.
+    Result(Row),
+}
 struct PinDrag {
     id: String,
     start: Point<Pixels>,
     active: bool,
+    /// Insert index in the rail (`0..=pins.len()`), when the pointer is over it.
     target: Option<usize>,
+    /// Pointer is on the rail's trash target.
+    unpin: bool,
+    source: DragSource,
 }
 pub struct Launcher {
     extensions: extension_integration::Extensions,
@@ -150,12 +161,14 @@ pub struct Launcher {
     form: Option<Form>,
     form_activation: Option<Activation>,
     menu: Option<(Row, usize)>,
-    pin_picker: Option<(Row, usize)>,
     popover_focus: FocusHandle,
     drag: Option<PinDrag>,
     pin_bounds: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
     pointer: Option<Point<Pixels>>,
     suppress_pin_click: bool,
+    suppress_row_click: bool,
+    pin_item_bounds: std::rc::Rc<std::cell::RefCell<Vec<Option<Bounds<Pixels>>>>>,
+    trash_bounds: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
     navigation: Option<Navigation>,
     utilities: Option<Entity<super::utilities::Utilities>>,
     utility_transport: Option<Arc<dyn super::utilities::UtilityTransport>>,
@@ -487,12 +500,14 @@ impl Launcher {
             form: None,
             form_activation: None,
             menu: None,
-            pin_picker: None,
             popover_focus: cx.focus_handle(),
             drag: None,
             pin_bounds: Default::default(),
             pointer: None,
             suppress_pin_click: false,
+            suppress_row_click: false,
+            pin_item_bounds: Default::default(),
+            trash_bounds: Default::default(),
             navigation: None,
             utilities: None,
             utility_transport: None,
@@ -564,10 +579,18 @@ impl Launcher {
         for effect in effects {
             self.effect(effect, cx);
         }
-        self.rows = self.model.display_rows();
-        if self.path_list_len != self.rows.len() {
+        let rows = self.model.display_rows();
+        let measurements_changed = rows.len() != self.rows.len()
+            || rows
+                .iter()
+                .zip(&self.rows)
+                .any(|(next, old)| next.id != old.id || next.category != old.category);
+        self.rows = rows;
+        if self.path_list_len != self.rows.len() || measurements_changed {
+            let top = self.path_list.logical_scroll_top();
             self.path_list_len = self.rows.len();
             self.path_list.reset(self.path_list_len);
+            self.path_list.scroll_to(top);
         }
         self.sync_input(cx);
         if self.error.is_none() {
@@ -740,7 +763,6 @@ impl Launcher {
         self.form = None;
         self.form_activation = None;
         self.menu = None;
-        self.pin_picker = None;
         self.drag = None;
         self.answer_active = false;
         self.answer_owner = None;
@@ -1459,12 +1481,23 @@ impl Launcher {
                         let mut records = tezbar_ui_model::extensions::WorkerRecords::default();
                         let worker_notice =
                             records.notice(&effects, value["effectSequence"].as_u64());
+                        let is_launch_action = matches!(
+                            &a.row.action,
+                            Action::OpenFile { .. }
+                                | Action::OpenApp { .. }
+                                | Action::OpenWithApp { .. }
+                        );
                         // Worker/core effects have already run. Only toast/HUD text is presented here.
-                        if let Some(message) = worker_notice
-                            .as_deref()
-                            .or_else(|| value["message"].as_str())
-                            .filter(|m| !m.is_empty())
+                        if !is_launch_action
+                            && (worker_notice.is_some()
+                                || value["message"]
+                                    .as_str()
+                                    .is_some_and(|m| !m.is_empty()))
                         {
+                            let message = worker_notice
+                                .as_deref()
+                                .or_else(|| value["message"].as_str())
+                                .unwrap_or_default();
                             this.finish_local(&a);
                             this.model.input.clear();
                             this.model.session.hide();
@@ -1533,6 +1566,11 @@ impl Launcher {
             let _ = gpui_tokio::Tokio::spawn(cx, async move { adapter.send(req).await }).await;
         }));
     }
+    pub(super) fn footer_notice(&self) -> Option<&str> {
+        self.notice
+            .as_deref()
+            .filter(|_| self.message_kind.is_none())
+    }
     pub(crate) fn message(&mut self, text: String, ms: u64, cx: &mut Context<Self>) {
         self.card_message(text, None, ms, cx);
     }
@@ -1544,7 +1582,7 @@ impl Launcher {
         cx: &mut Context<Self>,
     ) {
         self.notice = Some(text.clone());
-        self.message_kind = kind;
+        self.message_kind = kind.or_else(|| text.contains(['\n', '\r']).then(|| "info".into()));
         self.answer_revision += 1;
         let revision = self.answer_revision;
         self.message_document
@@ -2053,11 +2091,24 @@ impl Launcher {
                             kind: "application".into(),
                             path: path.clone(),
                         }),
-                        Action::OpenFile { path } | Action::OpenWithApp { path, .. } => {
-                            Some(IconSource::Asset {
-                                kind: "file".into(),
-                                path: path.clone(),
-                            })
+                        Action::OpenFile { path } => Some(IconSource::Asset {
+                            kind: "file".into(),
+                            path: path.clone(),
+                        }),
+                        Action::OpenWithApp { path, .. } => {
+                            if let Some(app_path) =
+                                self.paths.get(&r.id).and_then(|v| v["appPath"].as_str())
+                            {
+                                Some(IconSource::Asset {
+                                    kind: "application".into(),
+                                    path: app_path.to_owned(),
+                                })
+                            } else {
+                                Some(IconSource::Asset {
+                                    kind: "file".into(),
+                                    path: path.clone(),
+                                })
+                            }
                         }
                         Action::RunExtensionCommand { extra, .. } => extra
                             .get("iconPath")
@@ -2170,3 +2221,6 @@ fn epoch_ms() -> u64 {
 
 #[cfg(test)]
 mod review_extension_access;
+
+#[cfg(test)]
+mod ui_parity_tests;

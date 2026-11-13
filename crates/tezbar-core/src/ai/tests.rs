@@ -555,9 +555,64 @@ fn native_source_has_only_reviewed_process_seams_and_never_stages_pi_policy() {
     ] {
         assert!(!ai.join(removed).exists())
     }
-    assert!(!std::fs::read_to_string(root.join("../../src-tauri/tauri.conf.json"))
+    assert!(!std::fs::read_to_string(root.join("../../packaging/legacy-app-policy.json"))
         .unwrap()
         .contains("raymes-pi-policy.ts"));
     let provider = std::fs::read_to_string(ai.join("provider.rs")).unwrap();
     assert!(!provider.contains("self.command(\"opencode\")"));
+}
+
+/// Diagnostic sweep of every AI settings action on a fresh profile. Prints a matrix;
+/// run with `cargo test -p tezbar-core ai_settings_matrix -- --ignored --nocapture`.
+#[tokio::test]
+#[ignore]
+async fn ai_settings_matrix() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let paths = CorePaths {
+        data_dir: root.join("data"),
+        config_dir: root.join("config"),
+        resource_dir: root.join("resources"),
+        temp_dir: root.join("tmp"),
+        home_dir: root.join("home"),
+    };
+    for p in [&paths.data_dir, &paths.config_dir, &paths.resource_dir, &paths.temp_dir, &paths.home_dir] {
+        std::fs::create_dir_all(p).unwrap();
+    }
+    let core = AiCore::new(CoreContext::headless(paths));
+    let show = |name: &str, r: Result<Value, String>| {
+        let text = match r {
+            Ok(v) => format!("OK  {}", v.to_string().chars().take(160).collect::<String>()),
+            Err(e) => format!("ERR {}", e.chars().take(200).collect::<String>()),
+        };
+        println!("{name:<48} {text}");
+    };
+    let call = |c: &'static str, a: Vec<Value>| {
+        let core = &core;
+        async move {
+            match tokio::time::timeout(Duration::from_secs(20), core.handle(c, &a)).await {
+                Ok(Some(r)) => r,
+                Ok(None) => Err("<unhandled channel>".into()),
+                Err(_) => Err("<timeout 20s>".into()),
+            }
+        }
+    };
+    let config = call("llm-config-get", vec![]).await;
+    show("llm-config-get", config.clone());
+    show("llm-provider-statuses", call("llm-provider-statuses", vec![]).await);
+    show("pi-extensions:list", call("pi-extensions:list", vec![]).await);
+    let providers = ["openai", "anthropic", "gemini", "deepseek", "ollama", "copilot", "opencode", "antigravity", "openai-compatible"];
+    for p in providers {
+        show(&format!("llm-list-models {p}"), call("llm-list-models", vec![json!(p)]).await);
+        show(&format!("llm-config-set provider={p}"), call("llm-config-set", vec![json!({"provider": p})]).await);
+    }
+    for c in ["ai-accounts:antigravity:list", "ai-accounts:antigravity:status", "github-device-poll", "github-device-cancel", "ai-accounts:antigravity:cancel"] {
+        show(c, call(c, vec![]).await);
+    }
+    show("llm-config-set customProvider", call("llm-config-set", vec![json!({"customProviders":[{"id":"custom:fixture","title":"Custom"}],"providerConfigs":{"custom:fixture":{"baseURL":"http://127.0.0.1:9/v1"}}})]).await);
+    show("llm-list-models custom:fixture", call("llm-list-models", vec![json!("custom:fixture")]).await);
+    show("llm-list-models openai bad key", call("llm-list-models", vec![json!("openai"), json!(""), json!("sk-invalid-fixture")]).await);
+    show("github-device-start", call("github-device-start", vec![]).await);
+    show("github-device-cancel 2", call("github-device-cancel", vec![]).await);
+    core.shutdown().await;
 }

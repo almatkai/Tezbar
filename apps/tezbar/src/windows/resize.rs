@@ -24,7 +24,7 @@ impl Gesture {
             edge,
         })
     }
-    pub fn update(self, w: &mut Window, zoom: f32, cx: &App) -> Result<(), String> {
+    pub fn update(self, w: &mut Window, zoom: f32, cx: &mut App) -> Result<(), String> {
         let Some((x, y)) = cursor(w) else {
             return Ok(());
         };
@@ -54,6 +54,7 @@ impl Gesture {
                 point(px(x as f32), px(y as f32)),
                 size(px(width as f32), px(height as f32)),
             ),
+            cx,
         )
     }
 }

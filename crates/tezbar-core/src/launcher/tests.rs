@@ -430,6 +430,22 @@ fn slash_path_completion_finds_directories_and_prefix_matches() {
     assert_eq!(desk_rows[0]["title"], "Desktop");
     assert_eq!(desk_rows[0]["kind"], "directory");
     assert_eq!(desk_rows[0]["value"], "/Desktop/");
+
+    let apps = vec![
+        json!({"name": "Cursor", "path": "/Applications/Cursor.app"}),
+        json!({"name": "Visual Studio Code", "path": "/Applications/Visual Studio Code.app"}),
+    ];
+    let open_with_rows = providers::complete(&ctx, "/Desktop ", &apps).unwrap();
+    let app_titles: Vec<_> = open_with_rows.as_array().unwrap().iter().map(|r| r["title"].as_str().unwrap()).collect();
+    assert!(app_titles.contains(&"Open in Finder"));
+    assert!(app_titles.contains(&"Cursor"));
+    assert!(app_titles.contains(&"Visual Studio Code"));
+
+    let open_with_slash_rows = providers::complete(&ctx, "/Desktop/ ", &apps).unwrap();
+    let slash_titles: Vec<_> = open_with_slash_rows.as_array().unwrap().iter().map(|r| r["title"].as_str().unwrap()).collect();
+    assert!(slash_titles.contains(&"Open in Finder"));
+    assert!(slash_titles.contains(&"Cursor"));
+    assert!(slash_titles.contains(&"Visual Studio Code"));
 }
 #[test]
 fn directory_visits_collapse_siblings_and_prefer_strong_concrete_branch() {

@@ -9,11 +9,23 @@ use tezbar_ui_model::terminal::{KeepAliveFor, SaveFor};
 impl TerminalView {
     pub(super) fn act(&mut self, key: KeyResult, w: &mut Window, cx: &mut Context<Self>) {
         let configure = matches!(key, KeyResult::Configure);
+        let text_zoom = matches!(key, KeyResult::TextZoom(_));
+        let configuring = self.state.configure.is_some();
         self.state.handle_key(key);
+        if configuring && self.state.configure.is_none() {
+            self.restore_terminal_focus(cx);
+        }
         if configure {
             if let Some(c) = &self.state.configure {
                 self.name.update(cx, |n, cx| n.set_text(&c.name, w, cx));
             }
+        }
+        if text_zoom
+            && self.state.configure.is_none()
+            && self.state.visible
+            && !self.state.disposed
+        {
+            self.focus.focus(w, cx);
         }
         self.pump(cx);
         self.sync_blink(cx);
@@ -177,27 +189,20 @@ impl Render for TerminalView {
             return div().into_any_element();
         }
         let t = tezbar_ui::tokens::tokens(w);
-        let title = self
-            .state
-            .active
-            .as_ref()
-            .and_then(|id| {
-                self.state
-                    .sessions
-                    .rows
-                    .iter()
-                    .find(|s| &s.session_id == id)
-            })
-            .map(|s| {
-                tezbar_ui_model::terminal::session_name(
-                    &s.cwd,
-                    s.last_command
-                        .as_deref()
-                        .or(s.initial_command.as_deref())
-                        .unwrap_or(""),
-                )
-            })
+        let session = self.state.active.as_ref().and_then(|id| {
+            self.state
+                .sessions
+                .rows
+                .iter()
+                .find(|s| &s.session_id == id)
+        });
+        let directory = session
+            .map(|s| tezbar_ui_model::terminal::directory_label(&s.cwd))
             .unwrap_or_else(|| "Shell".into());
+        let command = session
+            .and_then(|s| s.last_command.as_deref().or(s.initial_command.as_deref()))
+            .unwrap_or("")
+            .to_owned();
         if self.state.dirty || self.frame.is_none() {
             self.frame = Some(self.state.grid.frame());
             self.state.dirty = false;
@@ -235,18 +240,38 @@ impl Render for TerminalView {
         );
         let mut sheet = controls::sheet(t)
             .id("terminal-view")
+            .font_family(tezbar_ui::tokens::font_family(cx, false))
+            .relative()
             .track_focus(&self.focus)
             .key_context("Terminal")
             .on_key_down(cx.listener(Self::key))
             .child(
                 controls::header(t)
+                    .h(px(44. * t.zoom))
+                    .px(px(16. * t.zoom))
+                    .gap(px(2. * t.zoom))
                     .justify_between()
                     .child(
                         div()
                             .flex_1()
                             .overflow_hidden()
-                            .text_size(px(13.))
-                            .child(title),
+                            .flex()
+                            .items_center()
+                            .gap(px(10. * t.zoom))
+                            .text_size(px(14. * t.zoom))
+                            .text_color(t.text2)
+                            .child(div().truncate().child(directory))
+                            .when(!command.is_empty(), |d| {
+                                d.child(div().w(px(1.)).h(px(14.)).bg(t.hairline)).child(
+                                    div()
+                                        .flex_1()
+                                        .truncate()
+                                        .font_family(tezbar_ui::tokens::mono_family())
+                                        .text_size(px(13. * t.zoom))
+                                        .text_color(t.text1)
+                                        .child(command),
+                                )
+                            }),
                     )
                     .child(
                         controls::button(
@@ -256,6 +281,8 @@ impl Render for TerminalView {
                             self.state.font_size <= 8,
                             t,
                         )
+                        .px(px(8. * t.zoom))
+                        .debug_selector(|| "terminal-zoom-out".into())
                         .on_click(cx.listener(|this, _, w, cx| {
                             this.act(KeyResult::TextZoom(Zoom::Out), w, cx)
                         })),
@@ -268,6 +295,8 @@ impl Render for TerminalView {
                             false,
                             t,
                         )
+                        .px(px(4. * t.zoom))
+                        .min_w(px(40. * t.zoom))
                         .on_click(cx.listener(|this, _, w, cx| {
                             this.act(KeyResult::TextZoom(Zoom::Reset), w, cx)
                         })),
@@ -280,6 +309,8 @@ impl Render for TerminalView {
                             self.state.font_size >= 24,
                             t,
                         )
+                        .px(px(8. * t.zoom))
+                        .debug_selector(|| "terminal-zoom-in".into())
                         .on_click(cx.listener(|this, _, w, cx| {
                             this.act(KeyResult::TextZoom(Zoom::In), w, cx)
                         })),
@@ -300,14 +331,27 @@ impl Render for TerminalView {
                             false,
                             t,
                         )
+                        .ml(px(8. * t.zoom))
+                        .px(px(10. * t.zoom))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.state.emit(TerminalEffect::SessionsToggle);
                             this.changed(cx);
                         })),
                     )
                     .child(
-                        controls::button("term-new", "New session", ButtonTone::Ghost, false, t)
-                            .on_click(cx.listener(|this, _, _, cx| this.new_session(cx))),
+                        controls::button("term-new", "+", ButtonTone::Ghost, false, t)
+                            .px(px(8. * t.zoom))
+                            .aria_label("New session")
+                            .debug_selector(|| "terminal-new-session".into())
+                            .on_click(cx.listener(|this, _, w, cx| {
+                                this.new_session(cx);
+                                if this.state.visible
+                                    && !this.state.disposed
+                                    && this.state.configure.is_none()
+                                {
+                                    this.focus.focus(w, cx);
+                                }
+                            })),
                     ),
             )
             .child(
@@ -315,6 +359,8 @@ impl Render for TerminalView {
                     .id("terminal-cells")
                     .flex_1()
                     .min_h_0()
+                    .mb(px(8. * t.zoom))
+                    .p(px(12. * t.zoom))
                     .overflow_hidden()
                     .on_mouse_down(MouseButton::Left, cx.listener(Self::pointer_down))
                     .on_mouse_down(MouseButton::Middle, cx.listener(Self::pointer_down))
@@ -337,40 +383,55 @@ impl Render for TerminalView {
                             false,
                             t,
                         )
+                        .debug_selector(|| "terminal-configure-action".into())
                         .on_click(
                             cx.listener(|this, _, w, cx| this.act(KeyResult::Configure, w, cx)),
                         ),
                     )
-                    .child(if cfg!(target_os = "macos") {
-                        "Configure ⌘K   Switch sessions ⌘1–9   Back Esc / ⌘["
+                    .child(if let Some(error) = &self.state.error {
+                        div()
+                            .id("terminal-error")
+                            .debug_selector(|| "terminal-error".into())
+                            .role(Role::Status)
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(12. * t.zoom))
+                            .text_color(t.danger)
+                            .child(error.clone())
+                            .into_any_element()
                     } else {
-                        "Configure Ctrl+Shift+K   Switch sessions Ctrl+1–9   Back Esc"
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .child(if cfg!(target_os = "macos") {
+                                "Configure ⌘K   Switch sessions ⌘1–9   Back Esc / ⌘["
+                            } else {
+                                "Configure Ctrl+Shift+K   Switch sessions Ctrl+1–9   Back Esc"
+                            })
+                            .into_any_element()
+                    })
+                    .when_some(self.task_indicator.clone(), |footer, indicator| {
+                        footer.child(indicator)
                     }),
             );
-        if let Some(error) = &self.state.error {
-            sheet = sheet.child(
-                div()
-                    .id("terminal-error")
-                    .role(Role::Status)
-                    .text_size(px(12.))
-                    .text_color(t.danger)
-                    .child(error.clone()),
-            );
-        }
         if let Some(c) = self.state.configure.clone() {
             let mut drawer = div()
                 .id("terminal-configure")
+                .debug_selector(|| "terminal-configure".into())
                 .role(Role::Dialog)
                 .aria_label("Terminal Session")
                 .flex()
                 .flex_col()
-                .gap(px(8.))
-                .p(px(16.))
-                .bg(t.panel)
-                .border_t_1()
-                .border_color(t.hairline)
+                .gap(px(12. * t.zoom))
+                .w_full().max_w(px(520. * t.zoom))
+                .p(px(16. * t.zoom))
+                .rounded(px(18. * t.zoom))
+                .bg(t.popover_solid)
+                .border_1().border_color(t.hairline)
                 .child("Terminal Session")
-                .child("Save the session label and control how long it stays available.")
+                .child("Save the session label and control how long the process stays alive after you leave.")
                 .child(self.name.clone())
                 .child("Save for");
             let save = [
@@ -444,6 +505,7 @@ impl Render for TerminalView {
                             false,
                             t,
                         )
+                        .debug_selector(|| "terminal-config-cancel".into())
                         .on_click(cx.listener(|this, _, w, cx| this.act(KeyResult::Back, w, cx))),
                     )
                     .child(
@@ -458,6 +520,7 @@ impl Render for TerminalView {
                     )
                     .child(
                         controls::button("term-config-save", "Save", ButtonTone::Primary, false, t)
+                            .debug_selector(|| "terminal-config-save".into())
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.state.save_configure();
                                 this.pump(cx);
@@ -465,10 +528,18 @@ impl Render for TerminalView {
                             })),
                     ),
             );
-            sheet = sheet.child(drawer);
-        }
-        if let Some(footer) = &self.task_indicator {
-            sheet = sheet.child(footer.clone());
+            sheet = sheet.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_start()
+                    .justify_center()
+                    .px(px(32. * t.zoom))
+                    .py(px(48. * t.zoom))
+                    .bg(rgba(0x00000059))
+                    .child(drawer),
+            );
         }
         sheet.into_any_element()
     }

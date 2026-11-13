@@ -68,25 +68,93 @@ impl StoreView {
     fn row(&self, index: usize, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
         let e = &self.rows[index];
         let selected = self.catalog.selected.as_ref() == Some(&e.id);
+        let installed = self.catalog.installed.iter().any(|v| v.id == e.id);
+        let subtitle = if installed {
+            "Installed".to_owned()
+        } else {
+            e.runtime_description(platform())
+                .map(|(label, _)| label.to_owned())
+                .unwrap_or_else(|| e.author.clone())
+        };
         self.button(
             format!("store-row-{}", e.id),
-            e.name.clone(),
+            String::new(),
             Action::Select(e.id.clone()),
             t,
             cx,
         )
+        .aria_label(e.name.clone())
+        .flex()
+        .items_center()
         .role(Role::ListBoxOption)
         .aria_selected(selected)
-        .h(px(tokens::ROW * t.zoom))
+        .h(px(48. * t.zoom))
         .w_full()
+        .px(px(8. * t.zoom))
+        .gap(px(10. * t.zoom))
         .bg(if selected {
             t.selected
         } else {
             transparent_black()
         })
+        .child(if let Some(image) = self.artwork.row_icon(&e.id) {
+            div()
+                .size(px(28. * t.zoom))
+                .rounded(px(7.))
+                .overflow_hidden()
+                .child(img(image).size_full().object_fit(ObjectFit::Cover))
+        } else {
+            div()
+                .size(px(28. * t.zoom))
+                .rounded(px(7.))
+                .bg(t.pill)
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(15.))
+                .child(e.name.chars().next().unwrap_or(' ').to_string())
+        })
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(12. * t.zoom))
+                        .child(e.name.clone()),
+                )
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(10.5 * t.zoom))
+                        .text_color(t.text4)
+                        .child(subtitle),
+                ),
+        )
         .into_any_element()
     }
     fn detail(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+        if github_url(&self.catalog.query) {
+            let repository = self
+                .catalog
+                .query
+                .trim()
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or("");
+            return div().flex().flex_col().justify_center().h_full().px(px(32. * t.zoom)).py(px(24. * t.zoom)).gap(px(12.))
+                .child(div().text_size(px(11.)).text_color(t.text4).child("Install from GitHub"))
+                .child(div().text_size(px(20. * t.zoom)).child(repository.to_owned()))
+                .child(div().text_size(px(13.)).text_color(t.text3).child(self.catalog.query.clone()))
+                .child(div().mt(px(12.)).text_size(px(13.)).text_color(t.text2)
+                    .child("Tezbar will download this public repository, validate its package manifest and install the extension."))
+                .child(self.button("store-install-github-detail".into(), "Install extension".into(), Action::Install(self.catalog.query.clone()), t, cx))
+                .into_any_element();
+        }
         let Some(e) = self.selected() else {
             return div()
                 .p(px(24.))
@@ -95,22 +163,64 @@ impl StoreView {
                 .into_any_element();
         };
         let installed = self.catalog.installed.iter().any(|v| v.id == e.id);
-        let mut d = div().flex().flex_col().gap(px(12.)).p(px(16.));
+        let mut d = div()
+            .flex()
+            .flex_col()
+            .gap(px(12. * t.zoom))
+            .p(px(20. * t.zoom));
+        let icon = div()
+            .size(px(56. * t.zoom))
+            .rounded(px(14.))
+            .overflow_hidden()
+            .border_1()
+            .border_color(t.hairline)
+            .bg(t.pill)
+            .flex()
+            .items_center()
+            .justify_center();
+        let icon = if let Some(image) = self.artwork.icon().or_else(|| self.artwork.row_icon(&e.id))
+        {
+            icon.child(img(image).size_full().object_fit(ObjectFit::Cover))
+        } else {
+            icon.child(
+                e.name
+                    .chars()
+                    .next()
+                    .unwrap_or(' ')
+                    .to_uppercase()
+                    .to_string(),
+            )
+        };
         d = d
             .child(
                 div()
-                    .id("store-extension-title")
-                    .role(Role::Heading)
-                    .text_size(px(15.))
-                    .child(e.name.clone()),
+                    .flex()
+                    .items_center()
+                    .gap(px(12. * t.zoom))
+                    .child(icon)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .id("store-extension-title")
+                                    .role(Role::Heading)
+                                    .text_size(px(20. * t.zoom))
+                                    .child(e.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(11. * t.zoom))
+                                    .text_color(t.text4)
+                                    .child(format!("{} · {}", e.author, e.version)),
+                            ),
+                    ),
             )
-            .child(
-                div()
-                    .text_color(t.text3)
-                    .child(format!("{} · {}", e.author, e.version)),
-            )
-            .child(self.detail.clone())
-            .child(div().text_color(t.text3).child(e.id.clone()));
+            .child(self.detail.clone());
         if let Some((label, description)) = e.runtime_description(platform()) {
             d = d.child(
                 div()
@@ -119,8 +229,43 @@ impl StoreView {
             );
         }
         if e.effective_runtime(platform()) == Some("rust") {
-            d = d.child(div().child("Native Rust Extension"));
+            d = d.child(
+                div()
+                    .rounded(px(10.))
+                    .border_1()
+                    .border_color(t.hairline)
+                    .bg(t.bar)
+                    .p(px(14.))
+                    .child(div().text_size(px(12.)).child("Native Rust Extension"))
+                    .child(
+                        div()
+                            .mt(px(4.))
+                            .text_size(px(11.))
+                            .text_color(t.text3)
+                            .child("Executes in-process with zero latency, low memory footprint, and no external runtime dependency."),
+                    ),
+            );
         }
+        d = d.child(
+            div()
+                .border_t_1()
+                .border_color(t.hairline)
+                .pt(px(12.))
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text4)
+                        .child("Extension ID"),
+                )
+                .child(
+                    div()
+                        .mt(px(4.))
+                        .text_size(px(12.))
+                        .font_family(tezbar_ui::tokens::mono_family())
+                        .text_color(t.text2)
+                        .child(e.id.clone()),
+                ),
+        );
         for key in ["platforms", "resources"] {
             if let Some(value) = e.metadata.get(key) {
                 d = d.child(div().text_color(t.text3).child(format!(
@@ -143,36 +288,16 @@ impl StoreView {
         if let Some(guidance) = e.acquisition_guidance() {
             d = d.child(div().text_color(t.text2).child(guidance));
         }
-        if let Some(progress) = self.catalog.installing.get(&e.id) {
-            d = d.child(
-                div()
-                    .id("store-install-progress")
-                    .role(Role::ProgressIndicator)
-                    .child(format!("Installing… {progress}%")),
-            );
-        } else if installed {
-            d = d.child(self.button(
-                "store-uninstall".into(),
-                "Remove extension".into(),
-                Action::Remove(e.id.clone()),
-                t,
-                cx,
-            ));
-        } else if e.can_install(platform()) {
-            d = d.child(self.button(
-                "store-install".into(),
-                "Install extension".into(),
-                Action::Install(e.id.clone()),
-                t,
-                cx,
-            ));
-        }
         for (i, command) in e.commands().into_iter().enumerate() {
             let name = command["name"].as_str().unwrap_or("");
             let title = command["title"].as_str().unwrap_or(name);
             d = d.child(
                 div()
-                    .child(title.to_owned())
+                    .rounded(px(7.))
+                    .bg(t.bar)
+                    .px(px(12.))
+                    .py(px(8.))
+                    .child(div().text_size(px(12.)).child(title.to_owned()))
                     .child(div().text_color(t.text3).child(
                         tezbar_ui_model::extensions::catalog::command_status(&command, platform()),
                     ))
@@ -187,6 +312,19 @@ impl StoreView {
                     }),
             );
         }
+        if e.metadata
+            .get("screenshotUrls")
+            .and_then(Value::as_array)
+            .is_none_or(Vec::is_empty)
+        {
+            d = d.child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(t.text4)
+                    .child("No screenshots available."),
+            );
+        }
+        let mut screenshots = div().flex().flex_wrap().gap(px(12. * t.zoom));
         for (i, url) in e
             .metadata
             .get("screenshotUrls")
@@ -197,22 +335,38 @@ impl StoreView {
             .filter_map(Value::as_str)
             .enumerate()
         {
-            if let Some(image) = self.artwork.image(i) {
-                d = d.child(
-                    img(image)
-                        .w_full()
-                        .max_h(px(240. * t.zoom))
-                        .object_fit(ObjectFit::Contain),
-                );
-            }
-            d = d.child(self.button(
-                format!("store-screenshot-{i}"),
-                format!("Open screenshot {}", i + 1),
-                Action::Open(url.into()),
-                t,
-                cx,
-            ));
+            let tile = self
+                .button(
+                    format!("store-screenshot-{i}"),
+                    String::new(),
+                    Action::Open(url.into()),
+                    t,
+                    cx,
+                )
+                .aria_label(format!("Open screenshot {}", i + 1))
+                .w(relative(0.48))
+                .h(px(150. * t.zoom))
+                .p_0()
+                .rounded(px(8.))
+                .border_1()
+                .border_color(t.hairline)
+                .bg(t.bar)
+                .overflow_hidden()
+                .flex()
+                .items_center()
+                .justify_center();
+            screenshots = screenshots.child(if let Some(image) = self.artwork.image(i) {
+                tile.child(img(image).size_full().object_fit(ObjectFit::Contain))
+            } else {
+                tile.child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(t.text4)
+                        .child("Loading screenshot…"),
+                )
+            });
         }
+        d = d.child(screenshots);
         if let Some(url) = e
             .metadata
             .get("readmeUrl")
@@ -251,6 +405,56 @@ impl StoreView {
                     cx,
                 ));
             }
+        }
+        d.into_any_element()
+    }
+    fn detail_footer(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+        if github_url(&self.catalog.query) {
+            return div().into_any_element();
+        }
+        let Some(e) = self.selected() else {
+            return div().into_any_element();
+        };
+        let installed = self.catalog.installed.iter().any(|v| v.id == e.id);
+        let mut d = div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap(px(8.))
+            .border_t_1()
+            .border_color(t.hairline)
+            .px(px(16.))
+            .py(px(12.))
+            .child(
+                div()
+                    .flex_1()
+                    .text_size(px(11.))
+                    .text_color(t.text4)
+                    .child(e.version.clone()),
+            );
+        if let Some(progress) = self.catalog.installing.get(&e.id) {
+            d = d.child(
+                div()
+                    .id("store-install-progress")
+                    .role(Role::ProgressIndicator)
+                    .child(format!("Installing… {progress}%")),
+            );
+        } else if installed {
+            d = d.child(self.button(
+                "store-uninstall".into(),
+                "Remove extension".into(),
+                Action::Remove(e.id.clone()),
+                t,
+                cx,
+            ));
+        } else if e.can_install(platform()) {
+            d = d.child(self.button(
+                "store-install".into(),
+                "Install extension".into(),
+                Action::Install(e.id.clone()),
+                t,
+                cx,
+            ));
         }
         d.into_any_element()
     }
@@ -351,7 +555,10 @@ impl Render for StoreView {
         let t = tokens::tokens(w);
         let header = controls::header(t)
             .gap(px(8.))
-            .child(self.button("store-back".into(), "Back".into(), Action::Back, t, cx))
+            .child(controls::back_button(
+                self.button("store-back".into(), "Back".into(), Action::Back, t, cx),
+                t,
+            ))
             .child(div().flex_1().child(self.search.clone()))
             .child(self.button(
                 "store-refresh".into(),
@@ -363,10 +570,10 @@ impl Render for StoreView {
         let mut list = div()
             .flex()
             .flex_col()
-            .w(relative(0.42))
+            .w(relative(0.34))
+            .min_w(px(160. * t.zoom))
             .min_h_0()
-            .border_r_1()
-            .border_color(t.hairline);
+            .px(px(2.));
         if self.catalog.loading {
             list = list.child(
                 div()
@@ -397,28 +604,32 @@ impl Render for StoreView {
             uniform_list(
                 "extension-store-items",
                 self.rows.len(),
-                cx.processor(move |v, range: std::ops::Range<usize>, _, cx| {
+                cx.processor(move |v, range: std::ops::Range<usize>, w, cx| {
+                    v.schedule_visible_range(range.clone(), w, cx);
+                    v.schedule_row_icons(range.clone(), w, cx);
                     range.map(|i| v.row(i, t, cx)).collect()
                 }),
             )
             .track_scroll(&self.scroll.clone())
             .flex_1(),
         );
-        if self.catalog.has_more {
+        if self.catalog.loading_more {
             list = list.child(
-                self.button(
-                    "store-more".into(),
-                    if self.catalog.loading_more {
-                        "Loading…"
-                    } else {
-                        "Load more"
-                    }
-                    .into(),
-                    Action::More,
-                    t,
-                    cx,
-                ),
+                div()
+                    .id("store-loading-more")
+                    .p(px(8.))
+                    .role(Role::Status)
+                    .text_color(t.text3)
+                    .child("Loading more extensions…"),
             );
+        } else if self.catalog.has_more && self.catalog.pagination_failed {
+            list = list.child(self.button(
+                "store-more".into(),
+                "Retry loading more".into(),
+                Action::More,
+                t,
+                cx,
+            ));
         }
         let message = self
             .error
@@ -437,6 +648,8 @@ impl Render for StoreView {
             });
         controls::sheet(t)
             .id("extensions-store")
+            .font_family(tezbar_ui::tokens::font_family(cx, false))
+            .relative()
             .track_focus(&self.focus)
             .capture_action(cx.listener(|v, _: &tezbar_ui::text_input::Newline, w, cx| {
                 v.bound_key("enter", w, cx)
@@ -449,26 +662,53 @@ impl Render for StoreView {
             )
             .capture_key_down(cx.listener(|v, e, w, cx| v.key(e, w, cx)))
             .child(header)
-            .child(self.button(
-                "store-settings".into(),
-                "Installed Extension Settings".into(),
-                Action::Settings,
-                t,
-                cx,
-            ))
             .child(
-                div().flex().flex_1().min_h_0().child(list).child(
-                    div()
-                        .id("store-detail")
-                        .flex_1()
-                        .overflow_y_scroll()
-                        .child(self.detail(t, cx)),
-                ),
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h_0()
+                    .gap(px(12.))
+                    .p(px(8.))
+                    .child(list)
+                    .child(
+                        div()
+                            .id("store-detail")
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .overflow_hidden()
+                            .rounded(px(tokens::ROW_RADIUS))
+                            .border_1()
+                            .border_color(t.hairline)
+                            .bg(t.bar)
+                            .child(
+                                div()
+                                    .id("store-detail-content")
+                                    .flex_1()
+                                    .overflow_y_scroll()
+                                    .child(self.detail(t, cx)),
+                            )
+                            .child(self.detail_footer(t, cx)),
+                    ),
             )
             .child(
                 controls::footer(t)
                     .when_some(self.footer.clone(), |d, footer| d.child(footer))
-                    .child(div().id("store-status").role(Role::Status).child(message)),
+                    .child(
+                        div()
+                            .id("store-status")
+                            .flex_1()
+                            .role(Role::Status)
+                            .child(message),
+                    )
+                    .child(self.button(
+                        "store-settings".into(),
+                        "Extension Settings".into(),
+                        Action::Settings,
+                        t,
+                        cx,
+                    )),
             )
             .when(self.remove.is_some(), |d| {
                 d.child(

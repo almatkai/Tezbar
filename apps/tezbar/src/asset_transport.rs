@@ -576,6 +576,18 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
     let mut stylesheet_bytes = 32 * 1024usize;
     let mut stylesheet_selectors = 1024usize;
     let mut stylesheets = Vec::new();
+    let mut attribute_scan_bytes = 1usize;
+    let mut inline_declaration_bytes = 0usize;
+    fn declaration_bytes(d: &simplecss::Declaration<'_>) -> usize {
+        // usvg copies values into per-element attributes. marker expands to
+        // three attributes; font resets thirteen and sets up to six more.
+        let copies = match d.name {
+            "marker" => 3,
+            "font" => 20,
+            _ => 1,
+        };
+        d.value.len().saturating_add(64).saturating_mul(copies)
+    }
     fn style_budget(text: &str, bytes: &mut usize, selectors: &mut usize) -> Result<(), String> {
         *bytes = bytes
             .checked_sub(text.len())
@@ -587,6 +599,13 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
     }
 
     for n in doc.descendants().filter(|n| n.is_element()) {
+        // Attribute lookup scans names, and ~= (including .class) scans the
+        // entire value. Charge each selector step for the largest such scan.
+        attribute_scan_bytes = attribute_scan_bytes.max(n.attributes().fold(1usize, |sum, a| {
+            sum.saturating_add(a.name().len())
+                .saturating_add(a.value().len())
+                .saturating_add(1)
+        }));
         if n.tag_name().name() == "style" {
             for text in n
                 .children()
@@ -607,6 +626,10 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
                 &mut stylesheet_bytes,
                 &mut stylesheet_selectors,
             )?;
+            inline_declaration_bytes = inline_declaration_bytes.max(
+                simplecss::DeclarationTokenizer::from(attr.value())
+                    .fold(0usize, |sum, d| sum.saturating_add(declaration_bytes(&d))),
+            );
         }
         if n.attribute("stroke-dasharray")
             .is_some_and(|a| a.len() > 4096)
@@ -691,32 +714,33 @@ fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
     for text in stylesheets {
         sheet.parse_more(text);
     }
+    let declaration_copies = sheet
+        .rules
+        .iter()
+        .flat_map(|rule| &rule.declarations)
+        .fold(inline_declaration_bytes, |sum, d| {
+            sum.saturating_add(declaration_bytes(d))
+        });
+    // Every rule may match every expanded node; inline styles in a referenced
+    // subtree are also repeated for <use>. Refuse before usvg copies any values.
+    if elements.saturating_mul(declaration_copies) > 8 * 1024 * 1024 {
+        return Err("SVG stylesheet exceeds declaration copy budget".into());
+    }
     let mut remaining = 1usize << 22;
     for rule in &sheet.rules {
         let selector = rule.selector.to_string();
-        let mut steps = 0usize;
-        let mut branches = 1usize;
-        for token in simplecss::SelectorTokenizer::from(selector.as_str()) {
-            let token = match token {
-                Ok(token) => token,
-                Err(_) => {
-                    // Display doesn't escape quotes inside attribute values. If
-                    // re-tokenizing that valid selector fails, every printed
-                    // whitespace byte is a conservative descendant upper bound.
-                    steps = selector.len();
-                    branches = selector
-                        .bytes()
-                        .filter(u8::is_ascii_whitespace)
-                        .fold(1usize, |n, _| n.saturating_mul(depth));
-                    break;
-                }
-            };
-            steps = steps.saturating_add(1);
-            if matches!(token, simplecss::SelectorToken::DescendantCombinator) {
-                branches = branches.saturating_mul(depth);
-            }
-        }
-        let work = elements.saturating_mul(steps).saturating_mul(branches);
+        // Display emits one space per descendant combinator, but does not
+        // escape attribute quotes. Re-tokenizing can silently stop early, so
+        // always use the whitespace upper bound. Spaces inside values or other
+        // combinators only over-count. Bytes also bound selector-step count.
+        let branches = selector
+            .bytes()
+            .filter(u8::is_ascii_whitespace)
+            .fold(1usize, |n, _| n.saturating_mul(depth));
+        let work = elements
+            .saturating_mul(selector.len())
+            .saturating_mul(branches)
+            .saturating_mul(attribute_scan_bytes);
         remaining = remaining
             .checked_sub(work)
             .ok_or("SVG stylesheet exceeds matching work budget")?;
