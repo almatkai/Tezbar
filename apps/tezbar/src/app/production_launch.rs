@@ -127,6 +127,8 @@ pub const ORDER: [Step; 13] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The macOS plan uses Unix-absolute fixture paths; `windows_tests` covers Windows.
+    #[cfg(unix)]
     #[test]
     fn production_paths_and_shutdown_are_exact_without_reading_a_profile() {
         let root = PathBuf::from("/fixture");

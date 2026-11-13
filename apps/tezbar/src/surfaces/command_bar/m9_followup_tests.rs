@@ -317,6 +317,20 @@ fn real_worker_case(
     settle(&rt, cx);
     let _ = open_gate.send(()); // a hidden launcher already aborted its waiter; harmless
     // Real core run completes; the fixture's effect timer fires 100 ms after render.
+    // A cold worker start (Bun + esbuild compile) can exceed the observation window on
+    // slower hosts such as Windows: wait for the run's first session event, bounded.
+    let session_event = || {
+        fixture.host.events.lock().unwrap().iter().any(|(c, _)| {
+            c == "extension:session-disposed" || c == "extension:session-invalidated"
+        })
+    };
+    for _ in 0..400 {
+        if session_event() {
+            break;
+        }
+        core_rt.block_on(async { tokio::time::sleep(std::time::Duration::from_millis(25)).await });
+        settle(&rt, cx);
+    }
     for _ in 0..40 {
         core_rt.block_on(async { tokio::time::sleep(std::time::Duration::from_millis(25)).await });
         settle(&rt, cx);
