@@ -148,17 +148,43 @@ pub async fn applications(ctx: &CoreContext) -> CoreResult {
 pub fn app_documents(apps: &[Value]) -> Vec<Value> {
     app_documents_at(apps, now_ms())
 }
+/// Windows app rows read "Start Menu › Folder" or "Windows app" instead of a raw
+/// `.lnk` path or `shell:AppsFolder\…!App` identifier.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_app_subtitle(path: &str) -> String {
+    if path.starts_with("shell:AppsFolder\\") {
+        return "Windows app".into();
+    }
+    let normalized = path.replace('/', "\\");
+    let lower = normalized.to_lowercase();
+    const PROGRAMS: &str = "\\start menu\\programs\\";
+    let Some(at) = lower.find(PROGRAMS) else {
+        return "Application".into();
+    };
+    let relative = &normalized[at + PROGRAMS.len()..];
+    match relative.rsplit_once('\\') {
+        Some((folder, _)) if !folder.is_empty() => {
+            format!("Start Menu \u{203a} {}", folder.replace('\\', " \u{203a} "))
+        }
+        _ => "Start Menu".into(),
+    }
+}
 // Refresh time is used only when the indexed payload actually changes.
 pub(super) fn app_documents_at(apps: &[Value], now: u64) -> Vec<Value> {
     apps.iter()
         .filter_map(|a| {
             let name = a["name"].as_str()?;
             let path = a["path"].as_str()?;
+            let subtitle = if cfg!(windows) {
+                windows_app_subtitle(path)
+            } else {
+                path.to_owned()
+            };
             let mut d = document(
                 &format!("app:{path}"),
                 "applications",
                 name,
-                path,
+                &subtitle,
                 &format!("{name} {path} {}", text::aliases(name).join(" ")),
                 json!({"type":"open-app","appName":name,"appPath":path}),
                 now,
@@ -1043,6 +1069,23 @@ mod windows_path_tests {
             slash(home.path(), &home.path().join("Desktop").join("Project"), true),
             "/Desktop/Project/"
         );
+    }
+
+    #[test]
+    fn windows_app_rows_name_their_start_menu_folder_not_the_shortcut_path() {
+        assert_eq!(
+            windows_app_subtitle(r"C:\ProgramData\Microsoft/Windows/Start Menu/Programs\Administrative Tools\Resource Monitor.lnk"),
+            "Start Menu \u{203a} Administrative Tools"
+        );
+        assert_eq!(
+            windows_app_subtitle(r"C:\Users\me\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Zed.lnk"),
+            "Start Menu"
+        );
+        assert_eq!(
+            windows_app_subtitle(r"shell:AppsFolder\Microsoft.WindowsCamera_8wekyb3d8bbwe!App"),
+            "Windows app"
+        );
+        assert_eq!(windows_app_subtitle(r"D:\Tools\tool.exe"), "Application");
     }
 
     trait EncodeWide {

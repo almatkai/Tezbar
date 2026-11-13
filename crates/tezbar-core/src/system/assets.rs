@@ -20,6 +20,23 @@ fn data(path: &Path) -> Value {
         .map(|b| json!(format!("data:{mime};base64,{}", STANDARD.encode(b))))
         .unwrap_or(Value::Null)
 }
+/// Windows PowerShell 5.1 (.NET Framework) rejects verbatim `\\?\` paths ("path's
+/// format is not supported" / "Invalid URI"), and canonicalized profile and home
+/// roots are verbatim. Hand it the ordinary spelling of the same path.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn legacy_spelling(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{unc}"))
+    } else if let Some(local) = text
+        .strip_prefix(r"\\?\")
+        .filter(|rest| rest.as_bytes().get(1) == Some(&b':'))
+    {
+        PathBuf::from(local)
+    } else {
+        path.to_path_buf()
+    }
+}
 fn valid_application(path: &str) -> bool {
     if cfg!(target_os = "macos") {
         path.ends_with(".app")
@@ -115,7 +132,7 @@ impl SystemCore {
             Ok(())
         } else if cfg!(windows) {
             let mut c = Command::new("powershell.exe");
-            c.args(["-NoLogo","-NoProfile","-NonInteractive","-Command",r#"$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Drawing;$icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE);if($null -eq $icon){exit 2};try{$bitmap=$icon.ToBitmap();try{$bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$icon.Dispose()}"#]).env("TEZBAR_ICON_SOURCE",&path).env("TEZBAR_ICON_DEST",&dest);
+            c.args(["-NoLogo","-NoProfile","-NonInteractive","-Command",r#"$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Drawing;$icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE);if($null -eq $icon){exit 2};try{$bitmap=$icon.ToBitmap();try{$bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$icon.Dispose()}"#]).env("TEZBAR_ICON_SOURCE",legacy_spelling(&path)).env("TEZBAR_ICON_DEST",legacy_spelling(&dest));
             output(c, Duration::from_secs(5)).await.map(|_| ())
         } else if kind == "application" {
             self.mac_app_icon(&path, &dest).await
@@ -296,4 +313,29 @@ pub(super) fn previewable(p: &str) -> bool {
         "tsv", "tif", "tiff", "txt", "wav", "webm", "webp", "xls", "xlsm", "xlsx",
     ]
     .contains(&ext.as_str())
+}
+
+#[cfg(test)]
+mod legacy_spelling_tests {
+    use super::*;
+    #[test]
+    fn verbatim_paths_get_their_ordinary_spelling_for_powershell() {
+        assert_eq!(
+            legacy_spelling(Path::new(r"\\?\C:\Users\me\icon.png")),
+            PathBuf::from(r"C:\Users\me\icon.png")
+        );
+        assert_eq!(
+            legacy_spelling(Path::new(r"\\?\UNC\server\share\a.lnk")),
+            PathBuf::from(r"\\server\share\a.lnk")
+        );
+        // Device and ordinary paths are left alone.
+        assert_eq!(
+            legacy_spelling(Path::new(r"\\?\Volume{x}\a")),
+            PathBuf::from(r"\\?\Volume{x}\a")
+        );
+        assert_eq!(
+            legacy_spelling(Path::new(r"C:\ProgramData\a.lnk")),
+            PathBuf::from(r"C:\ProgramData\a.lnk")
+        );
+    }
 }
