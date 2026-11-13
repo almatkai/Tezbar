@@ -111,9 +111,11 @@ impl Utilities {
                                         .object_fit(ObjectFit::Cover)
                                         .into_any_element()
                                 } else {
+                                    // GPUI paints an svg only with its own text color.
                                     svg()
                                         .data(icon.as_bytes())
                                         .size(px(14. * t.zoom))
+                                        .text_color(t.text3)
                                         .into_any_element()
                                 },
                             ),
@@ -1114,7 +1116,12 @@ impl Utilities {
                     } else {
                         Toggled::False
                     })
-                    .child(svg().data(icon.as_bytes()).size(px(11. * t.zoom)))
+                    .child(
+                        svg()
+                            .data(icon.as_bytes())
+                            .size(px(11. * t.zoom))
+                            .text_color(if active { t.success } else { t.text3 }),
+                    )
                     .child(div().text_size(px(10.5 * t.zoom)).child(label)),
             );
         }
