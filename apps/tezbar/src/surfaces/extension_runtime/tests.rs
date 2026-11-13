@@ -77,6 +77,156 @@ fn failed_activation_and_duplicate_nonce_preserve_live_screen(cx: &mut TestAppCo
         1
     );
 }
+/// Holds the explicit Run reply until the test has delivered the worker's disposal of
+/// the replaced same-command session (the worker emits it before returning the reply).
+struct GatedRun {
+    calls: Mutex<Vec<&'static str>>,
+    gate: Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    run_reply: Value,
+}
+impl ExtensionTransport for GatedRun {
+    fn send(&self, r: ExtensionRequest) -> ExtensionFuture {
+        let (channel, _) = r.wire();
+        self.calls.lock().unwrap().push(channel);
+        let run = channel == "extension:run-command";
+        let gate = run.then(|| self.gate.lock().unwrap().take()).flatten();
+        let run_reply = self.run_reply.clone();
+        Box::pin(async move {
+            if let Some(gate) = gate {
+                let _ = gate.await;
+            }
+            Ok(if run { run_reply } else { json!({"ok":true}) })
+        })
+    }
+    fn drain(&self) -> ExtensionFuture {
+        Box::pin(async { Ok(json!(true)) })
+    }
+}
+fn disposed(id: &str) -> CoreEvent {
+    CoreEvent::Other {
+        channel: "extension:session-disposed".into(),
+        payload: json!({"sessionId":id}),
+    }
+}
+fn setup_save_with_disposal_first(cx: &mut TestAppContext, run_reply: Value) -> (Entity<RuntimeView>, &mut VisualTestContext, tokio::runtime::Runtime) {
+    let rt = runtime(cx);
+    let (open, gate) = tokio::sync::oneshot::channel();
+    let transport = Arc::new(GatedRun {
+        calls: Default::default(),
+        gate: Mutex::new(Some(gate)),
+        run_reply,
+    });
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(transport.clone(), Arc::new(NoAssets), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(reply(json!({"type":"List","children":[{"type":"List.Item","props":{"id":"a","title":"Setup"}}]})), 1, w, cx).unwrap();
+            v.preference.identity = Some(("fixture".into(), "run".into()));
+            v.save_setup(cx);
+            assert!(v.preference.saving);
+        })
+    });
+    settle(&rt, cx);
+    assert!(transport.calls.lock().unwrap().contains(&"extension:run-command"));
+    // The worker's same-command replacement disposes the setup session first.
+    cx.update(|w, cx| view.update(cx, |v, cx| v.core_event(&disposed("session"), w, cx)));
+    let _ = open.send(());
+    settle(&rt, cx);
+    (view, cx, rt)
+}
+#[gpui::test]
+fn setup_save_activates_replacement_when_old_session_disposal_arrives_first(
+    cx: &mut TestAppContext,
+) {
+    let (view, cx, _rt) = setup_save_with_disposal_first(
+        cx,
+        json!({"ok":true,"mode":"view","extensionId":"fixture","commandName":"run","sessionId":"replacement","generation":"g2","refreshMs":null,"root":{"type":"List","children":[{"type":"List.Item","props":{"id":"b","title":"Replacement"}}]},"actions":[]}),
+    );
+    view.read_with(cx, |v, _| {
+        assert_eq!(
+            v.session.as_ref().map(|s| s.key.session_id.as_str()),
+            Some("replacement")
+        );
+        assert!(v.error.is_none(), "{:?}", v.error);
+        assert!(!v.preference.saving);
+    });
+}
+#[gpui::test]
+fn setup_save_failure_after_disposal_retires_the_superseded_session(cx: &mut TestAppContext) {
+    let (view, cx, _rt) =
+        setup_save_with_disposal_first(cx, json!({"ok":false,"message":"synthetic run failure"}));
+    view.read_with(cx, |v, _| {
+        assert!(v.session.is_none());
+        assert_eq!(v.error, Some("Extension session ended. Run the command again."));
+    });
+}
+#[gpui::test]
+fn setup_save_invalid_replacement_after_disposal_retires_the_superseded_session(
+    cx: &mut TestAppContext,
+) {
+    // ok:true but no renderable root: activate() rejects before it would retire.
+    let (view, cx, _rt) = setup_save_with_disposal_first(cx, json!({"ok":true,"mode":"view"}));
+    view.read_with(cx, |v, _| {
+        assert!(v.session.is_none(), "disposed setup session must not be retained");
+        assert_eq!(v.error, Some("The extension returned an invalid view."));
+        assert!(!v.preference.saving);
+    });
+}
+#[gpui::test]
+fn session_disposal_outside_a_setup_save_still_retires(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(reply(json!({"type":"List","children":[{"type":"List.Item","props":{"id":"a","title":"Row"}}]})), 1, w, cx).unwrap();
+            v.core_event(&disposed("session"), w, cx);
+        })
+    });
+    settle(&rt, cx);
+    view.read_with(cx, |v, _| {
+        assert!(v.session.is_none());
+        assert_eq!(v.error, Some("Extension session ended. Run the command again."));
+    });
+}
+#[gpui::test]
+fn back_leaves_placeholder_after_worker_stop_without_worker_requests(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    let backs = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = backs.clone();
+    let _subscription = cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, e: &ExtensionEffectEmission, _| {
+            if matches!(e.effect, ExtensionEffect::Back) {
+                seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        })
+    });
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(reply(json!({"type":"List","children":[{"type":"List.Item","props":{"id":"a","title":"Row"}}]})), 1, w, cx).unwrap();
+            v.core_event(
+                &CoreEvent::Other {
+                    channel: "extension-worker-status".into(),
+                    payload: json!({"phase":"stopped"}),
+                },
+                w,
+                cx,
+            );
+            assert!(v.session.is_none(), "a stopped worker retires the session");
+        })
+    });
+    settle(&rt, cx);
+    let before = fake.calls.lock().unwrap().len();
+    cx.update(|w, cx| view.update(cx, |v, cx| v.event(UiEvent::Back, w, cx)));
+    settle(&rt, cx);
+    assert_eq!(backs.load(std::sync::atomic::Ordering::SeqCst), 1);
+    // Leaving the dead placeholder must not reach (and so revive) the worker.
+    assert_eq!(fake.calls.lock().unwrap().len(), before);
+}
 #[gpui::test]
 fn form_password_local_values_validation_and_action_submit(cx: &mut TestAppContext) {
     let rt = runtime(cx);

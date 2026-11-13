@@ -9,6 +9,9 @@ pub(super) struct Setup {
     pub values: BTreeMap<String, Value>,
     pub fields: BTreeMap<String, FieldEntry>,
     pub saving: bool,
+    /// The worker disposed this session because the save's own explicit Run replaced it
+    /// (same command). The in-flight save owns the hand-off; it retires on failure.
+    pub superseded: bool,
 }
 impl RuntimeView {
     pub(super) fn prepare_preferences(
@@ -128,6 +131,7 @@ impl RuntimeView {
             values,
             fields,
             saving: false,
+            superseded: false,
         };
     }
     pub(super) fn edit_preference(&mut self, key: String, value: Value, cx: &mut Context<Self>) {
@@ -225,8 +229,18 @@ impl RuntimeView {
                             let replacement = v.activate(reply, delivered.unwrap_or(0), w, cx);
                             v.opened = delivered;
                             if replacement.is_err() {
+                                // activate() validates before retiring; never keep a setup
+                                // session the worker already disposed.
+                                if v.preference.superseded {
+                                    v.retire(cx);
+                                }
                                 v.error = Some("The extension returned an invalid view.");
                             }
+                        }
+                        _ if v.preference.superseded => {
+                            // The worker already disposed the setup session; nothing to retry here.
+                            v.retire(cx);
+                            v.error = Some("Extension session ended. Run the command again.");
                         }
                         _ => v.error = Some("Preferences could not be saved. Try again."),
                     };

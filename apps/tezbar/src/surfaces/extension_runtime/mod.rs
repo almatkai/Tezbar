@@ -366,6 +366,13 @@ impl RuntimeView {
                 .as_ref()
                 .is_some_and(|s| payload["sessionId"] == s.key.session_id)
         {
+            // Saving setup preferences runs the same command again; the worker replaces
+            // (disposes) this session before that Run's reply arrives. Retiring here would
+            // cancel the save job and orphan its replacement. Only that hand-off is deferred.
+            if self.preference.saving {
+                self.preference.superseded = true;
+                return;
+            }
             self.retire(cx);
             self.error = Some("Extension session ended. Run the command again.");
             cx.notify();
@@ -496,6 +503,14 @@ impl RuntimeView {
     }
     pub fn event(&mut self, event: UiEvent, w: &mut Window, cx: &mut Context<Self>) {
         if !self.visible || self.disposed {
+            return;
+        }
+        // An ended session or stopped worker leaves only the placeholder. Back must still
+        // leave it exactly as a live root's Leave would; nothing here starts a worker.
+        if self.session.is_none() && matches!(event, UiEvent::Back) {
+            self.error = None;
+            self.emit_effect(ExtensionEffect::Back, cx);
+            cx.notify();
             return;
         }
         // Actions never overlap. A search burst is coalesced separately below.
