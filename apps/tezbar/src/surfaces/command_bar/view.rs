@@ -1794,6 +1794,14 @@ impl Render for Launcher {
                         return;
                     }
                     view.update(cx, |this, cx| {
+                        if let Some(origin) = this.move_arm {
+                            if e.pressed_button != Some(MouseButton::Left) {
+                                this.move_arm = None;
+                            } else if move_started(origin, e.position) {
+                                this.move_arm = None;
+                                let _ = this.relay.send(Event::SnapBegin);
+                            }
+                        }
                         if this.resize.is_some() && e.pressed_button != Some(MouseButton::Left) {
                             this.end_pointer_gesture(cx);
                         } else {
@@ -1816,6 +1824,7 @@ impl Render for Launcher {
                         return;
                     }
                     view.update(cx, |this, cx| {
+                        this.move_arm = None;
                         if this.resize.is_some() {
                             this.end_pointer_gesture(cx);
                         }
@@ -1840,6 +1849,16 @@ impl Render for Launcher {
         root
             .relative()
             .font_family(tokens::font_family(cx, false))
+            // Empty header/footer chrome moves the window. Text fields and other
+            // focusable controls prevent default on press, so selection still works.
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, e: &MouseDownEvent, w, _| {
+                    this.move_arm = (!w.default_prevented()
+                        && move_zone(e.position, w.viewport_size(), this.zoom))
+                    .then_some(e.position);
+                }),
+            )
             .capture_key_down(cx.listener(|this, e, w, cx| this.key(e, w, cx)))
             // TextInput consumes horizontal-arrow actions before key_down runs.
             .capture_action(cx.listener(|this, _: &tezbar_ui::text_input::Left, w, cx| {
@@ -1897,7 +1916,9 @@ impl Render for Launcher {
                                 .id("drag-handle")
                                 .on_mouse_down(MouseButton::Left, {
                                     let relay = self.relay.clone();
-                                    move |_, _, _| {
+                                    move |_, _, cx| {
+                                        // The badge starts the move at once; the chrome arm must not re-start it.
+                                        cx.stop_propagation();
                                         let _ = relay.send(Event::SnapBegin);
                                     }
                                 }),
@@ -2252,4 +2273,28 @@ fn kbd_group(keys: impl Into<SharedString>, t: tokens::Tokens) -> Div {
         .line_height(px(16. * t.zoom))
         .text_color(t.text2)
         .child(keys.into())
+}
+
+/// Header and footer strips of the launcher frame (any mounted surface) act as a move handle.
+pub(super) fn move_zone(at: Point<Pixels>, viewport: Size<Pixels>, zoom: f32) -> bool {
+    let y = f32::from(at.y);
+    y <= tokens::HEADER * zoom || y >= f32::from(viewport.height) - tokens::FOOTER * zoom
+}
+/// A press only becomes a move after real travel, so plain clicks on chips stay clicks.
+pub(super) fn move_started(origin: Point<Pixels>, now: Point<Pixels>) -> bool {
+    let (dx, dy) = (f32::from(now.x - origin.x), f32::from(now.y - origin.y));
+    dx * dx + dy * dy >= 16.
+}
+#[cfg(test)]
+mod move_zone_tests {
+    use super::*;
+    #[::core::prelude::v1::test]
+    fn header_and_footer_strips_move_and_travel_threshold_keeps_clicks() {
+        let viewport = size(px(760.), px(640.));
+        assert!(move_zone(point(px(300.), px(10.)), viewport, 1.));
+        assert!(move_zone(point(px(300.), px(635.)), viewport, 1.));
+        assert!(!move_zone(point(px(300.), px(320.)), viewport, 1.));
+        assert!(!move_started(point(px(10.), px(10.)), point(px(12.), px(12.))));
+        assert!(move_started(point(px(10.), px(10.)), point(px(14.), px(10.))));
+    }
 }

@@ -331,6 +331,8 @@ impl Render for SettingsContent {
                             .on_mouse_down(MouseButton::Left, |_, window, _| {
                                 window.start_window_move();
                             })
+                            // `start_window_move` is a no-op on Windows; the heading is a caption there.
+                            .when(cfg!(windows), |d| d.window_control_area(WindowControlArea::Drag))
                             .text_center()
                             .text_size(px(13.))
                             .font_weight(FontWeight::SEMIBOLD)

@@ -863,6 +863,7 @@ impl Owner {
                 move |w, cx| {
                     w.set_window_title("Terminal Sessions");
                     let _ = native::no_shadow(w);
+                    let _ = native::frameless(w);
                     let close = relay.clone();
                     w.on_window_should_close(cx, move |_, _| {
                         let _ = close.send(Event::PanelHide);
@@ -1786,6 +1787,7 @@ fn run_app(
                     ..Default::default()
                 },
                 move |w, cx| {
+                    let _ = native::frameless(w);
                     let close = view_relay.clone();
                     w.on_window_should_close(cx, move |_, _| {
                         let _ = close.send(Event::Hide);

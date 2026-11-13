@@ -431,6 +431,39 @@ pub fn no_shadow(w: &Window) -> Result<(), String> {
     let _ = w;
     Ok(())
 }
+/// Windows 11 draws its own 1px square border around popup windows. Tezbar draws one
+/// rounded GPUI frame inside a transparent window, so the system border and corner
+/// treatment are removed to leave a single frame (no-op before Windows 11 / elsewhere).
+pub fn frameless(w: &Window) -> Result<(), String> {
+    #[cfg(windows)]
+    unsafe {
+        #[link(name = "dwmapi")]
+        unsafe extern "system" {
+            fn DwmSetWindowAttribute(
+                hwnd: *mut std::ffi::c_void,
+                attribute: u32,
+                value: *const std::ffi::c_void,
+                size: u32,
+            ) -> i32;
+        }
+        const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+        const DWMWA_BORDER_COLOR: u32 = 34;
+        const DWMWCP_DONOTROUND: u32 = 1;
+        const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
+        let hwnd = token(w)? as *mut std::ffi::c_void;
+        let corner = DWMWCP_DONOTROUND;
+        let border = DWMWA_COLOR_NONE;
+        // Older builds reject these attributes; they also have no border to remove.
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner as *const _ as _, 4);
+        let result = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border as *const _ as _, 4);
+        if result < 0 {
+            return Err(format!("DWM border removal failed: {result}"));
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = w;
+    Ok(())
+}
 /// Physical button state ends native move loops even when AppKit consumes mouse-up.
 pub fn left_button_down() -> bool {
     #[cfg(target_os = "macos")]

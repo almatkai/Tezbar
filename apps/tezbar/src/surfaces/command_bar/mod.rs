@@ -163,6 +163,8 @@ pub struct Launcher {
     menu: Option<(Row, usize)>,
     popover_focus: FocusHandle,
     drag: Option<PinDrag>,
+    /// Header/footer press that becomes a window move once the pointer travels.
+    move_arm: Option<Point<Pixels>>,
     pin_bounds: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
     pointer: Option<Point<Pixels>>,
     suppress_pin_click: bool,
@@ -502,6 +504,7 @@ impl Launcher {
             menu: None,
             popover_focus: cx.focus_handle(),
             drag: None,
+            move_arm: None,
             pin_bounds: Default::default(),
             pointer: None,
             suppress_pin_click: false,
