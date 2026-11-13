@@ -78,7 +78,9 @@ pub enum Event {
     Bounds,
     CloseSettings,
     DialogClosed,
-    SnapBegin,
+    /// Window move start; carries the press point in window coordinates when known,
+    /// so the window stays pinned under the cursor however late the event is handled.
+    SnapBegin(Option<(f32, f32)>),
     SnapEnd,
     SnapDwell(u64),
     Zoom(f32),

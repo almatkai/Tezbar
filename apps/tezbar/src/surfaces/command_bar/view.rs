@@ -1799,7 +1799,10 @@ impl Render for Launcher {
                                 this.move_arm = None;
                             } else if move_started(origin, e.position) {
                                 this.move_arm = None;
-                                let _ = this.relay.send(Event::SnapBegin);
+                                let _ = this.relay.send(Event::SnapBegin(Some((
+                                    f32::from(origin.x),
+                                    f32::from(origin.y),
+                                ))));
                             }
                         }
                         if this.resize.is_some() && e.pressed_button != Some(MouseButton::Left) {
@@ -1910,10 +1913,13 @@ impl Render for Launcher {
                                 .id("drag-handle")
                                 .on_mouse_down(MouseButton::Left, {
                                     let relay = self.relay.clone();
-                                    move |_, _, cx| {
+                                    move |e: &MouseDownEvent, _, cx| {
                                         // The badge starts the move at once; the chrome arm must not re-start it.
                                         cx.stop_propagation();
-                                        let _ = relay.send(Event::SnapBegin);
+                                        let _ = relay.send(Event::SnapBegin(Some((
+                                            f32::from(e.position.x),
+                                            f32::from(e.position.y),
+                                        ))));
                                     }
                                 }),
                         )

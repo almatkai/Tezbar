@@ -721,7 +721,7 @@ impl Owner {
                 cx.hide();
             }
             SurfaceOp::Quit => self.quit(cx),
-            SurfaceOp::SnapDragStart => self.begin_snap(cx),
+            SurfaceOp::SnapDragStart => self.begin_snap(None, cx),
             SurfaceOp::SnapDragEnd => self.end_snap(cx),
             SurfaceOp::PressKey { key, modifiers } => {
                 // This is the intentional native input effect, not a core request. Return its
@@ -977,7 +977,7 @@ impl Owner {
             }
         }
     }
-    fn begin_snap(&mut self, cx: &mut Context<Self>) {
+    fn begin_snap(&mut self, grab: Option<(f32, f32)>, cx: &mut Context<Self>) {
         self.end_snap(cx);
         if self.lifecycle.quitting {
             return;
@@ -988,7 +988,15 @@ impl Owner {
             .launcher
             .update(cx, |_, w, _| (w.bounds(), w.scale_factor() as f64))
             .ok();
-        let origin = tezbar_host::monitors::cursor_point();
+        // Anchor to the press point (screen pixels) rather than wherever the cursor
+        // has travelled by the time this event is handled.
+        let origin = match (grab, initial) {
+            (Some((gx, gy)), Some((bounds, scale))) => Some((
+                (f64::from(bounds.left()) + f64::from(gx)) * scale,
+                (f64::from(bounds.top()) + f64::from(gy)) * scale,
+            )),
+            _ => tezbar_host::monitors::cursor_point(),
+        };
         self.drag_task = Some(cx.spawn(async move |owner, cx| {
             loop {
                 cx.background_executor()
@@ -1229,7 +1237,7 @@ impl Owner {
                 self.follow_panel(cx);
                 self.snap_update(None, cx);
             }
-            Event::SnapBegin => self.begin_snap(cx),
+            Event::SnapBegin(grab) => self.begin_snap(grab, cx),
             Event::SnapEnd => self.end_snap(cx),
             Event::SnapDwell(g) => self.snap_update(Some(g), cx),
             Event::Surface(op, reply) => {

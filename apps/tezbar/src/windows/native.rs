@@ -99,12 +99,17 @@ pub fn place_scaled(
             let dpi = tezbar_host::placement::valid_scale_factor(_scale);
             let hwnd = h.hwnd.get();
             dispatch_placement(w, b, cx, move || unsafe {
-                let target = [
-                    (f64::from(b.origin.x) * dpi) as i32,
-                    (f64::from(b.origin.y) * dpi) as i32,
-                    (f64::from(b.size.width) * dpi) as i32,
-                    (f64::from(b.size.height) * dpi) as i32,
-                ];
+                // GPUI bounds are the client area; SetWindowPos/GetWindowRect use the
+                // outer rect, which keeps the system frame on the left, right and bottom.
+                let target = outer_rect(
+                    [
+                        (f64::from(b.origin.x) * dpi) as i32,
+                        (f64::from(b.origin.y) * dpi) as i32,
+                        (f64::from(b.size.width) * dpi) as i32,
+                        (f64::from(b.size.height) * dpi) as i32,
+                    ],
+                    frame_insets(hwnd as _),
+                );
                 let mut current: windows_sys::Win32::Foundation::RECT = std::mem::zeroed();
                 if windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(
                     hwnd as _,
@@ -147,6 +152,48 @@ pub fn place_scaled(
         w.resize(b.size);
         Err("Native placement unavailable".into())
     }
+}
+/// Outer-rect insets `[left, top, right, bottom]` of the non-client frame around
+/// the client area, in physical pixels.
+#[cfg(windows)]
+unsafe fn frame_insets(hwnd: windows_sys::Win32::Foundation::HWND) -> [i32; 4] {
+    use windows_sys::Win32::{
+        Foundation::{POINT, RECT},
+        Graphics::Gdi::ClientToScreen,
+        UI::WindowsAndMessaging::{GetClientRect, GetWindowRect},
+    };
+    let (mut outer, mut client): (RECT, RECT) = (std::mem::zeroed(), std::mem::zeroed());
+    let mut origin = POINT { x: 0, y: 0 };
+    if GetWindowRect(hwnd, &mut outer) == 0
+        || GetClientRect(hwnd, &mut client) == 0
+        || ClientToScreen(hwnd, &mut origin) == 0
+    {
+        return [0; 4];
+    }
+    client_insets(
+        [outer.left, outer.top, outer.right, outer.bottom],
+        [origin.x, origin.y, client.right, client.bottom],
+    )
+}
+/// `outer` is `[left, top, right, bottom]`; `client` is `[x, y, width, height]`.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn client_insets(outer: [i32; 4], client: [i32; 4]) -> [i32; 4] {
+    [
+        (client[0] - outer[0]).max(0),
+        (client[1] - outer[1]).max(0),
+        (outer[2] - client[0] - client[2]).max(0),
+        (outer[3] - client[1] - client[3]).max(0),
+    ]
+}
+/// Client `[x, y, width, height]` grown by frame insets into an outer rect.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn outer_rect(client: [i32; 4], insets: [i32; 4]) -> [i32; 4] {
+    [
+        client[0] - insets[0],
+        client[1] - insets[1],
+        client[2] + insets[0] + insets[2],
+        client[3] + insets[1] + insets[3],
+    ]
 }
 pub fn passthrough(w: &Window) -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -789,5 +836,22 @@ mod placement_tests {
             assert_eq!(w.viewport_size(), size(px(1000.), px(430.)));
             assert_eq!(requested_bounds(w, app), w.bounds());
         });
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    #[::core::prelude::v1::test]
+    fn client_bounds_round_trip_through_the_outer_frame() {
+        // A GPUI popup on Windows: 8px frame left/right/bottom, none on top.
+        let outer = [564, 192, 564 + 776, 192 + 648];
+        let client = [572, 192, 760, 640];
+        let insets = client_insets(outer, client);
+        assert_eq!(insets, [8, 0, 8, 8]);
+        // Re-placing the same client bounds reproduces the same outer rect: no drift.
+        assert_eq!(outer_rect(client, insets), [564, 192, 776, 648]);
+        // Frameless windows are unaffected.
+        assert_eq!(outer_rect([10, 20, 300, 200], [0; 4]), [10, 20, 300, 200]);
     }
 }
