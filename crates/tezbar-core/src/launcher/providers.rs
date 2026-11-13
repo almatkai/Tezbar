@@ -179,6 +179,10 @@ pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
         if ["open-emoji-picker", "open-quick-notes"].contains(&id) {
             continue;
         }
+        // Execution already refuses macOS-only commands elsewhere; never offer them.
+        if d["macOnly"] == true && !cfg!(target_os = "macos") {
+            continue;
+        }
         out.push(document(
             &format!("native:{id}"),
             "native-command",

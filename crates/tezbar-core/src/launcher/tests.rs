@@ -319,6 +319,17 @@ fn extension_descriptor_contract_and_surface_catalog() {
         && d["tokens"].as_str().unwrap().contains("обновление")));
 }
 
+#[test]
+fn mac_only_native_commands_are_indexed_only_on_macos() {
+    let docs = providers::command_documents(&[
+        json!({"id":"restart-dock","title":"Restart Dock","macOnly":true}),
+        json!({"id":"show-disk-usage","title":"Show Disk Usage","macOnly":false}),
+    ]);
+    let has = |id: &str| docs.iter().any(|d| d["id"] == format!("native:{id}"));
+    assert!(has("show-disk-usage"));
+    assert_eq!(has("restart-dock"), cfg!(target_os = "macos"));
+}
+
 #[tokio::test]
 async fn startup_failure_can_retry_and_concurrent_starts_spawn_one_loop() {
     let directory = tempfile::tempdir().unwrap();
@@ -435,15 +446,17 @@ fn slash_path_completion_finds_directories_and_prefix_matches() {
         json!({"name": "Cursor", "path": "/Applications/Cursor.app"}),
         json!({"name": "Visual Studio Code", "path": "/Applications/Visual Studio Code.app"}),
     ];
+    // Directories open in the platform file manager (default_app).
+    let file_manager = if cfg!(windows) { "Open in File Explorer" } else { "Open in Finder" };
     let open_with_rows = providers::complete(&ctx, "/Desktop ", &apps).unwrap();
     let app_titles: Vec<_> = open_with_rows.as_array().unwrap().iter().map(|r| r["title"].as_str().unwrap()).collect();
-    assert!(app_titles.contains(&"Open in Finder"));
+    assert!(app_titles.contains(&file_manager));
     assert!(app_titles.contains(&"Cursor"));
     assert!(app_titles.contains(&"Visual Studio Code"));
 
     let open_with_slash_rows = providers::complete(&ctx, "/Desktop/ ", &apps).unwrap();
     let slash_titles: Vec<_> = open_with_slash_rows.as_array().unwrap().iter().map(|r| r["title"].as_str().unwrap()).collect();
-    assert!(slash_titles.contains(&"Open in Finder"));
+    assert!(slash_titles.contains(&file_manager));
     assert!(slash_titles.contains(&"Cursor"));
     assert!(slash_titles.contains(&"Visual Studio Code"));
 }

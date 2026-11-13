@@ -251,6 +251,8 @@ pub(super) async fn apple(script: &str) -> Result<String, String> {
 pub(super) async fn shell(script: &str) -> Result<String, String> {
     run("/bin/bash", &["-lc", script]).await
 }
+/// Windows PowerShell 5.1 writes stdout in the OEM code page; `output` decodes UTF-8.
+pub(super) const PS_UTF8_OUTPUT: &str = "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding;";
 pub(super) async fn ps(script: &str) -> Result<String, String> {
     run(
         "powershell.exe",
@@ -259,7 +261,7 @@ pub(super) async fn ps(script: &str) -> Result<String, String> {
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            &format!("$ErrorActionPreference='Stop'; {script}"),
+            &format!("{PS_UTF8_OUTPUT} $ErrorActionPreference='Stop'; {script}"),
         ],
     )
     .await

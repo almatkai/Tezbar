@@ -10,6 +10,16 @@ fn context(root: &std::path::Path) -> CoreContext {
         home_dir: root.join("home"),
     })
 }
+/// Real Windows PowerShell: non-ASCII stats text (OS caption separators, Cyrillic
+/// SSIDs/volume labels) must survive the OEM-code-page stdout boundary.
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_powershell_output_is_utf8_for_non_ascii_text() {
+    let text = ps("[string][char]0x00B7 + ' ' + [string][char]0x041F + [string][char]0x0440 + [string][char]0x0438 + ' ' + [string][char]0x00D7")
+        .await
+        .expect("powershell.exe");
+    assert_eq!(text, "· При ×");
+}
 #[test]
 fn catalogs_match_all_ids() {
     let list = commands::descriptors();
