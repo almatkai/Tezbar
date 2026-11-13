@@ -2842,8 +2842,9 @@ mod svg_namespace_tests {
             for (at, _) in source.match_indices(open) {
                 let end = source[at..].find('>').map_or(source.len(), |e| at + e);
                 let tag = &source[at..end];
+                // Raw strings spell `xmlns="…"`, escaped strings `xmlns=\"…\"`.
                 assert!(
-                    tag.contains(r#"xmlns="http://www.w3.org/2000/svg""#),
+                    tag.contains("xmlns=") && tag.contains("http://www.w3.org/2000/svg"),
                     "{file}: inline icon without SVG namespace: {tag}"
                 );
             }
