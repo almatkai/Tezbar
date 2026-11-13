@@ -980,14 +980,7 @@ impl Render for Onboarding {
                             .text_size(px(18.))
                             .font_weight(FontWeight::MEDIUM)
                             .child(
-                                match key {
-                                    "Alt" => "⌥",
-                                    "Command" => "⌘",
-                                    "Control" => "⌃",
-                                    "Shift" => "⇧",
-                                    v => v,
-                                }
-                                .to_owned(),
+                                shortcut_keycap_label(key).to_owned(),
                             ),
                     );
                 }
@@ -1205,6 +1198,24 @@ impl Render for Onboarding {
     }
 }
 
+/// macOS shows modifier glyphs; Windows/Linux keycaps use the printed key names.
+fn shortcut_keycap_label(key: &str) -> &str {
+    if cfg!(target_os = "macos") {
+        return match key {
+            "Alt" => "⌥",
+            "Command" => "⌘",
+            "Control" => "⌃",
+            "Shift" => "⇧",
+            v => v,
+        };
+    }
+    match key {
+        "Control" => "Ctrl",
+        "Command" | "Super" => "Win",
+        v => v,
+    }
+}
+
 /// Call after coreReady and before showing either surface. One retry, then fail open.
 pub fn boot_gate(store: SettingsStore) -> tezbar_core::host::HostFuture<bool> {
     Box::pin(async move {
@@ -1376,6 +1387,24 @@ mod tests {
             })
         });
         assert_eq!(view.read_with(cx, |v, _| v.step), 1);
+    }
+}
+
+#[cfg(test)]
+mod keycap_label_tests {
+    #[::core::prelude::v1::test]
+    fn shortcut_keycaps_use_platform_modifier_names() {
+        let label = super::shortcut_keycap_label;
+        assert_eq!(label("Space"), "Space");
+        if cfg!(target_os = "macos") {
+            assert_eq!(label("Control"), "⌃");
+            assert_eq!(label("Command"), "⌘");
+        } else {
+            assert_eq!(label("Control"), "Ctrl");
+            assert_eq!(label("Alt"), "Alt");
+            assert_eq!(label("Shift"), "Shift");
+            assert_eq!(label("Command"), "Win");
+        }
     }
 }
 

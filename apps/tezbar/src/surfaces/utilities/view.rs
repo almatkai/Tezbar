@@ -145,7 +145,7 @@ impl Utilities {
                             div()
                                 .text_size(px(9. * t.zoom))
                                 .text_color(t.text3)
-                                .child(format!("⌘{}", index + 1)),
+                                .child(platform_keys(&format!("⌘{}", index + 1))),
                         )
                     })
                     .into_any_element();
@@ -467,7 +467,8 @@ impl Utilities {
             return;
         }
         let key = e.keystroke.key.as_str();
-        let command = e.keystroke.modifiers.platform;
+        // Cmd on macOS, Ctrl on Windows/Linux (where `platform` is the OS-reserved Win key).
+        let command = e.keystroke.modifiers.secondary(cx);
         if self.surface == Surface::Permissions && key == "r" {
             self.act(Action::Refresh, w, cx);
             cx.stop_propagation();
@@ -940,7 +941,7 @@ impl Utilities {
                     .flex()
                     .items_center()
                     .gap(px(4. * t.zoom))
-                    .child(controls::keycap(*keys, t))
+                    .child(controls::keycap(platform_keys(keys), t))
                     .child(*label)
             })
             .collect()
@@ -2797,6 +2798,16 @@ impl Render for Utilities {
             );
         }
         root
+    }
+}
+
+/// Shortcut hint text for the primary modifier handled by `Modifiers::secondary`:
+/// `⌘` on macOS, `Ctrl` on Windows/Linux.
+pub(super) fn platform_keys(keys: &str) -> String {
+    if cfg!(target_os = "macos") {
+        keys.to_owned()
+    } else {
+        keys.replace("⌘ ", "Ctrl+").replace('⌘', "Ctrl+")
     }
 }
 

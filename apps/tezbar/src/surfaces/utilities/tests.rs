@@ -222,6 +222,35 @@ fn snippet_create_actual_id_cancel_and_delete_confirmation(cx: &mut TestAppConte
     );
 }
 #[gpui::test]
+fn snippet_shortcuts_use_platform_primary_modifier(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Snippets, 1), w, cx)));
+    settle(&rt, cx);
+    let primary = if cfg!(target_os = "macos") { "cmd" } else { "ctrl" };
+    if !cfg!(target_os = "macos") {
+        // `platform` is the OS-reserved Windows key there (Win+E opens Explorer).
+        cx.simulate_keystrokes("cmd-e");
+        settle(&rt, cx);
+        assert!(view.read_with(cx, |v, _| v.fields.is_empty()));
+    }
+    cx.simulate_keystrokes(&format!("{primary}-e"));
+    settle(&rt, cx);
+    assert!(
+        !view.read_with(cx, |v, _| v.fields.is_empty()),
+        "primary+E opens the snippet editor"
+    );
+    cx.simulate_keystrokes("escape");
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.fields.is_empty()));
+    assert_eq!(
+        super::view::platform_keys("⌘ E"),
+        if cfg!(target_os = "macos") { "⌘ E" } else { "Ctrl+E" }
+    );
+}
+#[gpui::test]
 fn notes_real_rich_ime_format_save_failure_retry_and_identity(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let fixture = Arc::new(Fixture::default());
@@ -729,7 +758,11 @@ fn vault_locked_screen_hides_browsing_and_unlock_restores_it(cx: &mut TestAppCon
         cx.debug_bounds("vault-empty-new").is_none(),
         "The original empty state uses the New shortcut"
     );
-    cx.simulate_keystrokes("cmd-n");
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-n"
+    } else {
+        "ctrl-n"
+    });
     settle(&rt, cx);
     assert_eq!(view.read_with(cx, |v, _| v.fields.len()), 3);
     assert!(cx.debug_bounds("vault-search").is_none());

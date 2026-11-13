@@ -856,7 +856,7 @@ impl RichText {
             cx.propagate();
             return;
         }
-        if e.keystroke.modifiers.platform {
+        if e.keystroke.modifiers.secondary(cx) {
             let style = match e.keystroke.key.as_str() {
                 "b" => Some(Style::Bold),
                 "i" => Some(Style::Italic),
