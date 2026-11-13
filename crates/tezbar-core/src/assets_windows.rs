@@ -68,7 +68,15 @@ pub(super) fn canonical_spelling(path: &Path) -> Result<PathBuf, String> {
     Ok(if is_verbatim_disk(path) {
         path.to_owned()
     } else {
-        PathBuf::from(format!(r"\\?\{}", path.display()))
+        // Rebuild from parsed components: `/` separates components here (for example
+        // `root.join("assets/icon.png")`) but is a literal character after `\\?\`.
+        let mut spelled = std::ffi::OsString::from(r"\\?\");
+        spelled.push(parts[0].as_os_str());
+        for part in &parts[2..] {
+            spelled.push(r"\");
+            spelled.push(part.as_os_str());
+        }
+        PathBuf::from(spelled)
     })
 }
 /// User-selected files carry explicit host authority. Follow normal disk aliases
@@ -172,6 +180,28 @@ mod tests {
             canonical
         );
         assert!(!is_verbatim_disk(Path::new(r"\\.\pipe\fixture")));
+        // `/` from a relative asset join is a separator, never part of the verbatim name.
+        assert_eq!(
+            canonical_spelling(Path::new(r"C:\fixture\assets/icons/image.png")).unwrap(),
+            Path::new(r"\\?\C:\fixture\assets\icons\image.png")
+        );
+    }
+    #[tokio::test]
+    async fn windows_scoped_read_accepts_forward_slash_relative_asset_joins() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap();
+        std::fs::create_dir_all(root.join("assets").join("icons")).unwrap();
+        std::fs::write(root.join("assets").join("icons").join("image.png"), b"inside").unwrap();
+        let scope = crate::assets::AssetScope::registered(root, BTreeSet::new());
+        // Extension manifests name assets with `/`; the uncanonicalized join must load.
+        let joined = d.path().join("assets/icons/image.png");
+        assert_eq!(
+            crate::assets::AssetService::default()
+                .local(&scope, &joined, 20)
+                .await
+                .unwrap(),
+            b"inside"
+        );
     }
     #[tokio::test]
     async fn windows_chosen_files_follow_user_aliases_without_scope_authority() {
