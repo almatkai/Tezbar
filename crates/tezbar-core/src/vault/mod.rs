@@ -6,7 +6,7 @@ pub mod storage;
 use crate::common::{now_ms, CoreResult};
 use auth::{AuthOutcome, DeviceAuthenticator, SystemAuthenticator};
 use crypto::{decrypt, encrypt, generate_random_bytes, KEY_LEN};
-use keychain::{KeyStore, SystemKeychain, VaultKey};
+use keychain::{KeyStore, VaultKey};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -20,7 +20,7 @@ use zeroize::Zeroize;
 
 const UNLOCK_REASON: &str = "unlock your Vault";
 const RESET_REASON: &str = "erase your Vault";
-const UNSUPPORTED: &str = "Vault is available on macOS for now";
+const UNSUPPORTED: &str = "Vault is available on macOS and Windows for now";
 const LOCKED: &str = "Vault is locked";
 /// Opening the vault again within this idle window needs no new prompt.
 const AUTO_LOCK_AFTER: Duration = Duration::from_secs(30 * 60);
@@ -46,11 +46,12 @@ struct InnerState {
 
 impl VaultService {
     pub fn new(root: PathBuf, app: Option<Arc<dyn Host>>) -> Self {
+        let keys = keychain::system_store(&root);
         Self::with_parts(
             root,
-            cfg!(target_os = "macos"),
+            cfg!(any(target_os = "macos", windows)),
             Arc::new(SystemAuthenticator),
-            Arc::new(SystemKeychain),
+            keys,
             app,
         )
     }
@@ -200,8 +201,10 @@ impl VaultService {
             Some(key) => key,
             None if has_file => {
                 return Err(
-                    "The vault key is missing from Keychain, so this vault cannot be opened."
-                        .to_string(),
+                    format!(
+                        "The vault key is missing from {}, so this vault cannot be opened.",
+                        keychain::STORE_NAME
+                    ),
                 )
             }
             None => {

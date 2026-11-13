@@ -179,6 +179,9 @@ mod platform {
             param: Handle,
         ) -> Handle;
         fn DestroyWindow(window: Handle) -> i32;
+        fn EnumClipboardFormats(format: u32) -> u32;
+        fn GetClipboardFormatNameW(format: u32, name: *mut u16, len: i32) -> i32;
+        fn RegisterClipboardFormatW(name: *const u16) -> u32;
     }
     #[link(name = "shell32")]
     extern "system" {
@@ -234,13 +237,125 @@ mod platform {
             }
         }
     }
+    /// Windows privacy conventions set by password managers (and by Tezbar's Vault):
+    /// monitors skip the content, and Windows keeps it out of Win+V history and cloud sync.
+    const EXCLUDE_FROM_MONITORS: &str = "ExcludeClipboardContentFromMonitorProcessing";
+    const VIEWER_IGNORE: &str = "Clipboard Viewer Ignore";
+    const HISTORY: &str = "CanIncludeInClipboardHistory";
+    const CLOUD: &str = "CanUploadToCloudClipboard";
+    const CF_UNICODETEXT: u32 = 13;
+    const GMEM_MOVEABLE: u32 = 0x2;
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+    /// Registered format names on the clipboard; Windows privacy markers are
+    /// reported as the concealed marker the history worker already honours.
     pub fn types() -> Vec<String> {
-        vec![]
+        unsafe {
+            if OpenClipboard(std::ptr::null_mut()) == 0 {
+                return vec![];
+            }
+            let _b = Board;
+            let mut out = vec![];
+            let mut format = 0;
+            loop {
+                format = EnumClipboardFormats(format);
+                if format == 0 {
+                    break;
+                }
+                let mut name = [0u16; 128];
+                let len = GetClipboardFormatNameW(format, name.as_mut_ptr(), name.len() as i32);
+                if len > 0 {
+                    out.push(String::from_utf16_lossy(&name[..len as usize]));
+                }
+            }
+            if out.iter().any(|n| n == EXCLUDE_FROM_MONITORS || n == VIEWER_IGNORE) {
+                out.push(super::CONCEALED_TYPE.into());
+            }
+            out
+        }
     }
-    pub fn write_concealed_text(_: &str) -> Result<u64, String> {
-        Err("Concealed clipboard writes are available on macOS for now".into())
+    unsafe fn global(bytes: &[u8]) -> Result<Handle, String> {
+        let h = GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1));
+        if h.is_null() {
+            return Err("Clipboard allocation failed".into());
+        }
+        let ptr = GlobalLock(h) as *mut u8;
+        if ptr.is_null() {
+            GlobalFree(h);
+            return Err("Clipboard allocation lock failed".into());
+        }
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
+        GlobalUnlock(h);
+        Ok(h)
     }
-    pub fn clear_if_sequence(_: u64) {}
+    /// Writes text with the Windows privacy markers and returns the new sequence.
+    pub fn write_concealed_text(text: &str) -> Result<u64, String> {
+        unsafe {
+            let mut units = wide(text);
+            let bytes = std::slice::from_raw_parts(units.as_ptr() as *const u8, units.len() * 2);
+            let text_handle = global(bytes);
+            units.iter_mut().for_each(|u| *u = 0);
+            let text_handle = text_handle?;
+            let owner = match Owner::new() {
+                Ok(owner) => owner,
+                Err(e) => {
+                    GlobalFree(text_handle);
+                    return Err(e);
+                }
+            };
+            if OpenClipboard(owner.0) == 0 {
+                GlobalFree(text_handle);
+                return Err("Clipboard is busy".into());
+            }
+            let board = Board;
+            if EmptyClipboard() == 0 {
+                GlobalFree(text_handle);
+                return Err("Could not clear the clipboard".into());
+            }
+            // Markers first, so no observer ever sees the text without them.
+            let markers: [(&str, &[u8]); 4] = [
+                (EXCLUDE_FROM_MONITORS, &[0]),
+                (VIEWER_IGNORE, &[0]),
+                (HISTORY, &0u32.to_le_bytes()),
+                (CLOUD, &0u32.to_le_bytes()),
+            ];
+            for (name, value) in markers {
+                let format = RegisterClipboardFormatW(wide(name).as_ptr());
+                if format == 0 {
+                    continue;
+                }
+                if let Ok(h) = global(value) {
+                    if SetClipboardData(format, h).is_null() {
+                        GlobalFree(h);
+                    }
+                }
+            }
+            if SetClipboardData(CF_UNICODETEXT, text_handle).is_null() {
+                GlobalFree(text_handle);
+                EmptyClipboard();
+                return Err("Could not write to the clipboard".into());
+            }
+            drop(board);
+            Ok(GetClipboardSequenceNumber() as u64)
+        }
+    }
+    /// Clears the clipboard only if nothing was copied since `sequence`.
+    pub fn clear_if_sequence(sequence: u64) {
+        unsafe {
+            if GetClipboardSequenceNumber() as u64 != sequence {
+                return;
+            }
+            let Ok(owner) = Owner::new() else { return };
+            if OpenClipboard(owner.0) == 0 {
+                return;
+            }
+            let _b = Board;
+            if GetClipboardSequenceNumber() as u64 == sequence {
+                EmptyClipboard();
+            }
+        }
+    }
     pub fn sequence() -> Option<u64> {
         Some(unsafe { GetClipboardSequenceNumber() } as u64)
     }

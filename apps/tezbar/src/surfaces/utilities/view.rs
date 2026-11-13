@@ -1603,9 +1603,11 @@ impl Utilities {
         let description = if failed {
             "Try opening Vault again."
         } else if unsupported {
-            "Vault is available on macOS for now."
+            "Vault is available on macOS and Windows for now."
         } else if checking {
             "Checking access to your saved items."
+        } else if cfg!(windows) {
+            "Windows Hello: your PIN, fingerprint or face"
         } else {
             "Touch ID or your Mac password"
         };
