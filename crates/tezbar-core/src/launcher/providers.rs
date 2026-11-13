@@ -636,10 +636,29 @@ fn display(home: &Path, path: &Path) -> String {
             if p.as_os_str().is_empty() {
                 "~".into()
             } else {
-                format!("~/{}", p.display())
+                // `~/` paths read with one separator style on every platform.
+                format!("~/{}", p.display()).replace('\\', "/")
             }
         })
         .unwrap_or_else(|_| path.to_string_lossy().into())
+}
+/// Dot-files are hidden everywhere; Windows also hides by attribute (e.g. `NTUSER.DAT`,
+/// `desktop.ini` and the legacy `Application Data` junctions that deny listing).
+fn hidden_entry(entry: &std::fs::DirEntry) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const HIDDEN: u32 = 0x2;
+        const SYSTEM: u32 = 0x4;
+        entry
+            .metadata()
+            .is_ok_and(|m| m.file_attributes() & (HIDDEN | SYSTEM) != 0)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = entry;
+        false
+    }
 }
 fn slash(home: &Path, path: &Path, dir: bool) -> String {
     let mut s = path
@@ -831,7 +850,7 @@ pub fn complete(ctx: &CoreContext, query: &str, apps: &[Value]) -> CoreResult {
     if let Ok(entries) = std::fs::read_dir(&directory) {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            if name.starts_with('.') || !name.to_lowercase().contains(&prefix) {
+            if name.starts_with('.') || hidden_entry(&e) || !name.to_lowercase().contains(&prefix) {
                 continue;
             }
             let path = e.path();
@@ -986,4 +1005,53 @@ pub fn merge_windows_start_apps(apps: &mut Vec<Value>, raw: &str) -> Result<(), 
         }
     }
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod windows_path_tests {
+    use super::*;
+
+    #[test]
+    fn home_relative_browsing_hides_attribute_hidden_entries_and_uses_forward_slashes() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(home.path().join("Desktop").join("Project")).unwrap();
+        let hidden = home.path().join("Desktop").join("desktop.ini");
+        std::fs::write(&hidden, "").unwrap();
+        let wide: Vec<u16> = hidden
+            .as_os_str()
+            .encode_wide_lossless()
+            .chain(std::iter::once(0))
+            .collect();
+        // FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM, as Explorer creates desktop.ini.
+        assert_ne!(
+            unsafe { windows_sys::Win32::Storage::FileSystem::SetFileAttributesW(wide.as_ptr(), 0x6) },
+            0
+        );
+        assert_eq!(resolve(home.path(), "/Desktop/"), home.path().join("Desktop/"));
+        let names: Vec<_> = std::fs::read_dir(home.path().join("Desktop"))
+            .unwrap()
+            .flatten()
+            .filter(|e| !hidden_entry(e))
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["Project"]);
+        assert_eq!(
+            display(home.path(), &home.path().join("Desktop").join("Project")),
+            "~/Desktop/Project"
+        );
+        assert_eq!(
+            slash(home.path(), &home.path().join("Desktop").join("Project"), true),
+            "/Desktop/Project/"
+        );
+    }
+
+    trait EncodeWide {
+        fn encode_wide_lossless(&self) -> std::vec::IntoIter<u16>;
+    }
+    impl EncodeWide for std::ffi::OsStr {
+        fn encode_wide_lossless(&self) -> std::vec::IntoIter<u16> {
+            use std::os::windows::ffi::OsStrExt;
+            self.encode_wide().collect::<Vec<_>>().into_iter()
+        }
+    }
 }

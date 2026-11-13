@@ -13,6 +13,16 @@ pub struct Preview {
     #[cfg(feature = "bench-control")]
     pub control_token: Option<String>,
 }
+/// The signed-in user's home: `HOME` where the platform sets it, `USERPROFILE` on Windows
+/// (which does not set `HOME`), so desktop-integrated previews see real user folders.
+fn user_home() -> Option<PathBuf> {
+    let var = |name| std::env::var_os(name).filter(|v| !v.is_empty());
+    #[cfg(windows)]
+    let home = var("USERPROFILE").or_else(|| var("HOME"));
+    #[cfg(not(windows))]
+    let home = var("HOME");
+    home.map(PathBuf::from)
+}
 fn real(path: &Path) -> anyhow::Result<PathBuf> {
     anyhow::ensure!(path.is_absolute(), "absolute path required");
     anyhow::ensure!(
@@ -96,7 +106,7 @@ impl Preview {
         preview.launcher_shortcut = launcher_shortcut;
         preview.home = home.or_else(|| {
             if allow_desktop_integration || std::env::var_os("TEZBAR_PREVIEW_USER_HOME").is_some() {
-                std::env::var_os("HOME").map(PathBuf::from)
+                user_home()
             } else {
                 None
             }
@@ -215,7 +225,7 @@ mod tests {
         args.push("--allow-desktop-integration".into());
         let p_desktop = Preview::parse(&args).unwrap();
         assert!(p_desktop.allow_desktop_integration);
-        if let Some(user_home) = std::env::var_os("HOME").map(PathBuf::from) {
+        if let Some(user_home) = user_home() {
             assert_eq!(p_desktop.core_paths().home_dir, user_home);
         }
     }
