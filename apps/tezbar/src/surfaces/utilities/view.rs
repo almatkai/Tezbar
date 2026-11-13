@@ -63,16 +63,16 @@ impl Utilities {
                 };
                 let icon = match glyph {
                     "▧" => {
-                        r#"<svg width="14" height="14" viewBox="0 0 14 14" fill="none"> <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2" /> <circle cx="5" cy="6" r="1" fill="currentColor" /> <path d="m2.5 10 3-2.5 3 2L11 8l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /> </svg>"#
+                        r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"> <rect x="1.5" y="2.5" width="11" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2" /> <circle cx="5" cy="6" r="1" fill="currentColor" /> <path d="m2.5 10 3-2.5 3 2L11 8l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /> </svg>"#
                     }
                     "▱" => {
-                        r#"<svg width="14" height="14" viewBox="0 0 14 14" fill="none"> <path d="M2.5 3.5a1 1 0 0 1 1-1h2.5l1 1.2H10.5a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V3.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /> </svg>"#
+                        r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"> <path d="M2.5 3.5a1 1 0 0 1 1-1h2.5l1 1.2H10.5a1 1 0 0 1 1 1V10a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V3.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /> </svg>"#
                     }
                     "↗" => {
-                        r#"<svg width="14" height="14" viewBox="0 0 14 14" fill="none"> <path d="M6 8a2 2 0 0 0 2.8 0l2-2a2 2 0 0 0-2.8-2.8l-.6.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /> <path d="M8 6a2 2 0 0 0-2.8 0l-2 2a2 2 0 0 0 2.8 2.8l.6-.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /> </svg>"#
+                        r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"> <path d="M6 8a2 2 0 0 0 2.8 0l2-2a2 2 0 0 0-2.8-2.8l-.6.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /> <path d="M8 6a2 2 0 0 0-2.8 0l-2 2a2 2 0 0 0 2.8 2.8l.6-.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /> </svg>"#
                     }
                     "T" => {
-                        r#"<svg width="14" height="14" viewBox="0 0 14 14" fill="none"> <path d="M3.5 2.5h5l2.5 2.5v6.5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-8.5a.5.5 0 0 1 .5-.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /> <path d="M5 7h4M5 9h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /> </svg>"#
+                        r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"> <path d="M3.5 2.5h5l2.5 2.5v6.5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-8.5a.5.5 0 0 1 .5-.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" /> <path d="M5 7h4M5 9h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /> </svg>"#
                     }
                     _ => unreachable!(),
                 };
@@ -728,7 +728,7 @@ impl Utilities {
             _ => "M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4",
         };
         let image = format!(
-            r#"<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{path}"/></svg>"#
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{path}"/></svg>"#
         );
         self.action_button_with_id(id, label, action, disabled, cx, t)
             .text_size(px(0.))
@@ -1076,25 +1076,25 @@ impl Utilities {
             let busy = active && self.clipboard_ui.pending.is_some();
             let icon = match action {
                 C::Json => {
-                    r#"<svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M4.5 2.5c-1 0-1.5.5-1.5 1.5v2c0 .8-.4 1.2-1.2 1.5.8.3 1.2.7 1.2 1.5v2c0 1 .5 1.5 1.5 1.5M9.5 2.5c1 0 1.5.5 1.5 1.5v2c0 .8.4 1.2 1.2 1.5-.8.3-1.2.7-1.2 1.5v2c0 1-.5 1.5-1.5 1.5" /> </svg>"#
+                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M4.5 2.5c-1 0-1.5.5-1.5 1.5v2c0 .8-.4 1.2-1.2 1.5.8.3 1.2.7 1.2 1.5v2c0 1 .5 1.5 1.5 1.5M9.5 2.5c1 0 1.5.5 1.5 1.5v2c0 .8.4 1.2 1.2 1.5-.8.3-1.2.7-1.2 1.5v2c0 1-.5 1.5-1.5 1.5" /> </svg>"#
                 }
                 C::Base64 => {
-                    r#"<svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <rect x="2" y="2.5" width="10" height="9" rx="1.5" /> <path d="M4.5 6.5h5M4.5 8.5h3" /> </svg>"#
+                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <rect x="2" y="2.5" width="10" height="9" rx="1.5" /> <path d="M4.5 6.5h5M4.5 8.5h3" /> </svg>"#
                 }
                 C::Encode => {
-                    r#"<svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M5.5 8.5 8.5 5.5M7.25 3.25l1-1a2.25 2.25 0 0 1 3.18 3.18l-1 1M6.75 10.75l-1 1a2.25 2.25 0 0 1-3.18-3.18l1-1" /> </svg>"#
+                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M5.5 8.5 8.5 5.5M7.25 3.25l1-1a2.25 2.25 0 0 1 3.18 3.18l-1 1M6.75 10.75l-1 1a2.25 2.25 0 0 1-3.18-3.18l1-1" /> </svg>"#
                 }
                 C::Hash => {
-                    r#"<svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M5 2 4 12M10 2 9 12M2.5 5h9M2 9h9" /> </svg>"#
+                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M5 2 4 12M10 2 9 12M2.5 5h9M2 9h9" /> </svg>"#
                 }
                 C::Count => {
-                    r#"<svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M3 2.5h8M3 7h8M3 11.5h5" /> </svg>"#
+                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M3 2.5h8M3 7h8M3 11.5h5" /> </svg>"#
                 }
                 C::Case => {
-                    r#"<svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M3 10.5 5.4 3.5h.2L8 10.5M3.8 8.5h3.4M9.5 10.5v-3.8c0-.6.4-1 1-1 1 0 1.5.7 1.5 1.5 0 .9-.6 1.5-1.5 1.6l1.7 1.7" /> </svg>"#
+                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <path d="M3 10.5 5.4 3.5h.2L8 10.5M3.8 8.5h3.4M9.5 10.5v-3.8c0-.6.4-1 1-1 1 0 1.5.7 1.5 1.5 0 .9-.6 1.5-1.5 1.6l1.7 1.7" /> </svg>"#
                 }
                 C::Qr => {
-                    r#"<svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <rect x="2" y="2" width="4" height="4" rx=".5" /> <rect x="8" y="2" width="4" height="4" rx=".5" /> <rect x="2" y="8" width="4" height="4" rx=".5" /> <path d="M8 8h1.5M11 8h1M8 11v1M10 10h2v2h-1.5" /> </svg>"#
+                    r#"<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"> <rect x="2" y="2" width="4" height="4" rx=".5" /> <rect x="8" y="2" width="4" height="4" rx=".5" /> <rect x="2" y="8" width="4" height="4" rx=".5" /> <path d="M8 8h1.5M11 8h1M8 11v1M10 10h2v2h-1.5" /> </svg>"#
                 }
             };
             chips = chips.child(
@@ -2822,5 +2822,31 @@ pub(super) fn kind_label(kind: tezbar_ui_model::vault::Kind) -> &'static str {
         Kind::Server => "Server",
         Kind::Password => "Password",
         Kind::Note => "Note",
+    }
+}
+
+#[cfg(test)]
+mod svg_namespace_tests {
+    /// usvg renders nothing for an `<svg>` root without the SVG namespace, which left
+    /// clipboard kind icons and conversion chips blank.
+    #[::core::prelude::v1::test]
+    fn inline_icons_declare_the_svg_namespace() {
+        let open = concat!("<", "svg ");
+        for (file, source) in [
+            ("utilities/view.rs", include_str!("view.rs")),
+            ("utilities/system_monitor.rs", include_str!("system_monitor.rs")),
+            ("command_bar/view.rs", include_str!("../command_bar/view.rs")),
+            ("command_bar/icons.rs", include_str!("../command_bar/icons.rs")),
+            ("settings/view.rs", include_str!("../settings/view.rs")),
+        ] {
+            for (at, _) in source.match_indices(open) {
+                let end = source[at..].find('>').map_or(source.len(), |e| at + e);
+                let tag = &source[at..end];
+                assert!(
+                    tag.contains(r#"xmlns="http://www.w3.org/2000/svg""#),
+                    "{file}: inline icon without SVG namespace: {tag}"
+                );
+            }
+        }
     }
 }
