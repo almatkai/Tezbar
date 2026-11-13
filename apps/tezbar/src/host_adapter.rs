@@ -8,6 +8,8 @@ pub struct GpuiHost {
     pub relay: Relay,
     registry: PreviewShortcuts,
     production: bool,
+    /// Preview opt-in for clipboard/app/file observers (production always has them).
+    services: bool,
     status_core: OnceLock<Weak<tezbar_core::NativeCore>>,
 }
 impl GpuiHost {
@@ -19,6 +21,7 @@ impl GpuiHost {
         Self {
             registry: PreviewShortcuts(desktop.clone(), false),
             production: false,
+            services: false,
             status_core: OnceLock::new(),
             desktop,
             relay,
@@ -39,10 +42,16 @@ impl GpuiHost {
         Self {
             registry: PreviewShortcuts(desktop.clone(), allow),
             production: false,
+            services: false,
             status_core: OnceLock::new(),
             desktop,
             relay,
         }
+    }
+    /// Explicit preview opt-in (see `Preview::allow_desktop_services`).
+    pub fn with_desktop_services(mut self, allow: bool) -> Self {
+        self.services = allow;
+        self
     }
     pub(crate) fn production(relay: Relay) -> Self {
         let mut host = Self::with_desktop_integration(relay, true);
@@ -144,7 +153,7 @@ impl Host for GpuiHost {
         &self.desktop
     }
     fn desktop_services(&self) -> bool {
-        self.production
+        self.production || self.services
     }
     fn native_terminal(&self) -> bool {
         // Preview is a native desktop application too, with its own CorePaths.

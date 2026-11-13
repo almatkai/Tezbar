@@ -6,6 +6,9 @@ pub struct Preview {
     pub resources: PathBuf,
     pub show: bool,
     pub allow_desktop_integration: bool,
+    /// Second, separate opt-in (requires desktop integration): clipboard history
+    /// observation and app/file discovery for this private profile. Off by default.
+    pub allow_desktop_services: bool,
     /// Explicit preview key; does not enable scans, clipboard observation or command hotkeys.
     pub launcher_shortcut: Option<String>,
     pub theme: String,
@@ -52,6 +55,7 @@ impl Preview {
         let mut resources = None;
         let mut show = false;
         let mut allow_desktop_integration = false;
+        let mut allow_desktop_services = false;
         let mut launcher_shortcut = None;
         let mut theme = "system".to_string();
         let mut home = None;
@@ -88,6 +92,7 @@ impl Preview {
                 }
                 "--show" => show = true,
                 "--allow-desktop-integration" => allow_desktop_integration = true,
+                "--allow-desktop-services" => allow_desktop_services = true,
                 _ => anyhow::bail!("unknown preview argument: {}", args[i]),
             }
             i += 1;
@@ -102,7 +107,12 @@ impl Preview {
             show,
             theme,
         )?;
+        anyhow::ensure!(
+            !allow_desktop_services || allow_desktop_integration,
+            "--allow-desktop-services requires --allow-desktop-integration"
+        );
         preview.allow_desktop_integration = allow_desktop_integration;
+        preview.allow_desktop_services = allow_desktop_services;
         preview.launcher_shortcut = launcher_shortcut;
         preview.home = home.or_else(|| {
             if allow_desktop_integration || std::env::var_os("TEZBAR_PREVIEW_USER_HOME").is_some() {
@@ -162,6 +172,7 @@ impl Preview {
             resources,
             show,
             allow_desktop_integration: false,
+            allow_desktop_services: false,
             launcher_shortcut: None,
             theme,
             home: None,
@@ -228,6 +239,17 @@ mod tests {
         if let Some(user_home) = user_home() {
             assert_eq!(p_desktop.core_paths().home_dir, user_home);
         }
+        // Integration alone never enables observers; services are a separate opt-in
+        // that is refused without integration.
+        assert!(!p_desktop.allow_desktop_services);
+        let mut services = args.clone();
+        services.push("--allow-desktop-services".into());
+        assert!(Preview::parse(&services).unwrap().allow_desktop_services);
+        let without_integration: Vec<String> = services
+            .into_iter()
+            .filter(|a| a != "--allow-desktop-integration")
+            .collect();
+        assert!(Preview::parse(&without_integration).is_err());
     }
     #[::core::prelude::v1::test]
     fn custom_home_flag_supported() {

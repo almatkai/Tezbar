@@ -1594,6 +1594,7 @@ pub fn run_production(admission: production_launch::Admission) -> anyhow::Result
         resources: plan.core.resource_dir.clone(),
         show: false,
         allow_desktop_integration: true,
+        allow_desktop_services: true,
         launcher_shortcut: None,
         theme: "system".into(),
         home: Some(plan.core.home_dir.clone()),
@@ -1763,6 +1764,7 @@ fn run_app(
             GpuiHost::production(relay.clone())
         } else {
             GpuiHost::with_desktop_integration(relay.clone(), preview.allow_desktop_integration)
+                .with_desktop_services(preview.allow_desktop_services)
         });
         let context = CoreContext::new(core_paths, Some(host.clone()))
             .with_dev_mode(production.is_none())
