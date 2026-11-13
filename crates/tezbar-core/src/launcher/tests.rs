@@ -320,6 +320,20 @@ fn extension_descriptor_contract_and_surface_catalog() {
 }
 
 #[test]
+fn real_catalog_offers_surface_routed_commands_and_hides_mac_scripts() {
+    // The platform's actual catalog through the real indexer, not fabricated descriptors.
+    let catalog = crate::system::native_command_descriptors();
+    let catalog = catalog.as_array().unwrap();
+    let docs = providers::command_documents(catalog);
+    let indexed = |id: &str| docs.iter().any(|d| d["id"] == format!("native:{id}"));
+    assert!(indexed("show-system-monitor"), "System Monitor is a native surface everywhere");
+    for d in catalog.iter().filter(|d| d["macOnly"] == true) {
+        let id = d["id"].as_str().unwrap();
+        let routed = crate::native_command_surface(id).is_some();
+        assert_eq!(indexed(id), cfg!(target_os = "macos") || routed, "{id}");
+    }
+}
+#[test]
 fn mac_only_native_commands_are_indexed_only_on_macos() {
     let docs = providers::command_documents(&[
         json!({"id":"restart-dock","title":"Restart Dock","macOnly":true}),

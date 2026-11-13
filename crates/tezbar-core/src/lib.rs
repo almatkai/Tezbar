@@ -213,26 +213,7 @@ impl NativeCore {
             .strip_prefix("command:")
             .or_else(|| command.strip_prefix("native:"))
             .unwrap_or(command);
-        let surface = match id {
-            "open-indexing" => Some("indexing"),
-            "open-extensions" => Some("extensions"),
-            "open-snippets" => Some("snippets"),
-            "open-notes" | "open-quick-notes" => Some("notes"),
-            "open-vault" => Some("vault"),
-            "open-clipboard-history" => Some("clipboard"),
-            "open-emoji-picker" => Some("emoji-picker"),
-            "show-system-monitor"
-            | "show-cpu-info"
-            | "show-macos-version"
-            | "show-memory-info"
-            | "show-disk-usage"
-            | "show-battery-status" => Some("system-monitor"),
-            "start-onboarding" => Some("onboarding"),
-            "open-settings" | "check-for-updates" => Some("settings"),
-            "open-extensions-settings" => Some("settings-extensions"),
-            _ => None,
-        };
-        if let Some(surface) = surface {
+        if let Some(surface) = native_command_surface(id) {
             return self
                 .ctx
                 .request("core:platform:open-surface", vec![json!(surface)])
@@ -399,6 +380,28 @@ mod tests;
 pub mod bun;
 pub mod child_supervisor;
 pub mod host;
+/// Native command ids served by a built-in Rust/GPUI surface on every platform.
+pub fn native_command_surface(id: &str) -> Option<&'static str> {
+    match id {
+        "open-indexing" => Some("indexing"),
+        "open-extensions" => Some("extensions"),
+        "open-snippets" => Some("snippets"),
+        "open-notes" | "open-quick-notes" => Some("notes"),
+        "open-vault" => Some("vault"),
+        "open-clipboard-history" => Some("clipboard"),
+        "open-emoji-picker" => Some("emoji-picker"),
+        "show-system-monitor"
+        | "show-cpu-info"
+        | "show-macos-version"
+        | "show-memory-info"
+        | "show-disk-usage"
+        | "show-battery-status" => Some("system-monitor"),
+        "start-onboarding" => Some("onboarding"),
+        "open-settings" | "check-for-updates" => Some("settings"),
+        "open-extensions-settings" => Some("settings-extensions"),
+        _ => None,
+    }
+}
 #[cfg(feature = "native-launcher-facade")]
 pub mod launcher_facade;
 pub mod native_v2_cli;

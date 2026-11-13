@@ -179,8 +179,12 @@ pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
         if ["open-emoji-picker", "open-quick-notes"].contains(&id) {
             continue;
         }
-        // Execution already refuses macOS-only commands elsewhere; never offer them.
-        if d["macOnly"] == true && !cfg!(target_os = "macos") {
+        // Execution refuses macOS-only scripts; never offer them. Ids routed to a built-in
+        // native surface (System Monitor) never reach that refusal and stay available.
+        if d["macOnly"] == true
+            && !cfg!(target_os = "macos")
+            && crate::native_command_surface(id).is_none()
+        {
             continue;
         }
         out.push(document(

@@ -253,6 +253,10 @@ pub(super) async fn shell(script: &str) -> Result<String, String> {
 }
 /// Windows PowerShell 5.1 writes stdout in the OEM code page; `output` decodes UTF-8.
 pub(super) const PS_UTF8_OUTPUT: &str = "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding;";
+/// The platform's built-in native command catalog (the launcher indexes it).
+pub(crate) fn native_command_descriptors() -> Value {
+    commands::descriptors()
+}
 pub(super) async fn ps(script: &str) -> Result<String, String> {
     run(
         "powershell.exe",
