@@ -1279,7 +1279,11 @@ impl Render for ChatView {
             div()
                 .text_size(px(10. * t.zoom))
                 .text_color(t.text4)
-                .child("Attach screen  ⌘⇧S    Send  ↵    New line  ⇧↵"),
+                .child(if cfg!(target_os = "macos") {
+                    "Attach screen  ⌘⇧S    Send  ↵    New line  ⇧↵"
+                } else {
+                    "Attach screen  Ctrl+Shift+S    Send  ↵    New line  Shift+↵"
+                }),
         );
         // In parent composition the shared footer owns these statuses and routing.
         for status in statuses
