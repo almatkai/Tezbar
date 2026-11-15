@@ -850,6 +850,11 @@ pub fn surface_boost(category: &str, title: &str, subtitle: &str, query: &Query)
     {
         return 1400.;
     }
+    // Built-in "Open <surface>" commands own their noun: "settings", "notes", "vault" open
+    // Tezbar's surface rather than a same-named Windows app or a release-notes match.
+    if category == "commands" && title.strip_prefix("open ") == Some(q) {
+        return 1400.;
+    }
     let mut b: f64 = if title == q {
         600.
     } else if title.starts_with(&q) {
@@ -961,5 +966,16 @@ mod store_boost_tests {
             assert_eq!(surface_boost("commands", title, "", &Query::new("store")), 1400., "{title}");
         }
         assert!(surface_boost("commands", "Loved Extensions", "", &Query::new("loved")) < 1400.);
+    }
+    #[test]
+    fn open_commands_own_their_noun_over_apps_and_partial_matches() {
+        for (title, q) in [("Open Settings", "settings"), ("Open Notes", "notes"), ("Open Vault", "vault")] {
+            let own = surface_boost("commands", title, "", &Query::new(q));
+            assert_eq!(own, 1400., "{title}");
+            // A same-named app tops out at a full app match.
+            assert!(own > surface_boost("applications", "Settings", "", &Query::new("settings")));
+            assert!(own > surface_boost("commands", "Release Notes", "", &Query::new("notes")));
+        }
+        assert!(surface_boost("commands", "Open Settings", "", &Query::new("sett")) < 1400.);
     }
 }
