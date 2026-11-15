@@ -780,7 +780,11 @@ impl Render for Onboarding {
                     div()
                         .text_size(px(13.))
                         .text_color(t.text3)
-                        .child("Five quick steps and it’s set up the way you work."),
+                        .child(format!(
+                            "{} quick steps and it’s set up the way you work.",
+                            // Permissions is a macOS-only step.
+                            if self.steps.len() == 5 { "Five" } else { "Four" }
+                        )),
                 )
                 .child(
                     controls::action_button(
