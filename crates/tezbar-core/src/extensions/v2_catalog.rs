@@ -96,11 +96,58 @@ pub(super) fn manifests(ctx: &CoreContext) -> Vec<Value> {
         })
         .collect()
 }
+/// raycast/extensions commit whose assets the native packages copied; pinned so store
+/// artwork cannot change underneath a release.
+const RAYCAST_ASSETS_COMMIT: &str = "28bf9eb29c72c2df9b4b1d17e3f7b51001de6c0d";
+/// Store artwork for a native package that is not installed yet: its icon lives in the
+/// release ZIP, so show the same file from the Raycast extension it replaces.
+fn store_icon_url(native: &Value) -> Option<String> {
+    let icon = native["icon"].as_str()?;
+    if icon.starts_with("https://") {
+        return Some(icon.to_owned());
+    }
+    // Packages keep the replaced extension's `assets/<file>` under resources/ (or resources/assets/).
+    let file = icon
+        .strip_prefix("resources/assets/")
+        .or_else(|| icon.strip_prefix("resources/"))?;
+    let slug = native["replaces"]
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .find_map(|id| id.strip_prefix("raycast."))?;
+    let safe = |s: &str| {
+        !s.is_empty()
+            && !s.starts_with('.')
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+    };
+    (safe(slug) && safe(file)).then(|| {
+        format!("https://raw.githubusercontent.com/raycast/extensions/{RAYCAST_ASSETS_COMMIT}/extensions/{slug}/assets/{file}")
+    })
+}
 pub(super) fn store_item(native: Value) -> Value {
     let native = describe(native);
     let acquisition =
         acquisition::metadata(acquisition::for_id(native["id"].as_str().unwrap_or("")));
-    json!({"id":native["id"],"name":native["name"],"description":native["description"],"version":native["version"],"author":"Tezbar","owner":"Tezbar","runtime":"rust","icon":native["icon"],"iconUrl":native["icon"].as_str().filter(|s|s.starts_with("https://")),"platforms":native["platforms"],"commands":native["commands"],"nativeV2":native,"acquisition":acquisition})
+    json!({"id":native["id"],"name":native["name"],"description":native["description"],"version":native["version"],"author":"Tezbar","owner":"Tezbar","runtime":"rust","icon":native["icon"],"iconUrl":store_icon_url(&native),"platforms":native["platforms"],"commands":native["commands"],"nativeV2":native,"acquisition":acquisition})
+}
+#[cfg(test)]
+mod store_icon_tests {
+    use super::*;
+    #[test]
+    fn every_native_store_item_has_pinned_upstream_artwork() {
+        let prefix = format!(
+            "https://raw.githubusercontent.com/raycast/extensions/{RAYCAST_ASSETS_COMMIT}/extensions/"
+        );
+        for native in source() {
+            let url = store_icon_url(&native).unwrap_or_else(|| panic!("{}", native["id"]));
+            assert!(url.starts_with(&prefix), "{url}");
+        }
+        let traversal = json!({"icon":"resources/assets/../x.png","replaces":["raycast.a"]});
+        assert_eq!(store_icon_url(&traversal), None);
+        let direct = json!({"icon":"https://example.com/i.png"});
+        assert_eq!(store_icon_url(&direct).as_deref(), Some("https://example.com/i.png"));
+    }
 }
 pub(super) fn installed(ctx: &CoreContext, id: &str) -> bool {
     process_install::resolve(ctx, id).is_ok()
