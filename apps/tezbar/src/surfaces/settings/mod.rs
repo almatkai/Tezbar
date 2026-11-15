@@ -11,7 +11,7 @@ pub(crate) mod tests;
 pub(crate) mod view;
 use super::command_bar::navigation::{Navigation, Payload, UpdateAction};
 use gpui::{prelude::*, *};
-pub use request::{AccountAction, SettingsRequest, VoiceAction};
+pub use request::{AccountAction, SettingsRequest};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -38,7 +38,6 @@ pub trait SettingsTransport: Send + Sync + 'static {
 pub enum Tab {
     General,
     Ai,
-    Voice,
     Knowledge,
     Extensions,
     Permissions,
@@ -46,10 +45,9 @@ pub enum Tab {
     Advanced,
 }
 impl Tab {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 7] = [
         Self::General,
         Self::Ai,
-        Self::Voice,
         Self::Knowledge,
         Self::Extensions,
         Self::Permissions,
@@ -60,7 +58,6 @@ impl Tab {
         match self {
             Self::General => "general",
             Self::Ai => "ai",
-            Self::Voice => "voice",
             Self::Knowledge => "knowledge",
             Self::Extensions => "extensions",
             Self::Permissions => "permissions",
@@ -72,7 +69,6 @@ impl Tab {
         match self {
             Self::General => "General",
             Self::Ai => "AI",
-            Self::Voice => "Voice",
             Self::Knowledge => "Knowledge",
             Self::Extensions => "Extensions",
             Self::Permissions => "Permissions",
@@ -127,10 +123,6 @@ struct Field {
 #[derive(Clone)]
 enum Completion {
     Config(u64),
-    Voice,
-    VoiceMutation,
-    VoiceSelected,
-    VoiceModes,
     Storage,
     Clipboard,
     ClipboardMutation,
@@ -220,7 +212,6 @@ pub enum Action {
     CancelSignIn,
     Account(AccountAction),
     AccountCallback,
-    Voice(VoiceAction),
     Knowledge(knowledge::Operation),
     KnowledgeControl(knowledge::Operation, String),
     ChooseFolder,
@@ -309,9 +300,6 @@ pub struct SettingsContent {
     tabs: Vec<FocusHandle>,
     focus: FocusHandle,
     knowledge_focus: Vec<FocusHandle>,
-    pub voice: Value,
-    voice_modes: Vec<String>,
-    pub selected_voice: String,
     onboarding_connected: Option<(String, String)>,
     onboarding_editing: bool,
     onboarding_checking: bool,
@@ -391,12 +379,9 @@ impl SettingsContent {
             contributions_stale: false,
             started: Instant::now(),
             window: w.window_handle(),
-            tabs: (0..8).map(|_| cx.focus_handle()).collect(),
+            tabs: (0..Tab::ALL.len()).map(|_| cx.focus_handle()).collect(),
             focus: cx.focus_handle(),
             knowledge_focus: vec![cx.focus_handle(), cx.focus_handle()],
-            voice: Value::Null,
-            voice_modes: vec![],
-            selected_voice: String::new(),
             onboarding_connected: None,
             onboarding_editing: false,
             onboarding_checking: false,
@@ -443,7 +428,6 @@ impl SettingsContent {
                 "llm-config-changed".into(),
                 "ai-extensions-changed".into(),
                 "knowledge:status".into(),
-                "voice:model:progress".into(),
             ],
             |view, event, cx| {
                 view.update(cx, |v, cx| v.core_event(event, cx));
@@ -635,11 +619,6 @@ impl SettingsContent {
                     self.knowledge.status_event(payload.clone());
                     cx.notify()
                 }
-                "voice:model:progress" if self.tab == Tab::Voice && self.visible => self.request(
-                    SettingsRequest::Voice(VoiceAction::List),
-                    Completion::Voice,
-                    cx,
-                ),
                 _ => {}
             }
         }
@@ -740,23 +719,6 @@ impl SettingsContent {
                 self.request(
                     SettingsRequest::Account(AccountAction::List),
                     Completion::Accounts(self.account_generation),
-                    cx,
-                )
-            }
-            Tab::Voice => {
-                self.request(
-                    SettingsRequest::Voice(VoiceAction::List),
-                    Completion::Voice,
-                    cx,
-                );
-                self.request(
-                    SettingsRequest::Voice(VoiceAction::Selected),
-                    Completion::VoiceSelected,
-                    cx,
-                );
-                self.request(
-                    SettingsRequest::Voice(VoiceAction::Modes),
-                    Completion::VoiceModes,
                     cx,
                 )
             }
@@ -939,27 +901,6 @@ impl SettingsContent {
                 );
                 self.request(SettingsRequest::ExtensionSchema, Completion::Schema, cx);
                 self.request(SettingsRequest::Installed, Completion::Installed, cx);
-            }
-            Completion::VoiceMutation => {
-                if r.is_ok() {
-                    self.request(
-                        SettingsRequest::Voice(VoiceAction::List),
-                        Completion::Voice,
-                        cx,
-                    );
-                    self.request(
-                        SettingsRequest::Voice(VoiceAction::Selected),
-                        Completion::VoiceSelected,
-                        cx,
-                    );
-                    self.request(
-                        SettingsRequest::Voice(VoiceAction::Modes),
-                        Completion::VoiceModes,
-                        cx,
-                    )
-                } else {
-                    self.error = Some("Could not update the voice model. Retry.".into())
-                }
             }
             Completion::ClipboardMutation => {
                 if r.is_err() {
@@ -1179,17 +1120,6 @@ impl SettingsContent {
             other => match r {
                 Err(e) => self.error = Some(e.into()),
                 Ok(v) => match other {
-                    Completion::Voice => self.voice = v,
-                    Completion::VoiceSelected => self.selected_voice = text(&v["modelId"]),
-                    Completion::VoiceModes => {
-                        self.voice_modes = v
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter_map(Value::as_str)
-                            .map(str::to_owned)
-                            .collect()
-                    }
                     Completion::Storage => self.storage = v,
                     Completion::Clipboard => {
                         self.clipboard = v;
@@ -1480,7 +1410,7 @@ impl SettingsContent {
             self.provider.provider.clone()
         };
         self.provider.load(p, &self.config);
-        for task in ["chat", "search", "action", "voice"] {
+        for task in ["chat", "search", "action"] {
             for (kind, map) in [
                 ("provider", "taskProviderOverrides"),
                 ("model", "taskModelOverrides"),
@@ -2236,9 +2166,6 @@ impl SettingsContent {
                     self.action(Action::Account(AccountAction::Paste(callback)), w, cx)
                 }
             }
-            Action::Voice(a) => {
-                self.request(SettingsRequest::Voice(a), Completion::VoiceMutation, cx)
-            }
             Action::KnowledgeControl(operation, trigger) => {
                 let e = self.knowledge.begin(operation, trigger, self.now());
                 self.knowledge_effects(e, cx)
@@ -2548,9 +2475,6 @@ fn provider_field<'a>(provider: &str, field: &'a str) -> &'a str {
 impl Completion {
     fn scope(&self) -> Option<&'static str> {
         match self {
-            Self::Voice => Some("voice"),
-            Self::VoiceSelected => Some("voice-selected"),
-            Self::VoiceModes => Some("voice-modes"),
             Self::Storage => Some("storage"),
             Self::Clipboard => Some("clipboard"),
             Self::DryRun => Some("dry-run"),

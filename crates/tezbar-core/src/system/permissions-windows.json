@@ -16,14 +16,6 @@
     "remediation": "Global shortcut and key-state monitoring are available automatically on Windows."
   },
   {
-    "id": "microphone",
-    "title": "Microphone",
-    "summary": "Capture audio for voice commands.",
-    "rationale": "Voice-activated commands and transcription features require microphone access.",
-    "settingsUrl": "ms-settings:privacy-microphone",
-    "remediation": "Open Settings → Privacy & security → Microphone and allow desktop apps to use the microphone."
-  },
-  {
     "id": "calendar",
     "title": "Calendar",
     "summary": "Read and create events for calendar-aware commands.",

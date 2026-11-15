@@ -730,7 +730,6 @@ fn settings_surface(tab: &str) -> Option<&'static str> {
     match tab {
         "extensions" => Some("settings-extensions"),
         "ai" => Some("settings-ai"),
-        "voice" => Some("settings-voice"),
         "knowledge" => Some("settings-knowledge"),
         "permissions" => Some("settings-permissions"),
         "storage" => Some("settings-storage"),

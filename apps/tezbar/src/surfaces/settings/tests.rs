@@ -74,8 +74,6 @@ impl SettingsTransport for Fixture {
                     json!([{"id":"folder","kind":"directory","value":"/fixture/","title":"Fixture folder","subtitle":"/fixture/"}]),
                 ),
                 "permissions:snapshot" => Ok(json!({"platform":"macos","statuses":[]})),
-                "voice:models:list" => Ok(json!([])),
-                "voice:model:get-selected" => Ok(json!({"modelId":"fixture-model"})),
                 "storage:breakdown" => {
                     Ok(json!({"totalBytes":64,"items":[{"id":"db","label":"Database","bytes":64}]}))
                 }
@@ -902,13 +900,6 @@ async fn task_override_uses_typed_fresh_map_and_preserves_peer_task() {
             .get("chat")
             .is_none()
     );
-    assert_eq!(
-        SettingsRequest::Voice(VoiceAction::CancelDownload("fixture-model".into())).wire(),
-        (
-            "voice:model:cancel-download",
-            vec![json!({"modelId":"fixture-model"})]
-        )
-    );
 }
 
 #[gpui::test]
@@ -1031,99 +1022,15 @@ fn cancelled_oauth_start_cannot_open_a_late_browser(cx: &mut TestAppContext) {
     );
 }
 // Windows shows no speech-runtime models: the native app has no dictation consumer yet.
-#[cfg(target_os = "windows")]
-#[gpui::test]
-fn windows_voice_offers_no_external_speech_runtimes(cx: &mut TestAppContext) {
-    let rt = runtime(cx);
-    let f = fixture();
-    f.responses.lock().unwrap().insert(
-        "voice:models:list",
-        json!([{"id":"m","name":"Model","status":"not-downloaded","runtime":{"ready":false,"installCommand":"python3 -m pip install x"}}]),
-    );
-    let store = SettingsStore::new(f.clone());
-    let (view, cx) =
-        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
-    cx.update(|w, cx| view.update(cx, |v, cx| v.activate_tab(Tab::Voice, w, cx)));
-    settle(&rt, cx);
-    assert!(cx.debug_bounds("settings-select-STT Model").is_none());
-    assert!(cx.debug_bounds("voice-download-m").is_none());
-}
-#[cfg(not(target_os = "windows"))]
-#[gpui::test]
-fn native_voice_selects_uninstalled_models_and_keeps_downloads_independent(
-    cx: &mut TestAppContext,
-) {
-    let rt = runtime(cx);
-    let f = fixture();
-    f.responses.lock().unwrap().insert("voice:models:list",json!([
-        {"id":"not-installed","name":"Not installed","status":"not-downloaded","downloadedBytes":0,"runtime":{"ready":false,"label":"Whisper","installCommand":"fixture-install"}},
-        {"id":"partial","name":"Partial","status":"error","downloadedBytes":12,"runtime":{"ready":true}},
-        {"id":"downloading","name":"Downloading","status":"downloading","stage":"downloading-weights","progress":0.25,"runtime":{"ready":true}}
-    ]));
-    f.responses.lock().unwrap().insert(
-        "voice:model:get-selected",
-        json!({"modelId":"not-installed"}),
-    );
-    f.responses
-        .lock()
-        .unwrap()
-        .insert("voice:stt:modes", json!(["local-model-assets"]));
-    let store = SettingsStore::new(f.clone());
-    let (view, cx) =
-        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
-    cx.update(|w, cx| view.update(cx, |v, cx| v.activate_tab(Tab::Voice, w, cx)));
-    settle(&rt, cx);
-    assert_eq!(
-        view.read_with(cx, |v, _| v.selected_voice.clone()),
-        "not-installed"
-    );
-    assert_eq!(
-        view.read_with(cx, |v, _| v.voice_modes.clone()),
-        ["local-model-assets"]
-    );
-    let button = cx
-        .debug_bounds("settings-select-STT Model")
-        .unwrap()
-        .center();
-    cx.simulate_click(button, Modifiers::default());
-    settle(&rt, cx);
-    let button = cx.debug_bounds("select-STT Model-0").unwrap().center();
-    cx.simulate_click(button, Modifiers::default());
-    settle(&rt, cx);
-    let button = cx.debug_bounds("voice-delete-partial").unwrap().center();
-    cx.simulate_click(button, Modifiers::default());
-    settle(&rt, cx);
-    let button = cx
-        .debug_bounds("voice-cancel-downloading")
-        .unwrap()
-        .center();
-    cx.simulate_click(button, Modifiers::default());
-    settle(&rt, cx);
-    let calls = f.calls.lock().unwrap();
-    for (channel, id) in [
-        ("voice:model:set-selected", "not-installed"),
-        ("voice:model:delete", "partial"),
-        ("voice:model:cancel-download", "downloading"),
-    ] {
-        assert_eq!(
-            calls
-                .iter()
-                .filter(|(c, a)| *c == channel && a == &vec![json!({"modelId":id})])
-                .count(),
-            1
-        );
-    }
-    assert!(!calls.iter().any(|(c, _)| *c == "voice:model:download"));
-}
 #[tokio::test]
-async fn settled_picker_owner_does_not_wait_for_an_unrelated_held_download() {
+async fn settled_picker_owner_does_not_wait_for_an_unrelated_held_uninstall() {
     let f = fixture();
     let (tx, rx) = tokio::sync::oneshot::channel();
     *f.held.lock().unwrap() = Some(rx);
-    *f.hold_channel.lock().unwrap() = Some("voice:model:download");
+    *f.hold_channel.lock().unwrap() = Some("extension:uninstall");
     let store = SettingsStore::new(f.clone());
     let id = store
-        .admit(SettingsRequest::Voice(VoiceAction::Download("peer".into())))
+        .admit(SettingsRequest::Uninstall("peer".into()))
         .unwrap();
     let copy = store.clone();
     let download = tokio::spawn(async move { copy.operation_result(id).await });
@@ -1238,7 +1145,7 @@ fn review_failed_operational_delete_is_retryable_but_never_dischargeable(cx: &mu
     let rt = runtime(cx);
     let f = fixture();
     // A real core delete that keeps failing (file in use / permission denied).
-    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    *f.fail_channel.lock().unwrap() = Some("extension:uninstall");
     let store = SettingsStore::new(f.clone());
     let barrier = EffectBarrier::default();
     let (view, cx) =
@@ -1247,11 +1154,8 @@ fn review_failed_operational_delete_is_retryable_but_never_dischargeable(cx: &mu
     settle(&rt, cx);
     cx.update(|w, cx| {
         view.update(cx, |v, cx| {
-            v.action(
-                Action::Voice(VoiceAction::Delete("fixture-model".into())),
-                w,
-                cx,
-            )
+            v.action(Action::Uninstall("fixture-model".into()), w, cx);
+            v.action(Action::Confirm(true), w, cx)
         })
     });
     settle(&rt, cx);
@@ -1266,7 +1170,7 @@ fn review_failed_operational_delete_is_retryable_but_never_dischargeable(cx: &mu
         .lock()
         .unwrap()
         .iter()
-        .filter(|(c, _)| *c == "voice:model:delete")
+        .filter(|(c, _)| *c == "extension:uninstall")
         .count();
     eprintln!(
         "OPUS close barrier: first={first:?} after 3 retries={after_retries:?} deletes={deletes} failures={}",
@@ -1286,7 +1190,7 @@ fn review_failed_operational_delete_is_retryable_but_never_dischargeable(cx: &mu
 fn review_unrelated_failed_operation_blocks_copilot_signin(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let f = fixture();
-    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    *f.fail_channel.lock().unwrap() = Some("extension:uninstall");
     let store = SettingsStore::new(f.clone());
     let (view, cx) =
         cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
@@ -1294,11 +1198,8 @@ fn review_unrelated_failed_operation_blocks_copilot_signin(cx: &mut TestAppConte
     settle(&rt, cx);
     cx.update(|w, cx| {
         view.update(cx, |v, cx| {
-            v.action(
-                Action::Voice(VoiceAction::Delete("fixture-model".into())),
-                w,
-                cx,
-            )
+            v.action(Action::Uninstall("fixture-model".into()), w, cx);
+            v.action(Action::Confirm(true), w, cx)
         })
     });
     settle(&rt, cx);
@@ -1324,7 +1225,7 @@ fn review_unrelated_failed_operation_blocks_copilot_signin(cx: &mut TestAppConte
     );
     assert_eq!(
         starts, 1,
-        "an unrelated failed Voice delete blocked Copilot sign-in"
+        "an unrelated failed extension uninstall blocked Copilot sign-in"
     );
 }
 #[gpui::test]
@@ -1333,7 +1234,7 @@ fn review_successful_toggle_reports_failure_after_unrelated_operation_failed(
 ) {
     let rt = runtime(cx);
     let f = fixture();
-    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    *f.fail_channel.lock().unwrap() = Some("extension:uninstall");
     let store = SettingsStore::new(f.clone());
     let (view, cx) =
         cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
@@ -1341,11 +1242,8 @@ fn review_successful_toggle_reports_failure_after_unrelated_operation_failed(
     settle(&rt, cx);
     cx.update(|w, cx| {
         view.update(cx, |v, cx| {
-            v.action(
-                Action::Voice(VoiceAction::Delete("fixture-model".into())),
-                w,
-                cx,
-            )
+            v.action(Action::Uninstall("fixture-model".into()), w, cx);
+            v.action(Action::Confirm(true), w, cx)
         })
     });
     settle(&rt, cx);
@@ -1402,7 +1300,7 @@ async fn review_owner_drain_cannot_strand_behind_an_exiting_pump() {
 fn review_repeated_failed_operations_exhaust_admission(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let f = fixture();
-    *f.fail_channel.lock().unwrap() = Some("voice:model:delete");
+    *f.fail_channel.lock().unwrap() = Some("extension:uninstall");
     let store = SettingsStore::new(f.clone());
     let (view, cx) =
         cx.add_window_view(|w, cx| SettingsContent::new(store.clone(), &UiState::default(), w, cx));
@@ -1411,22 +1309,15 @@ fn review_repeated_failed_operations_exhaust_admission(cx: &mut TestAppContext) 
     for _ in 0..15 {
         cx.update(|w, cx| {
             view.update(cx, |v, cx| {
-                v.action(
-                    Action::Voice(VoiceAction::Delete("fixture-model".into())),
-                    w,
-                    cx,
-                )
+                v.action(Action::Uninstall("fixture-model".into()), w, cx);
+                v.action(Action::Confirm(true), w, cx)
             })
         });
         settle(&rt, cx);
     }
     cx.update(|w, cx| {
         view.update(cx, |v, cx| {
-            v.action(
-                Action::Voice(VoiceAction::Select("other-model".into())),
-                w,
-                cx,
-            )
+            v.action(Action::DryRun(true), w, cx)
         })
     });
     settle(&rt, cx);
@@ -1435,7 +1326,7 @@ fn review_repeated_failed_operations_exhaust_admission(cx: &mut TestAppContext) 
         .lock()
         .unwrap()
         .iter()
-        .filter(|(c, _)| *c == "voice:model:set-selected")
+        .filter(|(c, _)| *c == "safety:dry-run:set")
         .count();
     eprintln!(
         "OPUS after 15 failed deletes: select calls={selects} error={:?} failures={}",
@@ -1464,7 +1355,7 @@ fn review_tab_switch_hides_unresolved_durable_failure(cx: &mut TestAppContext) {
     });
     settle(&rt, cx);
     let before = view.read_with(cx, |v, _| v.error.clone());
-    cx.update(|w, cx| view.update(cx, |v, cx| v.action(Action::Tab(Tab::Voice), w, cx)));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.action(Action::Tab(Tab::Storage), w, cx)));
     settle(&rt, cx);
     let after = view.read_with(cx, |v, _| v.durable_error().map(str::to_owned));
     eprintln!(

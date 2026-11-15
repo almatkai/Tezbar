@@ -12,16 +12,6 @@ pub enum AccountAction {
     Cancel,
 }
 #[derive(Clone)]
-pub enum VoiceAction {
-    List,
-    Selected,
-    Modes,
-    Select(String),
-    Download(String),
-    CancelDownload(String),
-    Delete(String),
-}
-#[derive(Clone)]
 pub enum SettingsRequest {
     CompletePath(String),
     PracticeCopy(String),
@@ -44,7 +34,6 @@ pub enum SettingsRequest {
         action: Action,
         args: Vec<Value>,
     },
-    Voice(VoiceAction),
     KnowledgeSnapshot,
     Knowledge(Operation),
     ChooseFolder,
@@ -95,7 +84,6 @@ impl SettingsRequest {
     // Replacement identity contains only finite target locators, never a credential value.
     pub(super) fn mutation_scope(&self) -> Option<String> {
         Some(match self {
-            Self::Voice(VoiceAction::Select(_)) => "voice-selection".into(),
             Self::Knowledge(Operation::Switch(_)) => "knowledge-model".into(),
             Self::Knowledge(Operation::Speed(_)) => "knowledge-speed".into(),
             Self::Knowledge(Operation::Depth(_)) => "knowledge-depth".into(),
@@ -160,7 +148,6 @@ impl SettingsRequest {
             self,
             Self::DeviceCancel
                 | Self::Account(AccountAction::Cancel)
-                | Self::Voice(VoiceAction::CancelDownload(_))
                 | Self::Knowledge(Operation::Cancel(_))
         )
     }
@@ -168,7 +155,6 @@ impl SettingsRequest {
         matches!(
             self,
             Self::Save(_)
-                | Self::Voice(VoiceAction::Select(_) | VoiceAction::Delete(_))
                 | Self::Knowledge(
                     Operation::Switch(_)
                         | Operation::Speed(_)
@@ -210,7 +196,6 @@ impl SettingsRequest {
                 | Self::ProviderStatuses
                 | Self::PiExtensions
                 | Self::Models { .. }
-                | Self::Voice(VoiceAction::List | VoiceAction::Selected | VoiceAction::Modes)
                 | Self::KnowledgeSnapshot
                 | Self::ChooseFolder
                 | Self::Storage
@@ -267,19 +252,6 @@ impl SettingsRequest {
                 AccountAction::Cancel => ("ai-accounts:antigravity:cancel", vec![]),
             },
             Self::Contribution { action, args } => (action.channel(), args),
-            Self::Voice(a) => match a {
-                VoiceAction::List => ("voice:models:list", vec![]),
-                VoiceAction::Selected => ("voice:model:get-selected", vec![]),
-                VoiceAction::Modes => ("voice:stt:modes", vec![]),
-                VoiceAction::Select(id) => {
-                    ("voice:model:set-selected", vec![json!({"modelId":id})])
-                }
-                VoiceAction::Download(id) => ("voice:model:download", vec![json!({"modelId":id})]),
-                VoiceAction::CancelDownload(id) => {
-                    ("voice:model:cancel-download", vec![json!({"modelId":id})])
-                }
-                VoiceAction::Delete(id) => ("voice:model:delete", vec![json!({"modelId":id})]),
-            },
             Self::KnowledgeSnapshot => ("knowledge:snapshot", vec![]),
             Self::Knowledge(o) => {
                 let r = o.request();

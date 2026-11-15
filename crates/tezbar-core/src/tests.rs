@@ -75,9 +75,23 @@ fn every_pre_migration_ipc_channel_has_a_native_owner() {
     .flatten()
     .copied()
     .collect();
+    // Voice input (dictation and speech-to-text models) was removed from the native app.
+    const RETIRED: &[&str] = &[
+        "voice:stt:modes",
+        "voice:stt:transcribe",
+        "voice:models:list",
+        "voice:model:download",
+        "voice:model:cancel-download",
+        "voice:model:delete",
+        "voice:model:get-selected",
+        "voice:model:set-selected",
+    ];
+    for channel in RETIRED {
+        assert!(!routes.contains(channel), "retired channel still routed: {channel}");
+    }
     let missing: Vec<_> = legacy
         .iter()
-        .filter(|channel| !routes.contains(channel.as_str()))
+        .filter(|channel| !routes.contains(channel.as_str()) && !RETIRED.contains(&channel.as_str()))
         .collect();
     assert!(missing.is_empty(), "Missing legacy routes: {missing:?}");
     assert!(extension_worker::CHANNELS
