@@ -1156,3 +1156,5 @@ fn benchmark_history(db: &mut rusqlite::Connection) -> CoreResult {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod idle_tests;
