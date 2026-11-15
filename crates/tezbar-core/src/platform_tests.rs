@@ -2,29 +2,6 @@ use super::*;
 use std::cell::Cell;
 
 #[test]
-fn windows_shortcut_launch_keeps_untrusted_paths_out_of_script() {
-    let app = r"C:\Start Menu\O'Brien $(bad); app.lnk";
-    let path = r"C:\Users\A B\$test & 'report'.txt";
-    let command = windows_open_with_command(app, path);
-    let command = command.as_std();
-    let args: Vec<_> = command.get_args().map(|s| s.to_str().unwrap()).collect();
-    assert_eq!(command.get_program(), "powershell.exe");
-    assert_eq!(
-        args[0..4],
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"]
-    );
-    assert!(args[4].contains("Start-Process -FilePath $env:TEZBAR_APP_PATH"));
-    assert!(!args[4].contains(app));
-    assert!(!args[4].contains(path));
-    let env: std::collections::HashMap<_, _> = command.get_envs().collect();
-    assert_eq!(env[std::ffi::OsStr::new("TEZBAR_APP_PATH")].unwrap(), app);
-    assert_eq!(
-        env[std::ffi::OsStr::new("TEZBAR_TARGET_PATH")].unwrap(),
-        path
-    );
-}
-
-#[test]
 fn application_name_fallback_and_settings_routes() {
     assert_eq!(
         application_target(&json!({"appName":"TextEdit"})).unwrap(),

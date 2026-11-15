@@ -1056,13 +1056,8 @@ async fn kill_process_tree(pid: u32) {
     }
     #[cfg(target_os = "windows")]
     {
-        let _ = tokio::process::Command::new("taskkill.exe")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .creation_flags(0x08000000)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await;
+        // The tree is terminated in-process (what `taskkill /T /F` did).
+        let _ = tokio::task::spawn_blocking(move || crate::windows_shell::kill_tree(pid)).await;
     }
 }
 

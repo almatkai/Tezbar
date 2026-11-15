@@ -175,20 +175,7 @@ impl Drop for ProcessTree {
             }
             #[cfg(windows)]
             {
-                let mut killer = Command::new("taskkill");
-                killer
-                    .args(["/PID", &pid.to_string(), "/T", "/F"])
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .creation_flags(0x08000000);
-                if let Ok(mut child) = killer.spawn() {
-                    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-                        runtime.spawn(async move {
-                            let _ = child.wait().await;
-                        });
-                    }
-                }
+                crate::windows_shell::kill_tree(pid);
             }
         }
     }

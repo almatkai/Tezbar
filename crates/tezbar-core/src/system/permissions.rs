@@ -121,17 +121,14 @@ fn windows_desktop(id: &str) -> &'static str {
 }
 #[cfg(windows)]
 fn windows_microphone() -> &'static str {
+    // Registry read in-process; DWORDs render like `reg query` (0x2) for the checks below.
     fn registry(path: &str, key: &str) -> Option<String> {
-        use std::os::windows::process::CommandExt;
-        let out = std::process::Command::new("reg.exe")
-            .args(["query", path, "/v", key])
-            .creation_flags(0x08000000)
-            .output()
-            .ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        Some(String::from_utf8_lossy(&out.stdout).into_owned())
+        let (root, sub) = path.split_once('\\')?;
+        let value = crate::windows_shell::read_registry_text(root, sub, key)?;
+        Some(match value.parse::<u32>() {
+            Ok(n) => format!("0x{n:x}"),
+            Err(_) => value,
+        })
     }
     if registry(
         r"HKLM\Software\Policies\Microsoft\Windows\AppPrivacy",

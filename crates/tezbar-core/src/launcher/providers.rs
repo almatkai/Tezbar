@@ -14,6 +14,7 @@ use std::{
         Arc,
     },
 };
+#[cfg_attr(windows, allow(dead_code))]
 pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
     let mut cmd = tokio::process::Command::new(program);
     cmd.args(args).kill_on_drop(true);
@@ -119,20 +120,9 @@ pub async fn applications(ctx: &CoreContext) -> CoreResult {
     })
     .await
     .map_err(|e| e.to_string())?;
+    // The shell Apps folder (what Get-StartApps listed), enumerated in-process.
     #[cfg(target_os = "windows")]
-    if let Ok(s) = output(
-        "powershell.exe",
-        &[
-            "-NoLogo",
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "Get-StartApps | Select-Object Name,AppID | ConvertTo-Json -Compress",
-        ],
-        8,
-    )
-    .await
-    {
+    if let Ok(Ok(s)) = tokio::task::spawn_blocking(crate::windows_shell::start_apps_json).await {
         let _ = merge_windows_start_apps(&mut apps, &s);
     }
     #[cfg(target_os = "macos")]

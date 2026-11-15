@@ -133,32 +133,17 @@ impl SystemCore {
             "start-keep-awake" | "stop-keep-awake" => {
                 let mut guard = self.state.keep_awake.lock().await;
                 let was = match guard.as_mut() {
-                    Some(c) => c.try_wait().map_err(|e| e.to_string())?.is_none(),
+                    Some(c) => c.is_active()?,
                     None => false,
                 };
                 if id == "stop-keep-awake" {
-                    if let Some(mut c) = guard.take() {
-                        let _ = c.kill().await;
-                        let _ = c.wait().await;
+                    if let Some(c) = guard.take() {
+                        c.stop().await;
                     }
                     return Ok(state("Keep Awake turned off.", was, false));
                 }
                 if !was {
-                    let mut command = if cfg!(windows) {
-                        let mut c = Command::new("powershell.exe");
-                        c.args(["-NoProfile","-NonInteractive","-Command",r#"Add-Type 'using System;using System.Runtime.InteropServices;public class Awake{[DllImport("kernel32.dll")]public static extern uint SetThreadExecutionState(uint f);}'; [Awake]::SetThreadExecutionState(0x80000003) | Out-Null; while($true){Start-Sleep -Seconds 60}"#]);
-                        c
-                    } else {
-                        let mut c = Command::new("/usr/bin/caffeinate");
-                        c.arg("-di");
-                        c
-                    };
-                    command
-                        .kill_on_drop(true)
-                        .stdin(std::process::Stdio::null())
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null());
-                    *guard = Some(command.spawn().map_err(|e| e.to_string())?);
+                    *guard = Some(KeepAwake::start()?);
                 }
                 return Ok(state("Keep Awake is on.", was, true));
             }
@@ -265,7 +250,17 @@ impl SystemCore {
             )),
             "git-root" | "copy-current-path" => {
                 let path = if cfg!(windows) {
-                    ps(r#"$window=(New-Object -ComObject Shell.Application).Windows() | Where-Object {$_.FullName -match 'explorer.exe$' -and $_.Document.Folder.Self.Path} | Select-Object -First 1; if($null -eq $window){throw 'No Explorer folder window is open.'}; $window.Document.Folder.Self.Path"#).await?
+                    {
+                        #[cfg(windows)]
+                        let folder = blocking(|| crate::windows_shell::explorer_folder().map(|p| json!(p)))
+                            .await?
+                            .as_str()
+                            .unwrap_or_default()
+                            .to_owned();
+                        #[cfg(not(windows))]
+                        let folder = String::new();
+                        folder
+                    }
                 } else {
                     apple("tell application \"Finder\" to get POSIX path of (target of front Finder window as alias)").await?
                 };
@@ -360,8 +355,10 @@ impl SystemCore {
         }
         let execution:Result<String,String>=async{if id=="speech.read-aloud" {
  let text=payload["text"].as_str().unwrap_or("").trim();if text.is_empty(){return Err("No text provided for read-aloud".into());}
- let mut c=if cfg!(windows){let mut c=Command::new("powershell.exe");c.args(["-NoLogo","-NoProfile","-NonInteractive","-Command","Add-Type -AssemblyName System.Speech; $voice=New-Object System.Speech.Synthesis.SpeechSynthesizer; try {$voice.Speak($env:TEZBAR_SPEECH_TEXT)} finally {$voice.Dispose()}"]).env("TEZBAR_SPEECH_TEXT",text);c}else{let mut c=Command::new("say");c.arg(text);c};c.stdin(std::process::Stdio::null());output(c,Duration::from_secs(600)).await?;Ok("Reading aloud".into())
- }else{let enabled=id.ends_with(".on");if cfg!(windows){ps(&format!(r"$p='HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'; Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value {0}; Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value {0}",if enabled{0}else{1})).await?;}else{apple(&format!("tell application \"System Events\" to tell appearance preferences to set dark mode to {enabled}")).await?;}Ok(format!("Dark mode {}",if enabled{"enabled"}else{"disabled"}))}}.await;
+ #[cfg(windows)]{let text=text.to_owned();blocking(move||crate::windows_shell::speak(&text,||false).map(|()|Value::Null)).await?;}
+ #[cfg(not(windows))]{let mut c=Command::new("say");c.arg(text);c.stdin(std::process::Stdio::null());output(c,Duration::from_secs(600)).await?;}
+ Ok("Reading aloud".into())
+ }else{let enabled=id.ends_with(".on");if cfg!(windows){#[cfg(windows)]crate::windows_shell::set_dark_mode(enabled)?;}else{apple(&format!("tell application \"System Events\" to tell appearance preferences to set dark mode to {enabled}")).await?;}Ok(format!("Dark mode {}",if enabled{"enabled"}else{"disabled"}))}}.await;
         let r = match execution {
             Ok(m) => result(true, m),
             Err(e) => result(false, e),
@@ -403,34 +400,218 @@ pub(super) fn password() -> String {
 }
 
 impl SystemCore {
+    #[cfg(windows)]
     async fn native_windows(&self, id: &str) -> CoreResult {
-        let script=match id {
- "toggle-dark-mode"=>{let query=r"Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name AppsUseLightTheme";let was=ps(query).await?=="0";ps(&format!(r"$p='HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize';Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value {0};Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value {0}",if was{1}else{0})).await?;let on=ps(query).await?=="0";return Ok(state("Toggled Windows dark mode",was,on));}
- "start-screen-saver"|"lock-screen"=>{run("rundll32.exe",&["user32.dll,LockWorkStation"]).await?;return Ok(result(true,"Screen locked"));}
- "toggle-mute"|"volume-up"|"volume-down"=>{
- let key=match id{"toggle-mute"=>173,"volume-up"=>175,_=>174};ps(&format!(r#"Add-Type 'using System;using System.Runtime.InteropServices;public class TezbarAudio{{[DllImport("user32.dll")]public static extern void keybd_event(byte k,byte s,uint f,UIntPtr x);}}';[TezbarAudio]::keybd_event({key},0,0,[UIntPtr]::Zero);[TezbarAudio]::keybd_event({key},0,2,[UIntPtr]::Zero)"#)).await?;return Ok(result(true,"System audio updated"));}
- "sleep-display"=>r#"Add-Type 'using System;using System.Runtime.InteropServices;public class Display{[DllImport("user32.dll")]public static extern IntPtr SendMessage(IntPtr h,uint m,IntPtr w,IntPtr l);}';[Display]::SendMessage([IntPtr]0xffff,0x0112,[IntPtr]0xF170,[IntPtr]2)|Out-Null"#,
- "sleep-system"=>"Add-Type -AssemblyName System.Windows.Forms; if(-not [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend,$false,$false)){throw 'Windows refused suspend request'}",
- "show-network-info"=>"Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object -ExpandProperty IPAddress",
- "flush-dns-cache"=>{let s=run("ipconfig.exe",&["/flushdns"]).await?;return Ok(result(true,s));}
- "toggle-wifi"=>{
- let adapter=r#"$adapter=Get-NetAdapter -IncludeHidden | Where-Object {$_.HardwareInterface -and ($_.NdisPhysicalMedium -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wireless|Wi-Fi|802\.11')} | Select-Object -First 1;if($null -eq $adapter){throw 'No Wi-Fi adapter found.'};"#;
- let query=format!("{adapter} $adapter.AdminStatus");let was=ps(&query).await?=="Up";
- let toggle=format!("$ErrorActionPreference='Stop';{adapter} if($adapter.AdminStatus -eq 'Up'){{Disable-NetAdapter -Name $adapter.Name -Confirm:$false}}else{{Enable-NetAdapter -Name $adapter.Name -Confirm:$false}}");
- use base64::Engine;let bytes:Vec<u8>=toggle.encode_utf16().flat_map(u16::to_le_bytes).collect();let encoded=base64::engine::general_purpose::STANDARD.encode(bytes);
- ps(&format!("$p=Start-Process powershell.exe -Verb RunAs -Wait -PassThru -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand','{encoded}');if($p.ExitCode -ne 0){{throw 'Wi-Fi elevation cancelled or failed'}}")).await?;
- let on=ps(&query).await?=="Up";return Ok(state("Wi-Fi toggled",was,on));}
- "empty-trash"=>"Clear-RecycleBin -Force -ErrorAction Stop",
- "show-macos-version"=>"$os=Get-CimInstance Win32_OperatingSystem;'{0} — version {1}, build {2}' -f $os.Caption,$os.Version,$os.BuildNumber",
- "show-cpu-info"=>"Get-CimInstance Win32_Processor | ForEach-Object {\"$($_.Name) — $($_.NumberOfCores) cores\"}",
- "show-memory-info"=>"$os=Get-CimInstance Win32_OperatingSystem;'Free: {0:N1} GB / Total: {1:N1} GB' -f ($os.FreePhysicalMemory/1MB),($os.TotalVisibleMemorySize/1MB)",
- "show-disk-usage"=>"Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object {'{0} Free: {1:N1} GB / {2:N1} GB' -f $_.DeviceID,($_.FreeSpace/1GB),($_.Size/1GB)}",
- "show-battery-status"=>"$b=Get-CimInstance Win32_Battery;if($b){$b | ForEach-Object {'Battery: {0}%' -f $_.EstimatedChargeRemaining}}else{'No battery detected'}",
- _=>return Err(format!("Command {id} is only available on macOS.")),
- };
-        Ok(result(
-            true,
-            ps(script).await?.pipe_nonempty("Command completed".into()),
-        ))
+        let id = id.to_owned();
+        blocking(move || native_windows_blocking(&id)).await
+    }
+    #[cfg(not(windows))]
+    async fn native_windows(&self, id: &str) -> CoreResult {
+        Err(format!("Command {id} is only available on macOS."))
+    }
+}
+
+/// Every Windows built-in command runs in-process (registry, Win32, WMI, WinRT): no shell child.
+#[cfg(windows)]
+fn native_windows_blocking(id: &str) -> CoreResult {
+    use super::windows_wmi::{Com, Wmi};
+    use crate::windows_shell as shell;
+    type Row = serde_json::Map<String, Value>;
+    let gb = |bytes: f64| bytes / 1_073_741_824.0;
+    let text = |row: &Row, key: &str| match row.get(key) {
+        Some(Value::String(s)) => s.clone(),
+        Some(v @ Value::Number(_)) => v.to_string(),
+        _ => String::new(),
+    };
+    let number = |row: &Row, key: &str| {
+        row.get(key)
+            .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .unwrap_or(0.0)
+    };
+    let message = match id {
+        "toggle-dark-mode" => {
+            let was = shell::dark_mode();
+            shell::set_dark_mode(!was)?;
+            return Ok(state("Toggled Windows dark mode", was, shell::dark_mode()));
+        }
+        "start-screen-saver" | "lock-screen" => {
+            shell::lock_workstation()?;
+            "Screen locked".to_owned()
+        }
+        "toggle-mute" | "volume-up" | "volume-down" => {
+            shell::tap_key(match id {
+                "toggle-mute" => shell::VK_VOLUME_MUTE,
+                "volume-up" => shell::VK_VOLUME_UP,
+                _ => shell::VK_VOLUME_DOWN,
+            });
+            "System audio updated".to_owned()
+        }
+        "sleep-display" => {
+            shell::sleep_display();
+            "Display sleeping".to_owned()
+        }
+        "sleep-system" => {
+            shell::suspend()?;
+            "System sleeping".to_owned()
+        }
+        "flush-dns-cache" => {
+            shell::flush_dns()?;
+            "Successfully flushed the DNS Resolver Cache.".to_owned()
+        }
+        "toggle-wifi" => {
+            let (was, on) = shell::toggle_wifi()?;
+            return Ok(state("Wi-Fi toggled", was, on));
+        }
+        "empty-trash" => if shell::empty_recycle_bin()? {
+            "Emptied Recycle Bin"
+        } else {
+            "Recycle Bin is already empty"
+        }
+        .to_owned(),
+        "show-memory-info" => {
+            use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+            let mut memory: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+            memory.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+            if unsafe { GlobalMemoryStatusEx(&mut memory) } == 0 {
+                return Err("Memory information is unavailable".into());
+            }
+            format!(
+                "Free: {:.1} GB / Total: {:.1} GB",
+                gb(memory.ullAvailPhys as f64),
+                gb(memory.ullTotalPhys as f64)
+            )
+        }
+        "show-battery-status" => {
+            use windows_sys::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+            let mut power: SYSTEM_POWER_STATUS = unsafe { std::mem::zeroed() };
+            let ok = unsafe { GetSystemPowerStatus(&mut power) } != 0;
+            if ok && power.BatteryFlag != 128 && power.BatteryFlag != 255 && power.BatteryLifePercent != 255 {
+                format!("Battery: {}%", power.BatteryLifePercent)
+            } else {
+                "No battery detected".to_owned()
+            }
+        }
+        "show-macos-version" | "show-cpu-info" | "show-disk-usage" | "show-network-info" => {
+            let _com = Com::init()?;
+            match id {
+                "show-macos-version" => {
+                    let rows = Wmi::connect(r"ROOT\CIMV2")?.query(
+                        "SELECT Caption, Version, BuildNumber FROM Win32_OperatingSystem",
+                        &["Caption", "Version", "BuildNumber"],
+                    )?;
+                    let os = rows.first().ok_or("Windows version is unavailable")?;
+                    format!(
+                        "{} \u{2014} version {}, build {}",
+                        text(os, "Caption"),
+                        text(os, "Version"),
+                        text(os, "BuildNumber")
+                    )
+                }
+                "show-cpu-info" => Wmi::connect(r"ROOT\CIMV2")?
+                    .query("SELECT Name, NumberOfCores FROM Win32_Processor", &["Name", "NumberOfCores"])?
+                    .iter()
+                    .map(|cpu| format!("{} \u{2014} {} cores", text(cpu, "Name").trim(), text(cpu, "NumberOfCores")))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                "show-disk-usage" => Wmi::connect(r"ROOT\CIMV2")?
+                    .query(
+                        "SELECT DeviceID, FreeSpace, Size FROM Win32_LogicalDisk WHERE DriveType = 3",
+                        &["DeviceID", "FreeSpace", "Size"],
+                    )?
+                    .iter()
+                    .map(|disk| {
+                        format!(
+                            "{} Free: {:.1} GB / {:.1} GB",
+                            text(disk, "DeviceID"),
+                            gb(number(disk, "FreeSpace")),
+                            gb(number(disk, "Size"))
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                _ => Wmi::connect(r"ROOT\StandardCimv2")?
+                    .query("SELECT IPAddress FROM MSFT_NetIPAddress WHERE AddressFamily = 2", &["IPAddress"])?
+                    .iter()
+                    .map(|row| text(row, "IPAddress"))
+                    .filter(|ip| !ip.is_empty() && !ip.starts_with("127."))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            }
+        }
+        _ => return Err(format!("Command {id} is only available on macOS.")),
+    };
+    Ok(result(true, message.pipe_nonempty("Command completed".into())))
+}
+
+/// Keep Awake: an in-process power request on Windows, `caffeinate` on macOS.
+pub(super) enum KeepAwake {
+    #[cfg(windows)]
+    Native(crate::windows_shell::KeepAwake),
+    #[cfg_attr(windows, allow(dead_code))]
+    Child(tokio::process::Child),
+}
+impl KeepAwake {
+    fn start() -> Result<Self, String> {
+        #[cfg(windows)]
+        return crate::windows_shell::KeepAwake::start().map(Self::Native);
+        #[cfg(not(windows))]
+        {
+            let mut command = Command::new("/usr/bin/caffeinate");
+            command
+                .arg("-di")
+                .kill_on_drop(true)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            command.spawn().map(Self::Child).map_err(|e| e.to_string())
+        }
+    }
+    fn is_active(&mut self) -> Result<bool, String> {
+        match self {
+            #[cfg(windows)]
+            Self::Native(awake) => Ok(awake.is_active()),
+            Self::Child(child) => Ok(child.try_wait().map_err(|e| e.to_string())?.is_none()),
+        }
+    }
+    pub(super) async fn stop(self) {
+        match self {
+            #[cfg(windows)]
+            Self::Native(awake) => drop(awake),
+            Self::Child(mut child) => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+            }
+        }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod native_windows_tests {
+    use super::*;
+    /// Read-only built-ins answer in-process (theme, radio, power and lock are not exercised:
+    /// they would change the desktop of whoever runs the suite).
+    #[test]
+    fn information_commands_answer_without_a_shell() {
+        for id in [
+            "show-macos-version",
+            "show-cpu-info",
+            "show-memory-info",
+            "show-disk-usage",
+            "show-battery-status",
+            "show-network-info",
+            "flush-dns-cache",
+        ] {
+            let reply = native_windows_blocking(id).unwrap();
+            assert_eq!(reply["ok"], true, "{id}: {reply}");
+            let message = reply["message"].as_str().unwrap();
+            assert!(!message.is_empty(), "{id}");
+            match id {
+                "show-macos-version" => assert!(message.contains("build"), "{message}"),
+                "show-memory-info" => assert!(message.starts_with("Free: "), "{message}"),
+                "show-disk-usage" => assert!(message.contains(" GB / "), "{message}"),
+                _ => {}
+            }
+        }
+        assert!(native_windows_blocking("not-a-command").is_err());
     }
 }

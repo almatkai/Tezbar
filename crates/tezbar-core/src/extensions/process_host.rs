@@ -444,19 +444,7 @@ fn clipboard_files_command(paths: &[String]) -> Result<tokio::process::Command, 
         cmd.args(["-e","on run argv\nset fs to {}\nrepeat with p in argv\nset end of fs to POSIX file p\nend repeat\nset the clipboard to fs\nend run","--"]).args(paths).kill_on_drop(true);
         Ok(cmd)
     }
-    #[cfg(target_os = "windows")]
-    {
-        let json = serde_json::to_string(paths)
-            .map_err(|e| e.to_string())?
-            .replace('\'', "''");
-        let script=format!("$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Windows.Forms;$paths=ConvertFrom-Json '{}';$files=New-Object System.Collections.Specialized.StringCollection;$files.AddRange([string[]]$paths);[System.Windows.Forms.Clipboard]::SetFileDropList($files)",json);
-        let mut cmd = tokio::process::Command::new("powershell.exe");
-        cmd.args(["-NoProfile", "-NonInteractive", "-STA", "-Command", &script])
-            .creation_flags(0x08000000)
-            .kill_on_drop(true);
-        Ok(cmd)
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(not(target_os = "macos"))]
     {
         let _ = paths;
         Err("Clipboard file write unsupported".into())
@@ -475,6 +463,17 @@ async fn run_clipboard_files_command(mut command: tokio::process::Command) -> Co
 }
 async fn write_files(params: &Value) -> CoreResult {
     let paths = clipboard_file_paths(params)?;
+    // Windows: CF_HDROP file list written in-process (what Explorer's Copy puts there).
+    #[cfg(target_os = "windows")]
+    {
+        let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        return tokio::task::spawn_blocking(move || crate::windows_shell::set_clipboard_files(&paths))
+            .await
+            .map_err(|e| e.to_string())?
+            .map(|()| json!(true))
+            .map_err(|_| "OS clipboard file write failed".into());
+    }
+    #[allow(unreachable_code)]
     run_clipboard_files_command(clipboard_files_command(&paths)?).await
 }
 
@@ -553,15 +552,17 @@ async fn selected_files() -> CoreResult {
         cmd.args(["-l","JavaScript","-e",r#"JSON.stringify(Application('Finder').selection().slice(0,128).map(function(item){return item.url();}))"#]);
         cmd
     };
+    // Windows: selection of the front-most File Explorer window, read through the shell.
     #[cfg(target_os = "windows")]
-    let mut command = {
-        let mut cmd = tokio::process::Command::new("powershell.exe");
-        cmd.args(["-NoProfile","-NonInteractive","-Command",r#"$ErrorActionPreference='Stop';Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public static class TezbarSelectionWindow{[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();}';$foreground=[TezbarSelectionWindow]::GetForegroundWindow().ToInt64();$paths=@();$shell=New-Object -ComObject Shell.Application;foreach($window in $shell.Windows()){if([long]$window.HWND -eq $foreground){$paths=@($window.Document.SelectedItems() | Select-Object -First 128 | ForEach-Object {$_.Path});break}};ConvertTo-Json -InputObject @($paths) -Compress"#]).creation_flags(0x08000000);
-        cmd
-    };
+    {
+        let files = tokio::task::spawn_blocking(|| crate::windows_shell::explorer_selection(128))
+            .await
+            .map_err(|e| e.to_string())??;
+        return Ok(json!(files.into_iter().filter(|p| p.is_absolute() && p.is_file()).collect::<Vec<_>>()));
+    }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     return Err("File selection is unsupported on this platform".into());
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[cfg(target_os = "macos")]
     {
         command
             .stdin(std::process::Stdio::null())
@@ -588,8 +589,6 @@ async fn selected_files() -> CoreResult {
                 .map_err(|e| e.to_string())?
                 .to_file_path()
                 .map_err(|_| "Selection URL is not a local file")?;
-            #[cfg(target_os = "windows")]
-            let path = PathBuf::from(value);
             if path.is_absolute() && path.is_file() {
                 files.push(path);
             }
@@ -695,7 +694,9 @@ mod shape_tests {
                 .map(|p| p.to_str().unwrap().to_string())
                 .collect::<Vec<_>>()
         );
+        #[cfg(target_os = "macos")]
         let command = clipboard_files_command(&selected).unwrap();
+        #[cfg(target_os = "macos")]
         let args = command
             .as_std()
             .get_args()
@@ -708,13 +709,6 @@ mod shape_tests {
                 &args[3..],
                 selected.iter().map(String::as_str).collect::<Vec<_>>()
             );
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let script = args.last().unwrap();
-            assert!(script.contains("$ErrorActionPreference='Stop'"));
-            assert!(script.contains("Clipboard]::SetFileDropList($files)"));
-            assert!(script.contains("clip''s video.mp4"));
         }
         // Exercise the production exit/error handling with a harmless test
         // executable, never the real clipboard command constructed above.

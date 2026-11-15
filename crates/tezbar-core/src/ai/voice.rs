@@ -471,13 +471,23 @@ impl Voice {
         if text.trim().is_empty() {
             return Ok(json!({"ok":true}));
         }
-        let binary = if cfg!(windows) {
-            "powershell.exe"
-        } else {
-            "say"
-        };
         let cancel = Cancel::new();
         self.inner.state.lock().unwrap().speech = Some(cancel.clone());
+        // Windows speaks through SAPI in-process; cancellation purges the queue.
+        #[cfg(windows)]
+        {
+            let text = text.trim().to_owned();
+            let (voice_cancel, stop) = (cancel.clone(), self.inner.stop.clone());
+            self.spawn(async move {
+                let _ = tokio::task::spawn_blocking(move || {
+                    crate::windows_shell::speak(&text, || voice_cancel.is_cancelled() || stop.is_cancelled())
+                })
+                .await;
+            });
+            return Ok(json!({"ok":true}));
+        }
+        #[allow(unreachable_code)]
+        let binary = "say";
         let available = self.has(binary).await;
         if cancel.is_cancelled() {
             return Ok(json!({"ok":true}));
@@ -485,15 +495,8 @@ impl Voice {
         if !available {
             return Err(format!("Text-to-speech runtime is unavailable: {binary}"));
         }
-        let mut command = if cfg!(windows) {
-            let mut cmd = process::command("powershell.exe");
-            cmd.args(["-NoLogo","-NoProfile","-NonInteractive","-Command","Add-Type -AssemblyName System.Speech; $voice=New-Object System.Speech.Synthesis.SpeechSynthesizer; try { $voice.Speak($env:TEZBAR_SPEECH_TEXT) } finally { $voice.Dispose() }"]).env("TEZBAR_SPEECH_TEXT",text.trim());
-            cmd
-        } else {
-            let mut cmd = process::command("say");
-            cmd.arg(text.trim());
-            cmd
-        };
+        let mut command = process::command("say");
+        command.arg(text.trim());
         let voice = self.clone();
         self.spawn(async move{let _=tokio::select!{r=process::output(&mut command,Duration::from_secs(3600),&cancel)=>r,_=voice.inner.stop.cancelled()=>{cancel.cancel();Err("Voice shut down".into())}};});
         Ok(json!({"ok":true}))

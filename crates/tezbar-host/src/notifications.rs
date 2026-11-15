@@ -98,28 +98,16 @@ pub async fn remove(id: &str) -> Result<(), String> {
     Ok(())
 }
 #[cfg(target_os = "windows")]
-async fn powershell(script: String) -> Result<(), String> {
-    let mut cmd = tokio::process::Command::new("powershell.exe");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .creation_flags(0x08000000)
-        .kill_on_drop(true);
-    let out = tokio::time::timeout(std::time::Duration::from_secs(10), cmd.output())
-        .await
-        .map_err(|_| "Notification command timed out")?
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err("Windows notification submission failed".into())
-    }
-}
-#[cfg(target_os = "windows")]
 fn tag(id: &str) -> String {
     use sha2::{Digest, Sha256};
     format!("{:x}", Sha256::digest(id.as_bytes()))[..16].to_string()
 }
 #[cfg(target_os = "windows")]
-pub async fn show(id: &str, title: &str, body: &str) -> Result<(), String> {
+const APP_ID: &str = "Tezbar";
+#[cfg(target_os = "windows")]
+const GROUP: &str = "TezbarExtensions";
+#[cfg(target_os = "windows")]
+fn toast_xml(title: &str, body: &str) -> String {
     fn xml(s: &str) -> String {
         s.replace('&', "&amp;")
             .replace('<', "&lt;")
@@ -127,12 +115,59 @@ pub async fn show(id: &str, title: &str, body: &str) -> Result<(), String> {
             .replace('"', "&quot;")
             .replace('\'', "&apos;")
     }
-    let xml=format!("<toast><visual><binding template='ToastGeneric'><text>{}</text><text>{}</text></binding></visual></toast>",xml(title),xml(body)).replace('\'',"''");
-    powershell(format!("$ErrorActionPreference='Stop';[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]>$null;[Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom,ContentType=WindowsRuntime]>$null;$xml=New-Object Windows.Data.Xml.Dom.XmlDocument;$xml.LoadXml('{}');$toast=[Windows.UI.Notifications.ToastNotification]::new($xml);$toast.Tag='{}';$toast.Group='TezbarExtensions';[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Tezbar').Show($toast)",xml,tag(id))).await
+    format!(
+        "<toast><visual><binding template='ToastGeneric'><text>{}</text><text>{}</text></binding></visual></toast>",
+        xml(title),
+        xml(body)
+    )
+}
+/// Toasts go through WinRT in-process (no PowerShell child).
+#[cfg(target_os = "windows")]
+pub async fn show(id: &str, title: &str, body: &str) -> Result<(), String> {
+    use windows::core::HSTRING;
+    use windows::Data::Xml::Dom::XmlDocument;
+    use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
+    let (xml, tag) = (toast_xml(title, body), tag(id));
+    tokio::task::spawn_blocking(move || -> windows::core::Result<()> {
+        let document = XmlDocument::new()?;
+        document.LoadXml(&HSTRING::from(xml))?;
+        let toast = ToastNotification::CreateToastNotification(&document)?;
+        toast.SetTag(&HSTRING::from(tag))?;
+        toast.SetGroup(&HSTRING::from(GROUP))?;
+        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_ID))?.Show(&toast)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|_| "Windows notification submission failed".to_string())
 }
 #[cfg(target_os = "windows")]
 pub async fn remove(id: &str) -> Result<(), String> {
-    powershell(format!("$ErrorActionPreference='Stop';[Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]>$null;[Windows.UI.Notifications.ToastNotificationManager]::History.Remove('{}','TezbarExtensions','Tezbar')",tag(id))).await
+    use windows::core::HSTRING;
+    use windows::UI::Notifications::ToastNotificationManager;
+    let tag = tag(id);
+    tokio::task::spawn_blocking(move || -> windows::core::Result<()> {
+        ToastNotificationManager::History()?.RemoveGroupedTagWithId(
+            &HSTRING::from(tag),
+            &HSTRING::from(GROUP),
+            &HSTRING::from(APP_ID),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|_| "Windows notification submission failed".to_string())
+}
+#[cfg(all(test, target_os = "windows"))]
+mod windows_tests {
+    #[test]
+    fn toast_xml_escapes_user_text() {
+        let xml = super::toast_xml("a <b> & 'c'", "\"d\"");
+        assert!(xml.contains("a &lt;b&gt; &amp; &apos;c&apos;"));
+        assert!(xml.contains("&quot;d&quot;"));
+        windows::Data::Xml::Dom::XmlDocument::new()
+            .unwrap()
+            .LoadXml(&windows::core::HSTRING::from(xml))
+            .unwrap();
+    }
 }
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub async fn show(_id: &str, _title: &str, _body: &str) -> Result<(), String> {

@@ -409,6 +409,8 @@ pub mod resource_directory;
 pub mod terminal;
 #[cfg(windows)]
 pub mod windows_job;
+#[cfg(windows)]
+pub(crate) mod windows_shell;
 
 #[cfg(test)]
 mod desktop_effect_tests;

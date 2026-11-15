@@ -565,16 +565,13 @@ impl PlatformCore {
                         output("/usr/bin/open", &["-a", app, path], 10).await?;
                     }
                 }
+                // ShellExecute resolves .lnk shortcuts and registered apps like Start-Process did.
                 #[cfg(target_os = "windows")]
                 {
-                    let mut command = windows_open_with_command(app, path);
-                    let output = tokio::time::timeout(Duration::from_secs(10), command.output())
+                    let (app, path) = (app.to_owned(), path.to_owned());
+                    tokio::task::spawn_blocking(move || crate::windows_shell::open_with(&app, &path))
                         .await
-                        .map_err(|_| "Starting application timed out".to_string())?
-                        .map_err(|e| e.to_string())?;
-                    if !output.status.success() {
-                        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-                    }
+                        .map_err(|e| e.to_string())??;
                 }
                 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                 {
@@ -705,34 +702,11 @@ end tell"#,
         let line = selected.strip_suffix('\n').unwrap_or(&selected);
         line.strip_suffix('\r').unwrap_or(line).to_string()
     };
+    // UI Automation text selection of the focused control, in-process.
     #[cfg(target_os = "windows")]
-    let selected = {
-        let source = r#"Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes
-$focused=[System.Windows.Automation.AutomationElement]::FocusedElement
-if($null -eq $focused){throw 'No focused text element'}
-$pattern=$null
-if(-not $focused.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern,[ref]$pattern)){throw 'The focused application does not expose text selection'}
-$text=(@($pattern.GetSelection() | ForEach-Object {$_.GetText(-1)}) -join '')
-[Console]::Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text)))"#;
-        let encoded = output(
-            "powershell.exe",
-            &[
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                source,
-            ],
-            3,
-        )
-        .await?;
-        String::from_utf8(
-            base64::engine::general_purpose::STANDARD
-                .decode(encoded.trim())
-                .map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?
-    };
+    let selected = tokio::task::spawn_blocking(crate::windows_shell::selected_text)
+        .await
+        .map_err(|e| e.to_string())??;
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let selected: String =
         return Err("Reading selected text is supported on macOS and Windows".into());
@@ -781,17 +755,6 @@ fn persist_or_rollback(
             )),
         },
     }
-}
-
-#[cfg(any(target_os = "windows", test))]
-fn windows_open_with_command(app: &str, path: &str) -> tokio::process::Command {
-    let mut command = tokio::process::Command::new("powershell.exe");
-    command.args(["-NoLogo","-NoProfile","-NonInteractive","-Command",
-        r#"$ErrorActionPreference='Stop'; Start-Process -FilePath $env:TEZBAR_APP_PATH -ArgumentList (, ('"' + $env:TEZBAR_TARGET_PATH + '"'))"#])
-        .env("TEZBAR_APP_PATH",app).env("TEZBAR_TARGET_PATH",path).kill_on_drop(true);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
-    command
 }
 
 #[cfg(test)]

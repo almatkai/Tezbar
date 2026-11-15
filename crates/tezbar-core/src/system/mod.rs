@@ -3,7 +3,7 @@ use super::common::{now_ms, CoreContext, CoreResult, HandlerResult};
 use serde_json::{json, Value};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
-    process::{Child, Command},
+    process::Command,
     sync::{Mutex, Semaphore},
 };
 mod assets;
@@ -47,7 +47,7 @@ pub struct SystemCore {
 struct State {
     currency: Mutex<HashMap<String, (u64, Value)>>,
     audit: Mutex<()>,
-    keep_awake: Mutex<Option<Child>>,
+    keep_awake: Mutex<Option<commands::KeepAwake>>,
     icons: Mutex<HashMap<String, Value>>,
     icon_slots: Semaphore,
     stats: Mutex<stats::StatsState>,
@@ -67,9 +67,8 @@ impl SystemCore {
         }
     }
     pub async fn shutdown(&self) {
-        if let Some(mut child) = self.state.keep_awake.lock().await.take() {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
+        if let Some(awake) = self.state.keep_awake.lock().await.take() {
+            awake.stop().await;
         }
     }
     pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {

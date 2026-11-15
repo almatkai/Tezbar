@@ -162,6 +162,30 @@ impl Drop for RuntimeActivity<'_> {
 }
 // Only unit tests route downloads to loopback archives; production always uses
 // pinned publisher URLs/checksums and the platform runtime catalog.
+/// Extract a verified zip in-process: only entries that stay inside `target`, no links.
+fn extract_zip(archive: &std::path::Path, target: &std::path::Path) -> Result<(), String> {
+    let file = std::fs::File::open(archive).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(file)).map_err(|e| e.to_string())?;
+    for index in 0..zip.len() {
+        let mut entry = zip.by_index(index).map_err(|e| e.to_string())?;
+        let relative = entry.enclosed_name().ok_or("Runtime archive entry escapes its folder")?;
+        if entry.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000) {
+            return Err("Runtime archive contains a link".into());
+        }
+        let path = target.join(relative);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut out = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+        std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 #[derive(Clone)]
 struct TestInstallSource {
@@ -785,17 +809,18 @@ impl Runtime {
         tokio::fs::create_dir_all(&runtime)
             .await
             .map_err(|e| e.to_string())?;
-        let cmd = if manifest.file.ends_with(".zip") {
-            let mut c = Command::new("powershell.exe");
-            c.args(["-NoLogo","-NoProfile","-NonInteractive","-Command","Expand-Archive -LiteralPath $env:TEZBAR_GEMMA_ARCHIVE -DestinationPath $env:TEZBAR_GEMMA_DESTINATION -Force"]).env("TEZBAR_GEMMA_ARCHIVE",&archive).env("TEZBAR_GEMMA_DESTINATION",&runtime);
-            c
+        // The archive was checksum verified before extraction; no JS supervisor participates.
+        if manifest.file.ends_with(".zip") {
+            let (source, target) = (archive.clone(), runtime.clone());
+            tokio::task::spawn_blocking(move || extract_zip(&source, &target))
+                .await
+                .map_err(|e| e.to_string())??;
+            cancel.check()?;
         } else {
             let mut c = Command::new("tar");
             c.arg("-xzf").arg(&archive).arg("-C").arg(&runtime);
-            c
-        };
-        // The archive was checksum verified before extraction; no JS supervisor participates.
-        extract::command(cmd, cancel).await?;
+            extract::command(c, cancel).await?;
+        }
         let search = runtime.clone();
         let executable = tokio::task::spawn_blocking(move || server(&search))
             .await

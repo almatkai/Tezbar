@@ -67,9 +67,10 @@ impl SystemCore {
         {
             return Ok(Value::Null);
         }
-        // UWP icon extraction is not available through ExtractAssociatedIcon; match legacy null behavior.
+        // Packaged (Store) apps have no file; the shell renders their tile icon by identity.
+        #[cfg(windows)]
         if path.starts_with("shell:AppsFolder\\") {
-            return Ok(Value::Null);
+            return self.packaged_app_icon(path).await;
         }
         let path = PathBuf::from(path);
         let p = path.clone();
@@ -131,9 +132,21 @@ impl SystemCore {
         let generated = if exists {
             Ok(())
         } else if cfg!(windows) {
-            let mut c = Command::new("powershell.exe");
-            c.args(["-NoLogo","-NoProfile","-NonInteractive","-Command",r#"$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Drawing;$icon=[System.Drawing.Icon]::ExtractAssociatedIcon($env:TEZBAR_ICON_SOURCE);if($null -eq $icon){exit 2};try{$bitmap=$icon.ToBitmap();try{$bitmap.Save($env:TEZBAR_ICON_DEST,[System.Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}}finally{$icon.Dispose()}"#]).env("TEZBAR_ICON_SOURCE",legacy_spelling(&path)).env("TEZBAR_ICON_DEST",legacy_spelling(&dest));
-            output(c, Duration::from_secs(5)).await.map(|_| ())
+            // Shell icon (applications) or thumbnail (files), rendered in-process.
+            #[cfg(windows)]
+            let rendered = {
+                let (source, target) = (legacy_spelling(&path), dest.clone());
+                let icon_only = kind == "application";
+                tokio::task::spawn_blocking(move || {
+                    crate::windows_shell::shell_icon_png(&source.to_string_lossy(), &target, 64, icon_only)
+                })
+                .await
+                .map_err(|e| e.to_string())
+                .and_then(|r| r)
+            };
+            #[cfg(not(windows))]
+            let rendered: Result<(), String> = Err("unreachable".into());
+            rendered
         } else if kind == "application" {
             self.mac_app_icon(&path, &dest).await
         } else {
@@ -313,6 +326,34 @@ pub(super) fn previewable(p: &str) -> bool {
         "tsv", "tif", "tiff", "txt", "wav", "webm", "webp", "xls", "xlsm", "xlsx",
     ]
     .contains(&ext.as_str())
+}
+
+#[cfg(windows)]
+impl SystemCore {
+    /// Store-app tile icon, cached per identity (no file metadata to key on).
+    async fn packaged_app_icon(&self, identity: &str) -> CoreResult {
+        let key = format!("application:{identity}");
+        if let Some(v) = self.state.icons.lock().await.get(&key).cloned() {
+            return Ok(v);
+        }
+        let _slot = self.state.icon_slots.acquire().await.map_err(|e| e.to_string())?;
+        let hash = format!("{:x}", Sha1::digest(key.as_bytes()));
+        let dir = self.ctx.paths.data_dir.join("icon-cache").join("applications").join(hash);
+        let dest = dir.join("icon.png");
+        let (source, target) = (identity.to_owned(), dest.clone());
+        let value = blocking(move || {
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            if !target.exists() {
+                if crate::windows_shell::shell_icon_png(&source, &target, 64, true).is_err() {
+                    return Ok(Value::Null);
+                }
+            }
+            Ok(data(&target))
+        })
+        .await?;
+        self.state.icons.lock().await.insert(key, value.clone());
+        Ok(value)
+    }
 }
 
 #[cfg(test)]

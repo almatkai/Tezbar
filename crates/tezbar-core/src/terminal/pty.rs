@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::process::Command as ProcessCommand;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex};
@@ -205,18 +206,9 @@ fn stop_session(session: &mut NativeTerminalSession) -> Result<(), String> {
     }
     #[cfg(windows)]
     if let Some(pid) = session.pid {
-        use std::os::windows::process::CommandExt;
-        // CREATE_NO_WINDOW: a console child of this GUI process would flash a window.
-        let status = ProcessCommand::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .creation_flags(0x08000000)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map_err(|e| e.to_string())?;
-        if status.success() {
-            return Ok(());
-        }
+        // The shell and everything it started end together, without a taskkill child.
+        crate::windows_shell::kill_tree(pid);
+        return Ok(());
     }
     session.killer.kill().map_err(|e| e.to_string())
 }
