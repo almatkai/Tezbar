@@ -116,7 +116,7 @@ pub struct ChatView {
     cancel_focus: FocusHandle,
     jobs: BTreeMap<u64, Task<()>>,
     next_job: u64,
-    clock: Option<Task<()>>,
+    clock: Option<(u64, Task<()>)>,
     frame: Option<Task<()>>,
     documents: BTreeMap<String, DocumentEntry>,
     images: ImageCache,
@@ -489,29 +489,6 @@ impl ChatView {
         self.refresh_scope(cx);
         self.refresh_documents(cx);
         self.refresh_thumbnails(w, cx);
-        if self.clock.is_none() {
-            let window = self.window;
-            self.clock = Some(cx.spawn(async move |this, cx| {
-                loop {
-                    cx.background_executor()
-                        .timer(Duration::from_millis(250))
-                        .await;
-                    if cx
-                        .update_window(window, |_, w, cx| {
-                            this.update(cx, |v, cx| {
-                                let e = v.controller.tick(now());
-                                if !e.is_empty() {
-                                    v.execute(e, w, cx);
-                                }
-                            })
-                        })
-                        .is_err()
-                    {
-                        break;
-                    }
-                }
-            }));
-        }
         if self.active().is_none_or(|c| c.approval.is_none()) {
             self.input.focus_handle(cx).focus(w, cx);
         }
@@ -581,7 +558,40 @@ impl ChatView {
             .as_deref()
             .and_then(|id| self.controller.conversation(id))
     }
+    fn sync_start_timeout(&mut self, cx: &mut Context<Self>) {
+        let deadline = if self.disposed {
+            None
+        } else {
+            self.controller.next_start_deadline()
+        };
+        if self.clock.as_ref().map(|(deadline, _)| *deadline) == deadline {
+            return;
+        }
+        // Dropping the previous GPUI task cancels its timer. Keep just the
+        // earliest outstanding deadline, regardless of the visible surface.
+        self.clock = None;
+        let Some(deadline) = deadline else { return };
+        let delay = Duration::from_millis(deadline.saturating_sub(now()));
+        let window = self.window;
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(delay).await;
+            let _ = cx.update_window(window, |_, w, cx| {
+                let _ = this.update(cx, |v, cx| {
+                    if v.clock.as_ref().map(|(due, _)| *due) != Some(deadline) {
+                        return;
+                    }
+                    v.clock = None;
+                    // The monotonic timer has elapsed even if wall time moved
+                    // backwards while waiting (or a test advanced its clock).
+                    let effects = v.controller.tick(now().max(deadline));
+                    v.execute(effects, w, cx);
+                });
+            });
+        });
+        self.clock = Some((deadline, task));
+    }
     fn publish(&mut self, cx: &mut Context<Self>) {
+        self.sync_start_timeout(cx);
         let status = self.controller.background();
         if status != self.last_background {
             self.last_background = status.clone();

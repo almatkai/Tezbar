@@ -93,6 +93,7 @@ struct Inner {
     lifecycle: tokio::sync::Mutex<()>,
     stop: Arc<AtomicBool>,
     wake: tokio::sync::Notify,
+    watcher_wake: Arc<tokio::sync::Notify>,
     tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
     refresh: tokio::sync::Mutex<()>,
     shortcuts: tokio::sync::Mutex<()>,
@@ -113,6 +114,7 @@ impl LauncherCore {
                 lifecycle: tokio::sync::Mutex::new(()),
                 stop: Arc::new(AtomicBool::new(false)),
                 wake: tokio::sync::Notify::new(),
+                watcher_wake: Arc::new(tokio::sync::Notify::new()),
                 tasks: Mutex::new(vec![]),
                 refresh: tokio::sync::Mutex::new(()),
                 shortcuts: tokio::sync::Mutex::new(()),
@@ -178,8 +180,9 @@ impl LauncherCore {
             let db = self.inner.db.clone();
             let stop = self.inner.stop.clone();
             let scanning = self.inner.scanning.clone();
+            let wake = self.inner.watcher_wake.clone();
             let watcher =
-                tokio::spawn(async move { providers::watch(ctx, db, stop, scanning).await });
+                tokio::spawn(async move { providers::watch(ctx, db, stop, scanning, wake).await });
             self.inner
                 .tasks
                 .lock()
@@ -260,6 +263,7 @@ impl LauncherCore {
             return Ok(());
         }
         self.inner.wake.notify_waiters();
+        self.inner.watcher_wake.notify_waiters();
         let tasks = std::mem::take(&mut *self.inner.tasks.lock().map_err(|e| e.to_string())?);
         for mut task in tasks {
             if tokio::time::timeout(std::time::Duration::from_secs(3), &mut task)

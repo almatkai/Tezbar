@@ -93,6 +93,7 @@ async fn ignored_watcher_burst_does_not_trigger_reconciliation() {
                 .add_path(root.join(format!("project/target/debug/generated{n}.rs")))),
             &tx,
             &overflow,
+            &tokio::sync::Notify::new(),
         );
     }
     let rescan = overflow.swap(false, Ordering::AcqRel);
@@ -132,6 +133,7 @@ fn watcher_filter_preserves_rename_delete_errors_and_loss_signals() {
             .add_path(visible.clone())),
         &tx,
         &overflow,
+        &tokio::sync::Notify::new(),
     );
     let event = rx.try_recv().unwrap().unwrap();
     assert_eq!(event.kind, rename);
@@ -143,6 +145,7 @@ fn watcher_filter_preserves_rename_delete_errors_and_loss_signals() {
             .add_path(ignored.clone())),
         &tx,
         &overflow,
+        &tokio::sync::Notify::new(),
     );
     assert_eq!(rx.try_recv().unwrap().unwrap().paths, vec![visible.clone()]);
     // An unsupported extension may be a deleted directory containing indexed files.
@@ -151,12 +154,14 @@ fn watcher_filter_preserves_rename_delete_errors_and_loss_signals() {
         Ok(Event::new(EventKind::Remove(RemoveKind::Any)).add_path(deleted_dir.clone())),
         &tx,
         &overflow,
+        &tokio::sync::Notify::new(),
     );
     assert_eq!(rx.try_recv().unwrap().unwrap().paths, vec![deleted_dir]);
     providers::queue_watch_event(
         Ok(Event::new(EventKind::Access(AccessKind::Any)).add_path(visible.clone())),
         &tx,
         &overflow,
+        &tokio::sync::Notify::new(),
     );
     assert!(rx.try_recv().is_err());
     assert!(!overflow.load(Ordering::Acquire));
@@ -167,12 +172,14 @@ fn watcher_filter_preserves_rename_delete_errors_and_loss_signals() {
             .set_flag(Flag::Rescan)),
         &tx,
         &overflow,
+        &tokio::sync::Notify::new(),
     );
     assert!(overflow.swap(false, Ordering::AcqRel));
     providers::queue_watch_event(
         Err(notify::Error::generic("synthetic watcher failure")),
         &tx,
         &overflow,
+        &tokio::sync::Notify::new(),
     );
     assert!(overflow.swap(false, Ordering::AcqRel));
     for _ in 0..3 {
@@ -180,6 +187,7 @@ fn watcher_filter_preserves_rename_delete_errors_and_loss_signals() {
             Ok(Event::new(EventKind::Any).add_path(visible.clone())),
             &tx,
             &overflow,
+            &tokio::sync::Notify::new(),
         );
     }
     assert!(
@@ -234,6 +242,7 @@ async fn incremental_reconciliation_keeps_edits_renames_deletions_and_source_cha
             Ok(Event::new(EventKind::Any).add_path(root.clone())),
             &tx,
             &overflow,
+            &tokio::sync::Notify::new(),
         );
     }
     assert!(overflow.swap(false, Ordering::AcqRel));
@@ -341,4 +350,93 @@ async fn terminal_idle_prune_does_not_write_synthetic_profile() {
             .unwrap(),
         modified
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn idle_polling_watcher_inbox_sleeps_until_event_or_shutdown() {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(2);
+    let stop = AtomicBool::new(false);
+    let overflow = AtomicBool::new(false);
+    let wake = tokio::sync::Notify::new();
+    let wait = providers::wait_watch_work(&mut rx, &stop, &overflow, &wake);
+    tokio::pin!(wait);
+    assert!(futures_util::poll!(&mut wait).is_pending());
+    tokio::time::advance(Duration::from_secs(3600)).await;
+    assert!(
+        futures_util::poll!(&mut wait).is_pending(),
+        "idle watcher owns no periodic timeout"
+    );
+    stop.store(true, Ordering::Release);
+    wake.notify_waiters();
+    assert!(matches!(wait.await, providers::WatchWork::Stopped));
+    drop(tx);
+}
+
+#[tokio::test(start_paused = true)]
+async fn idle_polling_watcher_retains_shutdown_and_event_loss_signals() {
+    use providers::{wait_watch_work, WatchWork};
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let stop = AtomicBool::new(true);
+    let overflow = AtomicBool::new(false);
+    let wake = tokio::sync::Notify::new();
+    // Notification before registration is not retained by notify_waiters.
+    wake.notify_waiters();
+    assert!(matches!(
+        wait_watch_work(&mut rx, &stop, &overflow, &wake).await,
+        WatchWork::Stopped
+    ));
+    stop.store(false, Ordering::Release);
+    {
+        let wait = wait_watch_work(&mut rx, &stop, &overflow, &wake);
+        tokio::pin!(wait);
+        assert!(futures_util::poll!(&mut wait).is_pending());
+        providers::queue_watch_event(
+            Err(notify::Error::generic("synthetic loss")),
+            &tx,
+            &overflow,
+            &wake,
+        );
+        assert!(
+            matches!(wait.await, WatchWork::Reconcile),
+            "error wakes an empty inbox"
+        );
+    }
+    // A rescan signal is retained even before the waiter exists and even for ignored paths.
+    let rescan = Event::new(EventKind::Any)
+        .add_path(std::path::PathBuf::from("/fixture/target/ignored"))
+        .set_flag(notify::event::Flag::Rescan);
+    providers::queue_watch_event(Ok(rescan), &tx, &overflow, &wake);
+    assert!(matches!(
+        wait_watch_work(&mut rx, &stop, &overflow, &wake).await,
+        WatchWork::Reconcile
+    ));
+    for _ in 0..2 {
+        providers::queue_watch_event(Ok(Event::new(EventKind::Any)), &tx, &overflow, &wake);
+    }
+    assert!(
+        matches!(
+            wait_watch_work(&mut rx, &stop, &overflow, &wake).await,
+            WatchWork::Reconcile
+        ),
+        "bounded queue loss requests reconciliation"
+    );
+    assert!(
+        matches!(
+            wait_watch_work(&mut rx, &stop, &overflow, &wake).await,
+            WatchWork::Event(Ok(_))
+        ),
+        "queued real event survives loss recovery"
+    );
+    {
+        let wait = wait_watch_work(&mut rx, &stop, &overflow, &wake);
+        tokio::pin!(wait);
+        assert!(futures_util::poll!(&mut wait).is_pending());
+        providers::queue_watch_event(Ok(Event::new(EventKind::Any)), &tx, &overflow, &wake);
+        assert!(matches!(wait.await, WatchWork::Event(Ok(_))));
+    }
+    drop(tx);
+    assert!(matches!(
+        wait_watch_work(&mut rx, &stop, &overflow, &wake).await,
+        WatchWork::Stopped
+    ));
 }
