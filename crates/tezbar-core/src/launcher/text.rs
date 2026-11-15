@@ -844,7 +844,8 @@ pub fn surface_boost(category: &str, title: &str, subtitle: &str, query: &Query)
     }
     if category == "commands"
         && ((title == "extensions" && q == "extensions")
-            || (title == "extensions store"
+            // The store command is titled "Loved Extensions" on Windows.
+            || ((title == "extensions store" || title == "loved extensions")
                 && ["store", "extension store", "extensions store"].contains(&q)))
     {
         return 1400.;
@@ -949,4 +950,16 @@ pub fn intent(query: &str) -> serde_json::Value {
 
 pub fn utf16_prefix(s: &str, length: usize) -> String {
     String::from_utf16_lossy(&s.encode_utf16().take(length).collect::<Vec<_>>())
+}
+
+#[cfg(test)]
+mod store_boost_tests {
+    use super::*;
+    #[test]
+    fn store_query_finds_the_store_command_under_either_title() {
+        for title in ["Extensions Store", "Loved Extensions"] {
+            assert_eq!(surface_boost("commands", title, "", &Query::new("store")), 1400., "{title}");
+        }
+        assert!(surface_boost("commands", "Loved Extensions", "", &Query::new("loved")) < 1400.);
+    }
 }
