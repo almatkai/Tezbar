@@ -1030,6 +1030,25 @@ fn cancelled_oauth_start_cannot_open_a_late_browser(cx: &mut TestAppContext) {
             .any(|(c, _)| *c == "open-external-url")
     );
 }
+// Windows shows no speech-runtime models: the native app has no dictation consumer yet.
+#[cfg(target_os = "windows")]
+#[gpui::test]
+fn windows_voice_offers_no_external_speech_runtimes(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    f.responses.lock().unwrap().insert(
+        "voice:models:list",
+        json!([{"id":"m","name":"Model","status":"not-downloaded","runtime":{"ready":false,"installCommand":"python3 -m pip install x"}}]),
+    );
+    let store = SettingsStore::new(f.clone());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate_tab(Tab::Voice, w, cx)));
+    settle(&rt, cx);
+    assert!(cx.debug_bounds("settings-select-STT Model").is_none());
+    assert!(cx.debug_bounds("voice-download-m").is_none());
+}
+#[cfg(not(target_os = "windows"))]
 #[gpui::test]
 fn native_voice_selects_uninstalled_models_and_keeps_downloads_independent(
     cx: &mut TestAppContext,

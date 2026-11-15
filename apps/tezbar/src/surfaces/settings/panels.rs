@@ -1079,6 +1079,16 @@ impl SettingsContent {
         .child(note(self.account_status.clone(), t))
     }
     pub(super) fn render_voice(&self, t: Tokens, cx: &mut Context<Self>) -> Div {
+        // The native app records no audio yet, so Windows must not offer Python/Homebrew
+        // speech runtimes for a dictation flow that cannot use them.
+        if cfg!(target_os = "windows") {
+            return div().child(setting(
+                "Dictation",
+                "Push-to-talk dictation is not available in the native Windows app yet. Read aloud uses the built-in Windows voice.",
+                div().text_size(px(12.5)).child("Not available"),
+                t,
+            ));
+        }
         let mut d = div()
             .child(setting(
                 "Push to Talk",
