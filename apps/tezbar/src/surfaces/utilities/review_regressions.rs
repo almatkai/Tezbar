@@ -210,6 +210,41 @@ fn review_new_release_navigation_opens_current_not_last_historical(cx: &mut Test
     assert_eq!(shown.as_deref(), Some("0.3.0-beta.7"));
 }
 
+// Windows desktop: Esc on What's new / Permissions did nothing because focus went to the
+// search field those headers never paint.
+#[gpui::test]
+fn escape_leaves_surfaces_without_a_search_field(cx: &mut TestAppContext) {
+    for (index, surface) in [Surface::ReleaseNotes, Surface::Permissions]
+        .into_iter()
+        .enumerate()
+    {
+        let rt = runtime(cx);
+        let (view, vcx) = cx.add_window_view(|w, cx| {
+            Utilities::new(Arc::new(Fixture::default()), &UiState::default(), w, cx)
+        });
+        let backs = std::rc::Rc::new(std::cell::Cell::new(0));
+        let sink = backs.clone();
+        vcx.update(|_, cx| {
+            cx.subscribe(&view, move |_, e: &UtilityEffect, _| {
+                if matches!(e, UtilityEffect::Back) {
+                    sink.set(sink.get() + 1);
+                }
+            })
+            .detach()
+        });
+        vcx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.configure_release("0.3.0-beta.7".into(), Some("Notes".into()));
+                v.navigate(nav(surface.clone(), index as u64 + 1), w, cx)
+            })
+        });
+        settle(&rt, vcx);
+        vcx.simulate_keystrokes("escape");
+        settle(&rt, vcx);
+        assert_eq!(backs.get(), 1, "{surface:?}: Esc must go back");
+    }
+}
+
 #[gpui::test]
 fn review_backspace_identical_styled_text_and_delete_paragraph_boundary(cx: &mut TestAppContext) {
     let (html, _, _) = review_note("<div><strong>a</strong>a</div>", 1, "backspace", cx);

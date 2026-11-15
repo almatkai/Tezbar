@@ -391,13 +391,19 @@ impl Utilities {
         }
         if let Some(first) = self.fields.first() {
             first.focus_handle(cx).focus(window, cx);
-        } else if self.surface == Surface::SystemMonitor
-            || (self.surface == Surface::Vault && !self.vault.model.unlocked)
-        {
+        } else if !self.renders_search() {
+            // A handle that is never painted cannot receive keys: Esc/Back would be dead.
             window.focus(&self.focus, cx);
         } else {
             window.focus(&self.search.focus_handle(cx), cx);
         }
+    }
+    /// Whether the header paints the search field (and so whether it can hold focus).
+    pub(super) fn renders_search(&self) -> bool {
+        !matches!(
+            self.surface,
+            Surface::SystemMonitor | Surface::Permissions | Surface::ReleaseNotes
+        ) && !(self.surface == Surface::Vault && !self.vault.model.unlocked)
     }
     pub fn set_visible(&mut self, visible: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.visible == visible {
