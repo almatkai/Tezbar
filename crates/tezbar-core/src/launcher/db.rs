@@ -451,6 +451,33 @@ fn search_at(db: &Connection, q: &str, candidates: bool, now: u64, fts_sql: &str
             d.lex = lex;
             docs.insert(id, d);
         }
+        // Built-in commands reserve a page too: their keywords ("store" for the store
+        // command) lose the FTS top 160 to files named store.ts / .DS_Store.
+        let mut commands = vec![];
+        let mut statement = db
+            .prepare_cached(
+                "SELECT id,title,subtitle,tokens FROM documents WHERE category IN ('commands','native-command') LIMIT 400",
+            )
+            .map_err(err)?;
+        let mut rows = statement.query([]).map_err(err)?;
+        while let Some(r) = rows.next().map_err(err)? {
+            let title: String = r.get(1).map_err(err)?;
+            let subtitle: String = r.get(2).map_err(err)?;
+            let tokens: String = r.get(3).map_err(err)?;
+            let (lex, _) = text::best_match(&format!("{title} {subtitle} {tokens}"), &prepared, &mut scratch);
+            if lex > 0. {
+                commands.push((r.get::<_, String>(0).map_err(err)?, lex));
+            }
+        }
+        commands.sort_by(|a, b| b.1.total_cmp(&a.1));
+        commands.truncate(20);
+        for (id, lex) in commands {
+            if docs.get(&id).map_or(true, |old| lex > old.lex) {
+                let mut d = hydrate(db, &id)?;
+                d.lex = lex;
+                docs.insert(id, d);
+            }
+        }
         // Names typed by ear in the other script: "клауд" finds "CloudFlare".
         if let Some(phonetic) = text::PhoneticQuery::new(&normalized) {
             let mut matches = vec![];
@@ -1281,5 +1308,28 @@ mod performance_regression_tests {
             "fixture must expose the prior category scan"
         );
         integrity(&db);
+    }
+}
+
+#[cfg(test)]
+mod command_reserve_tests {
+    use super::*;
+    use serde_json::json;
+    /// Hundreds of `store.ts` files must not push the store command out of the FTS page.
+    #[tokio::test]
+    async fn keyword_command_survives_a_page_full_of_matching_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("index.sqlite3"));
+        let mut docs: Vec<Value> = (0..300)
+            .map(|n| json!({"id":format!("file:{n}"),"category":"files","title":format!("store{n}.ts"),
+                "subtitle":format!("C:/src/{n}/store.ts"),"tokens":"store ts","action":{"type":"open-file","path":format!("C:/src/{n}/store.ts")},"updatedAt":n}))
+            .collect();
+        docs.push(json!({"id":"command:open-extensions","category":"commands","title":"Loved Extensions",
+            "subtitle":"Browse Tezbar-recommended GitHub extensions","tokens":"Loved Extensions store extension store extensions store raycast store /store",
+            "action":{"type":"invoke-command","commandId":"open-extensions"},"updatedAt":1}));
+        db.upsert(docs, vec![]).await.unwrap();
+        let results = db.search("store".into(), false).await.unwrap();
+        assert_eq!(results[0]["id"], "command:open-extensions", "{results:#}");
+        db.shutdown().await.unwrap();
     }
 }
