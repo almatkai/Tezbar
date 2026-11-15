@@ -308,11 +308,16 @@ impl ExtensionWorker {
         let (bun, directory) = if let Some(launch) = &self.launch {
             (launch.bun.clone(), launch.directory.clone())
         } else {
-            let data = self.ctx.paths.data_dir.clone();
-            // Discovery remains lazy and exclusive to extension execution.
-            let bun = tokio::task::spawn_blocking(move || crate::bun::locate_bun(&data))
-                .await
-                .map_err(|e| e.to_string())??;
+            // Lazy and exclusive to extension execution: prefer a local Bun, otherwise
+            // provision the pinned, checksum-verified copy into app data (beta.8 parity).
+            let context = self.ctx.clone();
+            let bun = crate::bun::ensure_bun(&self.ctx.paths.data_dir, move |phase, percent| {
+                context.emit(
+                    "extension-worker-status",
+                    json!({"phase": phase, "percent": percent}),
+                );
+            })
+            .await?;
             let directory = if cfg!(debug_assertions) {
                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist-backend")
             } else {
