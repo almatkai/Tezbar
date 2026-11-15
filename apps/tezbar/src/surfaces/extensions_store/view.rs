@@ -167,7 +167,9 @@ impl StoreView {
             .flex()
             .flex_col()
             .gap(px(12. * t.zoom))
-            .p(px(20. * t.zoom));
+            .p(px(20. * t.zoom))
+            // Body copy size; rows without their own size used to inherit the 16px default.
+            .text_size(px(12. * t.zoom));
         let icon = div()
             .size(px(56. * t.zoom))
             .rounded(px(14.))
