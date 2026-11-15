@@ -12,6 +12,10 @@ mod commands;
 mod permissions;
 mod safety;
 mod stats;
+#[cfg(windows)]
+mod stats_windows;
+#[cfg(windows)]
+mod windows_wmi;
 #[cfg(test)]
 mod tests;
 

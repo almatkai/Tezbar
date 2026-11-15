@@ -295,39 +295,19 @@ pub(super) fn mac_fixed(p: &Value) -> Value {
     let free = num(&storage["free_space_in_bytes"]);
     json!({"device":{"platform":"macOS","name":h["machine_name"],"model":h["machine_model"],"chip":h["chip_type"],"osVersion":null,"uptimeSeconds":null},"cpu":{"model":h["chip_type"],"totalCores":n(cores.first()),"performanceCores":n(cores.get(1)),"efficiencyCores":n(cores.get(2))},"gpu":{"model":g["sppci_model"].as_str().or_else(||g["_name"].as_str()),"cores":num(&g["sppci_cores"]),"display":display["_spdisplays_pixels"]},"storage":{"name":storage["_name"],"device":physical["device_name"],"totalBytes":total,"freeBytes":free,"usedBytes":difference(&total,&free),"smartStatus":physical["smart_status"]},"batteryHealth":{"maximumCapacityPercent":n(cap.first()),"cycleCount":num(&health["sppower_battery_cycle_count"]),"condition":health["sppower_battery_health"].as_str().map(|s|if s=="Good"||s=="sppower_battery_health_good"{"Normal"}else{s}),"lowPowerMode":settings.and_then(|v| match v["Battery Power"]["LowPowerMode"].as_str() {Some("Yes")=>Some(true),Some("No")=>Some(false),_=>None})}})
 }
-const WINDOWS_STATIC: &str = r#"
-$computer=Get-CimInstance Win32_ComputerSystem | Select-Object -First 1
-$processor=Get-CimInstance Win32_Processor | Select-Object -First 1
-$gpu=Get-CimInstance Win32_VideoController | Sort-Object AdapterRAM -Descending | Select-Object -First 1
-$os=Get-CimInstance Win32_OperatingSystem
-$drive=Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'"
-$physical=Get-PhysicalDisk -ErrorAction SilentlyContinue | Sort-Object Size -Descending | Select-Object -First 1
-$design=(Get-CimInstance -Namespace root/WMI BatteryStaticData -ErrorAction SilentlyContinue | Measure-Object DesignedCapacity -Sum).Sum
-$full=(Get-CimInstance -Namespace root/WMI BatteryFullChargedCapacity -ErrorAction SilentlyContinue | Measure-Object FullChargedCapacity -Sum).Sum
-$cycles=(Get-CimInstance -Namespace root/WMI BatteryCycleCount -ErrorAction SilentlyContinue | Measure-Object CycleCount -Sum).Sum
-[ordered]@{name=$env:COMPUTERNAME;model=($computer.Manufacturer+' '+$computer.Model);cpu=$processor.Name;cores=$computer.NumberOfLogicalProcessors;gpu=$gpu.Name;width=$gpu.CurrentHorizontalResolution;height=$gpu.CurrentVerticalResolution;refresh=$gpu.CurrentRefreshRate;os=($os.Caption+' · '+$os.Version+' · build '+$os.BuildNumber);storage=$drive.VolumeName;device=$drive.DeviceID;smart=$physical.HealthStatus;fans=@(Get-CimInstance Win32_Fan -ErrorAction SilentlyContinue | ForEach-Object {$_.DesiredSpeed} | Where-Object {$_ -gt 0});design=$design;full=$full;cycles=$cycles} | ConvertTo-Json -Compress -Depth 5
-"#;
-const WINDOWS_LIVE: &str = r#"
-$os=Get-CimInstance Win32_OperatingSystem
-$b=Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
-$page=@(Get-CimInstance Win32_PageFileUsage -ErrorAction SilentlyContinue)
-$profile=Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object {$_.IPv4Connectivity -ne 'Disconnected' -or $_.IPv6Connectivity -ne 'Disconnected'} | Select-Object -First 1
-$adapter=Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {$_.Name -eq $profile.InterfaceAlias} | Select-Object -First 1
-$counters=$adapter | Get-NetAdapterStatistics -ErrorAction SilentlyContinue
-$ip=Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $adapter.ifIndex -ErrorAction SilentlyContinue | Select-Object -First 1
-$cpu=Get-CimInstance Win32_PerfRawData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction SilentlyContinue
-$drive=Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'"
-[ordered]@{uptime=([DateTime]::Now-$os.LastBootUpTime).TotalSeconds;total=($os.TotalVisibleMemorySize*1024);free=($os.FreePhysicalMemory*1024);cpuUser=$cpu.PercentUserTime;cpuSystem=$cpu.PercentPrivilegedTime;cpuIdle=$cpu.PercentIdleTime;swapTotal=(($page | Measure-Object AllocatedBaseSize -Sum).Sum*1MB);swapUsed=(($page | Measure-Object CurrentUsage -Sum).Sum*1MB);batteryPresent=($null -ne $b);batteryCharge=$b.EstimatedChargeRemaining;batteryStatus=$b.BatteryStatus;batteryMinutes=$b.EstimatedRunTime;interface=$profile.InterfaceAlias;ssid=$profile.Name;ip=$ip.IPAddress;medium=$adapter.NdisPhysicalMedium;rx=$counters.ReceivedBytes;tx=$counters.SentBytes;processes=@(Get-Process).Count;diskTotal=$drive.Size;diskFree=$drive.FreeSpace} | ConvertTo-Json -Compress -Depth 4
-"#;
 impl SystemCore {
     async fn windows_stats(&self, state: &mut StatsState) -> CoreResult {
-        if state.fixed.is_none() {
-            let p: Value =
-                serde_json::from_str(&ps(WINDOWS_STATIC).await?).map_err(|e| e.to_string())?;
-            state.fixed = Some(p);
+        // In-process WMI/Win32 (no PowerShell child per refresh).
+        #[cfg(windows)]
+        {
+            if state.fixed.is_none() {
+                state.fixed = Some(blocking(super::stats_windows::fixed).await?);
+            }
         }
-        let live: Value =
-            serde_json::from_str(&ps(WINDOWS_LIVE).await?).map_err(|e| e.to_string())?;
+        #[cfg(windows)]
+        let live: Value = blocking(super::stats_windows::live).await?;
+        #[cfg(not(windows))]
+        let live: Value = return Err("Windows statistics are only collected on Windows".into());
         let p = state.fixed.clone().unwrap();
         let mut cpu = json!({"model":p["cpu"],"totalCores":num(&p["cores"]),"performanceCores":null,"efficiencyCores":null,"usagePercent":null,"userPercent":null,"systemPercent":null,"idlePercent":null,"loadAverage":null});
         if let (Some(user), Some(system), Some(idle)) = (
