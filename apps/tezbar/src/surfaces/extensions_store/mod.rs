@@ -6,7 +6,7 @@ mod tests;
 mod view;
 use crate::events::{CoreEvent, CoreEvents, EventSubscription};
 use gpui::{prelude::*, *};
-use request::{ExtensionFuture, ExtensionRequest, ExtensionTransport, success};
+use request::{ExtensionFuture, ExtensionRequest, ExtensionTransport, StoreSource, success};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -39,6 +39,7 @@ impl EventEmitter<StoreEffectEmission> for StoreView {}
 pub struct StoreView {
     transport: Arc<dyn ExtensionTransport>,
     catalog: Catalog,
+    source: StoreSource,
     search: Entity<TextInput>,
     focus: FocusHandle,
     footer: Option<AnyView>,
@@ -108,6 +109,7 @@ impl StoreView {
         Self {
             transport,
             catalog: Default::default(),
+            source: StoreSource::default(),
             search,
             focus: cx.focus_handle(),
             footer: None,
@@ -150,6 +152,7 @@ impl StoreView {
                 &cx.entity(),
                 [
                     "extensions-changed",
+                    "extensions-catalog-updated",
                     "extension:install-progress",
                     "extension-worker-status",
                 ]
@@ -213,7 +216,9 @@ impl StoreView {
     pub fn core_event(&mut self, e: &CoreEvent, cx: &mut Context<Self>) {
         if let CoreEvent::Other { channel, payload } = e {
             match channel.as_str() {
-                "extensions-changed" => self.refresh.changed(self.now()),
+                "extensions-changed" | "extensions-catalog-updated" => {
+                    self.refresh.changed(self.now())
+                }
                 "extension:install-progress" => {
                     if let Some(id) = payload["extensionId"]
                         .as_str()
@@ -251,6 +256,17 @@ impl StoreView {
         self.debounce = None;
         self.search_job = None;
         self.events = None; /* admitted mutations retain independent task ownership */
+    }
+    fn switch_source(&mut self, source: StoreSource, cx: &mut Context<Self>) {
+        if self.source == source || self.remove.is_some() {
+            return;
+        }
+        self.source = source;
+        self.catalog.store.clear();
+        self.catalog.selected = None;
+        self.catalog.total = 0;
+        self.scroll = UniformListScrollHandle::new();
+        self.query(self.catalog.query.clone(), cx);
     }
     fn query(&mut self, text: String, cx: &mut Context<Self>) {
         if self.remove.is_some() {
@@ -351,11 +367,13 @@ impl StoreView {
         let t = self.transport.clone();
         let epoch = self.epoch;
         let revision = self.query_revision;
+        let source = self.source;
         self.search_job = Some(cx.spawn(async move |this, cx| {
             let result = gpui_tokio::Tokio::spawn(cx, async move {
                 let page = t
                     .send(ExtensionRequest::Search {
                         query,
+                        source,
                         offset,
                         limit,
                     })
@@ -393,6 +411,13 @@ impl StoreView {
             &self.catalog.installed,
             &self.catalog.query,
         );
+        self.rows.retain(|e| {
+            e.metadata
+                .get("source")
+                .and_then(Value::as_str)
+                .unwrap_or("tezbar")
+                == self.source.id()
+        });
         if !self
             .catalog
             .selected

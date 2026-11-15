@@ -397,6 +397,9 @@ fn list(ctx: &CoreContext) -> Value {
         if extension.id.starts_with("com.tezbar.native.") || rule != Ok(super::acquisition::Rule::Remote) { value["acquisition"]=super::acquisition::metadata(rule); }
         value
     }).collect();
+    for value in &mut values {
+        value["source"] = json!(super::catalog::source_for_id(value["id"].as_str().unwrap_or("")));
+    }
     values.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     json!(values)
 }

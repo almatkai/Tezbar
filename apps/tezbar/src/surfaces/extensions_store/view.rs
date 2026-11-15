@@ -6,6 +6,7 @@ use tezbar_ui::{
 #[derive(Clone)]
 pub(super) enum Action {
     Settings,
+    Source(StoreSource),
     Back,
     Refresh,
     More,
@@ -23,6 +24,7 @@ impl StoreView {
             return;
         }
         match a {
+            Action::Source(source) => self.switch_source(source, cx),
             Action::Settings => self.emit_effect(StoreEffect::Settings, cx),
             Action::Back => self.emit_effect(StoreEffect::Back, cx),
             Action::Refresh => self.reload(cx),
@@ -569,6 +571,45 @@ impl Render for StoreView {
                 t,
                 cx,
             ));
+        let tabs = div()
+            .id("store-sources")
+            .role(Role::TabList)
+            .aria_label("Extension source")
+            .flex()
+            .gap(px(6.))
+            .px(px(12.))
+            .py(px(6.))
+            .children([StoreSource::Tezbar, StoreSource::Raycast].map(|source| {
+                self.button(
+                    format!("store-source-{}", source.id()),
+                    source.label().into(),
+                    Action::Source(source),
+                    t,
+                    cx,
+                )
+                .role(Role::Tab)
+                .aria_selected(self.source == source)
+                .bg(if self.source == source {
+                    t.selected
+                } else {
+                    transparent_black().into()
+                })
+                .on_key_down(cx.listener(move |v, e: &KeyDownEvent, w, cx| {
+                    if matches!(e.keystroke.key.as_str(), "left" | "right" | "home" | "end") {
+                        let next = if e.keystroke.key == "home" {
+                            StoreSource::Tezbar
+                        } else if e.keystroke.key == "end" {
+                            StoreSource::Raycast
+                        } else if v.source == StoreSource::Tezbar {
+                            StoreSource::Raycast
+                        } else {
+                            StoreSource::Tezbar
+                        };
+                        v.action(Action::Source(next), w, cx);
+                        cx.stop_propagation();
+                    }
+                }))
+            }));
         let mut list = div()
             .flex()
             .flex_col()
@@ -641,11 +682,7 @@ impl Render for StoreView {
                 format!(
                     "{} extensions · {}",
                     self.catalog.total,
-                    if cfg!(windows) {
-                        "Tezbar-loved"
-                    } else {
-                        "Raycast catalog"
-                    }
+                    self.source.label()
                 )
             });
         controls::sheet(t)
@@ -664,6 +701,7 @@ impl Render for StoreView {
             )
             .capture_key_down(cx.listener(|v, e, w, cx| v.key(e, w, cx)))
             .child(header)
+            .child(tabs)
             .child(
                 div()
                     .flex()

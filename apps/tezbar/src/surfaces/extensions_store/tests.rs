@@ -381,3 +381,54 @@ fn deferred_page_is_invalidated_by_query_and_hide_and_keyboard_still_pages(
     });
     assert_eq!(*fake.searches.lock().unwrap(), vec![(25, 25)]);
 }
+
+#[gpui::test]
+fn source_switch_clears_rows_and_rejects_old_page(cx: &mut TestAppContext) {
+    let fake = Arc::new(Fake::default());
+    let (view, cx) = cx.add_window_view(|w, cx| StoreView::new(fake, w, cx));
+    view.update(cx, |v, cx| {
+        let own: Entry =
+            serde_json::from_value(json!({"id":"own", "name":"Own", "source":"tezbar"})).unwrap();
+        let community: Entry = serde_json::from_value(
+            json!({"id":"community", "name":"Community", "source":"raycast"}),
+        )
+        .unwrap();
+        v.catalog.search("".into(), false);
+        v.catalog.loaded(
+            1,
+            Ok((vec![own.clone()], vec![own, community], 1, false)),
+            false,
+        );
+        v.rebuild(cx);
+        assert_eq!(
+            v.rows.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(),
+            ["own"]
+        );
+        let Effect::Search { token, .. } = v.catalog.search("".into(), false).unwrap() else {
+            panic!()
+        };
+        v.switch_source(StoreSource::Raycast, cx);
+        v.catalog
+            .loaded(token, Ok((vec![], vec![], 999, true)), false);
+        assert_eq!(v.catalog.total, 0, "stale source page must be ignored");
+        assert_eq!(
+            v.rows.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(),
+            ["community"]
+        );
+        assert!(!v.catalog.has_more);
+        assert_eq!(v.source, StoreSource::Raycast);
+        for source in [StoreSource::Tezbar, StoreSource::Raycast] {
+            let (_, args) = ExtensionRequest::Search {
+                query: "hello".into(),
+                source,
+                offset: 25,
+                limit: 25,
+            }
+            .wire();
+            assert_eq!(
+                args[0],
+                json!({"query":"hello", "source":source.id(), "offset":25, "limit":25})
+            );
+        }
+    });
+}

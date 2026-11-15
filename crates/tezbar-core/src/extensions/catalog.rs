@@ -33,7 +33,10 @@ impl Catalog {
             .await
             .map_err(|e| e.to_string())?;
 
-        if let Some(value) = disk.as_ref().filter(|v| v["version"].as_u64().unwrap_or(0) >= 6) {
+        if let Some(value) = disk
+            .as_ref()
+            .filter(|v| v["version"].as_u64().unwrap_or(0) >= 6)
+        {
             let fetched_at = value["fetchedAt"].as_u64().unwrap_or(0);
             let entries = prepare(normalize(&value["entries"]));
             if !entries.is_empty() {
@@ -152,10 +155,21 @@ impl Catalog {
             });
         }
 
-        let catalog = if cfg!(target_os = "windows") {
-            Arc::default()
-        } else {
+        // Two groups: "tezbar" (Tezbar's own extensions: native Rust packages and the
+        // Tezbar-maintained JavaScript ones in loved_extensions.json) and "raycast" (the
+        // community catalog). Without a source both are returned.
+        let source = options["source"]
+            .as_str()
+            .filter(|s| matches!(*s, "tezbar" | "raycast"))
+            .map(str::to_owned);
+        // The Tezbar tab is available immediately from bundled metadata. Keep the
+        // existing Windows default for callers that have not selected a source.
+        let with_raycast = source.as_deref() != Some("tezbar")
+            && (!cfg!(target_os = "windows") || source.as_deref() == Some("raycast"));
+        let catalog = if with_raycast {
             self.entries().await.unwrap_or_default()
+        } else {
+            Arc::default()
         };
         let ctx = self.ctx.clone();
         let entries = tokio::task::spawn_blocking(move || {
@@ -164,7 +178,7 @@ impl Catalog {
                 serde_json::from_str(include_str!("loved_extensions.json"))
                     .expect("bundled extension catalog")
             });
-            let entries = if cfg!(target_os = "windows") {
+            let entries = if !with_raycast {
                 loved
                     .iter()
                     .filter(|v| query.is_empty() || v.to_string().to_lowercase().contains(&query))
@@ -194,7 +208,12 @@ impl Catalog {
                     &query,
                 )
             };
-            merge_native(entries, &query, super::v2_catalog::manifests(&ctx))
+            let mut entries = merge_native(entries, &query, super::v2_catalog::manifests(&ctx));
+            tag_sources(&mut entries, loved);
+            if let Some(source) = &source {
+                entries.retain(|item| item["source"] == source.as_str());
+            }
+            entries
         })
         .await
         .map_err(|e| e.to_string())?;
@@ -206,6 +225,37 @@ impl Catalog {
         Ok(
             json!({"hasMore":offset + items.len() < total,"items":items,"total":total,"offset":offset,"limit":limit}),
         )
+    }
+}
+
+pub(super) fn source_for_id(id: &str) -> &'static str {
+    static OWN_IDS: OnceLock<std::collections::HashSet<String>> = OnceLock::new();
+    let ids = OWN_IDS.get_or_init(|| {
+        let loved: Vec<Value> = serde_json::from_str(include_str!("loved_extensions.json"))
+            .expect("bundled extension catalog");
+        loved
+            .iter()
+            .filter_map(|v| v["id"].as_str().map(str::to_owned))
+            .collect()
+    });
+    if ids.contains(id) || id.starts_with("com.tezbar.native.") {
+        "tezbar"
+    } else {
+        "raycast"
+    }
+}
+
+/// Tezbar's own extensions are the native packages and the Tezbar-maintained list; every
+/// other entry comes from the Raycast community catalog.
+fn tag_sources(entries: &mut [Value], loved: &[Value]) {
+    let ours: std::collections::HashSet<String> = loved
+        .iter()
+        .filter_map(|item| item["id"].as_str().map(str::to_owned))
+        .collect();
+    for item in entries {
+        let id = item["id"].as_str().unwrap_or("");
+        let tezbar = ours.contains(id) || id.starts_with("com.tezbar.native.");
+        item["source"] = json!(if tezbar { "tezbar" } else { "raycast" });
     }
 }
 
@@ -310,7 +360,10 @@ fn normalize(value: &Value) -> Vec<Value> {
         .filter(|v| v["name"].as_str().is_some_and(|s| !s.is_empty()))
         .map(|v| {
             let name = v["name"].as_str().unwrap_or("");
-            let title = v["title"].as_str().filter(|s| !s.is_empty()).unwrap_or(name);
+            let title = v["title"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .unwrap_or(name);
             let description = v["description"].as_str().unwrap_or("");
             let author = v["author"]
                 .as_str()
@@ -319,8 +372,13 @@ fn normalize(value: &Value) -> Vec<Value> {
                 .unwrap_or("Raycast Community");
             let icon_url = v["iconUrl"].as_str().or_else(|| v["icon_url"].as_str());
             let icon = v["icon"].as_str();
-            let screenshots = v["screenshotUrls"].as_array().or_else(|| v["screenshot_urls"].as_array());
-            let install_count = v["installCount"].as_u64().or_else(|| v["install_count"].as_u64()).unwrap_or(0);
+            let screenshots = v["screenshotUrls"]
+                .as_array()
+                .or_else(|| v["screenshot_urls"].as_array());
+            let install_count = v["installCount"]
+                .as_u64()
+                .or_else(|| v["install_count"].as_u64())
+                .unwrap_or(0);
             let categories = v["categories"].clone();
             let commands = v["commands"]
                 .as_array()
@@ -328,7 +386,10 @@ fn normalize(value: &Value) -> Vec<Value> {
                 .flatten()
                 .filter_map(|c| {
                     let cmd_name = c["name"].as_str()?;
-                    let cmd_title = c["title"].as_str().filter(|s| !s.is_empty()).unwrap_or(cmd_name);
+                    let cmd_title = c["title"]
+                        .as_str()
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or(cmd_name);
                     let cmd_desc = c["description"].as_str().unwrap_or("");
                     Some(json!({
                         "name": cmd_name,
@@ -345,10 +406,17 @@ fn normalize(value: &Value) -> Vec<Value> {
             obj.insert("author".into(), json!(author));
             obj.insert("installCount".into(), json!(install_count));
             obj.insert("categories".into(), categories);
+            obj.insert("platforms".into(), v["platforms"].clone());
             obj.insert("commands".into(), json!(commands));
-            if let Some(u) = icon_url { obj.insert("iconUrl".into(), json!(u)); }
-            if let Some(i) = icon { obj.insert("icon".into(), json!(i)); }
-            if let Some(s) = screenshots { obj.insert("screenshotUrls".into(), json!(s)); }
+            if let Some(u) = icon_url {
+                obj.insert("iconUrl".into(), json!(u));
+            }
+            if let Some(i) = icon {
+                obj.insert("icon".into(), json!(i));
+            }
+            if let Some(s) = screenshots {
+                obj.insert("screenshotUrls".into(), json!(s));
+            }
             Value::Object(obj)
         })
         .collect()
@@ -366,7 +434,7 @@ fn manifest(v: &Value) -> Value {
         "repository":format!("https://github.com/raycast/extensions/tree/main/extensions/{name}"),
         "downloadCount":v["installCount"],"icon":v["icon"],"iconUrl":v["iconUrl"],
         "authorIconUrl":super::registry::avatar(&json!(author)),"screenshotUrls":v["screenshotUrls"],
-        "categories":v["categories"],"commands":v["commands"],"owner":author})
+        "categories":v["categories"],"commands":v["commands"],"owner":author,"platforms":v["platforms"]})
 }
 
 fn token_score(value: &str, query: &str, exact: f64, prefix: f64) -> f64 {
@@ -517,6 +585,38 @@ mod tests {
             assert_eq!(page["total"], 2);
             assert_eq!(page["hasMore"], false);
         }
+        let community = prepare(vec![
+            json!({"name":"zzfixture-windows","title":"ZZFixture Windows","platforms":["Windows"]}),
+            json!({"name":"zzfixture-mac","title":"ZZFixture Mac","platforms":["macOS"]}),
+        ]);
+        *catalog.cache.lock().await = Some((now_ms(), community));
+        let own = catalog
+            .search(
+                "extension:search-store",
+                &[json!({"source":"tezbar","limit":1000})],
+            )
+            .await
+            .unwrap();
+        assert!(own["total"].as_u64().unwrap() > 0);
+        assert!(own["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|e| e["source"] == "tezbar"));
+        assert!(own["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["runtime"] == "javascript"));
+        let raycast = catalog
+            .search(
+                "extension:search-store",
+                &[json!({"source":"raycast","query":"zzfixture","limit":1})],
+            )
+            .await
+            .unwrap();
+        assert_eq!(raycast["total"], 2);
+        assert_eq!(raycast["items"][0]["source"], "raycast");
         assert_eq!(
             SearchKeys::new(&json!({"name":"arc","title":"Arc"})).score(&Value::Null, "arc"),
             35200.
@@ -552,6 +652,25 @@ mod tests {
             0.
         );
         assert!(score(&json!({"name":"arc","title":"Arc"}), "arc") > 10000.);
+    }
+    #[test]
+    fn store_entries_split_into_tezbar_and_raycast() {
+        let loved = vec![
+            json!({"id":"raycast.forked"}),
+            json!({"id":"com.tezbar.translate"}),
+        ];
+        let mut entries = vec![
+            json!({"id":"com.tezbar.native.timers"}),
+            json!({"id":"raycast.forked"}),
+            json!({"id":"com.tezbar.translate"}),
+            json!({"id":"raycast.community"}),
+        ];
+        tag_sources(&mut entries, &loved);
+        let sources: Vec<_> = entries
+            .iter()
+            .map(|e| e["source"].as_str().unwrap())
+            .collect();
+        assert_eq!(sources, ["tezbar", "tezbar", "tezbar", "raycast"]);
     }
     #[test]
     fn own_v1_catalog_keeps_declared_ids_and_command_count() {

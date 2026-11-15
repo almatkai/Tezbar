@@ -9,11 +9,33 @@ pub trait ExtensionTransport: Send + Sync + 'static {
     fn drain(&self) -> ExtensionFuture;
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StoreSource {
+    #[default]
+    Tezbar,
+    Raycast,
+}
+impl StoreSource {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Tezbar => "tezbar",
+            Self::Raycast => "raycast",
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Tezbar => "Tezbar",
+            Self::Raycast => "Raycast",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum ExtensionRequest {
     List,
     Search {
         query: String,
+        source: StoreSource,
         offset: usize,
         limit: usize,
     },
@@ -73,11 +95,12 @@ impl ExtensionRequest {
             Self::List => ("extension:list", vec![]),
             Self::Search {
                 query,
+                source,
                 offset,
                 limit,
             } => (
                 "extension:search-store",
-                vec![json!({"query":query,"offset":offset,"limit":limit})],
+                vec![json!({"query":query,"source":source.id(),"offset":offset,"limit":limit})],
             ),
             Self::Install(id) => ("extension:install", vec![json!(id)]),
             Self::Uninstall(id) => ("extension:uninstall", vec![json!(id)]),
