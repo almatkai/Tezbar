@@ -567,16 +567,22 @@ pub fn verify_macos_bundle_identity(bundle: &Path) -> Result<(), String> {
         .arg(bundle)
         .output()
         .map_err(|e| e.to_string())?;
-    let observed = String::from_utf8_lossy(&output.stderr);
-    if !output.status.success()
-        || observed
-            .lines()
-            .find_map(|l| l.strip_prefix("designated => "))
-            != Some(requirement)
-    {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() || !pinned_requirement(&stdout, &stderr, requirement) {
         return Err("Designated requirement differs from the committed pin".into());
     }
     Ok(())
+}
+#[cfg(unix)]
+fn pinned_requirement(stdout: &str, stderr: &str, requirement: &str) -> bool {
+    // codesign writes the requirement to stdout and diagnostics to stderr.
+    // Accept either stream, but never an absent, different or ambiguous pin.
+    let mut requirements = stdout
+        .lines()
+        .chain(stderr.lines())
+        .filter_map(|line| line.strip_prefix("designated => "));
+    requirements.next() == Some(requirement) && requirements.next().is_none()
 }
 #[cfg(unix)]
 fn pinned_team(detail: &str, team: &str) -> bool {
@@ -888,6 +894,36 @@ fn verify_legacy(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[cfg(unix)]
+    fn designated_requirement_uses_both_codesign_streams_without_weakening_the_pin() {
+        let pin: Value = serde_json::from_str(include_str!("../../../packaging/macos-signing.json"))
+            .unwrap();
+        let requirement = pin["designatedRequirement"].as_str().unwrap();
+        let observed = format!("designated => {requirement}\n");
+        let diagnostic = "Executable=/Applications/Tezbar.app/Contents/MacOS/tezbar\n";
+        assert!(pinned_requirement(&observed, diagnostic, requirement));
+        assert!(pinned_requirement("", &observed, requirement));
+        assert!(!pinned_requirement("", diagnostic, requirement));
+        assert!(!pinned_requirement(
+            "designated => identifier \"com.tezbar.app\"\n",
+            diagnostic,
+            requirement
+        ));
+        assert!(!pinned_requirement(&observed, &observed, requirement));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    #[ignore = "requires TEZBAR_SIGNED_BUNDLE pointing to an existing certificate-signed Tezbar.app"]
+    fn real_signed_bundle_passes_startup_identity_verification() {
+        let bundle = std::env::var_os("TEZBAR_SIGNED_BUNDLE")
+            .map(std::path::PathBuf::from)
+            .expect("TEZBAR_SIGNED_BUNDLE must name the signed app under test");
+        verify_macos_bundle_identity(&bundle)
+            .expect("the ordinary startup verifier must accept the pinned signed bundle");
+    }
+
     fn release() -> Release {
         Release {version:"0.3.0-beta.8".parse().unwrap(),notes:"fixture".into(),url:"https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.8/Tezbar.app.tar.gz".parse().unwrap(),signature:STANDARD.encode(include_bytes!("../tests/fixtures/fixture.tar.gz.minisig"))}
     }

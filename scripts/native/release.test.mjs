@@ -144,6 +144,10 @@ test('controlled native assembly signs copied helpers, recaptures hashes, verifi
   const cargo=f.calls.find(c=>c.command==='cargo');assert.equal(cargo.options.manifest,path.join(f.root,'apps/tezbar/Cargo.toml'))
   const outer=f.calls.find(c=>c.command==='codesign')
   assert.ok(outer.argv.includes(`=designated => ${f.policy.designatedRequirement}`))
+  const admission=f.calls.find(c=>c.argv.includes('--verify-installation'))
+  assert.equal(admission.command,path.join(f.app,'Contents/MacOS/tezbar'))
+  assert.ok(f.calls.indexOf(admission)>f.calls.indexOf(outer))
+  assert.ok(f.calls.indexOf(admission)<f.calls.findIndex(c=>c.command==='hdiutil'))
   const signer=f.calls.find(c=>c.argv.includes('signer'));assert.deepEqual(signer.argv.slice(1,3),['signer','sign'])
   assert.equal(f.calls.some(c=>c.argv.includes('build') && c.command!=='cargo'),false)
   assert.equal(f.calls.some(c=>c.command==='spctl'),false,'testing-preview is not Gatekeeper/notarization acceptance')
@@ -156,7 +160,18 @@ test('explicit local-preview stays nonpublishable and never discovers certificat
   assert.equal(receipt.appIdentifier,'com.tezbar.preview.native');assert.equal(receipt.platformVerified,false)
   assert.equal(receipt.macOSSigning,undefined)
   assert.equal(f.calls.some(c=>c.command==='security' || c.argv.includes('signer')),false)
+  assert.equal(f.calls.some(c=>c.argv.includes('--verify-installation')),false)
   assert.equal(f.calls.find(c=>c.command==='codesign').argv[2],'-')
+})
+
+test('a signed app rejected by its own startup admission cannot become a release artifact',async t=>{
+  const f=await fixture(t)
+  await assert.rejects(nativeRelease(f.args,{...f.adapters,run:async(command,argv,options)=>{
+    if(argv.includes('--verify-installation')) throw Error('Production startup admission rejected')
+    return f.adapters.run(command,argv,options)
+  }}),/Production startup admission rejected/)
+  assert.deepEqual(await readdir(f.output),[])
+  assert.equal(f.calls.some(c=>c.command==='hdiutil' || c.argv.includes('signer')),false)
 })
 
 test('resource or metadata mutation never writes a release receipt',async t=>{

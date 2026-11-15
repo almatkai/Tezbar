@@ -52,5 +52,8 @@ tested validator-compatibility/bridge-release plan against the oldest supported
 installed validator. The successor inventory lists that as a release gate.
 It also requires the new binary's own non-GUI startup admission check on the
 final signed bundle; approval by the previous version's validator alone is
-insufficient. These public release gates are not implemented by the private
-preview assembler.
+insufficient. The macOS release builder runs the sealed app with
+`--verify-installation` before creating its DMG, updater archive or receipt.
+This invokes the same admission check as an ordinary launch without opening
+windows or accessing a user profile. Private preview assembly skips production
+admission because ad-hoc bundles are deliberately inadmissible.
