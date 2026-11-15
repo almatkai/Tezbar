@@ -852,7 +852,7 @@ pub fn surface_boost(category: &str, title: &str, subtitle: &str, query: &Query)
     }
     // Built-in "Open <surface>" commands own their noun: "settings", "notes", "vault" open
     // Tezbar's surface rather than a same-named Windows app or a release-notes match.
-    if category == "commands" && title.strip_prefix("open ") == Some(q) {
+    if matches!(category, "commands" | "native-command") && title.strip_prefix("open ") == Some(q) {
         return 1400.;
     }
     let mut b: f64 = if title == q {

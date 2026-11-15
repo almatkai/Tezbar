@@ -185,6 +185,7 @@ pub(super) fn app_documents_at(apps: &[Value], now: u64) -> Vec<Value> {
         })
         .collect()
 }
+const SURFACE_DUPLICATES: &[&str] = &["open-snippets", "open-vault"];
 pub fn command_documents(native: &[Value]) -> Vec<Value> {
     command_documents_at(native, now_ms())
 }
@@ -209,7 +210,7 @@ pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
             d["title"].as_str().unwrap_or(id),
             d["subtitle"].as_str().unwrap_or(""),
             &format!(
-                "{} {} {} {}",
+                "{} {} {} {} {}",
                 d["title"].as_str().unwrap_or(""),
                 d["subtitle"].as_str().unwrap_or(""),
                 d["category"].as_str().unwrap_or(""),
@@ -220,12 +221,23 @@ pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
                         .filter_map(Value::as_str)
                         .collect::<Vec<_>>()
                         .join(" "))
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
+                // Slash aliases of the built-in rows these replace (see SURFACE_DUPLICATES).
+                match id {
+                    "open-snippets" => "/snippets",
+                    "open-vault" => "/vault",
+                    _ => "",
+                }
             ),
             json!({"type":"run-native-command","commandId":id}),
             now,
         ));
     }
+    // Only native rows actually offered (macOS-only ones may have been skipped above).
+    let native_ids: std::collections::HashSet<String> = out
+        .iter()
+        .filter_map(|d| d["id"].as_str()?.strip_prefix("native:").map(str::to_owned))
+        .collect();
     for (id, title, subtitle, keywords) in [
         (
             "open-settings",
@@ -296,6 +308,11 @@ pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
             "update updates check for updates upgrade version обновление обновы /update",
         ),
     ] {
+        // Snippets and Vault also come from the native catalog (which the home screen
+        // recommends); a second built-in row of the same surface is a duplicate.
+        if SURFACE_DUPLICATES.contains(&id) && native_ids.contains(id) {
+            continue;
+        }
         out.push(document(
             &format!("command:{id}"),
             "commands",
@@ -1086,5 +1103,27 @@ mod windows_path_tests {
             use std::os::windows::ffi::OsStrExt;
             self.encode_wide().collect::<Vec<_>>().into_iter()
         }
+    }
+}
+
+#[cfg(test)]
+mod surface_duplicate_tests {
+    use super::*;
+    #[test]
+    fn each_surface_command_is_offered_once() {
+        let native: Vec<Value> = serde_json::from_str(include_str!("../system/native-windows.json")).unwrap();
+        let docs = command_documents_at(&native, 1);
+        for surface in ["open-vault", "open-snippets"] {
+            let rows: Vec<_> = docs
+                .iter()
+                .filter(|d| d["id"].as_str().is_some_and(|id| id.ends_with(&format!(":{surface}"))))
+                .collect();
+            assert_eq!(rows.len(), 1, "{surface}: {rows:#?}");
+        }
+        let vault = docs.iter().find(|d| d["id"] == "native:open-vault").unwrap();
+        assert!(vault["tokens"].as_str().unwrap().contains("/vault"));
+        // Without the native catalog the built-in rows remain.
+        let bare = command_documents_at(&[], 1);
+        assert!(bare.iter().any(|d| d["id"] == "command:open-vault"));
     }
 }
