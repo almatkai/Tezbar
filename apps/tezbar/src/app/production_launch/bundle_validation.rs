@@ -34,7 +34,12 @@ pub fn verify_payload(
     if running.is_some_and(|expected| expected != &binary) {
         return Err("Running executable provenance mismatch".into());
     }
-    verify_resources(&contents.join("Resources"), &binary, &metadata_sha256)?;
+    verify_resources(
+        &contents.join("Resources"),
+        &binary,
+        &metadata_sha256,
+        MACOS_REQUIRED,
+    )?;
     for (key, expected) in [
         ("CFBundleIdentifier", "com.tezbar.app"),
         ("CFBundleExecutable", "tezbar"),
@@ -46,10 +51,56 @@ pub fn verify_payload(
     }
     Ok(())
 }
+const MACOS_REQUIRED: &[&str] = &[
+    "dist-backend/extension-worker.js",
+    "dist-backend/vec0",
+    "dist-backend/libsqlite3.dylib",
+    "trayIconTemplate@2x.png",
+    "icon.icns",
+    "embedding-runtime/embedding-runtime.zip",
+    "licenses/raycast-extensions-MIT.txt",
+    "native/axhelper/axhelper",
+    "native/screenocr/screenocr-helper",
+    "native/color-picker/color-picker-helper",
+    "native/image-colors/image-colors-helper",
+];
+/// The Windows NSIS layout (scripts/native/release.mjs WINDOWS_ROOTS): no macOS helpers.
+const WINDOWS_REQUIRED: &[&str] = &[
+    "dist-backend/extension-worker.js",
+    "dist-backend/vec0",
+    "trayIconTemplate@2x.png",
+    "icon.ico",
+    "licenses/raycast-extensions-MIT.txt",
+];
+/// Installed Windows app: `<install>\tezbar.exe` with its resources and provenance beside it.
+/// Identity (Authenticode) is verified by the production wrapper when a pin exists.
+pub fn verify_windows_install(
+    install: &Path,
+    version: &str,
+    running: Option<&BuildMetadata>,
+) -> Result<(), String> {
+    let executable = install.join("tezbar.exe");
+    for path in [install, executable.as_path()] {
+        if std::fs::symlink_metadata(path)
+            .map_err(|e| e.to_string())?
+            .file_type()
+            .is_symlink()
+        {
+            return Err("Installation reparse point rejected".into());
+        }
+    }
+    let (binary, metadata_sha256) = build_metadata::capture(&executable)?;
+    binary.production(version)?;
+    if running.is_some_and(|expected| expected != &binary) {
+        return Err("Running executable provenance mismatch".into());
+    }
+    verify_resources(install, &binary, &metadata_sha256, WINDOWS_REQUIRED)
+}
 fn verify_resources(
     root: &Path,
     binary: &BuildMetadata,
     metadata_sha256: &str,
+    required: &[&str],
 ) -> Result<(), String> {
     use sha2::{Digest, Sha256};
     use std::io::Read;
@@ -78,20 +129,8 @@ fn verify_resources(
         .as_array()
         .filter(|f| !f.is_empty() && f.len() <= 100000)
         .ok_or("Missing resource inventory")?;
-    for key in [
-        "dist-backend/extension-worker.js",
-        "dist-backend/vec0",
-        "dist-backend/libsqlite3.dylib",
-        "trayIconTemplate@2x.png",
-        "icon.icns",
-        "embedding-runtime/embedding-runtime.zip",
-        "licenses/raycast-extensions-MIT.txt",
-        "native/axhelper/axhelper",
-        "native/screenocr/screenocr-helper",
-        "native/color-picker/color-picker-helper",
-        "native/image-colors/image-colors-helper",
-    ] {
-        if !files.iter().any(|f| f["destination"] == key) {
+    for key in required {
+        if !files.iter().any(|f| f["destination"] == *key) {
             return Err("Required native resource missing".into());
         }
     }
@@ -284,6 +323,59 @@ mod tests {
         manifest["runtimeShaders"] = json!(true);
         std::fs::write(path, manifest.to_string()).unwrap();
         assert!(verify_payload(&bundle, VERSION, None, plist).is_err());
+    }
+    fn windows_fixture(install: &Path, binary: Value) {
+        std::fs::create_dir_all(install).unwrap();
+        let record = binary.to_string();
+        std::fs::write(
+            install.join("tezbar.exe"),
+            format!("MZ\0TEZBAR_NATIVE_BUILD_V2\0{record}\0TEZBAR_NATIVE_BUILD_END\0"),
+        )
+        .unwrap();
+        let files: Vec<_> = super::WINDOWS_REQUIRED.iter().map(|name| {
+            let path = install.join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"fixture").unwrap();
+            json!({"destination":name,"bytes":7,"sha256":format!("{:x}",Sha256::digest(b"fixture"))})
+        }).collect();
+        let mut manifest = binary;
+        manifest["binaryMetadataSha256"] =
+            json!(format!("{:x}", Sha256::digest(record.as_bytes())));
+        manifest["files"] = json!(files);
+        std::fs::write(
+            install.join(".tezbar-native-production.json"),
+            manifest.to_string(),
+        )
+        .unwrap();
+    }
+    #[test]
+    fn windows_install_is_admitted_only_with_exact_provenance_and_resources() {
+        let temp = tempfile::tempdir().unwrap();
+        let install = temp.path().join("Tezbar");
+        windows_fixture(&install, metadata());
+        // The NSIS uninstaller and other unpinned files beside the app are not resources.
+        std::fs::write(install.join("uninstall.exe"), b"MZ uninstaller").unwrap();
+        assert!(verify_windows_install(&install, VERSION, None).is_ok());
+        assert!(verify_windows_install(&install, "0.0.1", None).is_err());
+        let mut old: BuildMetadata = serde_json::from_value(metadata()).unwrap();
+        old.source_commit = "a".repeat(40);
+        assert!(verify_windows_install(&install, VERSION, Some(&old)).is_err());
+        for case in ["dirty", "resource", "missing-resource", "missing-exe"] {
+            let temp = tempfile::tempdir().unwrap();
+            let install = temp.path().join("Tezbar");
+            let mut binary = metadata();
+            if case == "dirty" {
+                binary["dirty"] = json!(true);
+            }
+            windows_fixture(&install, binary);
+            match case {
+                "resource" => std::fs::write(install.join("dist-backend/vec0"), b"changed").unwrap(),
+                "missing-resource" => std::fs::remove_file(install.join("icon.ico")).unwrap(),
+                "missing-exe" => std::fs::remove_file(install.join("tezbar.exe")).unwrap(),
+                _ => (),
+            }
+            assert!(verify_windows_install(&install, VERSION, None).is_err(), "{case}");
+        }
     }
     #[test]
     fn ambiguous_and_truncated_binary_records_are_not_attested() {

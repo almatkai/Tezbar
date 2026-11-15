@@ -209,12 +209,56 @@ impl Admission {
             verify_bundle(bundle, env!("CARGO_PKG_VERSION"), Some(&running))?;
             Ok(Self { executable })
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
+        {
+            if executable.file_name().and_then(|n| n.to_str()) != Some("tezbar.exe") {
+                return Err("Production requires the installed tezbar.exe".into());
+            }
+            let install = executable.parent().ok_or("Missing installation directory")?;
+            bundle_validation::verify_windows_install(
+                install,
+                env!("CARGO_PKG_VERSION"),
+                Some(&running),
+            )?;
+            Ok(Self { executable })
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = executable;
-            Err("Production admission awaits Windows installer and storage validation".into())
+            Err("Production admission is available on macOS and Windows only".into())
         }
     }
+    #[cfg(target_os = "windows")]
+    pub(super) fn plan(self) -> anyhow::Result<LaunchPlan> {
+        // Consult production environment only after provenance/resource admission.
+        let home = std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .ok_or_else(|| anyhow::anyhow!("Home unavailable"))?;
+        // The installed Tauri app kept its data under %LOCALAPPDATA%\com.tezbar.app.
+        let local_data = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(r"AppData\Local"));
+        let resources = self
+            .executable
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Missing installation directory"))?
+            .to_path_buf();
+        plan(
+            Environment {
+                platform: Platform::Windows,
+                cache: local_data.clone(),
+                local_data,
+                home,
+                resources,
+                temp: std::env::temp_dir(),
+                data_override: std::env::var_os("TEZBAR_DATA_DIR").map(PathBuf::from),
+                config_override: std::env::var_os("TEZBAR_CONFIG_DIR").map(PathBuf::from),
+            },
+            &self.executable,
+        )
+        .map_err(anyhow::Error::msg)
+    }
+    #[cfg(not(target_os = "windows"))]
     pub(super) fn plan(self) -> anyhow::Result<LaunchPlan> {
         // Consult production environment only after signature/resource admission.
         let home = std::env::var_os("HOME")
