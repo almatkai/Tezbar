@@ -1280,6 +1280,12 @@ impl SettingsContent {
             let mut v = TextInput::new_native(cx);
             v.configure(FieldOptions {
                 name: label.to_string().into(),
+                // Filters have no visible label: their name is the hint.
+                placeholder: if id.ends_with(".filter") {
+                    label.to_string().into()
+                } else {
+                    "".into()
+                },
                 password,
                 multiline,
                 ..Default::default()

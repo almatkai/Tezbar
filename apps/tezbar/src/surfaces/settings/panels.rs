@@ -1887,49 +1887,37 @@ impl SettingsContent {
             }
             let id = text(&e["extName"]);
             let active = selected.as_deref() == Some(&id);
+            let count = e["commands"].as_array().map(Vec::len).unwrap_or(0);
             list = list.child(
-                self.button(
+                self.row_button(
                     format!("installed-{id}"),
                     e["title"].as_str().unwrap_or(&id).to_owned(),
+                    Some(format!("{count} command{}", if count == 1 { "" } else { "s" })),
                     Action::InstalledCommand(id.clone(), None),
                     t,
                     cx,
                 )
-                .w_full()
                 .text_size(px(12.5))
-                .bg(if active && self.selected_command.is_none() {
-                    t.selected
-                } else {
-                    transparent_black().into()
-                })
-                .child(note(
-                    format!(
-                        "{} commands",
-                        e["commands"].as_array().map(Vec::len).unwrap_or(0)
-                    ),
-                    t,
-                )),
+                .font_weight(FontWeight::MEDIUM)
+                .when(active && self.selected_command.is_none(), |d| d.bg(t.selected)),
             );
             if active {
                 for c in e["commands"].as_array().into_iter().flatten() {
                     let name = text(&c["name"]);
                     list = list.child(
-                        self.button(
+                        self.row_button(
                             format!("installed-command-{id}-{name}"),
                             c["title"].as_str().unwrap_or(&name).to_owned(),
+                            None,
                             Action::InstalledCommand(id.clone(), Some(name.clone())),
                             t,
                             cx,
                         )
-                        .w_full()
                         .pl(px(24.))
-                        .bg(
-                            if self.selected_command.as_deref() == Some(&name) {
-                                t.selected
-                            } else {
-                                transparent_black().into()
-                            },
-                        ),
+                        .text_color(t.text2)
+                        .when(self.selected_command.as_deref() == Some(&name), |d| {
+                            d.bg(t.selected)
+                        }),
                     );
                 }
             }
@@ -2067,14 +2055,16 @@ impl SettingsContent {
                             .border_t_1()
                             .border_color(t.hairline)
                             .child(
-                                self.button(
+                                self.row_button(
                                     format!("command-detail-{key}"),
                                     c["title"].as_str().unwrap_or("Command").to_owned(),
+                                    None,
                                     Action::InstalledCommand(id.clone(), Some(text(&c["name"]))),
                                     t,
                                     cx,
                                 )
-                                .flex_1(),
+                                .flex_1()
+                                .px(px(0.)),
                             )
                             .child(note(
                                 if self.extension_settings["disabledCommands"][&key] == true {

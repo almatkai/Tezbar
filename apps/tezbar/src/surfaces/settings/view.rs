@@ -25,6 +25,37 @@ impl SettingsContent {
         )
         .debug_selector(move || id.clone())
     }
+    /// A list row: label left, optional count/status right, hover highlight. Buttons
+    /// centre their label, which turned lists into centred pills.
+    pub(super) fn row_button(
+        &self,
+        id: String,
+        label: impl Into<SharedString>,
+        trailing: Option<String>,
+        action: Action,
+        t: Tokens,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        self.button(id, label, action, t, cx)
+            .w_full()
+            .min_w(px(0.))
+            .justify_between()
+            .gap(px(10.))
+            .px(px(10.))
+            .py(px(7.))
+            .font_weight(FontWeight::NORMAL)
+            .bg(transparent_black())
+            .hover(move |d| d.bg(t.pill))
+            .when_some(trailing, |d, trailing| {
+                d.child(
+                    div()
+                        .flex_shrink_0()
+                        .text_size(px(11.))
+                        .text_color(t.text3)
+                        .child(trailing),
+                )
+            })
+    }
     pub(super) fn b(
         &self,
         label: &str,
