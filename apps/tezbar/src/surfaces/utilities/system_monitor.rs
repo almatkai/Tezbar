@@ -325,17 +325,19 @@ impl Utilities {
                     ),
             )
             .child(monitor_meter(percent, "Storage used", t).mt(px(12. * z)));
-        let exact = |key: &str| {
+        // Decimal size, with the exact byte count on its own line (it never fits beside it
+        // in a half-width column, so it used to be cut off mid-number).
+        let exact = |label: &'static str, key: &str| {
             let bytes = monitor_number(&v["storage"][key]);
-            bytes
+            let (primary, exact) = bytes
                 .map(|n| {
-                    format!(
-                        "{} ({} bytes)",
+                    (
                         model::monitor::decimal_bytes(n),
-                        self.presentation.0.count(n.round().max(0.) as usize)
+                        Some(format!("{} bytes", self.presentation.0.count(n.round().max(0.) as usize))),
                     )
                 })
-                .unwrap_or_else(|| "—".into())
+                .unwrap_or_else(|| ("—".into(), None));
+            monitor_detail_exact(label, primary, exact, t)
         };
         storage = storage.child(
             div()
@@ -346,7 +348,7 @@ impl Utilities {
                     div()
                         .flex_1()
                         .min_w_0()
-                        .child(monitor_detail("Free", exact("freeBytes"), false, t))
+                        .child(exact("Free", "freeBytes"))
                         .child(monitor_detail(
                             "Used",
                             monitor_bytes(&v["storage"]["usedBytes"]),
@@ -358,7 +360,7 @@ impl Utilities {
                     div()
                         .flex_1()
                         .min_w_0()
-                        .child(monitor_detail("Capacity", exact("totalBytes"), false, t))
+                        .child(exact("Capacity", "totalBytes"))
                         .child(monitor_detail(
                             "Drive",
                             monitor_text(
@@ -727,6 +729,37 @@ fn monitor_detail(label: &'static str, value: String, last: bool, t: tokens::Tok
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t.text2)
                 .child(value),
+        )
+}
+fn monitor_detail_exact(label: &'static str, value: String, exact: Option<String>, t: tokens::Tokens) -> Div {
+    div()
+        .flex()
+        .min_w_0()
+        .items_center()
+        .justify_between()
+        .gap(px(12. * t.zoom))
+        .py(px(8. * t.zoom))
+        .border_b_1()
+        .border_color(rgba(0xffffff0b))
+        .child(div().flex_shrink_0().text_size(px(10.5 * t.zoom)).text_color(t.text4).child(label))
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .items_end()
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(11. * t.zoom))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(t.text2)
+                        .child(value),
+                )
+                .when_some(exact, |d, exact| {
+                    d.child(div().truncate().text_size(px(9.5 * t.zoom)).text_color(t.text4).child(exact))
+                }),
         )
 }
 fn monitor_details<const N: usize>(rows: [(&'static str, String); N], t: tokens::Tokens) -> Div {

@@ -1743,11 +1743,11 @@ impl Render for Utilities {
                 (
                     "Files",
                     number("sourceCount").to_string(),
-                    format!("{} bytes source data", number("sourceBytes")),
+                    format!("{} source data", index_bytes(number("sourceBytes"))),
                 ),
                 (
                     "Local index",
-                    format!("{} bytes", snapshot["storageBytes"].as_u64().unwrap_or(0)),
+                    index_bytes(snapshot["storageBytes"].as_u64().unwrap_or(0)),
                     format!("{} searchable chunks", number("chunkCount")),
                 ),
                 (
@@ -2829,6 +2829,31 @@ pub(super) fn kind_label(kind: tezbar_ui_model::vault::Kind) -> &'static str {
         Kind::Server => "Server",
         Kind::Password => "Password",
         Kind::Note => "Note",
+    }
+}
+
+/// Indexing sizes, as the legacy IndexingView printed them (binary units).
+pub(super) fn index_bytes(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    let n = bytes as f64;
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if n < KB * KB {
+        format!("{:.1} KB", n / KB)
+    } else if n < KB * KB * KB {
+        format!("{:.1} MB", n / (KB * KB))
+    } else {
+        format!("{:.2} GB", n / (KB * KB * KB))
+    }
+}
+#[cfg(test)]
+mod index_bytes_tests {
+    #[::core::prelude::v1::test]
+    fn index_sizes_use_readable_units() {
+        assert_eq!(super::index_bytes(0), "0 B");
+        assert_eq!(super::index_bytes(634_296), "619.4 KB");
+        assert_eq!(super::index_bytes(5 * 1024 * 1024), "5.0 MB");
+        assert_eq!(super::index_bytes(3 * 1024 * 1024 * 1024), "3.00 GB");
     }
 }
 
