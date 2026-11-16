@@ -66,6 +66,7 @@ pub enum Event {
         reply: oneshot::Sender<Result<Option<std::path::PathBuf>, String>>,
     },
     Activate,
+    ShowLauncher,
     Hide,
     Toggle,
     Settings,
@@ -378,20 +379,29 @@ impl Relay {
     }
 }
 pub fn install_native_handlers(relay: &Relay) {
-    let weak = relay.downgrade();
-    global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(
-        move |e: global_hotkey::GlobalHotKeyEvent| {
-            if e.state == global_hotkey::HotKeyState::Pressed {
-                send_weak(&weak, Event::Hotkey(e.id));
-            }
-        },
-    ));
+    global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(hotkey_handler(relay)));
     let weak = relay.downgrade();
     muda::MenuEvent::set_event_handler(Some(move |e: muda::MenuEvent| {
         send_weak(&weak, Event::Menu(e.id.0))
     }));
+    tray_icon::TrayIconEvent::set_event_handler(Some(tray_handler(relay)));
+}
+/// The same callbacks used by the OS, independently invocable without installing global handlers.
+pub(crate) fn hotkey_handler(
+    relay: &Relay,
+) -> impl Fn(global_hotkey::GlobalHotKeyEvent) + Send + Sync + 'static {
     let weak = relay.downgrade();
-    tray_icon::TrayIconEvent::set_event_handler(Some(move |e: tray_icon::TrayIconEvent| {
+    move |e: global_hotkey::GlobalHotKeyEvent| {
+        if e.state == global_hotkey::HotKeyState::Pressed {
+            send_weak(&weak, Event::Hotkey(e.id));
+        }
+    }
+}
+pub(crate) fn tray_handler(
+    relay: &Relay,
+) -> impl Fn(tray_icon::TrayIconEvent) + Send + Sync + 'static {
+    let weak = relay.downgrade();
+    move |e: tray_icon::TrayIconEvent| {
         if let tray_icon::TrayIconEvent::Click {
             id,
             button: tray_icon::MouseButton::Left,
@@ -399,11 +409,14 @@ pub fn install_native_handlers(relay: &Relay) {
             ..
         } = e
         {
-            if id.0 == "tezbar-preview-primary" {
+            if id.0 == crate::host_adapter::PRIMARY_TRAY_ID {
+                // A menu-bar open request is idempotent: never hide an already open launcher.
+                send_weak(&weak, Event::ShowLauncher);
+            } else if id.0 == crate::host_adapter::PREVIEW_TRAY_ID {
                 send_weak(&weak, Event::Toggle);
             }
         }
-    }));
+    }
 }
 fn send_weak(weak: &Weak<Mailbox>, event: Event) {
     if let Some(mailbox) = weak.upgrade() {

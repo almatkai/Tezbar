@@ -199,6 +199,8 @@ impl Host for GpuiHost {
         })
     }
 }
+pub(crate) const PRIMARY_TRAY_ID: &str = "tezbar-primary";
+pub(crate) const PREVIEW_TRAY_ID: &str = "tezbar-preview-primary";
 /// Owns the primary tray separately from extension trays. Dropping it removes the native item.
 pub struct PrimaryTray {
     _tray: tray_icon::TrayIcon,
@@ -248,9 +250,9 @@ impl PrimaryTray {
         let icon = tray_icon::Icon::from_rgba(image.into_raw(), w, h).map_err(|e| e.to_string())?;
         let tray = tray_icon::TrayIconBuilder::new()
             .with_id(if production {
-                "tezbar-primary"
+                PRIMARY_TRAY_ID
             } else {
-                "tezbar-preview-primary"
+                PREVIEW_TRAY_ID
             })
             .with_menu(Box::new(menu))
             .with_menu_on_left_click(false)

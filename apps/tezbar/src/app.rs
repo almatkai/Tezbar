@@ -106,6 +106,14 @@ struct Owner {
 }
 impl Owner {
     fn start_core(&mut self, cx: &mut Context<Self>) {
+        if self.lifecycle.quitting || self.startup.as_ref().is_some_and(|task| !task.is_ready()) {
+            return;
+        }
+        // The native launcher must remain reachable even while legacy recovery or optional
+        // service startup is pending. Run on the GUI thread, before either readiness gate.
+        if let Err(error) = self.core.initialize_shortcuts() {
+            log::warn!("Native launcher shortcut unavailable: {error}");
+        }
         if self
             .launcher
             .update(cx, |view, _, _| view.migration_pending())
@@ -113,9 +121,6 @@ impl Owner {
         {
             self.m7.fail_open();
             self.show(cx);
-            return;
-        }
-        if self.lifecycle.quitting || self.startup.as_ref().is_some_and(|task| !task.is_ready()) {
             return;
         }
         let core = self.core.clone();
@@ -1158,6 +1163,7 @@ impl Owner {
             }
             Event::Main(op) => op(),
             Event::Activate => self.restore(cx),
+            Event::ShowLauncher => self.show(cx),
             Event::Hide => self.hide(cx),
             Event::Toggle => {
                 if self.lifecycle.visible {
@@ -1769,7 +1775,10 @@ fn run_app(
         let context = CoreContext::new(core_paths, Some(host.clone()))
             .with_dev_mode(production.is_none())
             .with_legacy_data_dir(None);
-        let core = CoreClient::new(tezbar_core::NativeCore::new(context).expect("isolated core"));
+        let core = CoreClient::for_launch(
+            tezbar_core::NativeCore::new(context).expect("native core"),
+            production.is_some(),
+        );
         host.bind_status_assets(&core.0);
         let settings_store = crate::surfaces::settings::SettingsStore::new(Arc::new(core.clone()));
         let launcher_settings_store = settings_store.clone();
@@ -1915,6 +1924,8 @@ fn run_app(
 
 #[cfg(test)]
 mod m9_review_tests;
+#[cfg(test)]
+mod startup_activation_tests;
 
 #[derive(Debug)]
 enum QuitPreparation {
