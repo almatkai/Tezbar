@@ -1581,3 +1581,48 @@ fn stop_during_running_multiline_tool_ignores_late_events(cx: &mut TestAppContex
         cx.run_until_parked();
     }
 }
+/// GPUI runs the transcript scroll handler while it holds the list state mutably
+/// borrowed. Re-reading the list there panicked inside the platform's wheel callback,
+/// which aborts the app (Windows 0xc0000409 / macOS "quit unexpectedly").
+#[gpui::test]
+fn wheel_scrolling_a_populated_transcript_does_not_reborrow_the_list(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "A");
+    settle(&rt, cx);
+    edit(&v, cx, "Scroll me");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    let run_a = run(&v, cx);
+    event(
+        &v,
+        cx,
+        json!({"type":"message","runId":run_a,"delta":"Line\n\n".repeat(40)}),
+    );
+    settle(&rt, cx);
+    cx.executor().advance_clock(Duration::from_millis(32));
+    settle(&rt, cx);
+    let handle = cx.update(|w, _| w.window_handle());
+    cx.simulate_window_resize(handle, size(px(467.), px(458.)));
+    cx.run_until_parked();
+    let composer = cx.debug_bounds("chat-composer").unwrap();
+    // Just above the composer is always the transcript.
+    let over = point(composer.center().x, composer.top() - px(40.));
+    for dy in [-120., 120., -40.] {
+        cx.simulate_event(ScrollWheelEvent {
+            position: over,
+            delta: ScrollDelta::Pixels(point(px(0.), px(dy))),
+            ..Default::default()
+        });
+        cx.run_until_parked();
+    }
+    // Scrolling back to the bottom resumes following the stream.
+    cx.simulate_event(ScrollWheelEvent {
+        position: over,
+        delta: ScrollDelta::Pixels(point(px(0.), px(-10_000.))),
+        ..Default::default()
+    });
+    cx.run_until_parked();
+    assert!(v.read_with(cx, |v, _| v.follow));
+}

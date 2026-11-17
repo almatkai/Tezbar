@@ -230,8 +230,11 @@ impl ChatView {
             v
         });
         let transcript = ListState::new(0, ListAlignment::Top, px(200.));
+        // GPUI calls this while it holds the list state mutably borrowed, so it must not
+        // touch `v.transcript` (any ListState read re-borrows it and panics inside a
+        // platform callback, which aborts the whole app). Use the counts in the event.
         transcript.set_scroll_handler(cx.listener(|v, e: &ListScrollEvent, _, _| {
-            v.follow = e.visible_range.end + 1 >= v.transcript.item_count();
+            v.follow = e.visible_range.end + 1 >= e.count;
         }));
         let sub = cx.subscribe(&input, |this, _, e: &Committed, cx| {
             if let Some(id) = this.controller.active.clone() {
