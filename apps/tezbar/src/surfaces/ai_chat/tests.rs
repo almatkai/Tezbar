@@ -511,6 +511,7 @@ fn run_wire_keeps_minimal_unsaved_context_and_metadata_no_rendered_stage_payload
         references: vec![],
         stages: vec![],
         created_at: 1,
+        timeline: vec![],
     });
     let r = chat::RunRequest {
         run_id: "agent-fixture".into(),
@@ -824,6 +825,7 @@ fn native_projection_preserves_stream_text_stage_text_and_replaces_stage_in_plac
         response_meta: None,
         references: vec![],
         created_at: 1,
+        timeline: vec![],
         stages: vec![chat::Stage {
             index: 1,
             label: "Tool".into(),
@@ -848,6 +850,19 @@ fn native_projection_preserves_stream_text_stage_text_and_replaces_stage_in_plac
     assert!(matches!(&rows[2],view::Row::Stage(t,0)if t.stages[0].status==chat::StageStatus::Done));
     assert!(matches!(&rows[3],view::Row::Text{range,..}if range==&(5..10)));
     assert_eq!(rows.len(), 5);
+    let view::Row::Header(turn) = &rows[0] else {
+        panic!("first row is the turn header")
+    };
+    let mut settled = (**turn).clone();
+    settled.timeline = vec![
+        chat::TimelineItem::Text { start: 0, end: 5 },
+        chat::TimelineItem::Stage(1),
+        chat::TimelineItem::Text { start: 5, end: 10 },
+    ];
+    let rows = view::project(&[Arc::new(settled)], None, &[]);
+    assert!(matches!(&rows[1],view::Row::Text{range,settled:true,..}if range==&(0..5)));
+    assert!(matches!(&rows[2], view::Row::Stage(_, 0)));
+    assert!(matches!(&rows[3],view::Row::Text{range,settled:true,..}if range==&(5..10)));
 }
 #[gpui::test]
 fn native_a11y_shows_approval_and_scrubs_known_provider_diagnostics(cx: &mut TestAppContext) {

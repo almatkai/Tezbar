@@ -25,8 +25,11 @@ pub(super) fn project(
     for t in turns {
         rows.push(Row::Header(t.clone()));
         let streaming = live == Some(t.id.as_str());
-        if streaming && !timeline.is_empty() {
-            for item in timeline {
+        // Live turns follow the conversation timeline; settled turns keep their own
+        // copy so tools, reasoning and text stay in the order they happened.
+        let order = if streaming { timeline } else { &t.timeline[..] };
+        if !order.is_empty() {
+            for item in order {
                 match item {
                     chat::TimelineItem::Stage(index) => {
                         if let Some(n) = t.stages.iter().position(|s| s.index == *index) {
@@ -39,7 +42,7 @@ pub(super) fn project(
                                 id: format!("{}-text-{start}", t.id),
                                 turn: t.clone(),
                                 range: *start..*end,
-                                settled: false,
+                                settled: !streaming,
                             });
                         }
                     }

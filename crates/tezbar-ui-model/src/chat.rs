@@ -84,6 +84,63 @@ pub struct Turn {
     pub references: Vec<Reference>,
     pub stages: Vec<Stage>,
     pub created_at: u64,
+    /// Arrival order of text segments and stages; empty for legacy turns, which
+    /// render stages first and the text after.
+    #[serde(skip)]
+    pub timeline: Vec<TimelineItem>,
+}
+/// Separates a new text segment from earlier ones so copied or replayed turn text
+/// keeps paragraphs apart. Segment ranges start after the break.
+fn paragraph_break(text: &mut String) {
+    if !text.is_empty() && !text.ends_with("\n\n") {
+        text.push_str(if text.ends_with('\n') { "\n" } else { "\n\n" });
+    }
+}
+/// Durable timeline entry as core stores it: text segments carry their own text.
+enum StoredItem {
+    Text(String),
+    Stage(u64),
+}
+/// Rebuilds byte ranges for stored text segments by locating each one, in order, in
+/// the turn text. Any segment that cannot be placed drops the timeline so the turn
+/// falls back to the legacy layout instead of showing misordered or duplicated text.
+fn align_timeline(text: &str, stages: &[Stage], items: Vec<StoredItem>) -> Vec<TimelineItem> {
+    let mut cursor = 0;
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        match item {
+            StoredItem::Text(segment) => {
+                let Some(at) = text.get(cursor..).and_then(|rest| rest.find(&segment)) else {
+                    return vec![];
+                };
+                let start = cursor + at;
+                cursor = start + segment.len();
+                out.push(TimelineItem::Text { start, end: cursor });
+            }
+            StoredItem::Stage(index) => {
+                if stages.iter().any(|s| s.index == index)
+                    && !out.contains(&TimelineItem::Stage(index))
+                {
+                    out.push(TimelineItem::Stage(index));
+                }
+            }
+        }
+    }
+    for s in stages {
+        if !out.contains(&TimelineItem::Stage(s.index)) {
+            out.push(TimelineItem::Stage(s.index));
+        }
+    }
+    if text
+        .get(cursor..)
+        .is_some_and(|rest| !rest.trim().is_empty())
+    {
+        out.push(TimelineItem::Text {
+            start: cursor,
+            end: text.len(),
+        });
+    }
+    out
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -139,6 +196,25 @@ impl Turn {
         if !self.stages.is_empty() {
             wire["stages"] = json!(self.stages);
         }
+        let timeline: Vec<_> = self
+            .timeline
+            .iter()
+            .filter_map(|item| match item {
+                TimelineItem::Text { start, end } => self
+                    .text
+                    .get(*start..*end)
+                    .filter(|t| !t.is_empty())
+                    .map(|t| json!({"type":"text","text":t})),
+                TimelineItem::Stage(index) => self
+                    .stages
+                    .iter()
+                    .find(|s| s.index == *index)
+                    .map(|s| json!({"type":"stage","stage":s})),
+            })
+            .collect();
+        if !timeline.is_empty() {
+            wire["timeline"] = json!(timeline);
+        }
         wire
     }
     /// Core chat attachments are descriptors. Canonical image blobs and signed/tool history
@@ -157,6 +233,8 @@ impl Turn {
             stages: Vec<Stage>,
             #[serde(default)]
             attachments: Vec<Image>,
+            #[serde(default)]
+            timeline: Vec<serde_json::Value>,
         }
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]
@@ -167,7 +245,22 @@ impl Turn {
             height: Option<u32>,
         }
         let t: Stored = serde_json::from_value(wire)?;
+        let stored = t
+            .timeline
+            .iter()
+            .filter_map(|v| match v["type"].as_str()? {
+                "text" => v["text"].as_str().map(|s| StoredItem::Text(s.into())),
+                "stage" => v["stage"]["index"].as_u64().map(StoredItem::Stage),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let timeline = if stored.is_empty() {
+            vec![]
+        } else {
+            align_timeline(&t.text, &t.stages, stored)
+        };
         Ok(Self {
+            timeline,
             id: t.id,
             role: t.role,
             text: t.text,
@@ -797,6 +890,7 @@ impl ChatController {
             references: std::mem::take(&mut c.attachments),
             stages: vec![],
             created_at: now,
+            timeline: vec![],
         });
         c.draft_revision += 1;
         c.input_error = None;
@@ -948,6 +1042,7 @@ impl ChatController {
             references: vec![],
             stages: vec![],
             created_at: now,
+            timeline: vec![],
         });
         c.approval = None;
         c.timeline.clear();
@@ -999,16 +1094,18 @@ impl ChatController {
                     if start + delta.len() > max {
                         a.error=Some("Response exceeded the display limit. Open saved history for the complete response.".into());
                         true
-                    } else {
+                    } else if let Some(TimelineItem::Text { end, .. }) = c.timeline.last_mut() {
                         a.text.push_str(&delta);
-                        if let Some(TimelineItem::Text { end, .. }) = c.timeline.last_mut() {
-                            *end = a.text.len();
-                        } else {
-                            c.timeline.push(TimelineItem::Text {
-                                start,
-                                end: a.text.len(),
-                            });
-                        }
+                        *end = a.text.len();
+                        false
+                    } else {
+                        paragraph_break(&mut a.text);
+                        let start = a.text.len();
+                        a.text.push_str(&delta);
+                        c.timeline.push(TimelineItem::Text {
+                            start,
+                            end: a.text.len(),
+                        });
                         false
                     }
                 } else {
@@ -1017,12 +1114,42 @@ impl ChatController {
             }
             Event::Answer { text, .. } => {
                 if let Some(a) = &mut c.assistant {
-                    a.text = text;
+                    // The agent's canonical answer is only its final model turn, which
+                    // begins after the last tool call (thinking happens inside a turn).
+                    // Replace only that turn's streamed text so narration written
+                    // between earlier tool calls keeps its place in the timeline.
+                    let thinking = |index: &u64| {
+                        a.stages.iter().any(|s| {
+                            s.index == *index
+                                && (s.tool_name.as_deref() == Some("thinking")
+                                    || s.label.starts_with("Thinking"))
+                        })
+                    };
+                    let boundary = c
+                        .timeline
+                        .iter()
+                        .rposition(|i| matches!(i, TimelineItem::Stage(n) if !thinking(n)));
+                    let first = boundary.map_or(0, |p| p + 1);
+                    let cut = c.timeline[first..]
+                        .iter()
+                        .find_map(|i| match i {
+                            TimelineItem::Text { start, .. } => Some(*start),
+                            TimelineItem::Stage(_) => None,
+                        })
+                        .unwrap_or(if boundary.is_some() { a.text.len() } else { 0 });
+                    let mut index = 0;
+                    c.timeline.retain(|i| {
+                        index += 1;
+                        index <= first || matches!(i, TimelineItem::Stage(_))
+                    });
+                    a.text.truncate(cut);
+                    paragraph_break(&mut a.text);
+                    let start = a.text.len();
+                    a.text.push_str(&text);
                     truncate(&mut a.text, max);
-                    c.timeline.retain(|i| matches!(i, TimelineItem::Stage(_)));
-                    if !a.text.is_empty() {
+                    if a.text.len() > start {
                         c.timeline.push(TimelineItem::Text {
-                            start: 0,
+                            start,
                             end: a.text.len(),
                         });
                     }
@@ -1114,6 +1241,7 @@ impl ChatController {
                 );
             }
         }
+        a.timeline = c.timeline.clone();
         let turn = Arc::new(a);
         remember(&mut c.context, &turn, self.max_turns);
         if let Some(old) = c.turns.iter_mut().find(|t| t.id == turn.id) {

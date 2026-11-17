@@ -283,6 +283,7 @@ async fn real_core_clear_covers_over_200_rows_and_tombstones_preparing_owner() {
         references: vec![],
         stages: vec![],
         created_at: 1,
+        timeline: vec![],
     });
     for n in 0..240 {
         let mut turn = (*turn).clone();

@@ -1344,3 +1344,73 @@ fn clear_admits_hidden_dirty_and_running_owners_and_recovers_failed_write() {
     assert!(c.owners.is_empty());
     assert!(c.active.is_none());
 }
+fn tool(index: u64) -> Event {
+    Event::Stage {
+        run_id: "r".into(),
+        stage: Stage {
+            index,
+            label: format!("bash: step {index}"),
+            status: StageStatus::Done,
+            detail: None,
+            output: None,
+            tool_name: Some("bash".into()),
+            duration_ms: None,
+            output_truncated: false,
+        },
+    }
+}
+fn say(delta: &str) -> Event {
+    Event::Message {
+        run_id: "r".into(),
+        delta: delta.into(),
+    }
+}
+#[test]
+fn settled_turn_keeps_interleaved_order_and_canonical_answer_keeps_narration() {
+    let mut c = controller();
+    start(&mut c, "a", "r");
+    c.event(tool(0));
+    c.event(tool(1));
+    c.event(say("Checking processes."));
+    c.event(tool(2));
+    c.event(say("Final draft"));
+    c.event(Event::Answer {
+        run_id: "r".into(),
+        text: "Final answer".into(),
+    });
+    c.event(Event::Done { run_id: "r".into() });
+    let turn = last(&c, "a");
+    assert_eq!(turn.text, "Checking processes.\n\nFinal answer");
+    let order: Vec<String> = turn
+        .timeline
+        .iter()
+        .map(|i| match i {
+            TimelineItem::Stage(n) => format!("stage {n}"),
+            TimelineItem::Text { start, end } => turn.text[*start..*end].to_string(),
+        })
+        .collect();
+    assert_eq!(
+        order,
+        [
+            "stage 0",
+            "stage 1",
+            "Checking processes.",
+            "stage 2",
+            "Final answer"
+        ]
+    );
+    let restored = Turn::from_core_wire(turn.to_core_wire()).unwrap();
+    assert_eq!(restored.timeline, turn.timeline);
+}
+#[test]
+fn stored_timeline_that_does_not_match_text_falls_back_to_legacy_layout() {
+    let wire = serde_json::json!({
+        "id": "t", "role": "assistant", "text": "answer", "createdAt": 1,
+        "stages": [{"index": 0, "label": "bash", "status": "done"}],
+        "timeline": [{"type": "text", "text": "missing"}, {"type": "stage", "stage": {"index": 0, "label": "bash", "status": "done"}}]
+    });
+    assert!(Turn::from_core_wire(wire).unwrap().timeline.is_empty());
+    let legacy =
+        serde_json::json!({"id": "t", "role": "assistant", "text": "answer", "createdAt": 1});
+    assert!(Turn::from_core_wire(legacy).unwrap().timeline.is_empty());
+}
