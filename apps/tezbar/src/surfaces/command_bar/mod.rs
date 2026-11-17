@@ -1039,7 +1039,7 @@ impl Launcher {
             let q=query.clone();
             let result=gpui_tokio::Tokio::spawn(cx,async move {
                 if kind==1 || kind==2 {return presentation::path_rows(adapter.send(Request::CompletePath(q)).await?);}
-                if kind==3 {let rows=presentation::history_rows(adapter.send(Request::Chats).await?,false)?;let q=q.to_lowercase();return Ok((rows.into_iter().filter(|r|r.title.to_lowercase().contains(&q)).collect(),HashMap::new()));}
+                if kind==3 {return Ok((presentation::history_rows(adapter.send(Request::Chats).await?,false)?,HashMap::new()));}
                 let request=if kind==2 {format!("`{}",q.trim_start_matches('`'))}else{q.clone()};
                 let value=adapter.send(Request::Search(request)).await?;
                 let mut rows:Vec<Row>=serde_json::from_value(value).map_err(|e|e.to_string())?;
@@ -1072,7 +1072,10 @@ impl Launcher {
                 if this.visible && generation==this.model.session.generation {
                     if let Ok((_,paths))=&result {this.paths=paths.clone();}
                 }
-                this.dispatch(Input::SearchComplete{generation,result:result.map(|(rows,_)|rows)},cx);
+                let result = result.map(|(rows, _)| {
+                    if kind == 3 { this.chat_search_rows(rows, &query) } else { rows }
+                });
+                this.dispatch(Input::SearchComplete{generation,result},cx);
                 if kind==1 {this.path_list.reset(this.rows.len());}
                 if kind==0&&query.is_empty()&&generation==this.model.session.generation {this.home=this.model.session.rows.clone();}
                 this.icons.clear();

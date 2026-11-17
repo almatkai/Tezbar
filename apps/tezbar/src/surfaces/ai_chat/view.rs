@@ -351,18 +351,6 @@ impl ChatView {
                 .min_h_0()
                 .py(px(4. * t.zoom)),
             )
-            .child(
-                div()
-                    .flex()
-                    .px(px(8. * t.zoom))
-                    .py(px(6. * t.zoom))
-                    .border_t_1()
-                    .border_color(t.hairline)
-                    .child(
-                        self.ghost("clear-all", "Clear all conversations", Action::Clear, t, cx)
-                            .text_color(t.danger),
-                    ),
-            )
             .into_any_element()
     }
     fn row(&mut self, index: usize, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
@@ -449,6 +437,10 @@ impl ChatView {
                 let expanded = self.expanded.contains(&key);
                 let running = matches!(stage.status, chat::StageStatus::Running);
                 let failed = matches!(stage.status, chat::StageStatus::Failed);
+                let live_turn = self
+                    .active()
+                    .and_then(|c| c.response())
+                    .is_some_and(|r| r.id == turn.id);
                 let thinking = stage.tool_name.as_deref().is_none_or(|n| n == "thinking")
                     && stage.label.to_lowercase().starts_with("thinking");
                 // AI Elements `Reasoning`: a quiet status line, not a card.
@@ -472,13 +464,13 @@ impl ChatView {
                         .py(px(4. * t.zoom))
                         .text_size(px(12.5 * t.zoom))
                         .text_color(if failed { t.danger } else { t.text3 })
-                        .child(if running {
-                            elements::spinner(format!("thinking-{key}"), 14. * t.zoom, t.text3)
+                        .child(elements::icon(Icon::Brain, 14. * t.zoom, t.text3))
+                        .child(if running && live_turn && !cx.reduce_motion() {
+                            controls::shimmer_text(format!("thinking-{key}"), "Thinking…", t.light)
                                 .into_any_element()
                         } else {
-                            elements::icon(Icon::Brain, 14. * t.zoom, t.text3).into_any_element()
+                            div().child(label).into_any_element()
                         })
-                        .child(label)
                         .into_any_element();
                 }
                 // AI Elements `Tool`: bordered collapsible with a status badge.
@@ -679,15 +671,21 @@ impl ChatView {
                 }) && turn.role == chat::Role::Assistant
                     && turn.error.is_some();
                 let actions = !live || retry;
+                let activity = self.active().and_then(chat::Conversation::activity);
+                let delete_selector = format!("chat-delete-{}", turn.id);
                 div()
+                    .w_full()
                     .flex()
                     .flex_col()
                     .gap(px(6. * t.zoom))
-                    .px(px(16. * t.zoom))
+                    .px(if user { gutter } else { px(16. * t.zoom) })
                     .pt(px(2. * t.zoom))
                     .pb(px((if user { 4. } else { 14. }) * t.zoom))
                     .when(user, |d| d.items_end())
-                    .when(live, |d| {
+                    // The running "Thinking…" line already shows that state.
+                    .when(live && activity != Some(chat::RunActivity::Thinking), |d| {
+                        let label = activity.map_or("Working…", chat::RunActivity::label);
+                        let waiting = activity == Some(chat::RunActivity::WaitingForApproval);
                         d.child(
                             div()
                                 .id(format!("working-{}", turn.id))
@@ -703,7 +701,18 @@ impl ChatView {
                                     14. * t.zoom,
                                     t.text3,
                                 ))
-                                .child("Working…"),
+                                .aria_label(label)
+                                .when(waiting, |d| d.text_color(t.warning))
+                                .child(if waiting || cx.reduce_motion() {
+                                    div().child(label).into_any_element()
+                                } else {
+                                    controls::shimmer_text(
+                                        format!("working-label-{}", turn.id),
+                                        label,
+                                        t.light,
+                                    )
+                                    .into_any_element()
+                                }),
                         )
                     })
                     .when_some(turn.error.clone(), |d, e| {
@@ -724,7 +733,9 @@ impl ChatView {
                     .when(actions, |d| {
                         d.child(
                             div()
+                                .w_full()
                                 .flex()
+                                .when(user, |d| d.justify_end())
                                 .items_center()
                                 .gap(px(2. * t.zoom))
                                 .when(retry, |d| {
@@ -748,14 +759,17 @@ impl ChatView {
                                     ))
                                 })
                                 .when(!live, |d| {
-                                    d.child(self.icon_button(
-                                        format!("remove-{}", turn.id),
-                                        Icon::Trash,
-                                        "Delete message",
-                                        Action::DeleteTurn(turn.id.clone()),
-                                        t,
-                                        cx,
-                                    ))
+                                    d.child(
+                                        self.icon_button(
+                                            format!("remove-{}", turn.id),
+                                            Icon::Trash,
+                                            "Delete message",
+                                            Action::DeleteTurn(turn.id.clone()),
+                                            t,
+                                            cx,
+                                        )
+                                        .debug_selector(move || delete_selector.clone()),
+                                    )
                                 })
                                 .when_some(turn.response_meta.clone(), |d, m| {
                                     d.child(
@@ -2153,11 +2167,7 @@ impl Render for ChatView {
                             .get(&status.session_id)
                             .map(|m| m.0.as_str())
                             .unwrap_or("Chat"),
-                        if status.waiting_approval {
-                            "Approval needed"
-                        } else {
-                            "Running"
-                        }
+                        status.activity.label()
                     ),
                     Action::Resume(status.session_id),
                     t,
@@ -2165,7 +2175,10 @@ impl Render for ChatView {
                 )
                 .h(px(22. * t.zoom))
                 .text_size(px(10.5 * t.zoom))
-                .when(status.waiting_approval, |d| d.text_color(t.warning)),
+                .when(
+                    status.activity == chat::RunActivity::WaitingForApproval,
+                    |d| d.text_color(t.warning),
+                ),
             );
         }
         if let Some(indicator) = self.footer.clone() {

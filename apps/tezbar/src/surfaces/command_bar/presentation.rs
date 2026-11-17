@@ -107,7 +107,7 @@ pub fn history_rows(value: Value, terminal: bool) -> Result<Vec<Row>, String> {
                 .or_else(|| v["label"].as_str())
                 .unwrap_or(&id)
                 .to_owned();
-            row.subtitle = v["cwd"]
+            row.subtitle = v[if terminal { "cwd" } else { "preview" }]
                 .as_str()
                 .or_else(|| v["workingDirectory"].as_str())
                 .unwrap_or_default()

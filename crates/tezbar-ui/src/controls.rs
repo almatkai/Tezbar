@@ -505,3 +505,39 @@ pub fn pin(t: Tokens) -> impl IntoElement {
     div().id("pin-marker").role(Role::Image).aria_label("Pinned")
         .child(gpui::svg().data(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="white" d="M5 .5 6 3l2.6.4-1.9 1.8.5 2.6L5 6.6 2.8 7.8l.5-2.6L1.4 3.4 4 3 5 .5Z"/></svg>"#.as_slice()).size(px(10. * t.zoom)).text_color(t.text3))
 }
+/// Status text whose letters shimmer through blue, white and violet, like the React
+/// "Generating…" label. Callers show plain text instead when reduce motion is on.
+pub fn shimmer_text(
+    id: impl Into<ElementId>,
+    label: &'static str,
+    light: bool,
+) -> impl IntoElement {
+    let palette: &[u32] = if light {
+        &[0x1d4ed8, 0x0369a1, 0x6d28d9, 0x9d174d]
+    } else {
+        &[0x93c5fd, 0xa5f3fc, 0xffffff, 0xd8b4fe, 0xf9a8d4]
+    };
+    let count = label.chars().count() as f32;
+    StyledText::new(label).with_animation(
+        id,
+        Animation::new(std::time::Duration::from_millis(2200))
+            .repeat()
+            .with_max_fps(30.0),
+        move |text, progress| {
+            text.with_highlights(label.char_indices().enumerate().map(|(i, (start, ch))| {
+                let stop =
+                    (progress - 0.5 * i as f32 / count).rem_euclid(1.0) * palette.len() as f32;
+                let index = stop as usize % palette.len();
+                let next = rgb(palette[(index + 1) % palette.len()]).alpha(stop.fract());
+                let color = rgb(palette[index]).blend(next);
+                (
+                    start..start + ch.len_utf8(),
+                    HighlightStyle {
+                        color: Some(color.into()),
+                        ..Default::default()
+                    },
+                )
+            }))
+        },
+    )
+}

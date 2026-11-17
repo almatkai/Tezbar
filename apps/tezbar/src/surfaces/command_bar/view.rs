@@ -1,5 +1,7 @@
 use super::*;
 use presentation::RowAction;
+use tezbar_ui_model::chat::RunActivity;
+
 #[derive(Clone)]
 struct PinTooltip {
     title: String,
@@ -289,6 +291,10 @@ impl Launcher {
         self.complete_path_for_id(&row.id, w, cx);
     }
     pub(super) fn return_home(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+        let from_chat = self
+            .navigation
+            .as_ref()
+            .is_some_and(|n| n.surface == Surface::AiChat);
         self.acknowledge_navigation(cx);
         self.hide_chat(cx);
         self.hide_terminal(w, cx);
@@ -309,6 +315,10 @@ impl Launcher {
         self.terminal_cwd = None;
         self.input.update(cx, |i, cx| i.clear_silently(w, cx));
         self.dispatch(Input::Hide, cx);
+        if from_chat {
+            // A leading space opens the AI conversation list with an empty query.
+            self.model.input = " ".into();
+        }
         self.dispatch(Input::Show, cx);
         self.input.focus_handle(cx).focus(w, cx);
     }
@@ -934,6 +944,8 @@ impl Launcher {
         let id = row.id.clone();
         let generation = self.model.session.displayed.unwrap_or(0);
         let title = row.title.clone();
+        let activity = self.chat_row_status(&row);
+        let activity_id = format!("chat-activity-{id}");
         let image = self.icons.get(&id).cloned();
         let selected = index == self.model.session.selected;
         let pin_slot = self
@@ -1143,10 +1155,7 @@ impl Launcher {
                         .child(title),
                 )
                 .when(!grid, |d| {
-                    let subtitle = self
-                        .chat_row_status(&self.rows[index])
-                        .map(str::to_owned)
-                        .unwrap_or_else(|| self.rows[index].subtitle.clone());
+                    let subtitle = self.rows[index].subtitle.clone();
                     d.when(!subtitle.is_empty(), |d| {
                         d.child(
                             div()
@@ -1175,22 +1184,39 @@ impl Launcher {
             )
         })
         .when(!grid && !instant && !path, |d| {
+            let badge = if let Some(activity) = activity {
+                if activity == RunActivity::WaitingForApproval || cx.reduce_motion() {
+                    div().child(activity.label()).into_any_element()
+                } else {
+                    controls::shimmer_text(activity_id, activity.label(), t.light && !selected)
+                        .into_any_element()
+                }
+            } else {
+                div()
+                    .child(presentation::kind_label(&row.category).to_owned())
+                    .into_any_element()
+            };
             d.child(
                 div()
                     .flex_shrink_0()
                     .px(px(6. * t.zoom))
                     .py(px(2. * t.zoom))
                     .rounded(px(5. * t.zoom))
-                    .bg(if selected { rgba(0xffffff29).into() } else { t.pill })
+                    .when(activity.is_none(), |d| {
+                        d.bg(if selected { rgba(0xffffff29).into() } else { t.pill })
+                    })
+                    .when(activity.is_some(), |d| d.font_weight(FontWeight::MEDIUM))
                     .text_size(px(10.5 * t.zoom))
                     .line_height(px(14. * t.zoom))
-                    .text_color(if selected {
+                    .text_color(if activity == Some(RunActivity::WaitingForApproval) {
+                        t.warning
+                    } else if selected {
                         rgb(0xffffff).into()
                     } else {
                         t.text3
                     })
                     .debug_selector(move || format!("result-kind-{index}"))
-                    .child(presentation::kind_label(&self.rows[index].category).to_owned()),
+                    .child(badge),
             )
         })
     }

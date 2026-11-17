@@ -414,7 +414,7 @@ fn hidden_runs_and_background_approval_survive_until_actual_unmount() {
     c.boot(Boot::Panel, None).unwrap();
     approval(&mut c, None);
     c.set_visible(false);
-    assert_eq!(c.background()[0].waiting_approval, true);
+    assert_eq!(c.background()[0].activity, RunActivity::WaitingForApproval);
     assert!(c.owners["a"].busy());
     assert!(
         c.unmount()

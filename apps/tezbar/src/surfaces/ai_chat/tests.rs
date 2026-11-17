@@ -1476,6 +1476,18 @@ fn transcript_messages_size_to_content_and_composer_fits_narrow_window(cx: &mut 
     });
     let user = messages.iter().find(|(_, user)| *user).unwrap().0;
     let assistant = messages.iter().find(|(_, user)| !*user).unwrap().0;
+    let user_delete: &'static str = Box::leak(v.read_with(cx, |v, _| {
+        v.projection
+            .iter()
+            .find_map(|row| match row {
+                view::Row::End(turn, _) if turn.role == chat::Role::User => {
+                    Some(format!("chat-delete-{}", turn.id))
+                }
+                _ => None,
+            })
+            .unwrap()
+            .into_boxed_str()
+    }));
     let handle = cx.update(|w, _| w.window_handle());
     for (width, height) in [(467., 900.), (900., 900.)] {
         cx.simulate_window_resize(handle, size(px(width), px(height)));
@@ -1497,6 +1509,9 @@ fn transcript_messages_size_to_content_and_composer_fits_narrow_window(cx: &mut 
             viewport.width - user.right() < px(30.),
             "User bubbles are right-aligned: {user:?}, {viewport:?}"
         );
+        let delete = cx.debug_bounds(user_delete).expect("User action is visible");
+        assert_eq!(delete.right(), user.right());
+        assert!(delete.top() >= user.bottom());
         assert!(
             assistant.size.height > user.size.height * 2.,
             "Wrapped assistant prose grows with its content: {assistant:?}"

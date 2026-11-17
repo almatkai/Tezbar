@@ -340,10 +340,10 @@ fn persistent_events_reach_hidden_run_and_approval_without_switching_active_owne
         assert_eq!(a.response().unwrap().text, "Background A");
     });
     assert!(view.read_with(cx, |v, _| {
-        v.chat
-            .background
-            .iter()
-            .any(|s| s.session_id == a["sessionId"].as_str().unwrap() && s.waiting_approval)
+        v.chat.background.iter().any(|s| {
+            s.session_id == a["sessionId"].as_str().unwrap()
+                && s.activity == RunActivity::WaitingForApproval
+        })
     }));
     cx.update(|w, cx| view.update(cx, |v, cx| v.hide(w, cx)));
     publish(
@@ -502,24 +502,59 @@ fn actual_navigation_screen_resume_back_and_footer_use_fresh_identity(cx: &mut T
     });
     settle(&rt, cx);
     let run = f.run();
+    let row_id = format!("chat:{}", run["sessionId"].as_str().unwrap());
+    let source = ChatSource {
+        entity: chat.entity_id(),
+        mount: chat.read_with(cx, |v, _| v.host_generation()),
+    };
+    cx.update(|w, cx| view.update(cx, |v, cx| v.chat_back(source, w, cx)));
+    cx.executor().advance_clock(Duration::from_millis(8));
+    settle(&rt, cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(
+            launcher::input_mode(&v.model.input, v.model.terminal_mode).mode,
+            Mode::Ai
+        );
+    });
+    let activity = |cx: &mut VisualTestContext| {
+        view.read_with(cx, |v, _| {
+            let row = v.rows.iter().find(|row| row.id == row_id).unwrap();
+            v.chat_row_status(row)
+        })
+    };
+    assert_eq!(activity(cx), Some(RunActivity::Starting));
+    publish(
+        cx,
+        json!({"type":"start","runId":run["runId"],"task":"Footer run"}),
+    );
+    settle(&rt, cx);
+    assert_eq!(activity(cx), Some(RunActivity::Generating));
+    for (index, label, tool, expected) in [
+        (0, "Thinking…", "thinking", RunActivity::Thinking),
+        (1, "Read file", "read_file", RunActivity::UsingTools),
+    ] {
+        publish(
+            cx,
+            json!({"type":"stage","runId":run["runId"],"stage":{"index":index,"label":label,"toolName":tool,"status":"running"}}),
+        );
+        settle(&rt, cx);
+        assert_eq!(activity(cx), Some(expected));
+        publish(
+            cx,
+            json!({"type":"stage","runId":run["runId"],"stage":{"index":index,"label":label,"toolName":tool,"status":"done"}}),
+        );
+        settle(&rt, cx);
+        assert_eq!(activity(cx), Some(RunActivity::Generating));
+    }
+    assert_eq!(f.count("agent:cancel"), 0);
     publish(
         cx,
         json!({"type":"approval","runId":run["runId"],"approvalId":"footer-approval","title":"Allow?","command":"{}","canRemember":false}),
     );
     settle(&rt, cx);
-    cx.update(|w, cx| view.update(cx, |v, cx| v.return_home(w, cx)));
-    let mut row = Row::command(
-        &format!("chat:{}", run["sessionId"].as_str().unwrap()),
-        "Saved chat",
-    );
-    row.category = "chat".into();
-    row.id = format!("chat:{}", run["sessionId"].as_str().unwrap());
-    assert_eq!(
-        view.read_with(cx, |v, _| v.chat_row_status(&row)),
-        Some("Waiting for approval…")
-    );
+    assert_eq!(activity(cx), Some(RunActivity::WaitingForApproval));
     let task = crate::surfaces::utilities::background_tasks::TaskStatus {
-        id: row.id.clone(),
+        id: row_id,
         kind: "chat".into(),
         title: "AI Chat".into(),
         detail: "Waiting".into(),

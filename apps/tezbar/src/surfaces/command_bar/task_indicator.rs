@@ -34,17 +34,11 @@ impl TaskIndicator {
     ) {
         self.chat = status
             .iter()
-            .filter(|s| s.busy)
             .map(|s| TaskStatus {
                 id: format!("chat:{}", s.session_id),
                 kind: "chat".into(),
                 title: "AI Chat".into(),
-                detail: if s.waiting_approval {
-                    "Waiting for approval…"
-                } else {
-                    "Generating…"
-                }
-                .into(),
+                detail: s.activity.label().into(),
                 progress: None,
                 remaining_seconds: None,
                 extension_id: None,

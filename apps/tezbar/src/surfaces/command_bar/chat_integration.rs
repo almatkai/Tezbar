@@ -2,7 +2,7 @@
 //! Shares the existing App window, SettingsStore and persistent CoreEvents owner.
 use super::*;
 use crate::surfaces::ai_chat::{ChatEffect, ChatFuture, ChatRequest, ChatTransport, ChatView};
-use tezbar_ui_model::chat::{BackgroundStatus, Boot};
+use tezbar_ui_model::chat::{BackgroundStatus, Boot, RunActivity};
 
 /// Source and mount travel with each queued effect, including across native dialogs.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -63,19 +63,35 @@ impl Launcher {
             self.return_home(w, cx);
         }
     }
-    pub(super) fn chat_row_status(&self, row: &Row) -> Option<&'static str> {
+    pub(super) fn chat_row_status(&self, row: &Row) -> Option<RunActivity> {
         let session = row.id.strip_prefix("chat:")?;
         self.chat
             .background
             .iter()
-            .find(|status| status.session_id == session && status.busy)
-            .map(|status| {
-                if status.waiting_approval {
-                    "Waiting for approval…"
-                } else {
-                    "Generating…"
+            .find(|status| status.session_id == session)
+            .map(|status| status.activity)
+    }
+    pub(super) fn chat_search_rows(&self, mut rows: Vec<Row>, query: &str) -> Vec<Row> {
+        let mut pending = Vec::new();
+        for status in &self.chat.background {
+            let id = format!("chat:{}", status.session_id);
+            if !rows.iter().any(|row| row.id == id) {
+                let mut row = Row::command("__chat-session", &status.title);
+                row.id = id;
+                row.category = "chat".into();
+                if let Action::InvokeCommand { payload, .. } = &mut row.action {
+                    *payload = json!({ "id": status.session_id });
                 }
-            })
+                pending.push(row);
+            }
+        }
+        pending.append(&mut rows);
+        let query = query.to_lowercase();
+        pending.retain(|row| {
+            let text = format!("{} {}", row.title, row.subtitle).to_lowercase();
+            query.split_whitespace().all(|term| text.contains(term))
+        });
+        pending
     }
     pub(crate) fn chat_clipboard_job(
         &mut self,
@@ -167,8 +183,15 @@ impl Launcher {
             for (mount, effect) in effects {
                 match effect {
                     ChatEffect::Background(statuses) => {
+                        let sessions_changed = this.chat.background.iter().map(|s| &s.session_id)
+                            .ne(statuses.iter().map(|s| &s.session_id));
                         this.task_indicator.update(cx, |footer, cx| footer.chat_status(&statuses, cx));
                         this.chat.background = statuses;
+                        if sessions_changed && this.navigation.is_none()
+                            && launcher::input_mode(&this.model.input, this.model.terminal_mode).mode == Mode::Ai
+                        {
+                            this.dispatch(Input::Invalidate { text: None }, cx);
+                        }
                         cx.notify();
                     }
                     effect => {

@@ -525,6 +525,34 @@ impl Conversation {
     pub fn busy(&self) -> bool {
         self.phase != RunPhase::Settled
     }
+    pub fn activity(&self) -> Option<RunActivity> {
+        if !self.busy() {
+            return None;
+        }
+        let activity = if self.approval.is_some() {
+            RunActivity::WaitingForApproval
+        } else if let Some(stage) = self.response().and_then(|response| {
+            response
+                .stages
+                .iter()
+                .rev()
+                .find(|s| s.status == StageStatus::Running)
+        }) {
+            if stage.label == "Thinking…" {
+                RunActivity::Thinking
+            } else {
+                RunActivity::UsingTools
+            }
+        } else if matches!(
+            self.phase,
+            RunPhase::Preparing { .. } | RunPhase::Running { started: false, .. }
+        ) {
+            RunActivity::Starting
+        } else {
+            RunActivity::Generating
+        };
+        Some(activity)
+    }
     pub fn unsaved(&self) -> bool {
         !self.dirty.is_empty()
     }
@@ -539,8 +567,27 @@ pub struct HistoryRow {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BackgroundStatus {
     pub session_id: String,
-    pub busy: bool,
-    pub waiting_approval: bool,
+    pub title: String,
+    pub activity: RunActivity,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunActivity {
+    Starting,
+    Thinking,
+    UsingTools,
+    Generating,
+    WaitingForApproval,
+}
+impl RunActivity {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Starting => "Starting agent…",
+            Self::Thinking => "Thinking…",
+            Self::UsingTools => "Using tools…",
+            Self::Generating => "Generating…",
+            Self::WaitingForApproval => "Waiting for approval…",
+        }
+    }
 }
 /// Entries with in-flight work or failed persistence are retained; admission is bounded.
 pub struct ChatController {
@@ -1445,11 +1492,21 @@ impl ChatController {
     pub fn background(&self) -> Vec<BackgroundStatus> {
         self.owners
             .values()
-            .filter(|c| c.deleted.is_none() && c.busy())
-            .map(|c| BackgroundStatus {
-                session_id: c.id.clone(),
-                busy: true,
-                waiting_approval: c.approval.is_some(),
+            .filter(|c| c.deleted.is_none())
+            .filter_map(|c| {
+                Some(BackgroundStatus {
+                    session_id: c.id.clone(),
+                    activity: c.activity()?,
+                    title: if c.title == "New chat" {
+                        c.turns
+                            .iter()
+                            .find(|turn| turn.role == Role::User)
+                            .or_else(|| c.preparation.as_ref().map(|p| &p.user))
+                            .map_or_else(|| c.title.clone(), |turn| title(&turn.text))
+                    } else {
+                        c.title.clone()
+                    },
+                })
             })
             .collect()
     }
