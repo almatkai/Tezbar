@@ -1583,6 +1583,22 @@ impl Owner {
     }
 }
 use tezbar_core::host::Host;
+/// GUI builds have no console, and a panic inside a platform callback (window
+/// procedure, AppKit, accessibility) aborts the process. Record every panic in the
+/// app log first so the crash leaves its message, location and backtrace behind.
+fn install_panic_log() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let thread = std::thread::current();
+        log::error!(
+            "panic on thread '{}': {info}\n{}",
+            thread.name().unwrap_or("unnamed"),
+            std::backtrace::Backtrace::force_capture()
+        );
+        log::logger().flush();
+        previous(info);
+    }));
+}
 pub fn run(preview: Preview) -> anyhow::Result<()> {
     run_app(preview, None)
 }
@@ -1669,6 +1685,7 @@ fn run_app(
     ));
     log::set_logger(log).map_err(|e| anyhow::anyhow!("Native logger: {e}"))?;
     log::set_max_level(log::LevelFilter::Info);
+    install_panic_log();
     let application = gpui_platform::application();
     let reopen = relay.clone();
     application.on_reopen(move |_| {

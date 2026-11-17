@@ -1514,3 +1514,70 @@ fn transcript_messages_size_to_content_and_composer_fits_narrow_window(cx: &mut 
         );
     }
 }
+#[gpui::test]
+fn stop_during_running_multiline_tool_ignores_late_events(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "A");
+    settle(&rt, cx);
+    edit(
+        &v,
+        cx,
+        "how can I clean storage of this pc give me full info about",
+    );
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    let r = run(&v, cx);
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":r,"stage":{"index":0,"label":"Thinking","toolName":"thinking","status":"running"}}),
+    );
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":r,"stage":{"index":0,"label":"Thinking","toolName":"thinking","status":"done","durationMs":900}}),
+    );
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":r,"stage":{"index":1,"label":"powershell: Get-PSDrive -PSProvider FileSystem | Select-Object Name, Des","toolName":"powershell","status":"running"}}),
+    );
+    cx.run_until_parked();
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":r,"stage":{"index":1,"label":"powershell: Get-PSDrive -PSProvider FileSystem | Select-Object Name, Des","toolName":"powershell","status":"done","output":"Exit status: 0\nstdout:\n\r\nName Description Free(GB)\r\n---- -----------\r\nC   115.56\r\n\r\n","durationMs":4525}}),
+    );
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":r,"stage":{"index":2,"label":"powershell: $paths = @(\n    \"$env:LOCALAPPDATA/Temp\",\n    \"$env:WINDIR/T","toolName":"powershell","status":"running"}}),
+    );
+    cx.run_until_parked();
+    action(&v, cx, Action::Expand("assistant-2".into()));
+    cx.run_until_parked();
+    action(&v, cx, Action::Stop);
+    settle(&rt, cx);
+    cx.run_until_parked();
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":r,"stage":{"index":2,"label":"powershell: x","toolName":"powershell","status":"failed","output":"Operation cancelled"}}),
+    );
+    event(
+        &v,
+        cx,
+        json!({"type":"error","runId":r,"message":"Operation cancelled"}),
+    );
+    settle(&rt, cx);
+    cx.run_until_parked();
+    let id = v.read_with(cx, |v, _| {
+        v.active().unwrap().turns.back().unwrap().id.clone()
+    });
+    for n in 0..3 {
+        action(&v, cx, Action::Expand(format!("{id}-{n}")));
+        cx.run_until_parked();
+    }
+}
