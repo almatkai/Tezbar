@@ -1188,7 +1188,17 @@ impl Launcher {
                 if activity == RunActivity::WaitingForApproval || cx.reduce_motion() {
                     div().child(activity.label()).into_any_element()
                 } else {
-                    controls::shimmer_text(activity_id, activity.label(), t.light && !selected)
+                    controls::shimmer_text(
+                        activity_id,
+                        activity.label(),
+                        if selected {
+                            controls::ShimmerTone::Accent
+                        } else if t.light {
+                            controls::ShimmerTone::Light
+                        } else {
+                            controls::ShimmerTone::Dark
+                        },
+                    )
                         .into_any_element()
                 }
             } else {

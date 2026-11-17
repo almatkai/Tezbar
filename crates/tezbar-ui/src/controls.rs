@@ -505,17 +505,27 @@ pub fn pin(t: Tokens) -> impl IntoElement {
     div().id("pin-marker").role(Role::Image).aria_label("Pinned")
         .child(gpui::svg().data(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="white" d="M5 .5 6 3l2.6.4-1.9 1.8.5 2.6L5 6.6 2.8 7.8l.5-2.6L1.4 3.4 4 3 5 .5Z"/></svg>"#.as_slice()).size(px(10. * t.zoom)).text_color(t.text3))
 }
-/// Status text whose letters shimmer through blue, white and violet, like the React
+/// Where shimmering status text sits; each surface gets its own palette.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ShimmerTone {
+    /// Light theme, on the sheet.
+    Light,
+    /// Dark theme, on the sheet: deep blue, indigo and violet, never near-white.
+    Dark,
+    /// On a selected (accent-filled) row: muted lavender and periwinkle.
+    Accent,
+}
+/// Status text whose letters shimmer through blue and violet, like the React
 /// "Generating…" label. Callers show plain text instead when reduce motion is on.
 pub fn shimmer_text(
     id: impl Into<ElementId>,
     label: &'static str,
-    light: bool,
+    tone: ShimmerTone,
 ) -> impl IntoElement {
-    let palette: &[u32] = if light {
-        &[0x1d4ed8, 0x0369a1, 0x6d28d9, 0x9d174d]
-    } else {
-        &[0x93c5fd, 0xa5f3fc, 0xffffff, 0xd8b4fe, 0xf9a8d4]
+    let palette: &[u32] = match tone {
+        ShimmerTone::Light => &[0x1d4ed8, 0x0369a1, 0x6d28d9, 0x9d174d],
+        ShimmerTone::Dark => &[0x4f6fb8, 0x6a5fc4, 0x8a5bbf, 0x3f7f9f, 0x7480c4],
+        ShimmerTone::Accent => &[0xa3a7f5, 0x9d8ff0, 0x8fb0ea, 0xb39cf2],
     };
     let count = label.chars().count() as f32;
     StyledText::new(label).with_animation(
