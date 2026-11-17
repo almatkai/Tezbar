@@ -1415,3 +1415,87 @@ fn review_n2_failed_user_append_refuses_quit_and_restores_draft(cx: &mut TestApp
         "keep this draft"
     );
 }
+#[gpui::test]
+fn transcript_messages_size_to_content_and_composer_fits_narrow_window(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "A");
+    settle(&rt, cx);
+    edit(&v, cx, "Short question");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    let run_a = run(&v, cx);
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":run_a,"stage":{"index":0,"label":"Thinking…","status":"done"}}),
+    );
+    event(
+        &v,
+        cx,
+        json!({"type":"stage","runId":run_a,"stage":{"index":1,"label":"Run command","toolName":"shell","status":"done","output":"ok","durationMs":1200}}),
+    );
+    let paragraph =
+        "The fixture answer wraps across several lines so its height must follow the text. ";
+    event(
+        &v,
+        cx,
+        json!({"type":"message","runId":run_a,"delta":format!("{}\n\nSecond paragraph.", paragraph.repeat(6))}),
+    );
+    settle(&rt, cx);
+    // Streamed text is published on the next 16 ms frame.
+    cx.executor().advance_clock(Duration::from_millis(32));
+    settle(&rt, cx);
+    let messages = v.read_with(cx, |v, _| {
+        v.projection
+            .iter()
+            .filter_map(|r| match r {
+                view::Row::Text { id, turn, .. } => Some((
+                    &*Box::leak(format!("chat-message-{id}").into_boxed_str()),
+                    turn.role == chat::Role::User,
+                )),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    });
+    let user = messages.iter().find(|(_, user)| *user).unwrap().0;
+    let assistant = messages.iter().find(|(_, user)| !*user).unwrap().0;
+    let handle = cx.update(|w, _| w.window_handle());
+    for (width, height) in [(467., 900.), (900., 900.)] {
+        cx.simulate_window_resize(handle, size(px(width), px(height)));
+        cx.run_until_parked();
+        let viewport = cx.update(|w, _| w.viewport_size());
+        let user = cx.debug_bounds(user).expect("User message is visible");
+        let assistant = cx
+            .debug_bounds(assistant)
+            .expect("Assistant message is visible");
+        assert!(
+            user.size.height < px(60.),
+            "A one-line user bubble hugs its text: {user:?}"
+        );
+        assert!(
+            user.size.width < viewport.width * 0.6,
+            "A short user bubble is content-width: {user:?}"
+        );
+        assert!(
+            viewport.width - user.right() < px(30.),
+            "User bubbles are right-aligned: {user:?}, {viewport:?}"
+        );
+        assert!(
+            assistant.size.height > user.size.height * 2.,
+            "Wrapped assistant prose grows with its content: {assistant:?}"
+        );
+        assert!(
+            assistant.size.height < px(400.),
+            "Assistant prose is not padded to an estimated height: {assistant:?}"
+        );
+        assert!(user.bottom() <= assistant.top(), "Rows never overlap");
+        let composer = cx.debug_bounds("chat-composer").unwrap();
+        let send = cx.debug_bounds("chat-send").unwrap();
+        assert!(
+            send.right() <= composer.right() && send.left() >= composer.left(),
+            "The submit button stays inside the prompt input: {send:?}, {composer:?}"
+        );
+    }
+}

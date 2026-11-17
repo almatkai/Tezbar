@@ -893,22 +893,43 @@ impl Render for MarkdownView {
             if let Kind::Code(ref language) = block.kind {
                 let code = text.clone();
                 row = row
+                    .my(px(4. * t.zoom))
                     .font_family(crate::tokens::font_family(cx, true))
+                    .text_size(px(12. * t.zoom))
+                    .rounded(px(8. * t.zoom))
+                    .border_1()
+                    .border_color(t.hairline)
                     .bg(t.field)
-                    .p(px(8. * t.zoom))
+                    .px(px(12. * t.zoom))
+                    .pt(px(6. * t.zoom))
+                    .pb(px(10. * t.zoom))
                     .child(
                         div()
                             .flex()
+                            .items_center()
                             .gap(px(8. * t.zoom))
-                            .child(div().text_color(t.text3).child(language.clone()))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .text_size(px(11. * t.zoom))
+                                    .text_color(t.text3)
+                                    .child(language.clone()),
+                            )
                             .child(
                                 crate::controls::button(
                                     ("copy-code", index),
                                     "Copy",
-                                    crate::controls::ButtonTone::Quiet,
+                                    crate::controls::ButtonTone::Ghost,
                                     false,
                                     t,
                                 )
+                                .px(px(8. * t.zoom))
+                                .py(px(4. * t.zoom))
+                                .rounded(px(6. * t.zoom))
+                                .text_size(px(11. * t.zoom))
+                                .text_color(t.text3)
+                                .hover(|d| d.bg(t.hover).text_color(t.text1))
+                                .cursor_pointer()
                                 .on_click(cx.listener(
                                     move |_, _, _, cx| cx.emit(DocumentEffect::Copy(code.clone())),
                                 )),

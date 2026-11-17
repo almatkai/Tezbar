@@ -1,4 +1,5 @@
 //! Retained native chat. ChatController owns conversations; core owns execution and canonical data.
+mod elements;
 mod extensions;
 mod references;
 mod request;
