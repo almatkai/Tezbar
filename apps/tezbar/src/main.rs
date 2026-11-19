@@ -27,6 +27,11 @@ fn main() -> anyhow::Result<()> {
         );
         return Ok(());
     }
+    if args == ["--verify-installation"] {
+        tezbar_native::app::production_launch::Admission::current().map_err(anyhow::Error::msg)?;
+        println!("Production installation verified");
+        return Ok(());
+    }
     if args.is_empty() {
         return tezbar_native::app::run_production(
             tezbar_native::app::production_launch::Admission::current()

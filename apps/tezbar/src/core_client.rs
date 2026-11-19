@@ -11,6 +11,7 @@ pub struct CoreClient(
     Arc<std::sync::Mutex<Option<tokio::runtime::Handle>>>,
     Arc<tokio::sync::Semaphore>,
     Arc<ExtensionAdmission>,
+    tezbar_core::StartupOptions,
 );
 struct ExtensionAdmission {
     normal: Arc<tokio::sync::Semaphore>,
@@ -276,6 +277,22 @@ impl CoreClient {
             .store(false, std::sync::atomic::Ordering::Release);
     }
     pub fn new(core: Arc<tezbar_core::NativeCore>) -> Self {
+        Self::with_startup_options(core, tezbar_core::StartupOptions::ISOLATED_PREVIEW)
+    }
+    pub(crate) fn for_launch(core: Arc<tezbar_core::NativeCore>, production: bool) -> Self {
+        // Keep optional background startup unchanged; only production owns configured shortcuts.
+        Self::with_startup_options(
+            core,
+            tezbar_core::StartupOptions {
+                initialize_shortcuts: production,
+                ..tezbar_core::StartupOptions::ISOLATED_PREVIEW
+            },
+        )
+    }
+    fn with_startup_options(
+        core: Arc<tezbar_core::NativeCore>,
+        options: tezbar_core::StartupOptions,
+    ) -> Self {
         Self(
             core,
             Arc::default(),
@@ -293,6 +310,7 @@ impl CoreClient {
                 commands: std::sync::atomic::AtomicUsize::new(0),
                 closing: std::sync::atomic::AtomicBool::new(false),
             }),
+            options,
         )
     }
     pub async fn request(&self, request: Request) -> Result<Value, String> {
@@ -337,6 +355,25 @@ impl CoreClient {
     pub async fn search(&self, q: String) -> Result<Vec<SearchRow>, String> {
         serde_json::from_value(self.request(Request::Search(q)).await?).map_err(|e| e.to_string())
     }
+    fn startup_options(&self) -> tezbar_core::StartupOptions {
+        #[cfg(feature = "bench-control")]
+        {
+            self.8
+        }
+        #[cfg(not(feature = "bench-control"))]
+        {
+            self.7
+        }
+    }
+    /// Called on the GUI thread before migration/core readiness can delay optional services.
+    /// Registration is idempotent and reads the existing configured accelerator; no fallback.
+    pub(crate) fn initialize_shortcuts(&self) -> Result<(), String> {
+        if self.startup_options().initialize_shortcuts {
+            self.0.platform.initialize_shortcuts()
+        } else {
+            Ok(())
+        }
+    }
     pub async fn start(&self) -> Result<(), String> {
         let mut owner = self.2.lock().await;
         if owner.ready {
@@ -344,10 +381,9 @@ impl CoreClient {
         }
         if owner.task.is_none() {
             let core = self.0.clone();
+            let options = self.startup_options();
             owner.task = Some(tokio::spawn(async move {
-                let result = core
-                    .start_with_options(tezbar_core::StartupOptions::ISOLATED_PREVIEW)
-                    .await;
+                let result = core.start_with_options(options).await;
                 log::info!("Native core start completed: {result:?}");
                 result
             }));

@@ -512,7 +512,8 @@ pub enum ShimmerTone {
     Light,
     /// Dark theme, on the sheet: deep blue, indigo and violet, never near-white.
     Dark,
-    /// On a selected (accent-filled) row: muted lavender and periwinkle.
+    /// On a selected (accent-filled) row: white, pink, violet and sky, so the
+    /// sweep stays visible against the indigo fill.
     Accent,
 }
 /// Status text whose letters shimmer through blue and violet, like the React
@@ -525,7 +526,7 @@ pub fn shimmer_text(
     let palette: &[u32] = match tone {
         ShimmerTone::Light => &[0x1d4ed8, 0x0369a1, 0x6d28d9, 0x9d174d],
         ShimmerTone::Dark => &[0x4f6fb8, 0x6a5fc4, 0x8a5bbf, 0x3f7f9f, 0x7480c4],
-        ShimmerTone::Accent => &[0xa3a7f5, 0x9d8ff0, 0x8fb0ea, 0xb39cf2],
+        ShimmerTone::Accent => &[0xffffff, 0xf9a8d4, 0xc4b5fd, 0x7dd3fc, 0xa5b4fc],
     };
     let count = label.chars().count() as f32;
     StyledText::new(label).with_animation(

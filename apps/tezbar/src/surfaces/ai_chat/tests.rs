@@ -1641,3 +1641,144 @@ fn wheel_scrolling_a_populated_transcript_does_not_reborrow_the_list(cx: &mut Te
     cx.run_until_parked();
     assert!(v.read_with(cx, |v, _| v.follow));
 }
+
+#[gpui::test]
+fn idle_polling_settled_hidden_chat_owns_no_timer(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "idle");
+    settle(&rt, cx);
+    cx.update(|_, cx| v.update(cx, |v, cx| v.set_visible(false, cx)));
+    assert!(
+        v.read_with(cx, |v, _| v.clock.is_none()),
+        "settled hidden chat must not retain an indefinite ticker"
+    );
+}
+
+#[gpui::test]
+fn idle_polling_hidden_unstarted_chat_times_out_once(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "timeout");
+    settle(&rt, cx);
+    edit(&v, cx, "Question");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    assert!(v.read_with(cx, |v, _| v.clock.is_some()));
+    cx.update(|_, cx| v.update(cx, |v, cx| v.set_visible(false, cx)));
+    cx.executor().advance_clock(Duration::from_secs(29));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:cancel"), 0);
+    assert!(v.read_with(cx, |v, _| v.active().unwrap().busy()));
+    cx.executor().advance_clock(Duration::from_secs(1));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:cancel"), 1);
+    assert!(v.read_with(cx, |v, _| v.clock.is_none()));
+    assert!(v.read_with(cx, |v, _| !v.active().unwrap().busy()));
+    let turn = &f.last("chat:append")["turn"];
+    assert!(turn["error"].as_str().unwrap().contains("30 seconds"));
+    cx.executor().advance_clock(Duration::from_secs(60));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:cancel"), 1);
+}
+
+#[gpui::test]
+fn idle_polling_chat_start_and_stop_cancel_deadline_task(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    new_chat(&v, cx, "started");
+    settle(&rt, cx);
+    edit(&v, cx, "Question");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    let run_id = run(&v, cx);
+    assert!(v.read_with(cx, |v, _| v.clock.is_some()));
+    event(
+        &v,
+        cx,
+        json!({"type":"start", "runId":run_id, "task":"Question"}),
+    );
+    assert!(v.read_with(cx, |v, _| v.clock.is_none()));
+    cx.update(|_, cx| v.update(cx, |v, cx| v.set_visible(false, cx)));
+    cx.executor().advance_clock(Duration::from_secs(60));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:cancel"), 0);
+    assert!(v.read_with(cx, |v, _| v.active().unwrap().busy()));
+    action(&v, cx, Action::Stop);
+    settle(&rt, cx);
+    assert!(v.read_with(cx, |v, _| v.clock.is_none()));
+    assert_eq!(f.count("agent:cancel"), 1);
+    new_chat(&v, cx, "stop-unstarted");
+    edit(&v, cx, "Another question");
+    action(&v, cx, Action::Send);
+    settle(&rt, cx);
+    assert!(v.read_with(cx, |v, _| v.clock.is_some()));
+    action(&v, cx, Action::Stop);
+    settle(&rt, cx);
+    assert!(v.read_with(cx, |v, _| v.clock.is_none()));
+    cx.executor().advance_clock(Duration::from_secs(60));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:cancel"), 2);
+}
+
+#[gpui::test]
+fn idle_polling_chat_reschedules_earliest_owner_and_removal(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = Fixture::new();
+    let (v, cx) = mount(cx, &f);
+    let base = now();
+    for (id, offset) in [("first", 0), ("second", 10_000)] {
+        new_chat(&v, cx, id);
+        cx.update(|w, cx| {
+            v.update(cx, |v, cx| {
+                v.controller.edit_draft(id, "Question".into());
+                let Effect::AppendUser { token, turn, .. } = v
+                    .controller
+                    .send(
+                        id,
+                        format!("run-{id}"),
+                        format!("user-{id}"),
+                        format!("assistant-{id}"),
+                        base,
+                    )
+                    .unwrap()
+                else {
+                    panic!("preparation required")
+                };
+                let effects = v.controller.prepared(id, token, Ok(turn), base + offset);
+                v.execute(effects, w, cx);
+            })
+        });
+        settle(&rt, cx);
+    }
+    assert_eq!(
+        v.read_with(cx, |v, _| v.clock.as_ref().map(|(due, _)| *due)),
+        Some(base + 30_000)
+    );
+    cx.update(|_, cx| v.update(cx, |v, cx| v.set_visible(false, cx)));
+    event(
+        &v,
+        cx,
+        json!({"type":"start", "runId":"run-first", "task":"Question"}),
+    );
+    assert_eq!(
+        v.read_with(cx, |v, _| v.clock.as_ref().map(|(due, _)| *due)),
+        Some(base + 40_000)
+    );
+    cx.update(|w, cx| {
+        v.update(cx, |v, cx| {
+            let effects = v.controller.delete("second");
+            v.execute(effects, w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert!(v.read_with(cx, |v, _| v.controller.conversation("second").is_none()));
+    assert!(v.read_with(cx, |v, _| v.clock.is_none()));
+    let cancellations = f.count("agent:cancel");
+    cx.executor().advance_clock(Duration::from_secs(60));
+    settle(&rt, cx);
+    assert_eq!(f.count("agent:cancel"), cancellations);
+}

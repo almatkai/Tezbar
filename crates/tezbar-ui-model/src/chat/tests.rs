@@ -1414,3 +1414,50 @@ fn stored_timeline_that_does_not_match_text_falls_back_to_legacy_layout() {
         serde_json::json!({"id": "t", "role": "assistant", "text": "answer", "createdAt": 1});
     assert!(Turn::from_core_wire(legacy).unwrap().timeline.is_empty());
 }
+
+#[test]
+fn start_deadlines_follow_earliest_owner_and_survive_hidden_navigation() {
+    let mut c = controller();
+    assert_eq!(c.next_start_deadline(), None);
+    start(&mut c, "a", "a-run");
+    assert_eq!(c.next_start_deadline(), Some(30_002));
+    c.boot(
+        Boot::NewChat {
+            session_id: "b".into(),
+            cwd: None,
+        },
+        None,
+    )
+    .unwrap();
+    start(&mut c, "b", "b-run");
+    if let RunPhase::Running { deadline, .. } = &mut c.owners.get_mut("b").unwrap().phase {
+        *deadline = 40_000;
+    }
+    c.set_visible(false);
+    assert_eq!(c.next_start_deadline(), Some(30_002));
+    assert!(c.tick(30_001).is_empty());
+    assert!(c
+        .tick(30_002)
+        .iter()
+        .any(|e| matches!(e, Effect::Cancel { run_id } if run_id == "a-run")));
+    assert_eq!(c.next_start_deadline(), Some(40_000));
+    c.event(Event::Start {
+        run_id: "b-run".into(),
+        task: "Question".into(),
+    });
+    assert_eq!(c.next_start_deadline(), None);
+    assert!(c.tick(40_000).is_empty());
+    c.stop("b");
+    start(&mut c, "b", "retry");
+    assert_eq!(c.next_start_deadline(), Some(30_002));
+    let effects = c.delete("b");
+    let token = effects
+        .iter()
+        .find_map(|effect| match effect {
+            Effect::DeleteConversation { token, .. } => Some(*token),
+            _ => None,
+        })
+        .unwrap();
+    c.delete_result("b", token, true);
+    assert_eq!(c.next_start_deadline(), None);
+}

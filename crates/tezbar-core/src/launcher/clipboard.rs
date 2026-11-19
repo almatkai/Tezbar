@@ -53,7 +53,7 @@ impl ClipboardCore {
                     next_config: std::time::Instant::now(),
                 };
                 loop {
-                    match rx.recv_timeout(Duration::from_millis(100)) {
+                    match receive_command(&rx, w.wait_timeout(std::time::Instant::now())) {
                         Ok(Command::Request(c, a, reply)) => {
                             let _ = reply.send(w.handle(&c, &a));
                         }
@@ -97,6 +97,16 @@ impl ClipboardCore {
             .send(Command::Request(c.into(), a.to_vec(), tx))
             .map_err(|_| "Clipboard worker stopped")?;
         rx.await.map_err(|e| e.to_string())?
+    }
+}
+// The receive boundary is shared with OS-free scheduling tests.
+fn receive_command<T>(
+    rx: &mpsc::Receiver<T>,
+    timeout: Option<Duration>,
+) -> Result<T, mpsc::RecvTimeoutError> {
+    match timeout {
+        Some(timeout) => rx.recv_timeout(timeout),
+        None => rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
     }
 }
 fn hash(s: &[u8]) -> String {
@@ -143,6 +153,39 @@ fn file_entry(paths: Vec<String>) -> Option<Value> {
     )
 }
 impl Worker {
+    fn wait_timeout(&self, now: std::time::Instant) -> Option<Duration> {
+        if !self.watch {
+            None
+        } else if self.config["clipboardWatchEnabled"] == false {
+            // Configuration can be edited outside this worker. Retain its
+            // one-second refresh deadline without polling the pasteboard.
+            Some(self.next_config.saturating_duration_since(now))
+        } else {
+            Some(Duration::from_millis(100))
+        }
+    }
+
+    fn refresh_config(&mut self, now: std::time::Instant) -> Result<(), String> {
+        if now >= self.next_config {
+            match self.ctx.config.read() {
+                Ok(config) => {
+                    self.config = config;
+                    self.next_config = now + Duration::from_secs(1);
+                }
+                Err(error) => {
+                    // Disabled capture needs a bounded config retry rather
+                    // than spinning on an expired deadline. Enabled capture
+                    // keeps failing closed at its existing 100ms cadence.
+                    if self.config["clipboardWatchEnabled"] == false {
+                        self.next_config = now + Duration::from_secs(1);
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn dir(&self) -> PathBuf {
         self.ctx.paths.data_dir.join("search/clipboard-images")
     }
@@ -377,10 +420,7 @@ impl Worker {
         )
     }
     fn poll(&mut self) -> Result<(), String> {
-        if std::time::Instant::now() >= self.next_config {
-            self.config = self.ctx.config.read()?;
-            self.next_config = std::time::Instant::now() + Duration::from_secs(1);
-        }
+        self.refresh_config(std::time::Instant::now())?;
         if self.config["clipboardWatchEnabled"] == false {
             return Ok(());
         }
@@ -682,6 +722,87 @@ mod tests {
             temp_dir: p.join("tmp"),
             home_dir: p.join("home"),
         })
+    }
+    #[test]
+    fn idle_polling_clipboard_waits_only_for_owned_work() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = std::time::Instant::now();
+        let mut w = Worker {
+            ctx: context(dir.path()),
+            db: None,
+            clipboard: None,
+            last_sequence: None,
+            last_id: String::new(),
+            watch: false,
+            image_fingerprints: HashMap::new(),
+            config: json!({"clipboardWatchEnabled":false}),
+            next_config: now + Duration::from_secs(1),
+        };
+        assert_eq!(w.wait_timeout(now), None, "watch=false owns no timer");
+        let (tx, rx) = mpsc::channel();
+        tx.send(Command::Watch(true)).unwrap();
+        assert!(matches!(
+            receive_command(&rx, w.wait_timeout(now)),
+            Ok(Command::Watch(true))
+        ));
+        w.watch = true;
+        assert_eq!(w.wait_timeout(now), Some(Duration::from_secs(1)));
+        assert_eq!(
+            w.wait_timeout(now + Duration::from_millis(900)),
+            Some(Duration::from_millis(100))
+        );
+        assert_eq!(
+            w.wait_timeout(now + Duration::from_secs(1)),
+            Some(Duration::ZERO)
+        );
+        // Actual config refresh remains reachable while capture is disabled.
+        w.next_config = now;
+        w.ctx
+            .config
+            .update(|v| {
+                v["clipboardWatchEnabled"] = json!(false);
+                Ok(())
+            })
+            .unwrap();
+        w.poll().unwrap();
+        assert_eq!(w.config["clipboardWatchEnabled"], false);
+        w.ctx
+            .config
+            .update(|v| {
+                v["clipboardWatchEnabled"] = json!(true);
+                Ok(())
+            })
+            .unwrap();
+        w.refresh_config(w.next_config).unwrap();
+        assert_eq!(
+            w.wait_timeout(now),
+            Some(Duration::from_millis(100)),
+            "enabled background capture retains its cadence"
+        );
+        w.config["clipboardWatchEnabled"] = json!(false);
+        std::fs::write(w.ctx.config.path(), "malformed").unwrap();
+        let retry = w.next_config;
+        assert!(w.refresh_config(retry).is_err());
+        assert_eq!(
+            w.wait_timeout(retry),
+            Some(Duration::from_secs(1)),
+            "failed reads must not busy-spin"
+        );
+        w.config["clipboardWatchEnabled"] = json!(true);
+        w.next_config = std::time::Instant::now();
+        assert!(
+            w.poll().is_err(),
+            "enabled capture must still fail closed on malformed config"
+        );
+        assert!(w.clipboard.is_none());
+        let (reply, _) = tokio::sync::oneshot::channel();
+        tx.send(Command::Stop(reply)).unwrap();
+        assert!(matches!(receive_command(&rx, None), Ok(Command::Stop(_))));
+        drop(tx);
+        assert!(matches!(
+            receive_command(&rx, None),
+            Err(mpsc::RecvTimeoutError::Disconnected)
+        ));
     }
     #[tokio::test]
     async fn history_mutations_emit_only_after_successful_writes() {

@@ -1335,6 +1335,21 @@ impl ChatController {
         }
         effects
     }
+    /// Only runs awaiting their start event own a start-timeout task. Visibility
+    /// does not affect this deadline; hidden runs keep their startup guarantee.
+    pub fn next_start_deadline(&self) -> Option<u64> {
+        self.owners
+            .values()
+            .filter_map(|c| match c.phase {
+                RunPhase::Running {
+                    started: false,
+                    deadline,
+                    ..
+                } => Some(deadline),
+                _ => None,
+            })
+            .min()
+    }
     pub fn tick(&mut self, now: u64) -> Vec<Effect> {
         let ids=self.owners.iter().filter(|(_,c)|matches!(c.phase,RunPhase::Running{started:false,deadline,..}if now>=deadline)).map(|(id,_)|id.clone()).collect::<Vec<_>>();
         let mut effects = vec![];

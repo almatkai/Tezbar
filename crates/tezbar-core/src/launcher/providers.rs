@@ -356,10 +356,12 @@ const SKIP: &[&str] = &[
     "out",
     "target",
 ];
-fn allowed(path: &Path) -> bool {
-    !path
-        .components()
+fn skipped(path: &Path) -> bool {
+    path.components()
         .any(|c| SKIP.contains(&c.as_os_str().to_string_lossy().as_ref()))
+}
+fn allowed(path: &Path) -> bool {
+    !skipped(path)
         && [
             "", "md", "txt", "json", "yaml", "yml", "ts", "tsx", "js", "jsx", "go", "py", "rs",
             "swift", "pdf", "png", "jpg",
@@ -373,22 +375,29 @@ fn allowed(path: &Path) -> bool {
                 .as_str(),
         )
 }
-pub fn file_document(path: &Path) -> Option<Value> {
+fn file_mtime(path: &Path) -> Option<u64> {
     if !allowed(path) {
         return None;
     }
-    let m = path.metadata().ok()?;
-    if !m.is_file() {
+    let metadata = path.metadata().ok()?;
+    if !metadata.is_file() {
         return None;
     }
+    Some(
+        metadata
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_millis() as u64,
+    )
+}
+pub fn file_document(path: &Path) -> Option<Value> {
+    file_document_at(path, file_mtime(path)?)
+}
+fn file_document_at(path: &Path, mtime: u64) -> Option<Value> {
     let p = path.to_string_lossy();
     let title = path.file_name()?.to_string_lossy();
-    let mtime = m
-        .modified()
-        .ok()?
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()?
-        .as_millis() as u64;
     let mut d = document(
         &format!("file:{p}"),
         "files",
@@ -410,6 +419,9 @@ pub fn roots(ctx: &CoreContext) -> Vec<PathBuf> {
 }
 pub async fn scan(ctx: CoreContext, db: Database, stop: Arc<AtomicBool>) -> Result<(), String> {
     let scan_roots = roots(&ctx);
+    // Unchanged files need neither JSON/token construction nor a per-row SQL
+    // UPSERT. Keep counting them toward the existing scan limits below.
+    let indexed = db.file_versions().await?;
     let (tx, mut rx) = tokio::sync::mpsc::channel(2);
     let scanning = tokio::task::spawn_blocking(move || {
         let mut batch = vec![];
@@ -432,9 +444,13 @@ pub async fn scan(ctx: CoreContext, db: Database, stop: Arc<AtomicBool>) -> Resu
                 if !entry.file_type().is_file() {
                     continue;
                 }
-                if let Some(d) = file_document(entry.path()) {
-                    batch.push(d);
+                if let Some(mtime) = file_mtime(entry.path()) {
                     count += 1;
+                    if indexed.get(entry.path()) != Some(&mtime) {
+                        if let Some(d) = file_document_at(entry.path(), mtime) {
+                            batch.push(d);
+                        }
+                    }
                 }
                 if batch.len() >= 400 {
                     if tx.blocking_send(std::mem::take(&mut batch)).is_err() {
@@ -494,24 +510,90 @@ pub async fn scan(ctx: CoreContext, db: Database, stop: Arc<AtomicBool>) -> Resu
     .await?;
     Ok(())
 }
+// Shared with the synthetic watcher/reconciliation tests; no OS watcher needed.
+pub(super) fn queue_watch_event(
+    mut event: notify::Result<notify::Event>,
+    tx: &tokio::sync::mpsc::Sender<notify::Result<notify::Event>>,
+    overflow: &AtomicBool,
+    wake: &tokio::sync::Notify,
+) {
+    match &mut event {
+        Ok(e) => {
+            // Loss-of-events signals must survive even when their paths would
+            // otherwise be ignored. Reconciliation recovers the whole index.
+            if e.need_rescan() {
+                overflow.store(true, Ordering::Release);
+                wake.notify_one();
+                return;
+            }
+            if matches!(e.kind, notify::EventKind::Access(_)) {
+                return;
+            }
+            // Filter before the bounded queue: build/git/cache churn in a
+            // watched root must not overflow into repeated full file scans.
+            let had_paths = !e.paths.is_empty();
+            e.paths.retain(|p| !skipped(p));
+            if had_paths && e.paths.is_empty() {
+                return;
+            }
+        }
+        Err(_) => {
+            overflow.store(true, Ordering::Release);
+            wake.notify_one();
+            return;
+        }
+    }
+    if tx.try_send(event).is_err() {
+        overflow.store(true, Ordering::Release);
+        wake.notify_one();
+    }
+}
+
+pub(super) enum WatchWork {
+    Event(notify::Result<notify::Event>),
+    Reconcile,
+    Stopped,
+}
+
+// OS-free inbox boundary used by the native watcher and deterministic tests.
+pub(super) async fn wait_watch_work(
+    rx: &mut tokio::sync::mpsc::Receiver<notify::Result<notify::Event>>,
+    stop: &AtomicBool,
+    overflow: &AtomicBool,
+    wake: &tokio::sync::Notify,
+) -> WatchWork {
+    loop {
+        // Register BEFORE inspecting persistent state: notify_waiters does not
+        // retain a permit when shutdown races with entering this wait.
+        let changed = wake.notified();
+        tokio::pin!(changed);
+        changed.as_mut().enable();
+        if stop.load(Ordering::Acquire) {
+            return WatchWork::Stopped;
+        }
+        if overflow.swap(false, Ordering::AcqRel) {
+            return WatchWork::Reconcile;
+        }
+        tokio::select! {
+            event = rx.recv() => return match event { Some(event) => WatchWork::Event(event), None => WatchWork::Stopped },
+            _ = &mut changed => {},
+        }
+    }
+}
+
 pub async fn watch(
     ctx: CoreContext,
     db: Database,
     stop: Arc<AtomicBool>,
     scanning: Arc<tokio::sync::Mutex<()>>,
+    wake: Arc<tokio::sync::Notify>,
 ) {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(256);
     let overflow = Arc::new(AtomicBool::new(false));
     let dirty = overflow.clone();
+    let event_wake = wake.clone();
     let mut watcher = match notify::recommended_watcher(move |e: notify::Result<notify::Event>| {
-        if e.as_ref()
-            .is_ok_and(|e| matches!(e.kind, notify::EventKind::Access(_)))
-        {
-            return;
-        }
-        if tx.try_send(e).is_err() {
-            dirty.store(true, Ordering::Release);
-        }
+        queue_watch_event(e, &tx, &dirty, &event_wake);
     }) {
         Ok(w) => w,
         Err(e) => {
@@ -524,22 +606,22 @@ pub async fn watch(
             log::debug!("Watch {}: {e}", root.display());
         }
     }
-    while !stop.load(Ordering::Relaxed) {
-        if overflow.swap(false, Ordering::AcqRel) {
-            let _guard = scanning.lock().await;
-            if let Err(e) = scan(ctx.clone(), db.clone(), stop.clone()).await {
-                log::warn!("File watcher rescan: {e}");
-            }
-        }
-        let event = tokio::select! {v=rx.recv()=>v,_=tokio::time::sleep(std::time::Duration::from_millis(500))=>continue};
-        let event = match event {
-            Some(Ok(e)) => e,
-            Some(Err(e)) => {
+    loop {
+        let event = match wait_watch_work(&mut rx, &stop, &overflow, &wake).await {
+            WatchWork::Stopped => return,
+            WatchWork::Event(Ok(event)) => event,
+            WatchWork::Event(Err(e)) => {
                 log::debug!("File watch event: {e}");
                 overflow.store(true, Ordering::Release);
                 continue;
             }
-            None => return,
+            WatchWork::Reconcile => {
+                let _guard = scanning.lock().await;
+                if let Err(e) = scan(ctx.clone(), db.clone(), stop.clone()).await {
+                    log::warn!("File watcher rescan: {e}");
+                }
+                continue;
+            }
         };
         let mut scan_dirs = matches!(
             event.kind,
@@ -548,13 +630,18 @@ pub async fn watch(
         );
         let mut paths = event.paths;
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        while let Ok(Ok(e)) = rx.try_recv() {
-            scan_dirs |= matches!(
-                e.kind,
-                notify::EventKind::Create(_)
-                    | notify::EventKind::Modify(notify::event::ModifyKind::Name(_))
-            );
-            paths.extend(e.paths);
+        while let Ok(event) = rx.try_recv() {
+            match event {
+                Ok(e) => {
+                    scan_dirs |= matches!(
+                        e.kind,
+                        notify::EventKind::Create(_)
+                            | notify::EventKind::Modify(notify::event::ModifyKind::Name(_))
+                    );
+                    paths.extend(e.paths);
+                }
+                Err(_) => overflow.store(true, Ordering::Release),
+            }
         }
         paths.sort();
         paths.dedup();

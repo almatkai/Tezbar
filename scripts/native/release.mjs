@@ -201,6 +201,7 @@ async function packageMac(plan, executable, environment, stageRoot, deps) {
   await writeProductionManifest(resources,path.join(app,'Contents/MacOS/tezbar'),signedFiles)
   await run('codesign',['--force','--sign',identity,...(plan.mode.localPreview ? [] : ['--options','runtime','--timestamp','--identifier',plan.policy.identifier,'--requirements',`=designated => ${plan.policy.designatedRequirement}`]),app],{env:environment})
   const signing=plan.mode.localPreview ? undefined : await verifyMac(app,plan.policy)
+  if (!plan.mode.localPreview) await run(path.join(app,'Contents/MacOS/tezbar'),['--verify-installation'],{env:environment})
   if (!plan.mode.unsigned) {
     const submission=path.join(stageRoot,'notarize.zip')
     await run('ditto',['-c','-k','--keepParent',app,submission])

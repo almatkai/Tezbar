@@ -135,13 +135,28 @@ impl TerminalCore {
     async fn prune(&self) -> CoreResult {
         let ctx = self.ctx.clone();
         tokio::task::spawn_blocking(move || {
+            let now = now_ms();
+            let is_expired = |s: &Value| {
+                s["status"] != "running" && s["saveUntil"].as_u64().is_some_and(|n| n <= now)
+            };
+            // ConfigStore::update always persists (including fsync/rename).
+            // Most ticks have no expired sessions and should not write at all.
+            if !ctx.config.read()?["terminalSessions"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(is_expired)
+            {
+                return Ok(Value::Null);
+            }
             let mut expired = vec![];
             let mut changed = false;
             ctx.config.update(|config| {
                 if let Some(items) = config["terminalSessions"].as_array_mut() {
                     items.retain(|s| {
-                        let remove = s["status"] != "running"
-                            && s["saveUntil"].as_u64().is_some_and(|n| n <= now_ms());
+                        // Recheck under ConfigStore's update lock; a concurrent
+                        // attach/update may have made a preflight match live.
+                        let remove = is_expired(s);
                         if remove {
                             changed = true;
                             if let Some(id) = s["sessionId"].as_str() {

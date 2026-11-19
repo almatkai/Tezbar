@@ -73,9 +73,10 @@ impl Database {
     {
         Self::dispatch(&self.reader_tx, f).await
     }
-    async fn dispatch<F>(sender: &mpsc::Sender<Message>, f: F) -> CoreResult
+    async fn dispatch<T, F>(sender: &mpsc::Sender<Message>, f: F) -> Result<T, String>
     where
-        F: FnOnce(&mut Connection) -> CoreResult + Send + 'static,
+        T: Send + 'static,
+        F: FnOnce(&mut Connection) -> Result<T, String> + Send + 'static,
     {
         let (tx, rx) = tokio::sync::oneshot::channel();
         sender
@@ -110,6 +111,22 @@ impl Database {
         })
         .await
         .map_err(err)?
+    }
+    /// A fresh snapshot for each serialized file reconciliation, not a long-lived
+    /// cache: watcher deletes, renames and other writers remain authoritative.
+    pub(super) async fn file_versions(&self) -> Result<HashMap<PathBuf, u64>, String> {
+        Self::dispatch(&self.tx, |db| {
+            let mut statement = db.prepare_cached(
+                "SELECT source_path,source_mtime FROM documents WHERE category='files' AND id='file:'||source_path AND source_mtime>=0 AND updated_at=source_mtime",
+            ).map_err(err)?;
+            let rows = statement
+                .query_map([], |r| {
+                    Ok((PathBuf::from(r.get::<_, String>(0)?), r.get::<_, u64>(1)?))
+                })
+                .map_err(err)?;
+            rows.collect::<Result<HashMap<_, _>, _>>().map_err(err)
+        })
+        .await
     }
     pub async fn upsert(&self, docs: Vec<Value>, replace: Vec<String>) -> CoreResult {
         self.call(move |db| {
@@ -265,13 +282,20 @@ fn prune(db: &Connection) -> Result<(), String> {
     }
     Ok(())
 }
+#[cfg(test)]
+thread_local! {
+    // Count actual per-document SQL attempts on this database's writer thread.
+    pub(super) static UPSERT_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 pub fn upsert(db: &Connection, d: &Value) -> Result<(), String> {
+    #[cfg(test)]
+    UPSERT_ATTEMPTS.with(|count| count.set(count.get() + 1));
     let id = d["id"].as_str().ok_or("Document id required")?;
     let category = d["category"].as_str().ok_or("Document category required")?;
     // Only builders without a source modification time opt in. Their refresh
     // clock must not refresh ranking or rewrite FTS for an unchanged payload.
     let synthetic_time = d["_syntheticUpdatedAt"].as_bool().unwrap_or(false);
-    db.execute("INSERT INTO documents(id,category,title,subtitle,tokens,action_json,updated_at,source_path,source_mtime,popularity) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(id) DO UPDATE SET category=excluded.category,title=excluded.title,subtitle=excluded.subtitle,tokens=excluded.tokens,action_json=excluded.action_json,updated_at=excluded.updated_at,source_path=excluded.source_path,source_mtime=excluded.source_mtime,popularity=excluded.popularity WHERE category<>excluded.category OR title<>excluded.title OR subtitle<>excluded.subtitle OR tokens<>excluded.tokens OR action_json<>excluded.action_json OR (NOT ?11 AND updated_at<>excluded.updated_at) OR popularity<>excluded.popularity OR source_path IS NOT excluded.source_path OR source_mtime IS NOT excluded.source_mtime",params![id,category,d["title"].as_str().unwrap_or(""),d["subtitle"].as_str().unwrap_or(""),d["tokens"].as_str().unwrap_or(""),serde_json::to_string(&d["action"]).map_err(err)?,d["updatedAt"].as_u64().unwrap_or(0),d["sourcePath"].as_str(),d["sourceMtime"].as_u64(),d["popularity"].as_f64().unwrap_or(0.),synthetic_time]).map_err(err)?;
+    db.prepare_cached("INSERT INTO documents(id,category,title,subtitle,tokens,action_json,updated_at,source_path,source_mtime,popularity) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(id) DO UPDATE SET category=excluded.category,title=excluded.title,subtitle=excluded.subtitle,tokens=excluded.tokens,action_json=excluded.action_json,updated_at=excluded.updated_at,source_path=excluded.source_path,source_mtime=excluded.source_mtime,popularity=excluded.popularity WHERE category<>excluded.category OR title<>excluded.title OR subtitle<>excluded.subtitle OR tokens<>excluded.tokens OR action_json<>excluded.action_json OR (NOT ?11 AND updated_at<>excluded.updated_at) OR popularity<>excluded.popularity OR source_path IS NOT excluded.source_path OR source_mtime IS NOT excluded.source_mtime").map_err(err)?.execute(params![id,category,d["title"].as_str().unwrap_or(""),d["subtitle"].as_str().unwrap_or(""),d["tokens"].as_str().unwrap_or(""),serde_json::to_string(&d["action"]).map_err(err)?,d["updatedAt"].as_u64().unwrap_or(0),d["sourcePath"].as_str(),d["sourceMtime"].as_u64(),d["popularity"].as_f64().unwrap_or(0.),synthetic_time]).map_err(err)?;
     Ok(())
 }
 const SELECT:&str="SELECT d.id,d.category,d.title,d.subtitle,d.action_json,d.updated_at,d.popularity FROM documents d ";
