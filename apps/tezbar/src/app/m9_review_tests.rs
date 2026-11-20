@@ -52,7 +52,7 @@ fn review_m9_cancelled_final_quit_restores_active_extension(cx: &mut TestAppCont
     view.update(cx, |v, cx| {
         v.receive_navigation(submit(1, "Probe chat before extension"), cx)
     });
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 1);
     let run = f.run();
     publish(
         cx,
@@ -198,7 +198,7 @@ fn review_m9_busy_install_refuses_quit_before_cancelling_live_chat(cx: &mut Test
         v.review_m9_configure_extensions(f.core.clone());
         v.receive_navigation(submit(1, "Keep this run alive"), cx)
     });
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 1);
     assert_eq!(f.count("agent:run"), 1);
     let _install = f.core.hold_extension_install_for_test();
     {

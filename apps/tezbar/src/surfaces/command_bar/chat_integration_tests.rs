@@ -108,6 +108,23 @@ impl Backend {
             .filter(|(c, _)| *c == channel)
             .count()
     }
+    // A launcher submit crosses the config and storage workers before recording
+    // agent:run. Advance both event loops until that observable request arrives.
+    pub(crate) fn wait_for_runs(
+        &self,
+        rt: &tokio::runtime::Runtime,
+        cx: &mut VisualTestContext,
+        expected: usize,
+    ) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while self.count("agent:run") < expected {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Timed out waiting for agent:run {expected}"
+            );
+            settle(rt, cx);
+        }
+    }
     pub fn run(&self) -> Value {
         self.calls
             .lock()
@@ -261,7 +278,7 @@ fn actual_launcher_prompt_mounts_once_acknowledges_and_retains_across_return(
             .unwrap();
     });
     view.update(cx, |v, cx| v.receive_navigation(intent.clone(), cx));
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 1);
     assert_eq!(
         f.count("agent:run"),
         1,
@@ -301,7 +318,7 @@ fn actual_launcher_prompt_mounts_once_acknowledges_and_retains_across_return(
     view.update(cx, |v, cx| {
         v.receive_navigation(submit(2, "Second invocation"), cx)
     });
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 2);
     assert_eq!(f.count("agent:run"), 2);
     assert_eq!(
         view.read_with(cx, |v, _| v.chat.view.as_ref().unwrap().entity_id()),
@@ -315,10 +332,10 @@ fn persistent_events_reach_hidden_run_and_approval_without_switching_active_owne
 ) {
     let (rt, _root, f, view, cx) = mount(cx);
     view.update(cx, |v, cx| v.receive_navigation(submit(1, "A"), cx));
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 1);
     let a = f.run();
     view.update(cx, |v, cx| v.receive_navigation(submit(2, "B"), cx));
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 2);
     let b = f.run();
     publish(
         cx,
@@ -371,7 +388,7 @@ fn quit_disposes_once_failed_persist_remains_owned_and_retry_saves_same_turn(
 ) {
     let (rt, _root, f, view, cx) = mount(cx);
     view.update(cx, |v, cx| v.receive_navigation(submit(1, "Keep this"), cx));
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 1);
     let run = f.run();
     publish(
         cx,
@@ -500,7 +517,7 @@ fn actual_navigation_screen_resume_back_and_footer_use_fresh_identity(cx: &mut T
     view.update(cx, |v, cx| {
         v.receive_navigation(submit(3, "Footer run"), cx)
     });
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 1);
     let run = f.run();
     let row_id = format!("chat:{}", run["sessionId"].as_str().unwrap());
     let source = ChatSource {
@@ -530,7 +547,7 @@ fn actual_navigation_screen_resume_back_and_footer_use_fresh_identity(cx: &mut T
     settle(&rt, cx);
     assert_eq!(activity(cx), Some(RunActivity::Generating));
     for (index, label, tool, expected) in [
-        (0, "Thinking…", "thinking", RunActivity::Thinking),
+        (0, "ThinkingвЂ¦", "thinking", RunActivity::Thinking),
         (1, "Read file", "read_file", RunActivity::UsingTools),
     ] {
         publish(
@@ -603,7 +620,7 @@ fn shared_picker_and_config_payload_events_change_next_snapshot_without_approvin
     view.update(cx, |v, cx| {
         v.receive_navigation(submit(1, "Selected via parent picker"), cx)
     });
-    settle(&rt, cx);
+    f.wait_for_runs(&rt, cx, 1);
     assert_eq!(
         f.run()["runSelection"],
         json!({"provider":"ollama","model":"next"})
