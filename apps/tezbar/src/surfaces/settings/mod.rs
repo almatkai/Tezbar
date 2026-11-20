@@ -2316,9 +2316,12 @@ impl SettingsContent {
                     ("alias", "Alias", "commandAliases"),
                     ("hotkey", "Shortcut", "commandHotkeys"),
                 ] {
+                    let id = if kind == "hotkey" {
+                        view::command_hotkey_id(command, &id, &self.extension_settings[source])
+                    } else { &id };
                     let key = format!("command.{kind}.{id}");
                     keep.insert(key.clone());
-                    let value = text(&self.extension_settings[source][&id]);
+                    let value = text(&self.extension_settings[source][id]);
                     self.field(&key, label, FieldKind::Local, &value, false, false, w, cx);
                 }
             }

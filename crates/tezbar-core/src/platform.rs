@@ -46,7 +46,8 @@ pub const CHANNELS: &[&str] = &[
 ];
 
 #[derive(Default)]
-struct Shortcuts {
+pub(crate) struct Shortcuts {
+    initialized: bool,
     launcher: Option<Shortcut>,
     commands: HashMap<String, Shortcut>,
 }
@@ -61,9 +62,9 @@ pub struct PlatformCore {
 impl PlatformCore {
     pub fn new(ctx: CoreContext) -> Self {
         Self {
+            shortcuts: ctx.shortcuts.clone(),
+            shortcut_updates: ctx.shortcut_updates.clone(),
             ctx,
-            shortcuts: Arc::new(Mutex::new(Shortcuts::default())),
-            shortcut_updates: Arc::new(Mutex::new(())),
         }
     }
 
@@ -71,6 +72,7 @@ impl PlatformCore {
         if !self.ctx.host.shortcuts().available() {
             return Ok(());
         }
+        let _update = self.shortcut_updates.lock().map_err(|e| e.to_string())?;
         let config = self.ctx.config.read()?;
         let default = if cfg!(target_os = "windows") {
             "Control+Space"
@@ -81,16 +83,17 @@ impl PlatformCore {
             .as_str()
             .filter(|s| !s.trim().is_empty())
             .unwrap_or(default);
-        self.register_shortcut(None, requested)?;
+        self.register_shortcut_inner(None, requested)?;
         if let Some(commands) = config["commandHotkeys"].as_object() {
             for (id, key) in commands {
                 if let Some(key) = key.as_str() {
-                    if let Err(error) = self.register_shortcut(Some(id), key) {
+                    if let Err(error) = self.set_binding(Some(id), key, &[]) {
                         log::warn!("Shortcut {id}: {error}");
                     }
                 }
             }
         }
+        self.shortcuts.lock().map_err(|e| e.to_string())?.initialized = true;
         Ok(())
     }
 
@@ -120,6 +123,11 @@ impl PlatformCore {
     }
 
     fn register_shortcut_inner(&self, command: Option<&str>, raw: &str) -> Result<String, String> {
+        let aliases = command.map(crate::extensions::command_hotkey_aliases).unwrap_or_default();
+        self.set_binding(command, raw, &aliases)
+    }
+
+    fn set_binding(&self, command: Option<&str>, raw: &str, aliases: &[String]) -> Result<String, String> {
         let normalized = normalize_shortcut(raw);
         let next = if normalized.is_empty() {
             None
@@ -137,9 +145,8 @@ impl PlatformCore {
         }
         let mut shortcuts = self.shortcuts.lock().map_err(|e| e.to_string())?;
         if let Some(id) = command {
-            let aliases = crate::extensions::command_hotkey_aliases(id);
             if !aliases.is_empty() {
-                return self.replace_migrated_command(id, &aliases, next, normalized, &mut shortcuts);
+                return self.replace_migrated_command(id, aliases, next, normalized, &mut shortcuts);
             }
         }
         let old = command
@@ -232,6 +239,76 @@ impl PlatformCore {
         Ok(normalized)
     }
 
+    // Serialize OS changes with the durable write and compensate every changed owner.
+    pub(crate) fn command_transaction<T>(&self, update: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        let _guard = self.shortcut_updates.lock().map_err(|e| e.to_string())?;
+        let before = self.shortcuts.lock().map_err(|e| e.to_string())?.commands.clone();
+        let error = match update() {
+            Ok(result) => return Ok(result),
+            Err(error) => error,
+        };
+        let after = self.shortcuts.lock().map_err(|e| e.to_string())?.commands.clone();
+        let mut failures = Vec::new();
+        for (id, binding) in &after {
+            if before.get(id) != Some(binding) {
+                if let Err(e) = self.set_binding(Some(id), "", &[]) { failures.push(e); }
+            }
+        }
+        for (id, binding) in &before {
+            if after.get(id) != Some(binding) {
+                if let Err(e) = self.set_binding(Some(id), &binding.to_string(), &[]) { failures.push(e); }
+            }
+        }
+        if failures.is_empty() { Err(error) } else { Err(format!("{error}; rollback failed: {}", failures.join("; "))) }
+    }
+
+    // Caller holds the command transaction lock. Before initialization the
+    // startup config read itself will pick up the migrated owners.
+    pub(crate) fn reconcile_command(&self, id: &str, accelerator: &str) -> Result<(), String> {
+        if self.shortcuts.lock().map_err(|e| e.to_string())?.initialized {
+            self.register_shortcut_inner(Some(id), accelerator)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn restore_legacy_owner(&self, canonical: &str, alias: &str, key: &str) -> Result<(), String> {
+        if self.shortcuts.lock().map_err(|e| e.to_string())?.initialized {
+            self.set_binding(Some(canonical), "", &[])?;
+            self.set_binding(Some(alias), key, &[])?;
+        }
+        Ok(())
+    }
+
+    fn save_command_hotkey(&self, requested: &str, key: &str) -> CoreResult {
+        self.command_transaction(|| {
+            let (id, pending_target) = crate::extensions::hotkey_edit_owner(&self.ctx, requested);
+            let aliases = crate::extensions::command_hotkey_aliases(&id);
+            let previous = {
+                let shortcuts = self.shortcuts.lock().map_err(|e| e.to_string())?;
+                std::iter::once(id.as_str()).chain(aliases.iter().map(String::as_str))
+                    .find_map(|key| shortcuts.commands.get(key)).map(ToString::to_string).unwrap_or_default()
+            };
+            let accelerator = match self.set_binding(Some(&id), key, &aliases) {
+                Ok(accelerator) => accelerator,
+                Err(error) => return Ok(json!({"ok":false,"accelerator":key,"error":error})),
+            };
+            self.ctx.config.update(|v| {
+                if v.get("commandHotkeys").is_none() { v["commandHotkeys"] = json!({}); }
+                crate::extensions::retire_legacy_command_hotkeys(v, &id)?;
+                let keys = v["commandHotkeys"].as_object_mut().ok_or("Invalid commandHotkeys")?;
+                if accelerator.is_empty() { keys.remove(&id); }
+                else { keys.insert(id.clone(), json!(accelerator)); }
+                if let Some(target) = pending_target {
+                    v[format!("identityMigrationHotkey:{target}")] = json!(id);
+                } else if !aliases.is_empty() {
+                    v[format!("identityMigrationHotkey:{id}")] = json!(true);
+                }
+                Ok(())
+            })?;
+            Ok(json!({"ok":true,"accelerator":accelerator,"previousAccelerator":previous}))
+        })
+    }
+
     // Called with shortcut_updates held. An initial registration may have failed,
     // so rollback must also support returning to an unregistered launcher.
     fn restore_launcher_shortcut(&self, previous: Option<Shortcut>) -> Result<(), String> {
@@ -316,21 +393,11 @@ impl PlatformCore {
                 .map_err(|e| e.to_string())?
             }
             "core:shortcut:update-command" => {
-                let key = args.get(1).and_then(Value::as_str).unwrap_or("");
-                let _update = self.shortcut_updates.lock().map_err(|e| e.to_string())?;
-                let previous = {
-                    let shortcuts = self.shortcuts.lock().map_err(|e| e.to_string())?;
-                    let aliases = crate::extensions::command_hotkey_aliases(text);
-                    std::iter::once(text).chain(aliases.iter().map(String::as_str))
-                        .find_map(|key| shortcuts.commands.get(key))
-                        .map(|binding| binding.to_string()).unwrap_or_default()
-                };
-                match self.register_shortcut_inner(Some(text), key) {
-                    Ok(accelerator) => Ok(
-                        json!({"ok":true,"accelerator":accelerator,"previousAccelerator":previous}),
-                    ),
-                    Err(error) => Ok(json!({"ok":false,"accelerator":key,"error":error})),
-                }
+                let key = args.get(1).and_then(Value::as_str).unwrap_or("").to_owned();
+                let id = text.to_owned();
+                let platform = self.clone();
+                tokio::task::spawn_blocking(move || platform.save_command_hotkey(&id, &key))
+                    .await.map_err(|e| e.to_string())?
             }
             "core:platform:visibility" => {
                 self.ctx

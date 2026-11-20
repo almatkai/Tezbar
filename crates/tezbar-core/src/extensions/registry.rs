@@ -763,52 +763,107 @@ fn retained_preferences_path(extension: &Installed) -> PathBuf {
         .join(format!("{}.json", extension.id))
 }
 
+fn supported_native_commands(extension: &Installed) -> impl Iterator<Item = &str> {
+    let supported = extension.id.starts_with("com.tezbar.native.")
+        && extension.manifest["healthError"].is_null() && compatible(&extension.manifest, false);
+    extension.manifest["commands"].as_array().into_iter().flatten()
+        .filter(move |cmd| supported && cmd["runtime"] == "rust" && compatible(cmd, true))
+        .filter_map(|cmd| cmd["name"].as_str())
+}
+
+/// The second ID records a fresh edit to a legacy command that may become
+/// covered later, even when the profile already contains an old native clear.
+pub(crate) fn hotkey_edit_owner(ctx: &CoreContext, requested: &str) -> (String, Option<String>) {
+    let Some((id, command)) = requested.strip_prefix("extcmd:").and_then(|s| s.split_once(':')) else {
+        return (requested.into(), None);
+    };
+    if id.starts_with("com.tezbar.native.") { return (requested.into(), None); }
+    let slug = super::v2_runtime::slug(id).unwrap_or_else(|| id.strip_prefix("raycast.")
+        .or_else(|| id.strip_prefix("com.tezbar.")).unwrap_or(id));
+    let canonical = super::v2_runtime::canonical_id(slug);
+    let target = format!("extcmd:{canonical}:{command}");
+    if !super::command_hotkey_aliases(&target).iter().any(|alias| alias == requested) {
+        return (requested.into(), None);
+    }
+    if installed(ctx, &canonical).is_ok_and(|e| supported_native_commands(&e).any(|name| name == command)) {
+        (target, None)
+    } else {
+        (requested.into(), Some(target))
+    }
+}
+
 fn migrate_command_settings(ctx: &CoreContext, extension: &Installed) -> Result<(), String> {
-    let current = ctx.config.read()?;
-    for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
-        if current.get(key).is_some_and(|v| !v.is_object()) {
-            return Err(format!("Identity migration: invalid {key}; configuration retained"));
-        }
-    }
-    if current[format!("identityMigration:{}", extension.id)] == true
-        && !extension.manifest["commands"].as_array().into_iter().flatten().any(|command| {
-            command["name"].as_str().is_some_and(|name| {
-                super::command_hotkey_aliases(&format!("extcmd:{}:{name}", extension.id))
-                    .iter().any(|alias| current["commandHotkeys"].get(alias).is_some())
-            })
-        })
-    {
-        return Ok(());
-    }
-    ctx.config.update(|config| {
+    let platform = crate::platform::PlatformCore::new(ctx.clone());
+    let targets: Vec<_> = supported_native_commands(extension)
+        .map(|name| format!("extcmd:{}:{name}", extension.id)).collect();
+    let marker = format!("identityMigration:{}", extension.id);
+    let granular = format!("identityMigrationHotkeysV2:{}", extension.id);
+    platform.command_transaction(|| {
+        let current = ctx.config.read()?;
         for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
-            if config.get(key).is_some_and(|v| !v.is_object()) {
+            if current.get(key).is_some_and(|v| !v.is_object()) {
                 return Err(format!("Identity migration: invalid {key}; configuration retained"));
             }
         }
-        let marker = format!("identityMigration:{}", extension.id);
-        let migrated = config[&marker] == true;
-        for command in extension.manifest["commands"].as_array().into_iter().flatten() {
-            let Some(name) = command["name"].as_str() else { continue; };
-            let target = format!("extcmd:{}:{name}", extension.id);
-            for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
-                if migrated || config[key].get(&target).is_some() { continue; }
-                for alias in super::command_hotkey_aliases(&target) {
-                    if let Some(value) = config[key].get(alias).cloned() {
-                        if config.get(key).is_none() { config[key] = json!({}); }
-                        config[key][&target] = value;
-                        break;
+        if current[&granular] == true && targets.iter().all(|id| {
+            current[format!("identityMigrationHotkey:{id}")] == true &&
+                !super::command_hotkey_aliases(id).iter().any(|alias| current["commandHotkeys"].get(alias).is_some())
+        }) { return Ok(()); }
+        ctx.config.update(|config| {
+            // Old profiles only recorded a package-wide marker. Honor existing clears
+            // once, then track the covered commands so later additions import normally.
+            let legacy_clear = config[&marker] == true && config[&granular] != true;
+            if legacy_clear {
+                // Older versions copied every manifest command, including commands
+                // for other platforms. Undo identifiable duplicate copies only.
+                for cmd in extension.manifest["commands"].as_array().into_iter().flatten() {
+                    let Some(name) = cmd["name"].as_str() else { continue; };
+                    let id = format!("extcmd:{}:{name}", extension.id);
+                    if targets.contains(&id) { continue; }
+                    let Some(key) = config["commandHotkeys"][&id].as_str().map(str::to_owned) else { continue; };
+                    if let Some(alias) = super::command_hotkey_aliases(&id).into_iter()
+                        .find(|alias| config["commandHotkeys"][alias].as_str() == Some(key.as_str())) {
+                        platform.restore_legacy_owner(&id, &alias, &key)?;
+                        config["commandHotkeys"].as_object_mut().unwrap().remove(&id);
                     }
                 }
             }
-            // A previous beta may already have copied the key. Retire its live
-            // aliases even then, without resurrecting a cleared canonical key.
-            super::retire_legacy_command_hotkeys(config, &target)?;
-        }
-        config[marker] = json!(true);
+            for id in &targets {
+                let done = format!("identityMigrationHotkey:{id}");
+                let aliases = super::command_hotkey_aliases(id);
+                let pending_edit = config[&done].as_str()
+                    .and_then(|owner| aliases.iter().find(|alias| alias.as_str() == owner));
+                if let Some(owner) = pending_edit {
+                    let bindings = config["commandHotkeys"].as_object_mut().ok_or("Invalid commandHotkeys")?;
+                    match bindings.get(owner).cloned() {
+                        Some(value) => { bindings.insert(id.clone(), value); }
+                        None => { bindings.remove(id); }
+                    }
+                }
+                for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
+                    if config.get(key).is_some_and(|v| !v.is_object()) {
+                        return Err(format!("Identity migration: invalid {key}; configuration retained"));
+                    }
+                    let already_imported = if key == "commandHotkeys" {
+                        legacy_clear || config[&done] == true || pending_edit.is_some()
+                    } else { config[&marker] == true };
+                    if config[key].get(id).is_some() || already_imported { continue; }
+                    if let Some(value) = aliases.iter().find_map(|alias| config[key].get(alias)).cloned() {
+                        config[key][id] = value;
+                    }
+                }
+                if pending_edit.is_some() || aliases.iter().any(|alias| config["commandHotkeys"].get(alias).is_some()) {
+                    super::retire_legacy_command_hotkeys(config, id)?;
+                    platform.reconcile_command(id, config["commandHotkeys"][id].as_str().unwrap_or(""))?;
+                }
+                config[done] = json!(true);
+            }
+            config[&marker] = json!(true);
+            config[&granular] = json!(true);
+            Ok(())
+        })?;
         Ok(())
-    })?;
-    Ok(())
+    })
 }
 
 fn validate_preference_snapshot(value: &Value) -> Result<(), String> {
@@ -1016,10 +1071,21 @@ fn settings(ctx: &CoreContext) -> Value {
             })
             .collect()
     }
-    let mut result:Vec<_>=collect(ctx).iter().filter(|e|compatible(&e.manifest,false)).map(|e| {
+    let extensions = collect(ctx);
+    let mut hotkey_owners = std::collections::HashMap::new();
+    for extension in &extensions {
+        for command in supported_native_commands(extension) {
+            let target = format!("extcmd:{}:{command}", extension.id);
+            for alias in super::command_hotkey_aliases(&target) {
+                hotkey_owners.insert(alias, target.clone());
+            }
+        }
+    }
+    let mut result:Vec<_>=extensions.iter().filter(|e|compatible(&e.manifest,false)).map(|e| {
         let pkg=&e.manifest;
         let commands:Vec<_>=pkg["commands"].as_array().into_iter().flatten().filter(|v|v["name"].is_string()&&compatible(v,true) && (e.id.starts_with("raycast.") || v["runtime"] == "rust")).map(|cmd| {
-            json!({"name":cmd["name"],"title":fallback(cmd,"title",cmd["name"].as_str().unwrap_or("")),"description":fallback(cmd,"description",""),
+            let key = format!("extcmd:{}:{}", e.id, cmd["name"].as_str().unwrap());
+            json!({"hotkeyId":hotkey_owners.get(&key).unwrap_or(&key),"name":cmd["name"],"title":fallback(cmd,"title",cmd["name"].as_str().unwrap_or("")),"description":fallback(cmd,"description",""),
                 "mode":fallback(cmd,"mode","view"),"interval":cmd["interval"],"disabledByDefault":cmd["disabledByDefault"].as_bool().unwrap_or(false),"preferences":schemas(&cmd["preferences"],"command")})
         }).collect();
         json!({"extName":e.slug,"extensionId":e.id,"title":fallback(pkg,"title",&e.slug),"description":fallback(pkg,"description",""),
@@ -1294,7 +1360,7 @@ mod tests {
         for alias in ["raycast.emoji", "com.tezbar.emoji"] {
             let temp = tempfile::tempdir().unwrap();
             let ctx = context(temp.path());
-            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("extensions/packages/com.tezbar.native.emoji"), package_dir:None, manifest:json!({"id":"com.tezbar.native.emoji","commands":[{"name":"search"}]}), data_dir:temp.path().into() };
+            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("extensions/packages/com.tezbar.native.emoji"), package_dir:None, manifest:json!({"id":"com.tezbar.native.emoji","platforms":[platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir:temp.path().into() };
             let old = format!("extcmd:{alias}:search");
             ctx.config.update(|v| { v["disabledCommands"] = json!({old.clone():true}); Ok(()) }).unwrap();
             migrate_command_settings(&ctx, &extension).unwrap();
@@ -1311,7 +1377,7 @@ mod tests {
     fn migrated_hotkey_tombstone_does_not_resurrect_a_cleared_binding() {
         let temp = tempfile::tempdir().unwrap();
         let ctx = context(temp.path());
-        let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"commands":[{"name":"search"}]}), data_dir:temp.path().into() };
+        let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"platforms":[platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir:temp.path().into() };
         let old = "extcmd:raycast.emoji:search";
         let target = "extcmd:com.tezbar.native.emoji:search";
         ctx.config.patch(&json!({"identityMigration:com.tezbar.native.emoji":true,"commandHotkeys":{old:"Alt+E"},"future":{"keep":true}})).unwrap();
@@ -1339,7 +1405,7 @@ mod tests {
             let platform = crate::platform::PlatformCore::new(ctx.clone());
             platform.initialize_shortcuts().unwrap();
             let old_binding = ctx.host.shortcuts().parse("Alt+E").unwrap();
-            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"commands":[{"name":"search"}]}), data_dir:temp.path().into() };
+            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"platforms":[platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir:temp.path().into() };
             migrate_command_settings(&ctx, &extension).unwrap();
             assert_eq!(ctx.config.read().unwrap()["commandHotkeys"][target], "Alt+E");
             let routed = platform.clone();
@@ -1374,6 +1440,89 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn discovery_releases_tombstone_and_dispatches_edited_and_newly_covered_hotkeys_after_restart() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = context(temp.path()).paths;
+        let host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let ctx = CoreContext::new(paths.clone(), Some(host.clone()));
+        let legacy = "extcmd:raycast.perplexity:ask-perplexity";
+        let canonical = "extcmd:com.tezbar.native.perplexity:ask-perplexity";
+        let second = "extcmd:raycast.perplexity:second";
+        let second_target = "extcmd:com.tezbar.native.perplexity:second";
+        let js_only = "extcmd:raycast.perplexity:other-platform";
+        let js_package = temp.path().join("extensions/perplexity/package.json");
+        write_json_atomic(&js_package, &json!({"name":"perplexity","platforms":[platform()],
+            "commands":[{"name":"ask-perplexity"},{"name":"second"},{"name":"other-platform"}]})).unwrap();
+        let foreign_command = |m: &mut Value| {
+            let mut foreign = m["commands"][0].clone();
+            foreign["name"] = json!("other-platform");
+            foreign["platforms"] = json!([if platform() == "macOS" { "Windows" } else { "macOS" }]);
+            m["commands"].as_array_mut().unwrap().push(foreign);
+        };
+        super::super::process_install::test_install_with(&ctx, "normal", foreign_command);
+        ctx.config.patch(&json!({"identityMigration:com.tezbar.native.perplexity":true,
+            "commandHotkeys":{legacy:"Alt+E",second:"Alt+S",js_only:"Alt+P","extcmd:com.tezbar.native.perplexity:other-platform":"Alt+P"}})).unwrap();
+        let core = crate::NativeCore::new(ctx.clone()).unwrap();
+        core.platform.initialize_shortcuts().unwrap();
+        let owner = |key: &str| core.platform.command_for_shortcut(ctx.host.shortcuts().parse(key).unwrap().id());
+        assert_eq!(owner("Alt+E").as_deref(), Some(legacy));
+        handle(&ctx, "core:extensions:commands", &[]).unwrap();
+        assert_eq!(owner("Alt+E"), None);
+        assert!(host.calls.lock().unwrap().contains(&"unregister:Alt+E".into()));
+        assert_eq!(core.launcher.handle("update-command-hotkey", &[json!("unrelated"),json!("Alt+E")])
+            .await.unwrap().unwrap()["ok"], true);
+        assert_eq!(owner("Alt+E").as_deref(), Some("unrelated"));
+        assert_eq!(core.launcher.handle("update-command-hotkey", &[json!(legacy),json!("Alt+J")])
+            .await.unwrap().unwrap()["ok"], true);
+        assert_eq!(owner("Alt+J").as_deref(), Some(canonical));
+        assert_eq!(owner("Alt+S").as_deref(), Some(second));
+        assert_eq!(owner("Alt+P").as_deref(), Some(js_only));
+        let schema = settings(&ctx);
+        let js_commands = &schema.as_array().unwrap().iter()
+            .find(|row| row["extensionId"] == "raycast.perplexity").unwrap()["commands"];
+        assert_eq!(js_commands[0]["hotkeyId"], canonical);
+        assert_eq!(js_commands[2]["hotkeyId"], js_only);
+        assert_eq!(core.launcher.handle("update-command-hotkey", &[json!(js_only),json!("Alt+T")])
+            .await.unwrap().unwrap()["ok"], true);
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            m["version"] = json!("1.1.0");
+            let mut next = m["commands"][0].clone();
+            next["name"] = json!("second");
+            m["commands"].as_array_mut().unwrap().push(next);
+            foreign_command(m);
+        });
+        for _ in 0..2 { handle(&ctx, "core:extensions:commands", &[]).unwrap(); }
+        assert_eq!(owner("Alt+S").as_deref(), Some(second_target));
+        assert_eq!(owner("Alt+P"), None);
+        assert_eq!(owner("Alt+T").as_deref(), Some(js_only));
+        let config = ctx.config.read().unwrap();
+        assert!(config["commandHotkeys"].get(legacy).is_none());
+        assert!(config["commandHotkeys"].get(second).is_none());
+        assert!(config["commandHotkeys"].get("extcmd:com.tezbar.native.perplexity:other-platform").is_none());
+        let fresh_host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let fresh = CoreContext::new(paths, Some(fresh_host.clone()));
+        let restarted = crate::NativeCore::new(fresh.clone()).unwrap();
+        restarted.platform.initialize_shortcuts().unwrap();
+        for (key, expected, extension, name) in [
+            ("Alt+J",canonical,"com.tezbar.native.perplexity","ask-perplexity"),
+            ("Alt+S",second_target,"com.tezbar.native.perplexity","second"),
+            ("Alt+T",js_only,"raycast.perplexity","other-platform"),
+        ] {
+            let binding = fresh.host.shortcuts().parse(key).unwrap();
+            let owner = restarted.platform.command_for_shortcut(binding.id()).unwrap();
+            assert_eq!(owner, expected);
+            restarted.execute_command_shortcut(&owner).await.unwrap();
+            assert_eq!(fresh_host.events.lock().unwrap().last().unwrap(),
+                &("run-extension-command-from-hotkey".into(),json!({"extensionId":extension,"commandName":name})));
+        }
+        restarted.execute_command_shortcut("ext-perplexity-ask-perplexity").await.unwrap();
+        assert_eq!(fresh_host.events.lock().unwrap().last().unwrap().1,
+            json!({"extensionId":"com.tezbar.native.perplexity","commandName":"ask-perplexity"}));
+        assert!(restarted.execute_command_shortcut("extcmd:com.tezbar.native.perplexity:other-platform")
+            .await.unwrap_err().contains("unavailable"));
+    }
+
     #[test]
     fn batch2_conflicts_abort_unless_canonical_field_exists() {
         let mut target = json!({"secret":"synthetic-a","commands":{"run":{"empty":true}}});
@@ -1390,7 +1539,7 @@ mod tests {
     fn batch2_identity_migration_aliases_restart_and_corruption() {
         let temp = tempfile::tempdir().unwrap();
         let ctx = context(temp.path());
-        let extension = Installed { id: "com.tezbar.native.emoji".into(), slug: "emoji".into(), path: temp.path().join("extensions/packages/com.tezbar.native.emoji"), package_dir: None, manifest: json!({"id":"com.tezbar.native.emoji","commands":[{"name":"search"}]}), data_dir: temp.path().into() };
+        let extension = Installed { id: "com.tezbar.native.emoji".into(), slug: "emoji".into(), path: temp.path().join("extensions/packages/com.tezbar.native.emoji"), package_dir: None, manifest: json!({"id":"com.tezbar.native.emoji","platforms":[platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir: temp.path().into() };
         let a = temp.path().join("extensions/packages/raycast.emoji/preferences.json");
         let b = temp.path().join("extensions/packages/com.tezbar.emoji/preferences.json");
         write_json_atomic(&a, &json!({"theme":"old","commands":{"search":{"a":1}}})).unwrap();

@@ -808,6 +808,15 @@ fn normalize_extension_id(id: &str) -> String {
         .unwrap_or(id.trim().trim_start_matches('@'))
         .replace(['\\', '/'], "-")
 }
+pub(super) fn command_hotkey_id<'a>(command: &'a Value, previous: &'a str, keys: &Value) -> &'a str {
+    let effective = command["hotkeyId"].as_str().unwrap_or(previous);
+    // Older Settings versions used the bare slug for JS commands.
+    if effective.starts_with("extcmd:raycast.") && keys.get(effective).is_none() && keys.get(previous).is_some() {
+        previous
+    } else {
+        effective
+    }
+}
 pub(super) fn merge_installed(schema: &Value, installed: &Value) -> Value {
     let mut rows = BTreeMap::new();
     for row in schema.as_array().into_iter().flatten() {

@@ -1810,6 +1810,7 @@ impl SettingsContent {
                 ));
             if let Some(c) = command {
                 let command = format!("extcmd:{id}:{}", text(&c["name"]));
+                let hotkey = view::command_hotkey_id(c, &command, &self.extension_settings["commandHotkeys"]);
                 let enabled = self.extension_settings["disabledCommands"][&command] != true;
                 detail = detail
                     .child(
@@ -1837,17 +1838,17 @@ impl SettingsContent {
                             .child(note("Global keyboard shortcut for this command", t))
                             .child(self.button(
                                 format!("record-command-hotkey-{command}"),
-                                if self.command_hotkey_recording.as_deref() == Some(&command) {
+                                if self.command_hotkey_recording.as_deref() == Some(hotkey) {
                                     "Press shortcut…".into()
                                 } else {
-                                    let value = self.value(&format!("command.hotkey.{command}"));
+                                    let value = self.value(&format!("command.hotkey.{hotkey}"));
                                     if value.is_empty() {
                                         "Record shortcut".into()
                                     } else {
                                         value
                                     }
                                 },
-                                Action::RecordCommandHotkey(command.clone()),
+                                Action::RecordCommandHotkey(hotkey.to_owned()),
                                 t,
                                 cx,
                             ))

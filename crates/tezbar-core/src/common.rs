@@ -32,6 +32,8 @@ pub struct CoreContext {
     pub terminal: Arc<crate::terminal::pty::NativeTerminalState>,
     pub legacy_data_dir: Option<PathBuf>,
     pub dev_mode: bool,
+    pub(crate) shortcuts: Arc<Mutex<crate::platform::Shortcuts>>,
+    pub(crate) shortcut_updates: Arc<Mutex<()>>,
     desktop_services: bool,
     events: EventSink,
     router: Arc<OnceLock<CoreRouter>>,
@@ -45,6 +47,8 @@ impl CoreContext {
         Self {
             config: Arc::new(ConfigStore::new(paths.config_dir.join("config.json"))),
             paths,
+            shortcuts: Default::default(),
+            shortcut_updates: Default::default(),
             desktop_services: host.desktop_services(),
             host,
             terminal: Arc::new(Default::default()),

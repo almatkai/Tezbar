@@ -701,69 +701,54 @@ async fn bundle_id_reads_temporary_plist_without_enumerating_installed_apps() {
 #[tokio::test]
 async fn hotkeys_persist_registered_accelerator_and_rollback_on_write_failure() {
     let dir = tempfile::tempdir().unwrap();
-    let ctx = profile(dir.path());
-    ctx.config
-        .patch(&json!({"commandHotkeys":{"cmd":"Control+O"},"future":42}))
-        .unwrap();
-    let calls = Arc::new(Mutex::new(vec![]));
-    let sink = calls.clone();
-    let path = ctx.config.path().to_owned();
-    ctx.set_router(Arc::new(move |channel, args| {
-        assert_eq!(channel, "core:shortcut:update-command");
-        let sink = sink.clone();
-        let path = path.clone();
-        Box::pin(async move {
-            sink.lock().unwrap().push(args.clone());
-            if args[1] == "break-save" {
-                // Simulate config becoming unwritable between registration and commit.
-                std::fs::remove_file(&path).unwrap();
-                std::fs::create_dir(&path).unwrap();
-            }
-            Ok(json!({"ok":true,"accelerator":if args[1]=="CmdOrCtrl+K" {json!("Control+K")}else{args[1].clone()}}))
-        })
-    })).unwrap();
-    let core = LauncherCore::new(ctx.clone());
-    let r = core
-        .dispatch(
-            "update-command-hotkey",
-            &[json!("cmd"), json!("CmdOrCtrl+K")],
-        )
-        .await
-        .unwrap();
-    assert_eq!(r["accelerator"], "Control+K");
-    assert_eq!(
-        ctx.config.read().unwrap()["commandHotkeys"]["cmd"],
-        "Control+K"
-    );
-    assert_eq!(ctx.config.read().unwrap()["future"], 42);
-    assert!(core
-        .dispatch(
-            "update-command-hotkey",
-            &[json!("cmd"), json!("break-save")]
-        )
-        .await
-        .is_err());
-    assert_eq!(
-        calls.lock().unwrap().last().unwrap(),
-        &vec![json!("cmd"), json!("Control+K")]
-    );
-    core.shutdown().await.unwrap();
+    let host = Arc::new(crate::host::TestHost { allow_interaction: true, ..Default::default() });
+    let ctx = CoreContext::new(profile(dir.path()).paths, Some(host.clone()));
+    let old = "extcmd:raycast.emoji:search";
+    let other = "extcmd:com.tezbar.emoji:search";
+    let target = "extcmd:com.tezbar.native.emoji:search";
+    ctx.config.patch(&json!({"commandHotkeys":{old:"Alt+E",other:"Alt+G"},
+        "identityMigrationHotkeyBackup:com.tezbar.native.emoji":false,"future":42})).unwrap();
+    let core = crate::NativeCore::new(ctx.clone()).unwrap();
+    core.platform.initialize_shortcuts().unwrap();
+    let update = |id: &str, key: &str| {
+        let core = core.clone();
+        let args = [json!(id), json!(key)];
+        async move { core.launcher.handle("update-command-hotkey", &args).await.unwrap() }
+    };
+    assert_eq!(update("cmd", "Ctrl+K").await.unwrap()["accelerator"], "Control+K");
+    let before = ctx.config.read().unwrap();
+    assert_eq!(before["commandHotkeys"]["cmd"], "Control+K");
+    assert!(update(target, "Alt+N").await.unwrap_err().contains("invalid hotkey rollback map"));
+    let saved = CoreContext::new(ctx.paths.clone(), None).config.read().unwrap();
+    assert_eq!(saved, before);
+    for (key, owner) in [("Alt+E", Some(old)), ("Alt+G", Some(other)), ("Alt+N", None)] {
+        let binding = ctx.host.shortcuts().parse(key).unwrap();
+        assert_eq!(core.platform.command_for_shortcut(binding.id()).as_deref(), owner);
+    }
+    let calls = host.calls.lock().unwrap();
+    for key in ["Alt+E", "Alt+G"] {
+        let release = calls.iter().position(|c| c == &format!("unregister:{key}")).unwrap();
+        assert!(calls[release+1..].contains(&format!("register:{key}")));
+    }
+    assert!(calls.contains(&"unregister:Alt+N".to_owned()));
 }
 
 #[tokio::test]
 async fn cancelling_shortcut_ipc_still_persists_the_registered_binding() {
     let dir = tempfile::tempdir().unwrap();
-    let ctx = profile(dir.path());
+    let ctx = CoreContext::new(profile(dir.path()).paths, Some(Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() })));
+    let platform = crate::platform::PlatformCore::new(ctx.clone());
     let (started, ready) = tokio::sync::oneshot::channel();
     let (release, released) = tokio::sync::oneshot::channel();
     let handoff = Arc::new(Mutex::new(Some((started, released))));
-    ctx.set_router(Arc::new(move |channel, _| {
+    ctx.set_router(Arc::new(move |channel, args| {
         assert_eq!(channel, "core:shortcut:update-command");
+        let platform = platform.clone();
         let (started, released) = handoff.lock().unwrap().take().unwrap();
         Box::pin(async move {
             started.send(()).unwrap();
             released.await.unwrap();
-            Ok(json!({"ok":true,"accelerator":"Control+K","previousAccelerator":""}))
+            platform.handle(&channel, &args).await.unwrap()
         })
     }))
     .unwrap();
@@ -773,7 +758,7 @@ async fn cancelling_shortcut_ipc_still_persists_the_registered_binding() {
         request_core
             .dispatch(
                 "update-command-hotkey",
-                &[json!("cmd"), json!("CmdOrCtrl+K")],
+                &[json!("cmd"), json!("Ctrl+K")],
             )
             .await
     });

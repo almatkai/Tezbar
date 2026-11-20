@@ -10,6 +10,7 @@ pub(crate) mod process_host;
 mod process_install;
 
 mod registry;
+pub(crate) use registry::hotkey_edit_owner;
 mod v2_catalog;
 mod v2_runtime;
 // Domain implementations/assets live in standalone extension repositories.
@@ -35,6 +36,7 @@ pub(crate) fn command_hotkey_aliases(id: &str) -> Vec<String> {
     for alias in declared {
         if alias != extension && !ids.contains(&alias) { ids.push(alias); }
     }
+    if !ids.iter().any(|alias| alias == slug) { ids.push(slug.to_owned()); }
     ids.into_iter().map(|alias| format!("extcmd:{alias}:{command}")).collect()
 }
 

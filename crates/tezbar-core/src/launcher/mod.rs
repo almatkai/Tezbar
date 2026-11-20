@@ -201,66 +201,12 @@ impl LauncherCore {
     async fn update_command_hotkey(&self, args: Vec<Value>) -> CoreResult {
         // Keep registration and persistence ordered across concurrent updates.
         let _guard = self.inner.shortcuts.lock().await;
-        let id = text_arg(&args, 0)?.to_owned();
-        let hotkey = text_arg(&args, 1)?.to_owned();
-        let previous = self.config().await?["commandHotkeys"][&id]
-            .as_str()
-            .unwrap_or("")
-            .to_owned();
-        let result = self
-            .inner
-            .ctx
-            .request(
-                "core:shortcut:update-command",
-                vec![json!(id), json!(hotkey)],
-            )
-            .await?;
-        if result["ok"] != true {
-            return Ok(result);
+        text_arg(&args, 0)?;
+        text_arg(&args, 1)?;
+        let result = self.inner.ctx.request("core:shortcut:update-command", args).await?;
+        if result["ok"] == true {
+            self.inner.ctx.emit("llm-config-changed", json!({}));
         }
-        let previous = result["previousAccelerator"]
-            .as_str()
-            .unwrap_or(&previous)
-            .to_owned();
-        let hotkey = result["accelerator"]
-            .as_str()
-            .ok_or("Shortcut registration omitted accelerator")?
-            .to_owned();
-        let config = self.inner.ctx.config.clone();
-        let saved_id = id.clone();
-        let persisted = tokio::task::spawn_blocking(move || {
-            let id = saved_id;
-            config.update(|v| {
-                if !v["commandHotkeys"].is_object() {
-                    v["commandHotkeys"] = json!({})
-                }
-                crate::extensions::retire_legacy_command_hotkeys(v, &id)?;
-                if hotkey.trim().is_empty() {
-                    v["commandHotkeys"].as_object_mut().unwrap().remove(&id);
-                } else {
-                    v["commandHotkeys"][id] = json!(hotkey)
-                }
-                Ok(())
-            })
-        })
-        .await
-        .map_err(|e| e.to_string())
-        .and_then(|v| v);
-        if let Err(error) = persisted {
-            let rollback = self
-                .inner
-                .ctx
-                .request(
-                    "core:shortcut:update-command",
-                    vec![json!(id), json!(previous)],
-                )
-                .await;
-            return Err(match rollback {
-                Ok(v) if v["ok"] == true => error,
-                other => format!("{error}; shortcut rollback failed: {other:?}"),
-            });
-        }
-        self.inner.ctx.emit("llm-config-changed", json!({}));
         Ok(result)
     }
 

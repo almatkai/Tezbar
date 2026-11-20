@@ -191,11 +191,24 @@ impl NativeCore {
 
     pub async fn execute_command_shortcut(&self, command: &str) -> CoreResult {
         let commands = self.ctx.request("core:extensions:commands", vec![]).await?;
+        let settings_id = command.strip_prefix("extcmd:").and_then(|key| key.split_once(':'));
         if let Some(extension) = commands
             .as_array()
             .into_iter()
             .flatten()
-            .find(|v| v["id"].as_str() == Some(command))
+            .find(|row| {
+                row["id"].as_str() == Some(command) || settings_id.is_some_and(|(extension, name)| {
+                    let js_slug = row["extensionId"].as_str().and_then(|id| id.strip_prefix("raycast."));
+                    let legacy_slug = extension.strip_prefix("com.tezbar.")
+                        .filter(|_| !extension.starts_with("com.tezbar.native."));
+                    row["cmdName"] == name && (row["extensionId"] == extension || row["extName"] == extension
+                        || legacy_slug.is_some() && legacy_slug == js_slug
+                        || row["extensionId"].as_str().is_some_and(|id| {
+                            crate::extensions::command_hotkey_aliases(&format!("extcmd:{id}:{name}"))
+                                .iter().any(|alias| alias == command)
+                        }))
+                })
+            })
         {
             self.ctx
                 .request("core:platform:visibility", vec![json!(true)])
@@ -212,6 +225,7 @@ impl NativeCore {
             );
             return Ok(json!({"ok":true}));
         }
+        if settings_id.is_some() { return Err(format!("Extension command unavailable: {command}")); }
         let id = command
             .strip_prefix("command:")
             .or_else(|| command.strip_prefix("native:"))
