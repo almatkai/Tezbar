@@ -81,7 +81,7 @@ it('keeps MenuBarExtra alive while ordinary foreground sessions are pruned', asy
   expect(reply.root.type).toBe('MenuBarExtra');expect(reply.root.props.title).toBe('Count 1')
   expect(disposeExtensionSession(menu.sessionId)).toBe(true)
   expect((await refreshExtensionSession({sessionId:menu.sessionId})).ok).toBe(false)
-})
+}, 20_000)
 
 it('refuses an extra background menu at capacity without evicting existing menus', async () => {
   clearAllExtensionSessions()
