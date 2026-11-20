@@ -1377,7 +1377,7 @@ mod tests {
     fn migrated_hotkey_tombstone_does_not_resurrect_a_cleared_binding() {
         let temp = tempfile::tempdir().unwrap();
         let ctx = context(temp.path());
-        let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"platforms":[platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir:temp.path().into() };
+        let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"platforms":[super::platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir:temp.path().into() };
         let old = "extcmd:raycast.emoji:search";
         let target = "extcmd:com.tezbar.native.emoji:search";
         ctx.config.patch(&json!({"identityMigration:com.tezbar.native.emoji":true,"commandHotkeys":{old:"Alt+E"},"future":{"keep":true}})).unwrap();
@@ -1405,7 +1405,7 @@ mod tests {
             let platform = crate::platform::PlatformCore::new(ctx.clone());
             platform.initialize_shortcuts().unwrap();
             let old_binding = ctx.host.shortcuts().parse("Alt+E").unwrap();
-            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"platforms":[platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir:temp.path().into() };
+            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"platforms":[super::platform()],"commands":[{"name":"search","runtime":"rust"}]}), data_dir:temp.path().into() };
             migrate_command_settings(&ctx, &extension).unwrap();
             assert_eq!(ctx.config.read().unwrap()["commandHotkeys"][target], "Alt+E");
             let routed = platform.clone();
