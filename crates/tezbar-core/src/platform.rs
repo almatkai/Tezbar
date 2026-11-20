@@ -136,6 +136,12 @@ impl PlatformCore {
             return Err("Launcher shortcut cannot be empty".into());
         }
         let mut shortcuts = self.shortcuts.lock().map_err(|e| e.to_string())?;
+        if let Some(id) = command {
+            let aliases = crate::extensions::command_hotkey_aliases(id);
+            if !aliases.is_empty() {
+                return self.replace_migrated_command(id, &aliases, next, normalized, &mut shortcuts);
+            }
+        }
         let old = command
             .and_then(|id| shortcuts.commands.get(id).cloned())
             .or_else(|| {
@@ -179,6 +185,50 @@ impl PlatformCore {
         } else {
             shortcuts.launcher = next;
         }
+        Ok(normalized)
+    }
+
+    fn replace_migrated_command(
+        &self, id: &str, aliases: &[String], next: Option<Shortcut>,
+        normalized: String, shortcuts: &mut Shortcuts,
+    ) -> Result<String, String> {
+        let owns = |key: &str| key == id || aliases.iter().any(|alias| alias == key);
+        let mut previous = Vec::new();
+        for key in std::iter::once(id).chain(aliases.iter().map(String::as_str)) {
+            if let Some(binding) = shortcuts.commands.get(key) {
+                if !previous.contains(binding) { previous.push(binding.clone()); }
+            }
+        }
+        if let Some(binding) = &next {
+            if shortcuts.launcher.as_ref() == Some(binding)
+                || shortcuts.commands.iter().any(|(key, value)| !owns(key) && value == binding)
+            {
+                return Err("This shortcut is already assigned to another Tezbar command".into());
+            }
+        }
+        let newly_registered = next.as_ref().is_some_and(|binding| !previous.contains(binding));
+        if newly_registered {
+            self.ctx.host.shortcuts().register(next.as_ref().unwrap())
+                .map_err(|error| format!("Could not register shortcut: {error}"))?;
+        }
+        let mut removed = Vec::new();
+        for binding in previous.iter().filter(|binding| Some(*binding) != next.as_ref()) {
+            if let Err(error) = self.ctx.host.shortcuts().unregister(binding) {
+                let mut rollback = Vec::new();
+                for old in removed.iter().rev() {
+                    if let Err(error) = self.ctx.host.shortcuts().register(old) { rollback.push(error.to_string()); }
+                }
+                if newly_registered {
+                    if let Err(error) = self.ctx.host.shortcuts().unregister(next.as_ref().unwrap()) { rollback.push(error.to_string()); }
+                }
+                return Err(if rollback.is_empty() {
+                    format!("Could not replace shortcut: {error}")
+                } else { format!("Could not replace shortcut: {error}; rollback failed: {}", rollback.join("; ")) });
+            }
+            removed.push(binding.clone());
+        }
+        shortcuts.commands.retain(|key, _| !owns(key));
+        if let Some(binding) = next { shortcuts.commands.insert(id.into(), binding); }
         Ok(normalized)
     }
 
@@ -268,14 +318,13 @@ impl PlatformCore {
             "core:shortcut:update-command" => {
                 let key = args.get(1).and_then(Value::as_str).unwrap_or("");
                 let _update = self.shortcut_updates.lock().map_err(|e| e.to_string())?;
-                let previous = self
-                    .shortcuts
-                    .lock()
-                    .map_err(|e| e.to_string())?
-                    .commands
-                    .get(text)
-                    .map(|s| s.to_string())
-                    .unwrap_or_default();
+                let previous = {
+                    let shortcuts = self.shortcuts.lock().map_err(|e| e.to_string())?;
+                    let aliases = crate::extensions::command_hotkey_aliases(text);
+                    std::iter::once(text).chain(aliases.iter().map(String::as_str))
+                        .find_map(|key| shortcuts.commands.get(key))
+                        .map(|binding| binding.to_string()).unwrap_or_default()
+                };
                 match self.register_shortcut_inner(Some(text), key) {
                     Ok(accelerator) => Ok(
                         json!({"ok":true,"accelerator":accelerator,"previousAccelerator":previous}),

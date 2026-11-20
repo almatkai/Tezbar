@@ -20,6 +20,43 @@ use super::extension_worker::{ExtensionWorker, CHANNELS as WORKER_CHANNELS};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 
+/// Compatibility names owned by one canonical native command hotkey.
+pub(crate) fn command_hotkey_aliases(id: &str) -> Vec<String> {
+    let Some((extension, command)) = id.strip_prefix("extcmd:").and_then(|v| v.split_once(':')) else {
+        return vec![];
+    };
+    let Some(slug) = extension.strip_prefix("com.tezbar.native.") else { return vec![]; };
+    if process_install::component(slug).is_err() || process_install::component(command).is_err() {
+        return vec![];
+    }
+    let mut ids = vec![format!("raycast.{slug}"), format!("com.tezbar.{slug}")];
+    let mut declared = v2_runtime::compatible_ids(slug);
+    declared.sort();
+    for alias in declared {
+        if alias != extension && !ids.contains(&alias) { ids.push(alias); }
+    }
+    ids.into_iter().map(|alias| format!("extcmd:{alias}:{command}")).collect()
+}
+
+/// Keep rollback values outside the map registered by PlatformCore at startup.
+pub(crate) fn retire_legacy_command_hotkeys(config: &mut Value, id: &str) -> Result<(), String> {
+    let values: Vec<_> = command_hotkey_aliases(id).into_iter()
+        .filter_map(|alias| config["commandHotkeys"].get(&alias).cloned().map(|value| (alias, value)))
+        .collect();
+    if values.is_empty() { return Ok(()); }
+    let extension = id.strip_prefix("extcmd:").unwrap().split_once(':').unwrap().0;
+    let backup = format!("identityMigrationHotkeyBackup:{extension}");
+    if config.get(&backup).is_some_and(|value| !value.is_object()) {
+        return Err("Identity migration: invalid hotkey rollback map; configuration retained".into());
+    }
+    if config.get(&backup).is_none() { config[&backup] = json!({}); }
+    for (alias, value) in values {
+        config[&backup][&alias] = value;
+        config["commandHotkeys"].as_object_mut().ok_or("Invalid commandHotkeys")?.remove(&alias);
+    }
+    Ok(())
+}
+
 pub(crate) fn v2_cli_list(ctx: &CoreContext) -> super::common::CoreResult {
     v2_catalog::cli_list(ctx)
 }

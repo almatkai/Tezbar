@@ -366,6 +366,58 @@ async fn host_capture_keeps_png_reply_contract_and_resizes() {
 }
 
 #[test]
+fn migrated_command_shortcut_transfers_live_owner_and_releases_all_aliases() {
+    let (_d, ctx, host) = scripted();
+    let old = "extcmd:raycast.emoji:search";
+    let other = "extcmd:com.tezbar.emoji:search";
+    let canonical = "extcmd:com.tezbar.native.emoji:search";
+    let old_binding = ctx.host.shortcuts().parse("Alt+E").unwrap();
+    let extra_binding = ctx.host.shortcuts().parse("Alt+G").unwrap();
+    let platform = PlatformCore::new(ctx);
+    platform.register_shortcut(Some(old), "Alt+E").unwrap();
+    platform.register_shortcut(Some(other), "Alt+G").unwrap();
+    platform.register_shortcut(Some(canonical), "Alt+E").unwrap();
+    assert_eq!(platform.command_for_shortcut(old_binding.id()), Some(canonical.into()));
+    assert_eq!(platform.command_for_shortcut(extra_binding.id()), None);
+    assert_eq!(*host.calls.lock().unwrap(), ["register:Alt+E", "register:Alt+G", "unregister:Alt+G"]);
+    platform.register_shortcut(Some(canonical), "").unwrap();
+    assert_eq!(platform.command_for_shortcut(old_binding.id()), None);
+}
+
+#[test]
+fn migrated_command_shortcut_preserves_old_owner_on_registration_or_release_failure() {
+    let (_d, ctx, host) = scripted();
+    let old = "extcmd:raycast.emoji:search";
+    let canonical = "extcmd:com.tezbar.native.emoji:search";
+    let binding = ctx.host.shortcuts().parse("Alt+E").unwrap();
+    let platform = PlatformCore::new(ctx);
+    platform.register_shortcut(Some(old), "Alt+E").unwrap();
+    host.shortcut_results.lock().unwrap().push_back(Err("registration refused".into()));
+    assert!(platform.register_shortcut(Some(canonical), "Alt+N").is_err());
+    assert_eq!(platform.command_for_shortcut(binding.id()), Some(old.into()));
+    host.shortcut_results.lock().unwrap().extend([Ok(()), Err("release refused".into()), Ok(())]);
+    assert!(platform.register_shortcut(Some(canonical), "Alt+N").is_err());
+    assert_eq!(platform.command_for_shortcut(binding.id()), Some(old.into()));
+    assert_eq!(host.calls.lock().unwrap().last().unwrap(), "unregister:Alt+N");
+    platform.register_shortcut(Some("another-command"), "Alt+N").unwrap();
+    let before = host.calls.lock().unwrap().len();
+    assert!(platform.register_shortcut(Some(canonical), "Alt+N").unwrap_err().contains("already assigned"));
+    assert_eq!(host.calls.lock().unwrap().len(), before);
+    assert_eq!(platform.command_for_shortcut(binding.id()), Some(old.into()));
+    let extra = "extcmd:com.tezbar.emoji:search";
+    let extra_binding = platform.ctx.host.shortcuts().parse("Alt+G").unwrap();
+    platform.register_shortcut(Some(extra), "Alt+G").unwrap();
+    host.shortcut_results.lock().unwrap().extend([
+        Ok(()), Ok(()), Err("second release refused".into()), Ok(()), Ok(())
+    ]);
+    assert!(platform.register_shortcut(Some(canonical), "Alt+R").is_err());
+    assert_eq!(platform.command_for_shortcut(binding.id()), Some(old.into()));
+    assert_eq!(platform.command_for_shortcut(extra_binding.id()), Some(extra.into()));
+    let calls = host.calls.lock().unwrap();
+    assert_eq!(&calls[calls.len()-5..], ["register:Alt+R", "unregister:Alt+E", "unregister:Alt+G", "register:Alt+E", "unregister:Alt+R"]);
+}
+
+#[test]
 fn host_shortcut_duplicate_assignment_and_empty_launcher_do_not_release_owner() {
     let (_d, ctx, host) = scripted();
     let p = PlatformCore::new(ctx);

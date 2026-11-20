@@ -543,6 +543,22 @@ impl Host {
         }
     }
 }
+// Use the same visible tree for validation and command routing. Empty optional
+// children on a leaf are harmless, but hidden descendants must never own routes.
+fn tray_children(item: &Value) -> Result<Option<&[Value]>, String> {
+    if item["kind"] == "submenu" {
+        return item["items"]
+            .as_array()
+            .map(|children| Some(children.as_slice()))
+            .ok_or_else(|| "Submenu items required".into());
+    }
+    match item.get("items") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Array(children)) if children.is_empty() => Ok(None),
+        _ => Err("Tray children require a submenu".into()),
+    }
+}
+
 // A tray click may open only a declared view in its owning package.
 fn tray_commands(params: &Value, manifest: &Value) -> Result<HashMap<String,String>,String> {
     fn walk(items: &[Value], manifest: &Value, depth: usize, count: &mut usize, out: &mut HashMap<String,String>) -> Result<(),String> {
@@ -556,7 +572,7 @@ fn tray_commands(params: &Value, manifest: &Value) -> Result<HashMap<String,Stri
                 if !manifest["commands"].as_array().is_some_and(|commands| commands.iter().any(|c|c["name"]==command && c["runtime"]=="rust" && c["mode"]=="view" && c["platforms"].as_array().is_none_or(|p|p.iter().any(|p|p==platform)))) { return Err("Tray command must be a supported view in this package".into()); }
                 let id=string(item,"id")?; if out.insert(id.to_owned(),command.to_owned()).is_some() { return Err("Duplicate tray command action".into()); }
             }
-            if let Some(children)=item.get("items") { walk(children.as_array().ok_or("Invalid tray children")?,manifest,depth+1,count,out)?; }
+            if let Some(children)=tray_children(item)? { walk(children,manifest,depth+1,count,out)?; }
         }
         Ok(())
     }
@@ -570,6 +586,10 @@ fn tray_launch_is_scoped_to_declared_views() {
     assert_eq!(tray_commands(&menu(json!("query")),&m).unwrap()["open"],"query");
     for bad in [json!("missing"),json!("background"),json!(42)] {assert!(tray_commands(&menu(bad),&m).is_err());}
     assert!(tray_commands(&json!({"items":[{"id":"x","kind":"submenu","commandName":"query","items":[]}]}),&m).is_err());
+    let hidden=json!({"items":[{"id":"visible","title":"Callback"},{"id":"leaf","title":"Leaf","items":[{"id":"visible","title":"Hidden","commandName":"query"}]}]});
+    assert!(tray_commands(&hidden,&m).unwrap_err().contains("require a submenu"));
+    let valid=json!({"items":[{"id":"group","title":"Group","kind":"submenu","items":[{"id":"open:3:4","title":"Open","commandName":"query"}]}]});
+    assert_eq!(tray_commands(&valid,&m).unwrap()["open:3:4"],"query");
 }
 
 // Protocol 1 additive targets require a session; omitted target retains legacy shape.
@@ -1418,6 +1438,10 @@ mod status_port_tests {
             )
             .unwrap_err()
             .contains("Duplicate tray action"));
+        assert!(host.set_status_item(dir.path(), json!({"resourceId":"r0","items":[{"id":"visible","title":"Visible"},{"id":"leaf","title":"Leaf","items":[{"id":"visible","title":"Hidden"}]}]}), cb.clone()).unwrap_err().contains("require a submenu"));
+        host.set_status_item(dir.path(), json!({"resourceId":"r0","items":[{"id":"group","title":"Group","kind":"submenu","items":[{"id":"callback:7:9","title":"Callback"}]}]}), cb.clone()).unwrap();
+        desktop.status.lock().unwrap()[&id]("callback:7:9".into());
+        assert_eq!(calls.lock().unwrap().last().unwrap(), "callback:7:9");
         assert!(host
             .set_status_item(dir.path(), json!({"resourceId":"../escape","items":[]}), cb)
             .is_err());
@@ -1536,9 +1560,9 @@ fn set_status_item_impl(
             }
             let _ = string(item, "title")?;
             match item["kind"].as_str() {
-                None | Some("section" | "separator") => {}
+                None | Some("section" | "separator") => { tray_children(item)?; }
                 Some("submenu") => validate(
-                    item["items"].as_array().ok_or("Submenu items required")?,
+                    tray_children(item)?.ok_or("Submenu items required")?,
                     depth + 1,
                     count,
                     ids,

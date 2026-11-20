@@ -234,6 +234,7 @@ impl LauncherCore {
                 if !v["commandHotkeys"].is_object() {
                     v["commandHotkeys"] = json!({})
                 }
+                crate::extensions::retire_legacy_command_hotkeys(v, &id)?;
                 if hotkey.trim().is_empty() {
                     v["commandHotkeys"].as_object_mut().unwrap().remove(&id);
                 } else {

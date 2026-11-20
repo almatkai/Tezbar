@@ -670,7 +670,7 @@ impl NativeSessions {
         };
         super::process::latency_phase("preferences_end");
         let Some(preferences) = preferences else {
-            if requested.starts_with("raycast.") {
+            if requested != canonical {
                 return Ok(None);
             }
             // Surface schema-2/tamper/target errors, not a false legacy launch.

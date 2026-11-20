@@ -770,7 +770,16 @@ fn migrate_command_settings(ctx: &CoreContext, extension: &Installed) -> Result<
             return Err(format!("Identity migration: invalid {key}; configuration retained"));
         }
     }
-    if current[format!("identityMigration:{}", extension.id)] == true { return Ok(()); }
+    if current[format!("identityMigration:{}", extension.id)] == true
+        && !extension.manifest["commands"].as_array().into_iter().flatten().any(|command| {
+            command["name"].as_str().is_some_and(|name| {
+                super::command_hotkey_aliases(&format!("extcmd:{}:{name}", extension.id))
+                    .iter().any(|alias| current["commandHotkeys"].get(alias).is_some())
+            })
+        })
+    {
+        return Ok(());
+    }
     ctx.config.update(|config| {
         for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
             if config.get(key).is_some_and(|v| !v.is_object()) {
@@ -778,20 +787,23 @@ fn migrate_command_settings(ctx: &CoreContext, extension: &Installed) -> Result<
             }
         }
         let marker = format!("identityMigration:{}", extension.id);
-        if config[&marker] == true { return Ok(()); }
+        let migrated = config[&marker] == true;
         for command in extension.manifest["commands"].as_array().into_iter().flatten() {
             let Some(name) = command["name"].as_str() else { continue; };
             let target = format!("extcmd:{}:{name}", extension.id);
             for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
-                if config[key].get(&target).is_some() { continue; }
-                for alias in [format!("raycast.{}", extension.slug), format!("com.tezbar.{}", extension.slug)] {
-                    if let Some(value) = config[key].get(format!("extcmd:{alias}:{name}")).cloned() {
+                if migrated || config[key].get(&target).is_some() { continue; }
+                for alias in super::command_hotkey_aliases(&target) {
+                    if let Some(value) = config[key].get(alias).cloned() {
                         if config.get(key).is_none() { config[key] = json!({}); }
                         config[key][&target] = value;
                         break;
                     }
                 }
             }
+            // A previous beta may already have copied the key. Retire its live
+            // aliases even then, without resurrecting a cleared canonical key.
+            super::retire_legacy_command_hotkeys(config, &target)?;
         }
         config[marker] = json!(true);
         Ok(())
@@ -1267,6 +1279,7 @@ pub(super) fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> CoreRe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     fn context(path: &Path) -> CoreContext {
         CoreContext::headless(crate::common::CorePaths {
             data_dir: path.into(),
@@ -1294,6 +1307,73 @@ mod tests {
             assert_eq!(ctx.config.read().unwrap()["disabledCommands"][&old], true);
         }
     }
+    #[test]
+    fn migrated_hotkey_tombstone_does_not_resurrect_a_cleared_binding() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = context(temp.path());
+        let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"commands":[{"name":"search"}]}), data_dir:temp.path().into() };
+        let old = "extcmd:raycast.emoji:search";
+        let target = "extcmd:com.tezbar.native.emoji:search";
+        ctx.config.patch(&json!({"identityMigration:com.tezbar.native.emoji":true,"commandHotkeys":{old:"Alt+E"},"future":{"keep":true}})).unwrap();
+        migrate_command_settings(&ctx, &extension).unwrap();
+        let config = ctx.config.read().unwrap();
+        assert!(config["commandHotkeys"].get(old).is_none());
+        assert!(config["commandHotkeys"].get(target).is_none());
+        assert_eq!(config["identityMigrationHotkeyBackup:com.tezbar.native.emoji"][old], "Alt+E");
+        assert_eq!(config["future"]["keep"], true);
+        let modified = std::fs::metadata(ctx.config.path()).unwrap().modified().unwrap();
+        migrate_command_settings(&ctx, &extension).unwrap();
+        assert_eq!(std::fs::metadata(ctx.config.path()).unwrap().modified().unwrap(), modified);
+    }
+
+    #[tokio::test]
+    async fn migrated_hotkey_clear_and_rebind_update_live_owner_and_survive_restart() {
+        for next in ["", "Alt+N"] {
+            let temp = tempfile::tempdir().unwrap();
+            let paths = context(temp.path()).paths;
+            let host = Arc::new(crate::host::TestHost { allow_interaction:true, desktop:true, ..Default::default() });
+            let ctx = CoreContext::new(paths.clone(), Some(host.clone()));
+            let old = "extcmd:raycast.emoji:search";
+            let target = "extcmd:com.tezbar.native.emoji:search";
+            ctx.config.patch(&json!({"commandHotkeys":{old:"Alt+E"},"future":42})).unwrap();
+            let platform = crate::platform::PlatformCore::new(ctx.clone());
+            platform.initialize_shortcuts().unwrap();
+            let old_binding = ctx.host.shortcuts().parse("Alt+E").unwrap();
+            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("native"), package_dir:None, manifest:json!({"commands":[{"name":"search"}]}), data_dir:temp.path().into() };
+            migrate_command_settings(&ctx, &extension).unwrap();
+            assert_eq!(ctx.config.read().unwrap()["commandHotkeys"][target], "Alt+E");
+            let routed = platform.clone();
+            ctx.set_router(Arc::new(move |channel, args| {
+                let platform = routed.clone();
+                Box::pin(async move { platform.handle(&channel, &args).await.unwrap_or_else(|| Err("Unexpected test route".into())) })
+            })).unwrap();
+            let launcher = crate::launcher::LauncherCore::new(ctx.clone());
+            let result = launcher.handle("update-command-hotkey", &[json!(target), json!(next)]).await.unwrap().unwrap();
+            assert_eq!(result["ok"], true);
+            assert_eq!(result["previousAccelerator"], "Alt+E");
+            assert_eq!(platform.command_for_shortcut(old_binding.id()), None);
+            let config = ctx.config.read().unwrap();
+            assert!(config["commandHotkeys"].get(old).is_none());
+            assert_eq!(config["commandHotkeys"].get(target).and_then(Value::as_str), if next.is_empty() { None } else { Some(next) });
+            assert_eq!(config["future"], 42);
+            let fresh_host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+            let restarted = CoreContext::new(paths, Some(fresh_host.clone()));
+            let fresh_platform = crate::platform::PlatformCore::new(restarted.clone());
+            fresh_platform.initialize_shortcuts().unwrap();
+            assert_eq!(fresh_platform.command_for_shortcut(old_binding.id()), None);
+            if !next.is_empty() {
+                let binding = restarted.host.shortcuts().parse(next).unwrap();
+                assert_eq!(fresh_platform.command_for_shortcut(binding.id()), Some(target.into()));
+                let calls = host.calls.lock().unwrap();
+                let register = calls.iter().position(|c| c == "register:Alt+N").unwrap();
+                let unregister = calls.iter().position(|c| c == "unregister:Alt+E").unwrap();
+                assert!(register < unregister);
+            }
+            assert!(!fresh_host.calls.lock().unwrap().iter().any(|c| c == "register:Alt+E"));
+            launcher.shutdown().await.unwrap();
+        }
+    }
+
     #[test]
     fn batch2_conflicts_abort_unless_canonical_field_exists() {
         let mut target = json!({"secret":"synthetic-a","commands":{"run":{"empty":true}}});

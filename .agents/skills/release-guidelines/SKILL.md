@@ -29,10 +29,12 @@ Completion: every relevant channel branch is accounted for, the target includes 
 Typical established Beta build, executed separately on each platform from the same clean source SHA:
 
 ```sh
-node scripts/build-release.mjs --channel beta --version <version> --allow-unsigned
+node scripts/build-release.mjs --channel beta --version <version> --allow-unsigned --resources <reviewed-stage> --output <fresh-output-directory>
 ```
 
 Use `tailscale status` to discover current addresses. Known Windows checkout: `User@desktop-ob83s8j`, `C:\Users\User\Desktop\Tezbar`; Mac checkout: `/Users/almat/Desktop/code/Tezbar APP/Tezbar`. Inspect connectivity and paths rather than assuming a machine is available.
+
+For Windows, also pass `--nsis-tools <reviewed-offline-nsis-kit>`; the kit must include its validated `toolchain.json`. Both resource and output paths must satisfy the native release parser. Run the same arguments with `--dry-run` before building.
 
 Transfer the Windows output directory into the selected Mac checkout's `build/` directory. Create a fresh `build/release-staging-v<version>/` containing:
 

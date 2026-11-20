@@ -57,6 +57,32 @@ async fn real_pipes_reverse_rpc_and_disposal() {
     sessions.clear().await;
 }
 #[tokio::test]
+async fn legacy_aliases_fall_through_without_native_and_prefer_verified_native() {
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = context(temp.path());
+    let sessions = NativeSessions::default();
+    let files = Arc::new(Mutex::new(()));
+    let legacy = temp.path().join("extensions/packages/com.tezbar.perplexity");
+    crate::common::write_json_atomic(&legacy.join("package.json"), &json!({
+        "name":"perplexity", "commands":[{"name":"ask-perplexity","mode":"view"},{"name":"legacy-only","mode":"view"}]
+    })).unwrap();
+    std::fs::write(legacy.join("ask-perplexity.js"), "export default function () {}").unwrap();
+    for alias in ["com.tezbar.perplexity", "raycast.perplexity"] {
+        assert!(sessions.handle(&ctx,&files,"extension:run-command",&[json!({"extensionId":alias,"commandName":"ask-perplexity"})]).await.is_none());
+    }
+    process_install::test_install(&ctx, "normal");
+    for alias in ["com.tezbar.perplexity", "raycast.perplexity"] {
+        let reply=sessions.handle(&ctx,&files,"extension:run-command",&[json!({"extensionId":alias,"commandName":"ask-perplexity"})]).await.unwrap().unwrap();
+        assert_eq!(reply["extensionId"], "com.tezbar.native.perplexity");
+        assert_eq!(reply["mode"], "view");
+        assert!(sessions.handle(&ctx,&files,"extension:run-command",&[json!({"extensionId":alias,"commandName":"legacy-only"})]).await.is_none());
+    }
+    let explicit=sessions.handle(&ctx,&files,"extension:run-command",&[json!({"extensionId":"com.tezbar.native.perplexity","commandName":"legacy-only"})]).await.unwrap().unwrap();
+    assert_eq!(explicit["ok"], false);
+    sessions.clear().await;
+}
+
+#[tokio::test]
 async fn no_child_on_listing_and_canonical_damage_never_falls_back() {
     let temp = tempfile::tempdir().unwrap();
     let ctx = context(temp.path());
