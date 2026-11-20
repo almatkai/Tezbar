@@ -1096,17 +1096,8 @@ impl RuntimeView {
         let Some(s) = &self.session else {
             return vec![];
         };
-        let ids = self
-            .rows
-            .iter()
-            .find(|r| s.root.kind != NodeKind::MenuBarExtra && Some(&r.id) == s.selection.as_ref())
-            .and_then(|r| r.node.props.get("actionIds"))
-            .and_then(Value::as_array);
         s.action_filter(self.action_search.read(cx).content.as_ref())
             .into_iter()
-            .filter(|a| {
-                ids.is_none_or(|ids| ids.iter().any(|id| id.as_str() == Some(a.id.as_str())))
-            })
             .cloned()
             .collect()
     }
@@ -1790,6 +1781,15 @@ impl Render for RuntimeView {
                                         .to_owned(),
                                 ),
                         );
+                        if self.session.as_ref().is_some_and(|s| s.can_load_more()) {
+                            body = body.child(self.button(
+                                "extension-load-more".into(),
+                                "Load more".into(),
+                                UiEvent::LoadMore,
+                                t,
+                                cx,
+                            ));
+                        }
                     } else {
                         body = body.child(
                             uniform_list(

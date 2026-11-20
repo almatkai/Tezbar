@@ -389,9 +389,9 @@ impl Host {
             "host.screen.capture"=>{
                 validate_capture_params(&params)?;
                 if let Some(target) = params["target"].as_str() {
-                    if !cfg!(target_os="windows") { return Err("Capture feature unavailable".into()); }
                     let session = params["sessionId"].as_str().ok_or("Capture requires current sessionId")?;
                     if !p.sessions.lock().map_err(|e|e.to_string())?.contains_key(session) { return Err("Capture session is no longer active".into()); }
+                    if !cfg!(target_os="windows") { return Err("Capture feature unavailable".into()); }
                     if !self.ctx.host.desktop_services() { return Err("Native desktop capture permission unavailable".into()); }
                     let capture = self.ctx.host.capture_targets(target.into());
                     let images = tokio::select! {
@@ -1521,7 +1521,16 @@ fn set_status_item_impl(
                 return Err("Too many tray items".into());
             }
             let id = string(item, "id")?;
-            process_install::component(id)?;
+            // The desktop menu maps this opaque callback back to its owning resource.
+            // Only the resource ID and package paths use filesystem component rules.
+            if id.len() > 200
+                || !id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+                || !id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.:".contains(&b))
+            {
+                return Err("Invalid tray action ID".into());
+            }
             if !ids.insert(id.into()) {
                 return Err("Duplicate tray action".into());
             }

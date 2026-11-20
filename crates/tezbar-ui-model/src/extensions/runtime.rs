@@ -313,8 +313,25 @@ impl TreeReply {
             Some(Value::Null) => PollPolicy::EventDriven,
             Some(v) => PollPolicy::Interval(v.as_u64().ok_or("Invalid refresh interval")?),
         };
-        let root: Node =
+        let mut root: Node =
             serde_json::from_value(value["root"].clone()).map_err(|_| "Invalid extension node")?;
+        // Some native lists advertise pagination on the reply itself.
+        if let Some(more) = value["hasMore"].as_bool() {
+            if matches!(root.kind, NodeKind::List | NodeKind::Grid)
+                && root
+                    .props
+                    .get("pagination")
+                    .and_then(|p| p["hasMore"].as_bool())
+                    .is_none()
+                && root
+                    .props
+                    .get("__hasMore")
+                    .and_then(Value::as_bool)
+                    .is_none()
+            {
+                root.props.insert("__hasMore".into(), Value::Bool(more));
+            }
+        }
         root.validate()?;
         let actions =
             serde_json::from_value(value["actions"].clone()).map_err(|_| "Invalid actions")?;
@@ -340,6 +357,7 @@ impl TreeReply {
 #[derive(Clone, PartialEq, Eq)]
 pub enum UiEvent {
     Select(String),
+    LoadMore,
     Primary,
     Secondary,
     Action(String),
@@ -365,6 +383,8 @@ pub struct RuntimeSession {
     pub notice_message: Option<String>,
     pub search_text: String,
     rows: Vec<(String, String)>,
+    row_action_ids: BTreeMap<String, Vec<String>>,
+    action_indices: BTreeMap<String, usize>,
     callbacks: BTreeSet<String>,
     stack: Vec<Arc<Node>>,
     policy: PollPolicy,
@@ -397,6 +417,8 @@ impl RuntimeSession {
             notice_message: None,
             search_text: String::new(),
             rows: vec![],
+            row_action_ids: BTreeMap::new(),
+            action_indices: BTreeMap::new(),
             callbacks: BTreeSet::new(),
             stack: vec![],
             policy: reply.refresh,
@@ -425,6 +447,13 @@ impl RuntimeSession {
             .and_then(|id| self.rows.iter().position(|r| &r.0 == id))
             .unwrap_or(0);
         self.rows.clear();
+        self.row_action_ids.clear();
+        self.action_indices = self
+            .actions
+            .iter()
+            .enumerate()
+            .map(|(index, action)| (action.id.clone(), index))
+            .collect();
         self.callbacks = self.actions.iter().map(|a| a.id.clone()).collect();
         // The worker serializes the search-bar accessory in props, not children.
         // Admit only the callback of the rendered dropdown for this exact session.
@@ -468,6 +497,15 @@ impl RuntimeSession {
                     .collect::<Vec<_>>()
                     .join(" ")
                     .to_lowercase();
+                if let Some(ids) = n.props.get("actionIds").and_then(Value::as_array) {
+                    self.row_action_ids.insert(
+                        id.clone(),
+                        ids.iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_owned)
+                            .collect(),
+                    );
+                }
                 self.rows.push((id, search));
             }
         }
@@ -652,13 +690,21 @@ impl RuntimeSession {
         let rows = self.filtered_ids();
         let index = rows.iter().position(|r| *r == id)?;
         self.selection = Some(id);
-        let has_more = self
+        if index + 3 >= rows.len() {
+            return self.load_more();
+        }
+        None
+    }
+    pub fn can_load_more(&self) -> bool {
+        !self.page_pending && (self
             .root
             .props
             .get("pagination")
             .is_some_and(|p| p["hasMore"] == true)
-            || self.root.props.get("__hasMore") == Some(&Value::Bool(true));
-        if has_more && !self.page_pending && index + 3 >= rows.len() {
+            || self.root.props.get("__hasMore") == Some(&Value::Bool(true)))
+    }
+    fn load_more(&mut self) -> Option<Effect> {
+        if self.can_load_more() {
             self.page_pending = true;
             Some(Effect::LoadMore(self.token()))
         } else {
@@ -693,20 +739,10 @@ impl RuntimeSession {
         })
     }
     pub fn primary(&mut self, secondary: bool) -> Result<Option<Effect>, &'static str> {
-        let mut nodes = vec![];
-        self.root.visit(&mut nodes);
-        let row_actions = self
-            .selection
-            .as_ref()
-            .and_then(|id| nodes.iter().find(|n| n.string("id") == Some(id.as_str())))
-            .and_then(|n| n.props.get("actionIds"))
-            .and_then(Value::as_array);
-        let index = usize::from(secondary);
-        let id = row_actions
-            .and_then(|a| a.get(index))
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-            .or_else(|| self.actions.get(index).map(|a| a.id.clone()));
+        let id = self
+            .scoped_actions()
+            .get(usize::from(secondary))
+            .map(|a| a.id.clone());
         let Some(id) = id else {
             return Ok(None);
         };
@@ -722,39 +758,16 @@ impl RuntimeSession {
     }
     pub fn shortcut_action_id(&self, key: &str, modifiers: &[String]) -> Option<&str> {
         let modifiers: BTreeSet<_> = modifiers.iter().collect();
-        let mut matches = self
-            .actions
-            .iter()
-            .filter(|action| {
+        self.scoped_actions()
+            .into_iter()
+            .find(|action| {
                 action.shortcut.as_ref().is_some_and(|shortcut| {
                     shortcut.key.as_deref() == Some(key)
                         && shortcut.modifiers.iter().collect::<BTreeSet<_>>() == modifiers
                 })
             })
-            .peekable();
-        matches.peek()?;
-
-        let row_actions = self
-            .selection
-            .as_deref()
-            .filter(|_| self.root.kind != NodeKind::MenuBarExtra)
-            .and_then(|id| {
-                let mut nodes = Vec::new();
-                self.root.visit(&mut nodes);
-                nodes.into_iter().find(|node| node.string("id") == Some(id))
-            })
-            .and_then(|node| node.props.get("actionIds"))
-            .and_then(Value::as_array);
-        let action = match row_actions {
-            Some(ids) => ids
-                .iter()
-                .filter_map(Value::as_str)
-                .find_map(|id| matches.clone().find(|action| action.id == id)),
-            None => matches.next(),
-        };
-        action.map(|action| action.id.as_str())
+            .map(|action| action.id.as_str())
     }
-
     pub fn shortcut(
         &mut self,
         key: &str,
@@ -835,16 +848,42 @@ impl RuntimeSession {
         self.records(effects, effect_sequence);
         self.schedule(now);
     }
+    fn scoped_actions(&self) -> Vec<&Action> {
+        let root_ids = self.root.props.get("actionIds").and_then(Value::as_array);
+        if !matches!(self.root.kind, NodeKind::List | NodeKind::Grid)
+            || (root_ids.is_none() && self.row_action_ids.is_empty())
+        {
+            return self.actions.iter().collect();
+        }
+        let row_ids = self
+            .selection
+            .as_ref()
+            .and_then(|id| self.row_action_ids.get(id));
+        let mut seen = BTreeSet::new();
+        row_ids
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .chain(root_ids.into_iter().flatten().filter_map(Value::as_str))
+            .filter(|id| seen.insert(*id))
+            .filter_map(|id| {
+                self.action_indices
+                    .get(id)
+                    .map(|index| &self.actions[*index])
+            })
+            .collect()
+    }
     pub fn action_filter(&self, query: &str) -> Vec<&Action> {
         let q = query.to_lowercase();
-        self.actions
-            .iter()
+        self.scoped_actions()
+            .into_iter()
             .filter(|a| a.title.to_lowercase().contains(&q))
             .collect()
     }
     pub fn ui_event(&mut self, event: UiEvent) -> Result<Option<Effect>, &'static str> {
         match event {
             UiEvent::Select(id) => Ok(self.select(id)),
+            UiEvent::LoadMore => Ok(self.load_more()),
             UiEvent::Primary => self.primary(false),
             UiEvent::Secondary => self.primary(true),
             UiEvent::Action(id) | UiEvent::Menu(id) => self.invoke(&id, None).map(Some),

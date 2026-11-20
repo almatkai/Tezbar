@@ -262,8 +262,7 @@ impl PrimaryTray {
     fn build(
         desktop: &NativeDesktop,
         resources: &std::path::Path,
-        launcher_hidden: std::sync::atomic::AtomicBool,
-    production: bool,
+        production: bool,
         requested_shortcut: Option<&str>,
     ) -> Result<Self, String> {
         let menu = muda::Menu::new();

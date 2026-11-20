@@ -213,6 +213,56 @@ async fn frame_limits_truncation_and_unicode() {
 }
 
 #[tokio::test]
+async fn versioned_tray_callback_round_trips_to_its_owning_process() {
+    let temp = tempfile::tempdir().unwrap();
+    let desktop = Arc::new(crate::host::TestHost {
+        allow_interaction: true,
+        ..Default::default()
+    });
+    let ctx = CoreContext::new(context(temp.path()).paths.clone(), Some(desktop.clone()));
+    process_install::test_install_with(&ctx, "event-delay", |m| {
+        m["capabilities"] = json!(["host.tray.set"]);
+    });
+    let package = process_install::resolve(&ctx, "com.tezbar.native.perplexity").unwrap();
+    let p = Process::spawn(&ctx, package, "test").await.unwrap();
+    let action = "refresh:4589ad:7";
+    let menu = |resource: &str, id: &str| json!({"resourceId":resource,"items":[{"id":id,"title":"Refresh"}]});
+    for invalid in ["../outside", "a/b", "a\\b", "a\nb", &"a".repeat(201)] {
+        assert!(
+            p.host
+                .request(&p, "host.tray.set", menu("tray", invalid))
+                .await
+                .is_err()
+        );
+    }
+    assert!(
+        p.host
+            .request(&p, "host.tray.set", menu("tray:foreign", action))
+            .await
+            .is_err()
+    );
+    assert!(desktop.status.lock().unwrap().is_empty());
+    p.host
+        .request(&p, "host.tray.set", menu("tray", action))
+        .await
+        .unwrap();
+    let specs = desktop.status_specs.lock().unwrap();
+    let (scope, spec) = specs.iter().next().unwrap();
+    let emitted = spec.items[0]["id"].as_str().unwrap();
+    desktop.status.lock().unwrap()[scope](emitted.to_owned());
+    drop(specs);
+    let marker = p.host.paths().unwrap().0.join("background-event");
+    wait_file(&marker).await;
+    let packet: Value = serde_json::from_slice(&std::fs::read(marker).unwrap()).unwrap();
+    assert_eq!(packet["method"], "background.event");
+    assert_eq!(
+        packet["params"],
+        json!({"resourceId":"tray","actionId":action})
+    );
+    p.stop();
+}
+
+#[tokio::test]
 async fn background_event_survives_interactive_work_but_has_a_bounded_deadline() {
     let temp = tempfile::tempdir().unwrap();
     let ctx = context(temp.path());
@@ -1192,6 +1242,18 @@ async fn typed_services_preserve_core_argument_and_image_shapes() {
     assert!(denied.request(&p,"host.screen.capture",json!({"target":"all","sessionId":v["sessionId"]})).await.unwrap_err().contains("Capability not granted"));
     // New targets cannot capture outside an owned current session.
     assert!(p.host.request(&p,"host.screen.capture",json!({"target":"all","sessionId":"not-owned"})).await.unwrap_err().contains("session"));
+    #[cfg(not(target_os = "windows"))]
+    assert_eq!(
+        p.host
+            .request(
+                &p,
+                "host.screen.capture",
+                json!({"target":"all","sessionId":v["sessionId"]})
+            )
+            .await
+            .unwrap_err(),
+        "Capture feature unavailable"
+    );
     assert!(p.host.request(&p,"host.screen.capture",json!({"target":"all"})).await.is_err());
     assert!(p.host.request(&p,"host.screen.capture",json!({"target":"region","sessionId":v["sessionId"]})).await.is_err());
 

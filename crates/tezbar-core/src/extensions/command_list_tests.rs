@@ -286,12 +286,14 @@ async fn failed_input_probe_is_not_cached_forever() {
     let temp = tempfile::tempdir().unwrap();
     let ctx = context(temp.path());
     process_install::test_install(&ctx, "normal");
+    legacy(&ctx);
     let core = ExtensionsCore::new(ctx.clone());
     let original = equal_source(&core).await;
-    let icon = process_install::root(&ctx, "com.tezbar.native.perplexity")
-        .unwrap()
-        .join("icon.png");
+    // A loose legacy icon is a display input. The managed package root
+    // deliberately ignores loose icons outside its active version inventory.
+    let icon = ctx.paths.data_dir.join("extensions/perplexity/icon.png");
     std::os::unix::fs::symlink("icon.png", &icon).unwrap();
+    assert!(registry::command_inputs(&ctx).is_err());
     assert_eq!(equal_source(&core).await, original);
     let before = work(&core);
     assert_eq!(commands(&core).await, original);

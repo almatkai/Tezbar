@@ -228,6 +228,100 @@ fn back_leaves_placeholder_after_worker_stop_without_worker_requests(cx: &mut Te
     assert_eq!(fake.calls.lock().unwrap().len(), before);
 }
 #[gpui::test]
+fn native_page_and_root_actions_follow_the_selected_row(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    let mut page = reply(json!({
+        "type":"List","props":{"actionIds":["refresh"]},"children":[
+            {"type":"List.Item","props":{"id":"a","title":"First","actionIds":["open-a"]}},
+            {"type":"List.Item","props":{"id":"b","title":"Second","actionIds":["open-b","refresh"]}}
+        ]
+    }));
+    page["actions"] = json!([
+        {"id":"refresh","title":"Refresh"},{"id":"open-a","title":"Open first"},
+        {"id":"open-b","title":"Open second"}
+    ]);
+    page["hasMore"] = json!(true);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(page, 1, w, cx).unwrap();
+            v.event(UiEvent::Select("b".into()), w, cx);
+            v.event(UiEvent::Select("b".into()), w, cx);
+            let ids: Vec<_> = v.session.as_ref().unwrap().action_filter("")
+                .into_iter().map(|a| a.id.as_str()).collect();
+            assert_eq!(ids, ["open-b", "refresh"]);
+        })
+    });
+    settle(&rt, cx);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.event(UiEvent::OpenActions, w, cx)));
+    cx.simulate_input("Refresh");
+    cx.run_until_parked();
+    cx.simulate_keystrokes("enter");
+    settle(&rt, cx);
+    let calls = fake.calls.lock().unwrap();
+    let pages: Vec<_> = calls
+        .iter()
+        .filter(|(c, _)| *c == "extension:load-more")
+        .collect();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(pages[0].1[0]["sessionId"], "session");
+    assert!(
+        calls
+            .iter()
+            .any(|(c, args)| *c == "extension:invoke-action" && args[0]["actionId"] == "refresh")
+    );
+}
+
+#[gpui::test]
+fn plain_form_action_keeps_edits_local_until_submit(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let mut form = reply(json!({"type":"Form","children":[
+                {"type":"Form.TextField","props":{"id":"tag","title":"Tag"}}
+            ]}));
+            form["actions"] = json!([
+                {"id":"help","title":"Help","kind":"action"},
+                {"id":"generate","title":"Generate","kind":"submit-form"}
+            ]);
+            v.activate(form, 1, w, cx).unwrap();
+            v.event(
+                UiEvent::ChangeField {
+                    id: "tag".into(),
+                    value: json!("v2"),
+                },
+                w,
+                cx,
+            );
+            v.event(UiEvent::Action("help".into()), w, cx);
+        })
+    });
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.event(UiEvent::Action("generate".into()), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let calls = fake.calls.lock().unwrap();
+    let actions: Vec<_> = calls
+        .iter()
+        .filter(|(c, _)| *c == "extension:invoke-action")
+        .map(|(_, args)| &args[0])
+        .collect();
+    assert_eq!(actions.len(), 2);
+    assert_eq!(actions[0]["actionId"], "help");
+    assert!(actions[0]["formValues"].is_null());
+    assert_eq!(actions[1]["actionId"], "generate");
+    assert_eq!(actions[1]["formValues"]["tag"], "v2");
+}
+
+#[gpui::test]
 fn form_password_local_values_validation_and_action_submit(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let fake = Arc::new(Fake::default());

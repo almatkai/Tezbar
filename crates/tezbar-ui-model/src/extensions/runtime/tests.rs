@@ -94,6 +94,32 @@ fn stable_selection_reorder_removal_and_pagination() {
     assert!(s.select("c".into()).is_none());
 }
 #[test]
+fn native_empty_page_can_advance_and_explicit_sdk_pagination_is_preserved() {
+    let wire = |props: Value, has_more: bool| {
+        TreeReply::from_wire(json!({
+            "ok":true,"mode":"view","sessionId":"s","extensionId":"e","commandName":"c",
+            "root":{"type":"List","props":props,"children":[]},"actions":[],"hasMore":has_more
+        }))
+        .unwrap()
+    };
+    let mut s = RuntimeSession::new(wire(json!({}), true), 0).unwrap();
+    let Some(Effect::LoadMore(token)) = s.ui_event(UiEvent::LoadMore).unwrap() else {
+        panic!("An empty native page with a cursor must be reachable");
+    };
+    assert!(s.ui_event(UiEvent::LoadMore).unwrap().is_none());
+    s.refresh_finished(&token, Some(wire(json!({}), false)), 1)
+        .unwrap();
+    assert!(!s.can_load_more());
+    for props in [
+        json!({"pagination":{"hasMore":false}}),
+        json!({"__hasMore":false}),
+    ] {
+        let s = RuntimeSession::new(wire(props, true), 0).unwrap();
+        assert!(!s.can_load_more());
+    }
+}
+
+#[test]
 fn client_filter_and_server_search_are_distinct() {
     let mut s = session();
     assert!(s.search("b".into()).is_none());
