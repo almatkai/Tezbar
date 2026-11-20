@@ -175,8 +175,66 @@ pub fn snippet_subtitle(s: &Value) -> String {
 fn failure(message: &str) -> Value {
     json!({"ok":false,"message":message})
 }
+pub fn validate_quicklink(v: &Value) -> Result<(), String> {
+    let o = v.as_object().ok_or("Quick Link must be an object")?;
+    if o.keys().any(|k| k != "link" && k != "name") {
+        return Err("Unknown Quick Link field".into());
+    }
+    for (key, limit, required) in [("link", 8192, true), ("name", 256, false)] {
+        match o.get(key) {
+            None if !required => (),
+            Some(Value::String(s))
+                if !s.trim().is_empty() && s.len() <= limit && !s.chars().any(char::is_control) =>
+            {
+                ()
+            }
+            _ => return Err(format!("Invalid Quick Link {key}")),
+        }
+    }
+    Ok(())
+}
 fn handle(root: &Path, c: &str, a: &[Value]) -> CoreResult {
     let v = a.first().cloned().unwrap_or(Value::Null);
+    if c.starts_with("quicklinks:") {
+        let path = root.join("search/quick-links.json");
+        let mut db = read_or(&path, json!({"links":[]}))?;
+        let links = db["links"].as_array_mut().ok_or("Invalid links store")?;
+        if c == "quicklinks:list" {
+            return Ok(json!(links));
+        }
+        if c == "quicklinks:delete" {
+            let id = text_arg(a, 0)?;
+            links.retain(|l| l["id"] != id);
+            write_json_atomic(&path, &db)?;
+            return Ok(json!(true));
+        }
+        let payload = if c == "quicklinks:update" {
+            a.get(1).ok_or("Missing Quick Link")?
+        } else {
+            &v
+        };
+        validate_quicklink(payload)?;
+        let saved = if c == "quicklinks:add" {
+            let item = json!({"id":format!("ql:{}", uuid::Uuid::new_v4()),"name":payload["name"].as_str().unwrap_or(payload["link"].as_str().unwrap()),"template":payload["link"],"createdAt":now_ms()});
+            links.push(item.clone());
+            item
+        } else if c == "quicklinks:update" {
+            let id = text_arg(a, 0)?;
+            let item = links
+                .iter_mut()
+                .find(|l| l["id"] == id)
+                .ok_or("Quick Link not found")?;
+            item["name"] = json!(payload["name"]
+                .as_str()
+                .unwrap_or(payload["link"].as_str().unwrap()));
+            item["template"] = payload["link"].clone();
+            item.clone()
+        } else {
+            return Err("Unknown Quick Link operation".into());
+        };
+        write_json_atomic(&path, &db)?;
+        return Ok(saved);
+    }
     if c.starts_with("notes:") {
         let path = root.join("search/notes.json");
         let mut db = read_or(&path, json!({"notes":[]}))?;
@@ -539,5 +597,55 @@ mod tests {
         assert_eq!(vault[0]["subtitle"], "Vault · Server");
         assert_eq!(vault[0]["action"]["type"], "open-vault-item");
         assert!(!vault[0].to_string().contains("opaque"));
+    }
+}
+
+#[cfg(test)]
+mod quicklink_tests {
+    use super::*;
+    #[test]
+    fn strict_payload() {
+        for value in [
+            json!(null),
+            json!({}),
+            json!({"link":1}),
+            json!({"link":""}),
+            json!({"link":"pssword","password":"secret"}),
+            json!({"link":"pssword","name":null}),
+            json!({"link":"a\nb"}),
+        ] {
+            assert!(validate_quicklink(&value).is_err());
+        }
+        assert!(validate_quicklink(&json!({"link":"pssword"})).is_ok());
+    }
+    #[tokio::test]
+    async fn save_update_delete_and_search_documents() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Stores::new(dir.path().into());
+        let path = dir.path().join("search/quick-links.json");
+        // Opening/cancelling an editor does not call the mutation service.
+        assert!(!path.exists());
+        let saved = store
+            .handle(
+                "quicklinks:add",
+                &[json!({"link":"pssword","name":"Strength"})],
+            )
+            .await
+            .unwrap();
+        let id = saved["id"].clone();
+        let loaded = read_json(&path).unwrap();
+        assert_eq!(loaded["links"][0]["template"], "pssword");
+        let docs = store.documents().await.unwrap();
+        assert!(docs.as_array().unwrap().iter().any(|d| d["id"] == id));
+        store
+            .handle(
+                "quicklinks:update",
+                &[id.clone(), json!({"link":"edited","name":"Edited"})],
+            )
+            .await
+            .unwrap();
+        assert_eq!(read_json(&path).unwrap()["links"][0]["id"], id);
+        store.handle("quicklinks:delete", &[id]).await.unwrap();
+        assert_eq!(read_json(&path).unwrap()["links"], json!([]));
     }
 }

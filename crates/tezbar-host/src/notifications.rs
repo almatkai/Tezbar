@@ -14,10 +14,7 @@ pub async fn show(id: &str, title: &str, body: &str) -> Result<(), String> {
         return Err("Removable notifications require a packaged Tezbar application".into());
     }
     use block2::RcBlock;
-    use objc2_foundation::NSString;
-    use objc2_user_notifications::{
-        UNMutableNotificationContent, UNNotificationRequest, UNUserNotificationCenter,
-    };
+    use objc2_user_notifications::UNUserNotificationCenter;
     // Permission is requested on explicit use, never app startup/catalog access.
     let permission = {
         use objc2::runtime::Bool;
@@ -51,6 +48,15 @@ pub async fn show(id: &str, title: &str, body: &str) -> Result<(), String> {
         .await
         .map_err(|_| "Notification permission timed out")?
         .map_err(|_| "Notification permission callback closed")??;
+    submit(id, title, body).await
+}
+#[cfg(target_os = "macos")]
+async fn submit(id: &str, title: &str, body: &str) -> Result<(), String> {
+    use block2::RcBlock;
+    use objc2_foundation::NSString;
+    use objc2_user_notifications::{
+        UNMutableNotificationContent, UNNotificationRequest, UNUserNotificationCenter,
+    };
     let rx = {
         let content = UNMutableNotificationContent::new();
         content.setTitle(&NSString::from_str(title));
@@ -176,4 +182,57 @@ pub async fn show(_id: &str, _title: &str, _body: &str) -> Result<(), String> {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub async fn remove(_id: &str) -> Result<(), String> {
     Err("Notifications unsupported on this platform".into())
+}
+
+#[cfg(target_os = "macos")]
+pub async fn show_if_authorized(id: &str, title: &str, body: &str) -> Result<(), String> {
+    if !bundled() {
+        return Err("Terminal feedback requires a packaged Tezbar application".into());
+    }
+    use block2::RcBlock;
+    use objc2_user_notifications::{
+        UNAuthorizationStatus, UNNotificationSetting, UNNotificationSettings,
+        UNUserNotificationCenter,
+    };
+    let rx = {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let tx = std::sync::Mutex::new(Some(tx));
+        let callback = RcBlock::new(move |settings: std::ptr::NonNull<UNNotificationSettings>| {
+            let settings = unsafe { settings.as_ref() };
+            let allowed = settings.authorizationStatus() == UNAuthorizationStatus::Authorized
+                && settings.alertSetting() == UNNotificationSetting::Enabled;
+            if let Ok(mut tx) = tx.lock() {
+                if let Some(tx) = tx.take() {
+                    let _ = tx.send(allowed);
+                }
+            }
+        });
+        UNUserNotificationCenter::currentNotificationCenter()
+            .getNotificationSettingsWithCompletionHandler(&callback);
+        rx
+    };
+    let allowed = tokio::time::timeout(std::time::Duration::from_secs(2), rx)
+        .await
+        .map_err(|_| "Notification settings timed out")?
+        .map_err(|_| "Notification settings callback closed")?;
+    if !allowed {
+        return Err(
+            "Terminal feedback requires notification alerts enabled in system settings".into(),
+        );
+    }
+    submit(id, title, body).await
+}
+#[cfg(target_os = "windows")]
+pub async fn show_if_authorized(id: &str, title: &str, body: &str) -> Result<(), String> {
+    use windows::{core::HSTRING, UI::Notifications::{NotificationSetting, ToastNotificationManager}};
+    let setting = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(APP_ID))
+        .and_then(|notifier| notifier.Setting()).map_err(|e| e.to_string())?;
+    if setting != NotificationSetting::Enabled {
+        return Err("Notification alerts are disabled".into());
+    }
+    show(id, title, body).await
+}
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub async fn show_if_authorized(id: &str, title: &str, body: &str) -> Result<(), String> {
+    show(id, title, body).await
 }

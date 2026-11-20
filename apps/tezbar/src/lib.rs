@@ -15,3 +15,5 @@ pub mod surfaces;
 
 mod settings_transport;
 mod chat_transport;
+
+mod quicklink_dialog;

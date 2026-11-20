@@ -2509,3 +2509,48 @@ fn slash_directory_enter_completes_path_and_space_shows_open_with(cx: &mut TestA
     assert_eq!(executed.1[0]["action"]["appPath"], "/Applications/Cursor.app");
 }
 
+
+#[test]
+fn optional_argument_policy_preserves_quick_run_and_defaults() {
+    let mut row = Row::command("optional", "Optional");
+    let make = |defs: Value| Action::RunExtensionCommand {
+        extension_id: "fixture".into(), command_name: "run".into(),
+        extra: serde_json::from_value(json!({"commandArgumentDefinitions": defs})).unwrap(),
+    };
+    row.action = make(json!([]));
+    assert!(presentation::arguments_for(&row, true).is_none());
+    row.action = make(json!([{"name":"count","required":false,"default":"1"}]));
+    assert!(presentation::arguments(&row).is_none());
+    let (mut args, _) = presentation::arguments_for(&row, true).unwrap();
+    assert_eq!(args.values, vec!["1"]);
+    assert_eq!(args.submit().unwrap().get("count").unwrap(), "1");
+    args.values[0].clear();
+    assert_eq!(args.submit().unwrap().get("count").unwrap(), "");
+    row.action = make(json!([{"name":"count","required":true}]));
+    assert!(presentation::arguments(&row).unwrap().0.submit().is_err());
+}
+#[gpui::test]
+fn optional_arguments_shift_enter_focus_escape_and_submit(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    cx.update(|cx| tezbar_ui::text_input::bind_keys(cx));
+    let adapter = Arc::new(Fixture::default());
+    let (relay, _rx) = Relay::new();
+    let (view, cx) = cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
+    cx.update(|w,cx| view.update(cx,|v,cx| {
+        let mut row = Row::command("optional", "Optional");
+        row.action = Action::RunExtensionCommand { extension_id:"fixture".into(), command_name:"run".into(), extra:serde_json::from_value(json!({"commandArgumentDefinitions":[{"name":"count","required":false,"default":"1"}]})).unwrap() };
+        seed(v,vec![row]); v.input.focus_handle(cx).focus(w,cx);
+    }));
+    cx.simulate_keystrokes("shift-enter");
+    assert!(view.read_with(cx,|v,_| v.form.is_some()));
+    cx.update(|w,cx| view.update(cx,|v,cx| assert!(v.form.as_ref().unwrap().inputs[0].focus_handle(cx).is_focused(w))));
+    cx.simulate_keystrokes("escape");
+    assert!(view.read_with(cx,|v,_| v.form.as_ref().unwrap().args.values[0].is_empty()));
+    cx.simulate_keystrokes("escape");
+    assert!(view.read_with(cx,|v,_| v.form.is_none()));
+    cx.simulate_keystrokes("shift-enter");
+    cx.simulate_keystrokes("enter");
+    settle(&rt,cx);
+    assert!(view.read_with(cx,|v,_| v.form.is_none()));
+    assert!(adapter.calls.lock().unwrap().iter().any(|(channel,_)| channel == "extension:run-command"));
+}

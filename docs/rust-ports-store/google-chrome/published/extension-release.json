@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 3,
+  "id": "com.tezbar.native.google-chrome",
+  "slug": "google-chrome",
+  "name": "Google Chrome",
+  "version": "0.1.0",
+  "description": "Search Google Chrome tabs, bookmarks and history across profiles, switch to open tabs, and open new, incognito or guest windows.",
+  "author": "Codely",
+  "icon": "resources/chrome-icon.png",
+  "runtime": "rust",
+  "replaces": [
+    "raycast.google-chrome"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "preferences": [
+    {
+      "description": "Find the full path to the Google Chrome Profile path via chrome://version/. If empty, the default profile will be used.",
+      "label": "Profile",
+      "default": "",
+      "name": "profilePath",
+      "required": false,
+      "title": "Profile Path",
+      "type": "textfield",
+      "placeholder": "/Users/username/Library/Application Support/Google/Chrome/Profile 1"
+    },
+    {
+      "default": false,
+      "description": "Before enable this, you should enable 'View > Developer > Allow JavaScript from Apple Events' in every Chrome profile.",
+      "label": "Extract the favicon from every open tab",
+      "name": "useOriginalFavicon",
+      "required": false,
+      "title": "Favicon",
+      "type": "checkbox"
+    },
+    {
+      "data": [
+        {
+          "title": "Default(classic)",
+          "value": "default"
+        },
+        {
+          "title": "Current Profile",
+          "value": "profile_current"
+        },
+        {
+          "title": "Original Profile",
+          "value": "profile_original"
+        }
+      ],
+      "default": "default",
+      "description": "When 'Default(classic), the tab will be opened in the profile open, or topmost profile window if multiple windows are open. When 'Current Profile', the tab will be opened in the profile specified in the 'Profile' field. When 'Original Profile' it will open in original profile tab is sourced from",
+      "name": "openTabInProfile",
+      "required": false,
+      "title": "Open Tab In Profile",
+      "type": "dropdown"
+    }
+  ],
+  "commands": [
+    {
+      "name": "new-tab",
+      "title": "New Tab",
+      "subtitle": "Google Chrome",
+      "description": "Open a new Google Chrome tab.",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-tab",
+      "title": "Search Tabs",
+      "subtitle": "Google Chrome",
+      "description": "List all tabs and go to the selected.",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-history",
+      "title": "Search History",
+      "subtitle": "Google Chrome",
+      "description": "Search browser history.",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-bookmarks",
+      "title": "Search Bookmarks",
+      "subtitle": "Google Chrome",
+      "description": "Search browser bookmarks.",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-all",
+      "title": "Search All",
+      "subtitle": "Google Chrome",
+      "description": "Search browser all tabs and history,bookmarks.",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-window",
+      "title": "Create New Window",
+      "subtitle": "Google Chrome",
+      "description": "Create New Window.",
+      "mode": "no-view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-incognito-window",
+      "title": "Create New Incognito Window",
+      "subtitle": "Google Chrome",
+      "description": "Create New Incognito Window.",
+      "mode": "no-view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-guest-window",
+      "title": "Create New Guest Window",
+      "subtitle": "Google Chrome",
+      "description": "Create New Guest Window.",
+      "mode": "no-view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "open-current-in-guest",
+      "title": "Open Current Tab in Guest",
+      "subtitle": "Google Chrome",
+      "description": "Open the current active tab's URL in a new Chrome Guest window.",
+      "mode": "no-view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "name-window",
+      "title": "Name Window",
+      "subtitle": "Google Chrome",
+      "description": "Name the currently active Google Chrome window.",
+      "mode": "no-view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-windows",
+      "title": "Search Windows",
+      "subtitle": "Google Chrome",
+      "description": "List all open windows and focus the selected one.",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": 2000
+    }
+  ],
+  "execution": "process",
+  "protocolVersion": 1,
+  "repository": "https://github.com/almatkai/google-chrome",
+  "capabilities": [
+    "clipboard.write",
+    "window.visibility",
+    "host.quicklinks.create"
+  ],
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/google-chrome/releases/download/v0.1.0/google-chrome-aarch64-apple-darwin-development.zip",
+      "sha256": "8c6472b1ca61e65c98c3dad14e32b577cf9c1e909f416743817abd184ffb514e",
+      "executable": "bin/tezbar-google-chrome",
+      "executableSha256": "4e5ea4f603181208a75aead0a14d6d91d39ecb0bf73888517d29e2cc5741b1e1"
+    }
+  },
+  "files": {},
+  "verification": [
+    {
+      "platform": "macOS",
+      "state": "not-run",
+      "note": "Native macOS and Windows synthetic tests/package checks passed; live desktop and real service/account acceptance remain pending. Requires the beta.12 host contracts."
+    }
+  ],
+  "minHostVersion": "0.3.0-beta.12"
+}

@@ -1,0 +1,17 @@
+{
+  "slug": "google-chrome",
+  "sourceCommit": "424d0649482276b54e673012b0324043292d030f",
+  "release": "https://github.com/almatkai/google-chrome/releases/tag/v0.1.0",
+  "downloads": "passed",
+  "inventoriesAndPolicies": "passed",
+  "targetPins": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/google-chrome/releases/download/v0.1.0/google-chrome-aarch64-apple-darwin-development.zip",
+      "sha256": "8c6472b1ca61e65c98c3dad14e32b577cf9c1e909f416743817abd184ffb514e",
+      "executable": "bin/tezbar-google-chrome",
+      "executableSha256": "4e5ea4f603181208a75aead0a14d6d91d39ecb0bf73888517d29e2cc5741b1e1"
+    }
+  },
+  "requiresHost": "0.3.0-beta.12",
+  "desktopAcceptance": "not-run"
+}

@@ -277,3 +277,5 @@ impl ExtensionsCore {
         self.worker.is_running().await
     }
 }
+
+mod process_audio;

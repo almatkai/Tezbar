@@ -190,6 +190,7 @@ impl Owner {
         if self.lifecycle.show().is_none() {
             return;
         }
+        self.host.set_launcher_hidden(false);
         if was_visible {
             let _ = self.launcher.update(cx, |_, w, cx| {
                 let _ = native::visible(w, true);
@@ -304,6 +305,7 @@ impl Owner {
         self.snapshot(cx);
         self.flush();
         if let Some(g) = self.lifecycle.hide(Instant::now()) {
+            self.host.set_launcher_hidden(true);
             if let Some(panel) = self.panel {
                 let _ = panel.update(cx, |_, w, _| native::visible(w, false));
             }
@@ -1524,6 +1526,16 @@ impl Owner {
                             };
                             let _ = reply.send(result);
                         }));
+                    }
+                    DialogRequest::QuickLink(value) => {
+                        let parent = self.launcher.update(cx, |_, w, _| native::token(w)).ok().and_then(Result::ok);
+                        let _ = cx.open_window(WindowOptions { kind: WindowKind::PopUp, ..Default::default() }, move |w, cx| {
+                            w.set_window_title("Create Quick Link");
+                            if let Some(parent) = parent { let _ = native::attach(w, parent); }
+                            w.activate_window();
+                            cx.activate(true);
+                            cx.new(|cx| crate::quicklink_dialog::Editor::new(value, reply, lease, w, cx))
+                        });
                     }
                     DialogRequest::ChooseFolder => {
                         let prompt = cx.prompt_for_paths(PathPromptOptions {

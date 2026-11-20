@@ -1,0 +1,23 @@
+{
+  "slug": "linear",
+  "sourceCommit": "f96db5c7d0392275d52359bcf89192944f083de9",
+  "release": "https://github.com/almatkai/linear/releases/tag/v0.1.0",
+  "downloads": "passed",
+  "inventoriesAndPolicies": "passed",
+  "targetPins": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/linear/releases/download/v0.1.0/linear-aarch64-apple-darwin.zip",
+      "sha256": "f2638f67164548fa16aa7783e8cf8362e34aef85be29c5d1cbe79f6c5288d414",
+      "executable": "bin/tezbar-linear",
+      "executableSha256": "83cf3ade0ea2bac4300ce58adb05397398b890918242e8c27a0a346c62a9fbef"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/linear/releases/download/v0.1.0/linear-x86_64-pc-windows-msvc.zip",
+      "sha256": "acf8c90c064841b343fa98ac980ee5e43035280a74e14751a0d7086634ba56ca",
+      "executable": "bin/tezbar-linear.exe",
+      "executableSha256": "634843c90027c8521cd4d9195b14771f6cda4194cd38f815d3ae4b2b4dcb4373"
+    }
+  },
+  "requiresHost": "0.3.0-beta.12",
+  "desktopAcceptance": "not-run"
+}

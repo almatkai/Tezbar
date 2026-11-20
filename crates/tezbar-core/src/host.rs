@@ -28,10 +28,12 @@ pub enum SurfaceOp {
 pub enum DialogRequest {
     Confirm(Value),
     ChooseFolder,
+    QuickLink(Value),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum DialogReply {
     Confirm(bool),
+    QuickLink(Option<Value>),
     Path(Option<PathBuf>),
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,6 +79,7 @@ pub trait StatusItems: Send + Sync {
 }
 #[derive(Clone, Debug)]
 pub enum NotificationSpec {
+    ExtensionFeedback(String),
     Timer {
         name: String,
         path: String,
@@ -95,6 +98,7 @@ pub enum NotificationSpec {
 #[derive(Clone)]
 pub enum DesktopEffect {
     ReadClipboard,
+    ReadClipboardContent,
     ClipboardSequence,
     WriteText(String),
     WriteHtml {
@@ -138,6 +142,7 @@ impl std::fmt::Debug for ExtensionControl {
 pub trait Host: Send + Sync + 'static {
     /// SDK status sync requires the native session-aware status host. Legacy
     /// hosts preserve their existing in-list behavior until their own cutover.
+    fn launcher_hidden(&self) -> bool { false }
     fn sdk_status_items(&self) -> bool {
         false
     }
@@ -164,6 +169,9 @@ pub trait Host: Send + Sync + 'static {
     fn shortcuts(&self) -> &dyn ShortcutRegistry;
     fn status_items(&self) -> &dyn StatusItems;
     fn capture_active_display(&self) -> HostFuture<Vec<u8>>;
+    fn capture_targets(&self, _target: String) -> HostFuture<Vec<Vec<u8>>> {
+        Box::pin(async { Err("Negotiated capture unavailable on this platform".into()) })
+    }
     fn desktop_services(&self) -> bool;
     /// Explicit first-party local PTY capability. It does not authorize clipboard,
     /// global shortcuts, authentication, tray integration or background services.
@@ -241,6 +249,9 @@ impl Host for TestHost {
             DesktopEffect::ClipboardSequence => serde_json::json!(0),
             DesktopEffect::ReadClipboard => {
                 serde_json::json!(self.clipboard_text.lock().unwrap().clone())
+            }
+            DesktopEffect::ReadClipboardContent => {
+                serde_json::json!({"text": self.clipboard_text.lock().unwrap().clone(), "hasFiles": false})
             }
             DesktopEffect::WriteText(text) => {
                 *self.clipboard_text.lock().unwrap() = text.clone();

@@ -323,7 +323,7 @@ fn merge_native(mut entries: Vec<Value>, query: &str, manifests: Vec<Value>) -> 
                 .map(str::to_owned)
                 .collect();
             if let Some(slug) = v["slug"].as_str() {
-                ids.push(format!("com.tezbar.{slug}"));
+                ids.extend(super::v2_runtime::compatible_ids(slug));
             }
             ids
         })
@@ -682,7 +682,7 @@ mod tests {
                 .iter()
                 .map(|v| v["commands"].as_array().unwrap().len())
                 .sum::<usize>(),
-            247
+            249
         );
         let ids: std::collections::HashSet<_> =
             loved.iter().filter_map(|v| v["id"].as_str()).collect();

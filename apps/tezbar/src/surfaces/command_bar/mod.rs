@@ -156,6 +156,7 @@ pub struct Launcher {
     state_save_error: Option<String>,
     prefix: Option<char>,
     argument_revision: u64,
+    edit_arguments_for: Option<String>,
     argument_rows: Vec<Row>,
     argument_task: Option<Task<()>>,
     form: Option<Form>,
@@ -497,6 +498,7 @@ impl Launcher {
             state_save_error: None,
             prefix: None,
             argument_revision: 0,
+            edit_arguments_for: None,
             argument_rows: vec![],
             argument_task: None,
             form: None,
@@ -1209,7 +1211,8 @@ impl Launcher {
             self.finish_local(&a);
             return;
         }
-        if let Some((args, labels)) = presentation::arguments(&a.row) {
+        let edit_optional = self.edit_arguments_for.take().as_deref() == Some(a.row.id.as_str());
+        if let Some((args, labels)) = presentation::arguments_for(&a.row, edit_optional) {
             self.record(&a, cx);
             a.usage_recorded = true;
             self.argument_revision += 1;
@@ -1495,6 +1498,7 @@ impl Launcher {
                         );
                         // Worker/core effects have already run. Only toast/HUD text is presented here.
                         if !is_launch_action
+                            && value["nativeFeedback"] != true
                             && (worker_notice.is_some()
                                 || value["message"]
                                     .as_str()

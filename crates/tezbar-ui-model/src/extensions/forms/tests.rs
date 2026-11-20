@@ -32,6 +32,37 @@ fn submit_only_defaults_keep_draft_while_changed_server_defaults_reset() {
     assert_eq!(s.values()["name"], "Draft");
 }
 #[test]
+fn text_replacement_applies_once_to_the_submitted_draft() {
+    let mut state = FormState::default();
+    let replacement = |token: &str, base: &str| {
+        form(json!([{
+            "type": "Form.TextArea",
+            "props": {"id": "query", "value": "formatted", "replacementId": token, "replacementBase": base}
+        }]))
+    };
+    let initial = form(json!([f(
+        "query",
+        "Form.TextArea",
+        Some(json!("formatted")),
+        false
+    )]));
+    state.reconcile(&initial);
+    state.change("query", json!("submitted")).unwrap();
+    state.reconcile(&replacement("first", "submitted"));
+    assert_eq!(state.values()["query"], "formatted");
+
+    state.change("query", json!("new edit")).unwrap();
+    state.reconcile(&replacement("second", "submitted"));
+    assert_eq!(state.values()["query"], "new edit");
+    state.change("query", json!("submitted")).unwrap();
+    state.reconcile(&initial);
+    state.reconcile(&replacement("second", "submitted"));
+    assert_eq!(state.values()["query"], "submitted");
+    state.reconcile(&replacement("third", "submitted"));
+    assert_eq!(state.values()["query"], "formatted");
+}
+
+#[test]
 fn controlled_updates_are_authoritative() {
     let mut s = FormState::default();
     let root = form(json!([f(

@@ -260,11 +260,15 @@ impl NativeSessions {
     ) -> Result<Arc<Process>, String> {
         let mut cancel = slot.generation.subscribe();
         tokio::select! {biased;_=cancel.changed()=>Err("Extension generation changed".into()),result=async{
+            super::process::latency_phase("process_lock_begin");
             let mut current=slot.process.lock().await;
+            super::process::latency_phase("process_lock_acquired");
             if *slot.generation.borrow()!=generation{return Err("Extension generation changed".into());}
             if let Some(p)=current.as_ref().filter(|p|p.alive()){return Ok(p.clone());}
+            super::process::latency_phase("resolve_begin");
             let resolve_ctx=ctx.clone();let id=id.to_string();
             let package=tokio::task::spawn_blocking(move||process_install::resolve(&resolve_ctx,&id)).await.map_err(|e|e.to_string())??;
+            super::process::latency_phase("resolve_end");
             let p=Process::spawn(ctx,package,reason).await?;
             if *slot.generation.borrow()!=generation{p.stop();return Err("Extension generation changed".into());}
             *current=Some(p.clone());Ok(p)
@@ -649,6 +653,7 @@ impl NativeSessions {
         let slot = self.slot(&canonical);
         let mut generation = slot.generation.subscribe();
         let selected_generation = *generation.borrow();
+        super::process::latency_phase("preferences_begin");
         let preferences = {
             let ctx = ctx.clone();
             let files = files.clone();
@@ -663,6 +668,7 @@ impl NativeSessions {
             .await
             .map_err(|e| e.to_string())??
         };
+        super::process::latency_phase("preferences_end");
         let Some(preferences) = preferences else {
             if requested.starts_with("raycast.") {
                 return Ok(None);

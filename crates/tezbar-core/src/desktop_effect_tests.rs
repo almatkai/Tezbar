@@ -86,6 +86,7 @@ fn headless_host_never_falls_through_even_when_interaction_disabled() {
     let host = TestHost::default();
     for e in [
         DesktopEffect::ReadClipboard,
+        DesktopEffect::ReadClipboardContent,
         DesktopEffect::WriteText("synthetic".into()),
         DesktopEffect::SelectedText,
         DesktopEffect::SelectedFiles,

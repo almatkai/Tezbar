@@ -7,6 +7,7 @@ pub struct GpuiHost {
     pub desktop: NativeDesktop,
     pub relay: Relay,
     registry: PreviewShortcuts,
+    launcher_hidden: std::sync::atomic::AtomicBool,
     production: bool,
     /// Preview opt-in for clipboard/app/file observers (production always has them).
     services: bool,
@@ -20,6 +21,7 @@ impl GpuiHost {
         }));
         Self {
             registry: PreviewShortcuts(desktop.clone(), false),
+            launcher_hidden: true.into(),
             production: false,
             services: false,
             status_core: OnceLock::new(),
@@ -28,6 +30,9 @@ impl GpuiHost {
         }
     }
 
+    pub(crate) fn set_launcher_hidden(&self, hidden: bool) {
+        self.launcher_hidden.store(hidden, std::sync::atomic::Ordering::Release);
+    }
     pub fn new(relay: Relay) -> Self {
         Self::with_desktop_integration(relay, false)
     }
@@ -41,6 +46,7 @@ impl GpuiHost {
         let desktop = NativeDesktop::new(Arc::new(move |op| queue.send(Event::Main(op))));
         Self {
             registry: PreviewShortcuts(desktop.clone(), allow),
+            launcher_hidden: true.into(),
             production: false,
             services: false,
             status_core: OnceLock::new(),
@@ -91,6 +97,9 @@ impl GpuiHost {
     }
 }
 impl Host for GpuiHost {
+    fn launcher_hidden(&self) -> bool {
+        self.production && self.launcher_hidden.load(std::sync::atomic::Ordering::Acquire)
+    }
     fn sdk_status_items(&self) -> bool {
         true
     }
@@ -181,9 +190,34 @@ impl Host for GpuiHost {
             .await
         })
     }
+    fn capture_targets(&self, target: String) -> HostFuture<Vec<Vec<u8>>> {
+        let relay = self.relay.clone();
+        Box::pin(async move {
+            #[cfg(target_os = "windows")]
+            {
+                use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+                struct Cancel(Arc<AtomicBool>);
+                impl Drop for Cancel { fn drop(&mut self) { self.0.store(true, Ordering::Release); } }
+                let cancel = Cancel(Arc::new(AtomicBool::new(false)));
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                relay.send(Event::Capture(tx))?;
+                let lease = rx.await.map_err(|_| "Capture owner closed")?;
+                tezbar_host::input::capture_targets_protected(target, cancel.0.clone(), move || {
+                    let mut lease = Some(lease);
+                    let restore: Box<dyn FnMut() -> Result<(), String> + Send> = Box::new(move || { drop(lease.take()); Ok(()) });
+                    Ok(vec![tezbar_host::input::CaptureGuard::new(restore)])
+                }).await
+            }
+            #[cfg(not(target_os = "windows"))]
+            { let _ = (relay, target); Err("Negotiated capture unavailable on this platform".into()) }
+        })
+    }
     fn notify(&self, spec: NotificationSpec) -> HostFuture<()> {
         Box::pin(async move {
             match spec {
+                NotificationSpec::ExtensionFeedback(body) => {
+                    tezbar_host::notifications::show_if_authorized("tezbar-extension-feedback", "Tezbar", &body).await
+                }
                 NotificationSpec::Show { id, title, body } => {
                     tezbar_host::notifications::show(&id, &title, &body).await
                 }
@@ -228,7 +262,8 @@ impl PrimaryTray {
     fn build(
         desktop: &NativeDesktop,
         resources: &std::path::Path,
-        production: bool,
+        launcher_hidden: std::sync::atomic::AtomicBool,
+    production: bool,
         requested_shortcut: Option<&str>,
     ) -> Result<Self, String> {
         let menu = muda::Menu::new();

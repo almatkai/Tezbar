@@ -4,7 +4,7 @@ pub(crate) mod clipboard_native;
 mod db;
 mod providers;
 mod storage;
-mod stores;
+pub mod stores;
 pub(crate) mod terminal;
 /// Shared query normalization and matching for core search and native UI models.
 pub mod text;
@@ -38,6 +38,10 @@ pub const CHANNELS: &[&str] = &[
     "clipboard:read",
     "clipboard:write",
     "clipboard:write-png",
+    "quicklinks:list",
+    "quicklinks:add",
+    "quicklinks:update",
+    "quicklinks:delete",
     "snippets:list",
     "snippets:copy",
     "snippets:add",
@@ -133,7 +137,9 @@ impl LauncherCore {
         }
         self.inner.db.call(|_| Ok(Value::Null)).await?;
         self.inner.terminal.initialize().await?;
-        self.inner.clipboard.start(self.inner.ctx.runs_desktop_services());
+        self.inner
+            .clipboard
+            .start(self.inner.ctx.runs_desktop_services());
         let this = self.clone();
         let refresh = tokio::spawn(async move {
             let _ = this
@@ -393,12 +399,17 @@ impl LauncherCore {
         Some(self.dispatch(channel, args).await)
     }
     async fn dispatch(&self, c: &str, a: &[Value]) -> CoreResult {
-        if c.starts_with("notes:")
+        if c.starts_with("quicklinks:")
+            || c.starts_with("notes:")
             || c.starts_with("snippets:") && c != "snippets:copy"
             || c == "directory-visit:record"
         {
             let result = self.inner.stores.handle(c, a).await?;
-            if (c.starts_with("notes:") || c.starts_with("snippets:")) && !c.ends_with(":list") {
+            if (c.starts_with("quicklinks:")
+                || c.starts_with("notes:")
+                || c.starts_with("snippets:"))
+                && !c.ends_with(":list")
+            {
                 self.local_refresh().await?;
             }
             return Ok(result);

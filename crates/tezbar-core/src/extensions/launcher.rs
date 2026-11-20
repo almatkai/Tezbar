@@ -260,6 +260,9 @@ pub(super) fn enabled(ctx: &CoreContext, m: &Value, command: &str) -> bool {
     let Ok(config) = ctx.config.read() else {
         return false;
     };
+    let canonical = format!("extcmd:{}:{command}", m["id"].as_str().unwrap_or(""));
+    if let Some(value) = config["disabledCommands"].get(&canonical) { return value != true; }
+    if config[format!("identityMigration:{}", m["id"].as_str().unwrap_or(""))] == true { return true; }
     let mut ids = vec![m["id"].as_str().unwrap_or("")];
     ids.extend(
         m["replaces"]

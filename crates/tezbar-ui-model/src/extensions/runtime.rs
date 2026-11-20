@@ -720,27 +720,50 @@ impl RuntimeSession {
         }
         self.invoke(&id, None).map(Some)
     }
+    pub fn shortcut_action_id(&self, key: &str, modifiers: &[String]) -> Option<&str> {
+        let modifiers: BTreeSet<_> = modifiers.iter().collect();
+        let mut matches = self
+            .actions
+            .iter()
+            .filter(|action| {
+                action.shortcut.as_ref().is_some_and(|shortcut| {
+                    shortcut.key.as_deref() == Some(key)
+                        && shortcut.modifiers.iter().collect::<BTreeSet<_>>() == modifiers
+                })
+            })
+            .peekable();
+        matches.peek()?;
+
+        let row_actions = self
+            .selection
+            .as_deref()
+            .filter(|_| self.root.kind != NodeKind::MenuBarExtra)
+            .and_then(|id| {
+                let mut nodes = Vec::new();
+                self.root.visit(&mut nodes);
+                nodes.into_iter().find(|node| node.string("id") == Some(id))
+            })
+            .and_then(|node| node.props.get("actionIds"))
+            .and_then(Value::as_array);
+        let action = match row_actions {
+            Some(ids) => ids
+                .iter()
+                .filter_map(Value::as_str)
+                .find_map(|id| matches.clone().find(|action| action.id == id)),
+            None => matches.next(),
+        };
+        action.map(|action| action.id.as_str())
+    }
+
     pub fn shortcut(
         &mut self,
         key: &str,
         modifiers: &[String],
     ) -> Result<Option<Effect>, &'static str> {
-        let mods: BTreeSet<_> = modifiers.iter().map(String::as_str).collect();
-        let id = self
-            .actions
-            .iter()
-            .find(|a| {
-                a.shortcut.as_ref().is_some_and(|s| {
-                    s.key.as_deref() == Some(key)
-                        && s.modifiers
-                            .iter()
-                            .map(String::as_str)
-                            .collect::<BTreeSet<_>>()
-                            == mods
-                })
-            })
-            .map(|a| a.id.clone());
-        id.map(|id| self.invoke(&id, None)).transpose()
+        self.shortcut_action_id(key, modifiers)
+            .map(str::to_owned)
+            .map(|id| self.invoke(&id, None))
+            .transpose()
     }
     pub fn change(&mut self, id: &str, value: Value) -> Result<Option<Effect>, &'static str> {
         let callback = self.form.change(id, value.clone())?;

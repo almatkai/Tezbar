@@ -1,0 +1,17 @@
+{
+  "slug": "brew",
+  "sourceCommit": "88dab6c580c4f2fa166cbd8c0b67989811ad1074",
+  "release": "https://github.com/almatkai/brew/releases/tag/v0.1.0",
+  "downloads": "passed",
+  "inventoriesAndPolicies": "passed",
+  "targetPins": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/brew/releases/download/v0.1.0/brew-aarch64-apple-darwin-development.zip",
+      "sha256": "80697e468292e7bbb49c510bdc30a1fb79b95a86a0fec7cbd51c21921c89d87a",
+      "executable": "bin/brew",
+      "executableSha256": "368bc9aca93d8a2b8da68df16bae6963c3d49b6ecc16eb3624ea4601c414cac5"
+    }
+  },
+  "requiresHost": "0.3.0-beta.12",
+  "desktopAcceptance": "not-run"
+}

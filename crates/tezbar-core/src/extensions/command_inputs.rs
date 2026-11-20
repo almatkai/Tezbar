@@ -203,6 +203,8 @@ pub(in crate::extensions) fn command_inputs(
             },
             slug,
             path,
+            // The managed active version was already probed above.
+            package_dir: None,
             manifest,
             data_dir: ctx.paths.data_dir.clone(),
         };

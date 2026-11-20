@@ -529,6 +529,76 @@ mod platform {
                 )
             }
         };
+        capture_rect(x, y, width, height)
+    }
+
+    pub(super) fn capture_targets(target: &str, cancel: &std::sync::atomic::AtomicBool) -> Result<Vec<Vec<u8>>, String> {
+        use windows_sys::Win32::{Foundation::{POINT, RECT, LPARAM, BOOL}, Graphics::Gdi::{EnumDisplayMonitors, HMONITOR, HDC}, UI::WindowsAndMessaging::GetCursorPos};
+        use std::sync::atomic::Ordering;
+        if !["active","all","interactive-region"].contains(&target) { return Err("Invalid native capture target".into()); }
+        if cancel.load(Ordering::Acquire) { return Ok(vec![]); }
+        if target == "active" { return capture(true).map(|v| vec![v]); }
+        if target == "interactive-region" {
+            // A desktop drag chooses physical desktop coordinates; Escape/right-click cancel.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            let mut start: Option<POINT> = None;
+            let foreground = unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+            struct Rubber { dc: HDC, rect: Option<RECT> }
+            impl Rubber {
+                fn clear(&mut self) { if let Some(r)=self.rect.take() { unsafe { windows_sys::Win32::Graphics::Gdi::DrawFocusRect(self.dc, &r); } } }
+            }
+            impl Drop for Rubber { fn drop(&mut self) { self.clear(); unsafe { ReleaseDC(std::ptr::null_mut(),self.dc); } } }
+            let mut rubber=Rubber { dc: unsafe { GetDC(std::ptr::null_mut()) }, rect: None };
+            if rubber.dc.is_null() { return Err("Cannot draw region selection".into()); }
+            // Wait for the invoking mouse click to be released before beginning the drag.
+            while unsafe { GetAsyncKeyState(0x01) } < 0 {
+                if cancel.load(Ordering::Acquire) || std::time::Instant::now()>=deadline { return Ok(vec![]); }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            while std::time::Instant::now() < deadline {
+                if cancel.load(Ordering::Acquire) || unsafe { GetAsyncKeyState(0x1B) } < 0 || unsafe { GetAsyncKeyState(0x02) } < 0 { return Ok(vec![]); }
+                if unsafe { windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow() } != foreground { return Ok(vec![]); }
+                let down = unsafe { GetAsyncKeyState(0x01) } < 0;
+                let mut point = POINT { x: 0, y: 0 };
+                if unsafe { GetCursorPos(&mut point) } == 0 { return Err("Cannot read region pointer".into()); }
+                if down && start.is_none() { start = Some(point); }
+                rubber.clear();
+                if down { if let Some(a)=start {
+                    let r=RECT { left:a.x.min(point.x), top:a.y.min(point.y), right:a.x.max(point.x), bottom:a.y.max(point.y) };
+                    unsafe { windows_sys::Win32::Graphics::Gdi::DrawFocusRect(rubber.dc,&r); }
+                    rubber.rect=Some(r);
+                } }
+                if !down {
+                    if let Some(a) = start {
+                        let (w,h) = ((point.x-a.x).abs(),(point.y-a.y).abs());
+                        if w < 2 || h < 2 { return Ok(vec![]); }
+                        return capture_rect(a.x.min(point.x),a.y.min(point.y),w,h).map(|v|vec![v]);
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            return Ok(vec![]);
+        }
+        unsafe extern "system" fn monitor(_: HMONITOR, _: HDC, rect: *mut RECT, data: LPARAM) -> BOOL {
+            let out = unsafe { &mut *(data as *mut Vec<(i32,i32,i32,i32)>) };
+            let r = unsafe { *rect }; out.push((r.left,r.top,r.right-r.left,r.bottom-r.top)); 1
+        }
+        let mut displays = Vec::<(i32,i32,i32,i32)>::new();
+        if unsafe { EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), Some(monitor), &mut displays as *mut _ as LPARAM) } == 0 { return Err("Cannot enumerate displays".into()); }
+        if displays.is_empty() || displays.len() > 16 { return Err("Invalid display count".into()); }
+        let pixels: i64=displays.iter().map(|(_,_,w,h)|i64::from(*w)*i64::from(*h)).sum();
+        if pixels>32_000_000 { return Err("Combined displays exceed pixel budget".into()); }
+        let mut total=0;
+        displays.into_iter().map(|(x,y,w,h)| {
+            if cancel.load(Ordering::Acquire) { return Err("Capture cancelled".into()); }
+            let bytes=capture_rect(x,y,w,h)?; total+=bytes.len();
+            if total>32*1024*1024 { return Err("Combined PNGs exceed capture budget".into()); }
+            Ok(bytes)
+        }).collect()
+    }
+
+    fn capture_rect(x: i32, y: i32, width: i32, height: i32) -> Result<Vec<u8>, String> {
+        if i64::from(width) * i64::from(height) > 32_000_000 { return Err("Capture exceeds pixel budget".into()); }
         if width <= 0 || height <= 0 {
             return Err("Windows reported an invalid virtual desktop size".to_string());
         }
@@ -663,12 +733,20 @@ pub async fn capture_protected(
     active: bool,
     protect: impl FnOnce() -> Result<Vec<CaptureGuard>, String> + Send + 'static,
 ) -> Result<Vec<u8>, String> {
+    capture_operation_protected(move || platform::capture(active), protect).await
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub async fn capture_operation_protected<T: Send + 'static>(
+    operation: impl FnOnce() -> Result<T, String> + Send + 'static,
+    protect: impl FnOnce() -> Result<Vec<CaptureGuard>, String> + Send + 'static,
+) -> Result<T, String> {
     tokio::task::spawn_blocking(move || {
         static CAPTURE: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _capture = CAPTURE.lock().unwrap_or_else(|e| e.into_inner());
         let mut guards = protect()?;
         std::thread::sleep(std::time::Duration::from_millis(120));
-        let result = platform::capture(active);
+        let result = operation();
         let mut restore_error = None;
         for guard in &mut guards {
             if let Err(error) = guard.restore() {
@@ -717,3 +795,8 @@ fn contains_point(x: f64, y: f64, width: f64, height: f64, px: f64, py: f64) -> 
 #[cfg(test)]
 #[path = "native_input_platform_tests.rs"]
 mod capture_tests;
+
+#[cfg(target_os = "windows")]
+pub async fn capture_targets_protected(target: String, cancel: std::sync::Arc<std::sync::atomic::AtomicBool>, protect: impl FnOnce() -> Result<Vec<CaptureGuard>, String> + Send + 'static) -> Result<Vec<Vec<u8>>, String> {
+    capture_operation_protected(move || platform::capture_targets(&target, &cancel), protect).await
+}

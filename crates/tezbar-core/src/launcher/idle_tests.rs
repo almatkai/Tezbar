@@ -281,7 +281,7 @@ async fn incremental_reconciliation_keeps_edits_renames_deletions_and_source_cha
         .as_array()
         .unwrap()
         .iter()
-        .any(|d| d["id"] == format!("file:{}", root.join("newfolder/renamed.rs").display())));
+        .any(|d| d["id"] == format!("file:{}", root.join("newfolder").join("renamed.rs").display())));
     assert!(db
         .search("visible".into(), true)
         .await

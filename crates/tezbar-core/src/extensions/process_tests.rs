@@ -369,7 +369,7 @@ async fn service_ports_keep_exact_migration_files_and_oauth_budget() {
     let entry = s.0.lock().unwrap().sessions[view["sessionId"].as_str().unwrap()].clone();
     assert_eq!(deadline(&entry), Duration::from_secs(240));
     assert_eq!(
-        entry.process.host.migration_paths(),
+        entry.process.host.migration_paths().unwrap(),
         json!({
             "nativeGoogleOAuth":temp.path().join("native-google-oauth/tokens.json"),
             "namedPorts":temp.path().join("named-ports.json")
@@ -389,7 +389,7 @@ async fn service_ports_keep_exact_migration_files_and_oauth_budget() {
     assert!(entry
         .process
         .host
-        .migration_paths()
+        .migration_paths().unwrap()
         .get("namedPorts")
         .is_none());
     #[cfg(unix)]
@@ -403,9 +403,7 @@ async fn service_ports_keep_exact_migration_files_and_oauth_budget() {
         assert!(entry
             .process
             .host
-            .migration_paths()
-            .get("nativeGoogleOAuth")
-            .is_none());
+            .migration_paths().is_err());
     }
     s.clear().await;
 }
@@ -786,7 +784,7 @@ async fn typed_grants_durable_ack_and_startup_probe_are_generic() {
     assert!(super::super::process_host::startup_probes(&ctx)
         .unwrap()
         .is_empty());
-    let paths = p.host.migration_paths();
+    let paths = p.host.migration_paths().unwrap();
     assert!(paths["old"]
         .as_str()
         .unwrap()
@@ -1188,6 +1186,15 @@ async fn typed_services_preserve_core_argument_and_image_shapes() {
         .unwrap();
     assert_eq!(capture["mimeType"], "image/png");
     assert!(capture["data"].is_string());
+    let mut denied_manifest=p.package.manifest.clone();
+    denied_manifest["capabilities"]=json!([]);
+    let denied=crate::extensions::process_host::Host::new(ctx.clone(),&denied_manifest).unwrap();
+    assert!(denied.request(&p,"host.screen.capture",json!({"target":"all","sessionId":v["sessionId"]})).await.unwrap_err().contains("Capability not granted"));
+    // New targets cannot capture outside an owned current session.
+    assert!(p.host.request(&p,"host.screen.capture",json!({"target":"all","sessionId":"not-owned"})).await.unwrap_err().contains("session"));
+    assert!(p.host.request(&p,"host.screen.capture",json!({"target":"all"})).await.is_err());
+    assert!(p.host.request(&p,"host.screen.capture",json!({"target":"region","sessionId":v["sessionId"]})).await.is_err());
+
     p.host
         .request(
             &p,
@@ -1225,6 +1232,7 @@ async fn typed_services_preserve_core_argument_and_image_shapes() {
     assert_eq!(calls[5].1[0], "settings-extensions");
     drop(calls);
     s.clear().await;
+    assert!(p.host.request(&p,"host.screen.capture",json!({"target":"interactive-region","sessionId":v["sessionId"]})).await.is_err());
 }
 
 #[tokio::test]
@@ -1259,4 +1267,76 @@ async fn legacy_uninstall_does_not_stop_canonical_sessions() {
         "unchanged"
     );
     core.shutdown().await;
+}
+#[tokio::test]
+async fn audio_navigation_grants_negotiation_and_session_fences() {
+    let temp=tempfile::tempdir().unwrap();let ctx=context(temp.path());
+    process_install::test_install_with(&ctx,"normal",|m|m["capabilities"]=json!(["host.audio.play","host.audio.stop","host.navigation.popToRoot"]));
+    let sessions=NativeSessions::default();let v=launch(&sessions,&ctx).await;
+    let id=v["sessionId"].as_str().unwrap();
+    let p=sessions.0.lock().unwrap().sessions[id].process.clone();
+    assert!(p.host.request(&p,"host.audio.stop",json!({"sessionId":id})).await.unwrap_err().contains("negotiated"));
+    p.service_features.lock().unwrap().extend(["audio.local.v1".into(),"navigation.session.v1".into()]);
+    for method in ["host.audio.stop","host.navigation.popToRoot"] {
+        let params=if method.ends_with("popToRoot"){json!({"sessionId":id,"clearSearch":true})}else{json!({"sessionId":id})};
+        p.host.request(&p,method,params.clone()).await.unwrap();
+        let mut invalid=params.clone();invalid["sessionId"]=json!("other-session");
+        assert!(p.host.request(&p,method,invalid).await.is_err());
+        let mut m=p.package.manifest.clone();m["capabilities"]=json!([]);
+        let denied=crate::extensions::process_host::Host::new(ctx.clone(),&m).unwrap();
+        assert!(denied.request(&p,method,params).await.unwrap_err().contains("Capability not granted"));
+    }
+    assert!(p.host.request(&p,"host.audio.play",json!({"sessionId":id,"path":"C:/outside.mp3"})).await.is_err());
+    p.dispose(id).await;
+    assert!(p.host.request(&p,"host.audio.stop",json!({"sessionId":id})).await.is_err());
+    p.stop_and_wait().await;
+    assert!(p.host.request(&p,"host.navigation.popToRoot",json!({"sessionId":id,"clearSearch":true})).await.is_err());
+    sessions.clear().await;
+}
+
+#[tokio::test]
+async fn clipboard_content_read_uses_owned_snapshot_and_keeps_text_default() {
+    use crate::host::{DesktopEffect, TestHost};
+
+    let temp = tempfile::tempdir().unwrap();
+    let host = Arc::new(TestHost {
+        allow_interaction: true,
+        clipboard_text: Mutex::new("fixture clipboard".into()),
+        ..Default::default()
+    });
+    let ctx = CoreContext::new(context(temp.path()).paths, Some(host.clone()));
+    ctx.set_router(Arc::new(|channel, args| {
+        assert_eq!(channel, "clipboard:read");
+        assert!(args.is_empty());
+        Box::pin(async { Ok(json!("legacy text result")) })
+    }))
+    .unwrap();
+    process_install::test_install_with(&ctx, "normal", |manifest| {
+        manifest["capabilities"] = json!(["clipboard.read"]);
+    });
+    let sessions = NativeSessions::default();
+    let view = launch(&sessions, &ctx).await;
+    let id = view["sessionId"].as_str().unwrap();
+    let process = sessions.0.lock().unwrap().sessions[id].process.clone();
+    let method = "host.clipboard.read";
+    let content = json!({"format": "content"});
+    assert_eq!(
+        process.host.request(&process, method, content.clone()).await.unwrap(),
+        json!({"text": "fixture clipboard", "hasFiles": false})
+    );
+    for params in [json!({}), json!({"format": "text"})] {
+        assert_eq!(
+            process.host.request(&process, method, params).await.unwrap(),
+            json!("legacy text result")
+        );
+    }
+    let mut manifest = process.package.manifest.clone();
+    manifest["capabilities"] = json!([]);
+    let denied = crate::extensions::process_host::Host::new(ctx, &manifest).unwrap();
+    assert!(denied.request(&process, method, content).await.unwrap_err().contains("Capability not granted"));
+    assert!(matches!(
+        host.desktop_effects.lock().unwrap().as_slice(),
+        [DesktopEffect::ReadClipboardContent]
+    ));
+    sessions.clear().await;
 }

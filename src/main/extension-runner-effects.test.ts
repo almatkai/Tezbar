@@ -95,4 +95,6 @@ it('refuses an extra background menu at capacity without evicting existing menus
   const existing=await invokeExtensionAction({sessionId:first.sessionId,actionId:first.actions[0]!.id})
   expect(existing.ok).toBe(true)
   clearAllExtensionSessions()
-})
+// This integrates 65 separately bundled sessions; concurrent native builds can
+// exceed Vitest's default five seconds without changing the capacity contract.
+}, 20_000)

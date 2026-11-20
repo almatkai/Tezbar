@@ -23,7 +23,14 @@
         "description": "Open the native screen sampler and inspect the selected color."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.color-picker",
+      "version": "1.0.1",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.asciimath-to-latex-converter",
@@ -44,7 +51,13 @@
         "description": "Convert AsciiMath input to LaTeX and preview the result."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.asciimath-to-latex-converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.base64",
@@ -76,7 +89,14 @@
         "description": "Decode Base64 clipboard text and copy the result."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.base64",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "0.1.0"
+    }
   },
   {
     "id": "raycast.base64-to-file",
@@ -98,7 +118,13 @@
         "description": "Convert base64 text to file"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.base64-to-file",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.bitly-url-shortener",
@@ -124,7 +150,13 @@
         "description": "List all the links you have shortened with Bitly"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.bitly-url-shortener",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.blurhash",
@@ -145,7 +177,13 @@
         "description": "Generate blurhash from clipboard content or Finder"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.blurhash",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.change-case",
@@ -272,7 +310,13 @@
         "description": "Convert selected text or clipboard to Upper first"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.change-case",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.clipboard-editor",
@@ -293,7 +337,13 @@
         "description": "Edit your clipboard text"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.clipboard-editor",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.clipboard-formatter",
@@ -315,7 +365,13 @@
         "description": "Removes formatting and html from the text stored in the clipboard, returning the unformatted text to the clipboard."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.clipboard-formatter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.clipboard-sequential-paste",
@@ -336,7 +392,13 @@
         "description": "Pastes the next item from your copied list."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.clipboard-sequential-paste",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.code-review-emojis",
@@ -358,7 +420,13 @@
         "description": "Shows a list of emojis that can be used for code review, in line with the Code Review Emoji Guide."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.code-review-emojis",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.color-shades",
@@ -385,7 +453,14 @@
         "description": "View your generated color shades palettes."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.color-shades",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "1.0.0"
+    }
   },
   {
     "id": "raycast.convert",
@@ -408,7 +483,13 @@
         "description": "Converts everything web related: rem, px, pt, hex, hex (with opacity), rgb, rgba, hsl, hsla, oklch and shows the closest Tailwind CSS color."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.convert",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.convert-3d-models",
@@ -446,7 +527,13 @@
         "description": "Quickly convert selected models to STP"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.convert-3d-models",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.converter",
@@ -479,7 +566,13 @@
         "description": "Convert among different byte unit: b, B, KB, MB, GB, etc."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.convert-px-to-vw-vh",
@@ -518,7 +611,13 @@
         "description": "History of your last conversions"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.convert-px-to-vw-vh",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.convert-typescript-to-javascript",
@@ -544,7 +643,13 @@
         "description": "Get selected text from the active application, transform it to JavaScript, and keep it in the clipboard"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.convert-typescript-to-javascript",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.counter",
@@ -576,7 +681,14 @@
         "description": "Resets the counter."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.counter",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "1.0.0"
+    }
   },
   {
     "id": "raycast.count-numbers",
@@ -598,7 +710,13 @@
         "description": "Count numbers."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.count-numbers",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.country-lookup",
@@ -620,7 +738,13 @@
         "description": "Search countries by name, capital, or language and browse rich details like flags, currencies, and regions."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.country-lookup",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.crypto-portfolio-tracker",
@@ -647,7 +771,13 @@
         "description": "View the total value and breakdown of your crypto portfolio."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.crypto-portfolio-tracker",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.crypto-price",
@@ -668,7 +798,13 @@
         "description": "See cryptocurency prices and more"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.crypto-price",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.css-calculations",
@@ -695,7 +831,13 @@
         "description": "Generate responsive clamp function based on rem values"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.css-calculations",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.csv-to-excel",
@@ -717,7 +859,13 @@
         "description": "Convert CSV table to Excel compatible table"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.csv-to-excel",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.curl",
@@ -744,7 +892,13 @@
         "description": "HTTP requests history"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.curl",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.currency-exchange",
@@ -765,7 +919,13 @@
         "description": "Calculate with Exchange Rate"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.currency-exchange",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.custom-wordle",
@@ -786,7 +946,13 @@
         "description": "Create a wordle with your own word and share it with your friends to have them guess your word."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.custom-wordle",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.date-converter",
@@ -808,7 +974,13 @@
         "description": "Parse and convert a date"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.date-converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.datetime-format-converter",
@@ -834,7 +1006,13 @@
         "description": "Convert a natural language prompt into a formatted date and insert it into the frontmost application"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.datetime-format-converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.dictionary",
@@ -862,7 +1040,13 @@
         "description": "Search your current cursor-selected words."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.dictionary",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.diff-checker",
@@ -889,7 +1073,13 @@
         "description": "Paste two JSON snippets to see the differences"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.diff-checker",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.emoji",
@@ -911,7 +1101,13 @@
         "description": "Finds emojis and inserts or copies them."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.emoji",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.emoji-kitchen",
@@ -933,7 +1129,13 @@
         "description": "Search for emojis and see their mashups."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.emoji-kitchen",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.epoch-to-timestamp",
@@ -954,7 +1156,13 @@
         "description": "Convert a Unix epoch in your clipboard, in seconds or milliseconds, to a human-readible timestamp."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.epoch-to-timestamp",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.file-info",
@@ -982,7 +1190,13 @@
         "description": "Strip all embedded metadata (EXIF, GPS, IPTC, XMP, etc.) and system attributes from selected files."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.file-info",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.file-tree-generator",
@@ -1004,7 +1218,13 @@
         "description": "Generates file tree from text"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.file-tree-generator",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.find-website",
@@ -1025,7 +1245,13 @@
         "description": "Quickly find the website you are looking for."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.find-website",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.fontawesome",
@@ -1047,7 +1273,13 @@
         "description": "Search Font Awesome icons"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.fontawesome",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.font-converter",
@@ -1079,7 +1311,13 @@
         "description": "Preview any installed or custom font."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.font-converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.font-search",
@@ -1101,7 +1339,13 @@
         "description": "Search locally installed fonts"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.font-search",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.format-graphql",
@@ -1123,7 +1367,13 @@
         "description": "Formats a GraphQL document"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.format-graphql",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.geohash-encode-decode",
@@ -1149,7 +1399,13 @@
         "description": "Enter a geohash and get insights such as the GeoJSON or WKT Polygon representation, centroid, neighbors, and more"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.geohash-encode-decode",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.hashrate-no",
@@ -1176,7 +1432,13 @@
         "description": "GPU Estimates according to Power Cost ($/kWh)"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.hashrate-no",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.html-colors",
@@ -1198,7 +1460,13 @@
         "description": "Quickly find HTML colors by name, hex, or RGB. Supports fuzzy search with typos and shows both basic and extended color sets."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.html-colors",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.image-base64",
@@ -1224,7 +1492,13 @@
         "description": "Convert image to base64"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.image-base64",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.image-diff-checker",
@@ -1245,7 +1519,13 @@
         "description": "Compares two images to identify differences."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.image-diff-checker",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.image-host",
@@ -1266,7 +1546,13 @@
         "description": "Host an image on imgBB"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.image-host",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.image-search",
@@ -1287,7 +1573,13 @@
         "description": "Searches Images on the web"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.image-search",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.image-shield",
@@ -1314,7 +1606,13 @@
         "description": "Restore original images from the fragments"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.image-shield",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.image-to-ascii",
@@ -1336,7 +1634,13 @@
         "description": "Convert image to Ascii"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.image-to-ascii",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.ipapi-is",
@@ -1357,7 +1661,13 @@
         "description": "Lookup IP or ASN"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.ipapi-is",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.ipcheck-ing",
@@ -1388,7 +1698,13 @@
         "description": "Keep your current external IP in the menu bar"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.ipcheck-ing",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.ip-finder",
@@ -1410,7 +1726,13 @@
         "description": "Scan local network for assigned IPs and get recommendations"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.ip-finder",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.ip-geolocation",
@@ -1442,7 +1764,13 @@
         "description": "Copy local/public IPv4/IPv6 address."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.ip-geolocation",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.ip-tools",
@@ -1504,7 +1832,13 @@
         "description": "Query IPv4 or Ipv6 Geolocation Information"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.ip-tools",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.json2ts",
@@ -1525,7 +1859,13 @@
         "description": "Generate TypeScript interfaces from JSON"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.json2ts",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.json-editor",
@@ -1548,7 +1888,13 @@
         "description": "Format, filter, minify, escape, and convert JSON."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.json-editor",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.json-format",
@@ -1595,7 +1941,13 @@
         "description": "Formats text into a valid JSON value with double quotes and escapes"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.json-format",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.json-resume",
@@ -1622,7 +1974,13 @@
         "description": "View and manage saved resumes"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.json-resume",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.json-to-toon-converter",
@@ -1643,7 +2001,13 @@
         "description": "Convert JSON to TOON format"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.json-to-toon-converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.kind-words",
@@ -1674,7 +2038,13 @@
         "description": "Browse gratitude prompts with usage notes and opener examples."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.kind-words",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.language-tool",
@@ -1700,7 +2070,13 @@
         "description": "Check a text with LanguageTool using the clipboard content and paste the result instantly. The language is detected automatically."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.language-tool",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.latex-math-symbols",
@@ -1721,7 +2097,13 @@
         "description": "Search through a library of latex math symbols from amsmath"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.latex-math-symbols",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.list-randomizer",
@@ -1742,7 +2124,13 @@
         "description": "Add items to a list and randomize it"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.list-randomizer",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.lorem-ipsum",
@@ -1779,9 +2167,27 @@
         "name": "ai-generate",
         "title": "Generate with AI",
         "description": "Use AI to generate some placeholder text"
+      },
+      {
+        "name": "markdown",
+        "title": "Generate Markdown",
+        "description": "Generate random placeholder content as a Markdown document"
+      },
+      {
+        "name": "html",
+        "title": "Generate HTML",
+        "description": "Generate random placeholder content as an HTML document"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.lorem-ipsum",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "0.1.1",
+      "releaseChannel": "preview"
+    }
   },
   {
     "id": "raycast.markdown-image-to-html",
@@ -1803,7 +2209,14 @@
         "description": "Transform a Markdown Image to HTML. This allows us to fix image size in Markdown base files."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.markdown-image-to-html",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "0.2.0"
+    }
   },
   {
     "id": "raycast.markdown-preview",
@@ -1827,7 +2240,13 @@
         "description": "Write and preview Markdown content with real-time rendering"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.markdown-preview",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.markdown-reference",
@@ -1848,7 +2267,13 @@
         "description": "Quickly search up how to format with Markdown"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.markdown-reference",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.markdown-styler",
@@ -1869,7 +2294,13 @@
         "description": "Convert Markdown to styled HTML with inline CSS for content platforms"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.markdown-styler",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.markdown-table-generator",
@@ -1890,7 +2321,14 @@
         "description": "Based on the inputted integer arguments, number of rows and number of columns, you will receive a markdown table."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.markdown-table-generator",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "0.1.0"
+    }
   },
   {
     "id": "raycast.markdown-this",
@@ -1911,7 +2349,13 @@
         "description": "Convert markdown text in clipboard to HTML"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.markdown-this",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.markdown-to-jira",
@@ -1933,7 +2377,13 @@
         "description": "Format a Markdown text into Jira markup."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.markdown-to-jira",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.mastodon-search",
@@ -1955,7 +2405,13 @@
         "description": "Search Mastodon for people or hashtags."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.mastodon-search",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.modify-hash",
@@ -1992,7 +2448,13 @@
         "description": "Extract files from a portable zip archive."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.modify-hash",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.node-release-notes",
@@ -2013,7 +2475,13 @@
         "description": "Quickly browse and access detailed information of Node.js versions"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.node-release-notes",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.oklch-color-converter",
@@ -2034,7 +2502,13 @@
         "description": "Convert colors between different color spaces and formats"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.oklch-color-converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.onelook-thesaurus",
@@ -2055,7 +2529,13 @@
         "description": "Enter a word, phrase, description, or pattern above to find synonyms, related words, and more."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.onelook-thesaurus",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.one-time-password",
@@ -2082,7 +2562,13 @@
         "description": "Paste the OTP code from the most recently used account into the active app"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.one-time-password",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.password-generator",
@@ -2115,7 +2601,13 @@
         "description": "Generate a passphrase from words, numbers, and symbols."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.password-generator",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.password-strength",
@@ -2137,7 +2629,13 @@
         "description": "Check the strength of your password"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.password-strength",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.paste-as-plain-text",
@@ -2160,7 +2658,14 @@
         "description": "Paste text from the clipboard as any format."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.paste-as-plain-text",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "1.0.0"
+    }
   },
   {
     "id": "raycast.qrcode-generator",
@@ -2191,7 +2696,13 @@
         "description": "Generate a QR code from selection content"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.qrcode-generator",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.random-data-generator",
@@ -2218,7 +2729,13 @@
         "description": "Used internally to run quicklinks from the generate command."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.random-data-generator",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.regex-tester",
@@ -2240,7 +2757,13 @@
         "description": "Preview and test regular expressions"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.regex-tester",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.text-differ",
@@ -2262,7 +2785,13 @@
         "description": "Show a line-by-line diff for two files selected in Finder or File Explorer"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.text-differ",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.text-rewrap",
@@ -2293,7 +2822,13 @@
         "description": "Rewraps text from currently highlighted selection at the chosen width"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.text-rewrap",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.timezone-converter",
@@ -2314,7 +2849,13 @@
         "description": "Converts any time to any timezone"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.timezone-converter",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.unicode-symbols",
@@ -2335,7 +2876,14 @@
         "description": "Browse and copy-paste common Unicode symbols."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.unicode-symbols",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "0.1.0"
+    }
   },
   {
     "id": "raycast.uuid-generator",
@@ -2396,7 +2944,13 @@
         "description": "View the UUID history"
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.uuid-generator",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.word-count",
@@ -2427,7 +2981,13 @@
         "description": "Show word count in an overlay on top of other applications."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.word-count",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "raycast.world-clock",
@@ -2459,7 +3019,13 @@
         "description": "Query the current time based on IP or domain."
       }
     ],
-    "runtime": "javascript"
+    "runtime": "javascript",
+    "nativePort": {
+      "id": "com.tezbar.native.world-clock",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "com.tezbar.gif-search",
@@ -2497,7 +3063,13 @@
     ],
     "runtime": "javascript",
     "slug": "gif-search",
-    "schemaVersion": 1
+    "schemaVersion": 1,
+    "nativePort": {
+      "id": "com.tezbar.native.gif-search",
+      "status": "released",
+      "desktopAcceptance": "not-verified-this-task",
+      "releaseAvailable": true
+    }
   },
   {
     "id": "com.tezbar.google-calendar",
@@ -2546,7 +3118,13 @@
     ],
     "runtime": "javascript",
     "slug": "google-calendar",
-    "schemaVersion": 1
+    "schemaVersion": 1,
+    "nativePort": {
+      "id": "com.tezbar.native.google-calendar",
+      "status": "released",
+      "desktopAcceptance": "not-verified-this-task",
+      "releaseAvailable": true
+    }
   },
   {
     "id": "com.tezbar.google-translate",
@@ -2601,7 +3179,13 @@
     ],
     "runtime": "javascript",
     "slug": "translate",
-    "schemaVersion": 1
+    "schemaVersion": 1,
+    "nativePort": {
+      "id": "com.tezbar.native.google-translate",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "com.tezbar.kill-process",
@@ -2623,7 +3207,13 @@
     ],
     "runtime": "javascript",
     "slug": "kill-process",
-    "schemaVersion": 1
+    "schemaVersion": 1,
+    "nativePort": {
+      "id": "com.tezbar.native.kill-process",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "com.tezbar.port-manager",
@@ -2667,7 +3257,13 @@
     ],
     "runtime": "javascript",
     "slug": "port-manager",
-    "schemaVersion": 1
+    "schemaVersion": 1,
+    "nativePort": {
+      "id": "com.tezbar.native.port-manager",
+      "status": "released",
+      "desktopAcceptance": "not-verified-this-task",
+      "releaseAvailable": true
+    }
   },
   {
     "id": "com.tezbar.spotify-player",
@@ -2896,7 +3492,13 @@
     ],
     "runtime": "javascript",
     "slug": "spotify-player",
-    "schemaVersion": 1
+    "schemaVersion": 1,
+    "nativePort": {
+      "id": "com.tezbar.native.spotify-player",
+      "status": "development",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": false
+    }
   },
   {
     "id": "com.tezbar.visual-studio-code",
@@ -2948,6 +3550,13 @@
     ],
     "runtime": "javascript",
     "slug": "visual-studio-code",
-    "schemaVersion": 1
+    "schemaVersion": 1,
+    "nativePort": {
+      "id": "com.tezbar.native.visual-studio-code",
+      "status": "published",
+      "desktopAcceptance": "pending",
+      "releaseAvailable": true,
+      "version": "0.1.1"
+    }
   }
 ]

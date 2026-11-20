@@ -1,0 +1,82 @@
+[
+  {
+    "slug": "google-chrome",
+    "sourceCommit": "424d0649482276b54e673012b0324043292d030f",
+    "release": "https://github.com/almatkai/google-chrome/releases/tag/v0.1.0",
+    "downloads": "passed",
+    "inventoriesAndPolicies": "passed",
+    "targetPins": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/google-chrome/releases/download/v0.1.0/google-chrome-aarch64-apple-darwin-development.zip",
+        "sha256": "8c6472b1ca61e65c98c3dad14e32b577cf9c1e909f416743817abd184ffb514e",
+        "executable": "bin/tezbar-google-chrome",
+        "executableSha256": "4e5ea4f603181208a75aead0a14d6d91d39ecb0bf73888517d29e2cc5741b1e1"
+      }
+    },
+    "requiresHost": "0.3.0-beta.12",
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "slug": "brew",
+    "sourceCommit": "88dab6c580c4f2fa166cbd8c0b67989811ad1074",
+    "release": "https://github.com/almatkai/brew/releases/tag/v0.1.0",
+    "downloads": "passed",
+    "inventoriesAndPolicies": "passed",
+    "targetPins": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/brew/releases/download/v0.1.0/brew-aarch64-apple-darwin-development.zip",
+        "sha256": "80697e468292e7bbb49c510bdc30a1fb79b95a86a0fec7cbd51c21921c89d87a",
+        "executable": "bin/brew",
+        "executableSha256": "368bc9aca93d8a2b8da68df16bae6963c3d49b6ecc16eb3624ea4601c414cac5"
+      }
+    },
+    "requiresHost": "0.3.0-beta.12",
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "slug": "linear",
+    "sourceCommit": "f96db5c7d0392275d52359bcf89192944f083de9",
+    "release": "https://github.com/almatkai/linear/releases/tag/v0.1.0",
+    "downloads": "passed",
+    "inventoriesAndPolicies": "passed",
+    "targetPins": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/linear/releases/download/v0.1.0/linear-aarch64-apple-darwin.zip",
+        "sha256": "f2638f67164548fa16aa7783e8cf8362e34aef85be29c5d1cbe79f6c5288d414",
+        "executable": "bin/tezbar-linear",
+        "executableSha256": "83cf3ade0ea2bac4300ce58adb05397398b890918242e8c27a0a346c62a9fbef"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/linear/releases/download/v0.1.0/linear-x86_64-pc-windows-msvc.zip",
+        "sha256": "acf8c90c064841b343fa98ac980ee5e43035280a74e14751a0d7086634ba56ca",
+        "executable": "bin/tezbar-linear.exe",
+        "executableSha256": "634843c90027c8521cd4d9195b14771f6cda4194cd38f815d3ae4b2b4dcb4373"
+      }
+    },
+    "requiresHost": "0.3.0-beta.12",
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "slug": "slack",
+    "sourceCommit": "fb381876f611fcc3568929575c94336d510f86ec",
+    "release": "https://github.com/almatkai/slack/releases/tag/v0.1.0",
+    "downloads": "passed",
+    "inventoriesAndPolicies": "passed",
+    "targetPins": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/slack/releases/download/v0.1.0/slack-aarch64-apple-darwin-development.zip",
+        "sha256": "07080eea0fb38df3717864fd1e48828b24ca2cb6b36afca346d1118644e33266",
+        "executable": "bin/tezbar-slack",
+        "executableSha256": "825818a34e312ed542fc99590053774be7ada76d01e1f36471ae6accff3c22ec"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/slack/releases/download/v0.1.0/slack-x86_64-pc-windows-msvc-development.zip",
+        "sha256": "8e2961ee5dbec21686385ea71833204fc8973b2af5ad06e408df048cf863e58d",
+        "executable": "bin/tezbar-slack.exe",
+        "executableSha256": "b6c192141f4e74f69282b4fa47f0755a56a3c12a9445d7061b834276caa89588"
+      }
+    },
+    "requiresHost": "0.3.0-beta.12",
+    "desktopAcceptance": "not-run"
+  }
+]

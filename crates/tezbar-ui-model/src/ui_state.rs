@@ -48,6 +48,17 @@ impl From<&Row> for Pin {
 /// ⌥1…9, ⌥0, ⌥-, ⌥= (React `MAX_PINNED_COMMANDS`).
 pub const MAX_PINS: usize = 12;
 pub fn normalize_pins(pins: &mut Vec<Pin>) {
+    let mut identities = std::collections::HashSet::new();
+    pins.retain(|p| {
+        let mut identity = p.id.clone();
+        if let Action::RunExtensionCommand { extension_id, command_name, .. } = &p.action {
+            let slug = extension_id.strip_prefix("com.tezbar.native.")
+                .or_else(|| extension_id.strip_prefix("raycast."))
+                .or_else(|| extension_id.strip_prefix("com.tezbar."));
+            if let Some(slug) = slug { identity = format!("extcmd:{slug}:{command_name}"); }
+        }
+        identities.insert(identity)
+    });
     pins.truncate(MAX_PINS);
     for (i, p) in pins.iter_mut().enumerate() {
         p.slot = i + 1;
@@ -203,6 +214,7 @@ pub fn parse_pins(v: &Value) -> Vec<Pin> {
             p.subtitle = p.subtitle.trim().into();
             if !p.id.is_empty() && !p.title.is_empty() {
                 pins.push(p);
+                normalize_pins(&mut pins);
             }
         }
         if pins.len() == 12 {
@@ -512,4 +524,22 @@ fn rename_with_retry(
         }
     }
     unreachable!()
+}
+
+#[cfg(test)]
+mod identity_migration_tests {
+    use super::*;
+    #[test]
+    fn favorite_aliases_keep_one_slot_and_rollback_action() {
+        let pins: Vec<Value> = ["raycast.emoji", "com.tezbar.emoji", "com.tezbar.native.emoji"].iter().enumerate().map(|(index, id)| json!({"id":if index == 0 { "ext-emoji-search".to_owned() } else { format!("extcmd:{id}:search") },"title":"Emoji","subtitle":"","category":"extensions","slot":1,"action":{"type":"run-extension-command","extensionId":id,"commandName":"search"}})).collect();
+        let parsed = parse_pins(&json!(pins));
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].slot, 1);
+        let mut state = UiState::default();
+        state.pins = pins.iter().cloned().map(|v| serde_json::from_value(v).unwrap()).collect();
+        let restored = UiState::decode(&state.encode().unwrap()).unwrap();
+        assert_eq!(restored.pins, parsed);
+        assert_eq!(parse_pins(&serde_json::to_value(&parsed).unwrap()), parsed);
+        assert!(matches!(&parsed[0].action, Action::RunExtensionCommand { extension_id, .. } if extension_id == "raycast.emoji"));
+    }
 }

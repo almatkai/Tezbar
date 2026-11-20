@@ -180,6 +180,17 @@ pub(super) fn field_id(n: &Node, index: usize) -> String {
         })
 }
 
+pub(super) fn form_label<'a>(n: &'a Node, id: &'a str) -> &'a str {
+    n.string("title").unwrap_or_else(|| {
+        if matches!(n.kind, NodeKind::Description | NodeKind::FormSeparator) { "" } else { id }
+    })
+}
+
+pub(super) fn selected_option_title<'a>(options: &[&'a Node], value: &Value) -> Option<&'a str> {
+    options.iter().find(|n| matches!(n.kind, NodeKind::DropdownItem | NodeKind::TagPickerItem)
+        && n.props.get("value") == Some(value)).and_then(|n| n.string("title"))
+}
+
 impl RuntimeView {
     fn button(
         &self,
@@ -632,7 +643,10 @@ impl RuntimeView {
         d.into_any_element()
     }
     fn field(&self, n: &Node, id: String, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
-        let title = n.string("title").unwrap_or(&id).to_owned();
+        if n.kind == NodeKind::FormSeparator {
+            return div().w_full().my(px(8. * t.zoom)).h(px(1.)).bg(t.hairline).into_any_element();
+        }
+        let title = form_label(n, &id).to_owned();
         let value = self
             .session
             .as_ref()
@@ -713,10 +727,7 @@ impl RuntimeView {
                         .collect::<Vec<_>>()
                         .join(", ")
                 } else {
-                    options
-                        .iter()
-                        .find(|n| n.string("value") == value.as_str())
-                        .and_then(|n| n.string("title"))
+                    selected_option_title(&options, &value)
                         .or(value.as_str())
                         .unwrap_or("Choose…")
                         .to_owned()
@@ -1295,7 +1306,7 @@ impl RuntimeView {
             cx.stop_propagation();
             return;
         }
-        if primary && key == "k" {
+        if primary && key == "k" && !m.shift && !m.alt {
             if !e.is_held {
                 self.event(
                     if panel {
@@ -1352,6 +1363,9 @@ impl RuntimeView {
             .as_ref()
             .is_some_and(|s| s.root.kind == NodeKind::Form);
         if key == "enter" {
+            if form && m.shift && self.dispatch_shortcut(e, w, cx) {
+                return;
+            }
             if form {
                 if !tezbar_ui_model::extensions::forms::should_submit(
                     tezbar_ui_model::extensions::forms::SubmitKey {
@@ -1446,41 +1460,38 @@ impl RuntimeView {
             cx.stop_propagation();
             return;
         }
-        if !e.is_held {
-            let mut mods = vec![];
-            if m.platform {
-                mods.push("cmd".into());
-            }
-            if m.control {
-                mods.push("ctrl".into());
-            }
-            if m.alt {
-                mods.push("opt".into());
-            }
-            if m.shift {
-                mods.push("shift".into());
-            }
-            let id = self
-                .session
-                .as_ref()
-                .and_then(|s| {
-                    s.actions.iter().find(|a| {
-                        a.shortcut.as_ref().is_some_and(|shortcut| {
-                            shortcut.key.as_deref() == Some(key)
-                                && shortcut
-                                    .modifiers
-                                    .iter()
-                                    .collect::<std::collections::BTreeSet<_>>()
-                                    == mods.iter().collect()
-                        })
-                    })
-                })
-                .map(|a| a.id.clone());
-            if let Some(id) = id {
-                self.event(UiEvent::Action(id), w, cx);
-                cx.stop_propagation();
-            }
+        self.dispatch_shortcut(e, w, cx);
+    }
+    fn dispatch_shortcut(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) -> bool {
+        if e.is_held {
+            return false;
         }
+        let key = e.keystroke.key.as_str();
+        let m = e.keystroke.modifiers;
+        let mut mods = vec![];
+        if m.platform {
+            mods.push("cmd".into());
+        }
+        if m.control {
+            mods.push("ctrl".into());
+        }
+        if m.alt {
+            mods.push("opt".into());
+        }
+        if m.shift {
+            mods.push("shift".into());
+        }
+        let id = self
+            .session
+            .as_ref()
+            .and_then(|session| session.shortcut_action_id(key, &mods))
+            .map(str::to_owned);
+        if let Some(id) = id {
+            self.event(UiEvent::Action(id), w, cx);
+            cx.stop_propagation();
+            return true;
+        }
+        false
     }
     fn columns(&self) -> usize {
         self.session

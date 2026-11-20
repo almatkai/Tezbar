@@ -156,6 +156,33 @@ fn action_shortcut_panel_filter_and_submit() {
     assert_eq!(s.action_filter("OPEN").len(), 1);
 }
 #[test]
+fn shared_shortcut_invokes_the_selected_rows_action() {
+    let mut tree = root(&["first", "second", "empty"]);
+    tree.children[1]
+        .props
+        .insert("actionIds".into(), json!(["copy-second"]));
+    tree.children[2].props.insert("actionIds".into(), json!([]));
+    let mut reply = reply(tree);
+    reply.actions[0].shortcut = Some(Shortcut {
+        modifiers: vec!["cmd".into()],
+        key: Some("c".into()),
+    });
+    let mut second = reply.actions[0].clone();
+    second.id = "copy-second".into();
+    reply.actions.push(second);
+    let mut session = RuntimeSession::new(reply, 0).unwrap();
+    let modifiers = ["cmd".into()];
+    assert_eq!(session.shortcut_action_id("c", &modifiers), Some("open"));
+    session.select("second".into());
+    assert!(matches!(
+        session.shortcut("c", &modifiers).unwrap(),
+        Some(Effect::Invoke { action_id, .. }) if action_id == "copy-second"
+    ));
+    session.select("empty".into());
+    assert_eq!(session.shortcut_action_id("c", &modifiers), None);
+}
+
+#[test]
 fn wire_rejects_unknown_and_oversize_or_duplicate_fields() {
     assert!(serde_json::from_value::<Node>(json!({"type":"WebView"})).is_err());
     let f = node("Form.TextField", json!({"id":"same"}), vec![]);

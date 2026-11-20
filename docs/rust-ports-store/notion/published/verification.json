@@ -1,0 +1,23 @@
+{
+  "slug": "notion",
+  "sourceCommit": "2bccd7ab9143432c25b350708a4697cab6d2405e",
+  "release": "https://github.com/almatkai/notion/releases/tag/v0.1.0",
+  "downloads": "passed",
+  "inventoriesAndPolicies": "passed",
+  "targetPins": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/notion/releases/download/v0.1.0/notion-aarch64-apple-darwin-development.zip",
+      "sha256": "a8cd83015b09bd5ca8b0023ed35a31020b8b32e3b8e83c984f2a252daa666464",
+      "executable": "bin/tezbar-notion",
+      "executableSha256": "e06ed0476b6900aa0b81ef0acbeae055230e20ee675c76d89432a01235a1f325"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/notion/releases/download/v0.1.0/notion-x86_64-pc-windows-msvc-development.zip",
+      "sha256": "96ed7484d1d742b0136e60d98e926b717188c33f7563f74381f80ec0c6f1b6d3",
+      "executable": "bin/tezbar-notion.exe",
+      "executableSha256": "abf3fc8dfe958804ffd3c15318cc43a4fc302b90d2e56c21f1cc31eea539043a"
+    }
+  },
+  "requiresHost": "0.3.0-beta.12",
+  "desktopAcceptance": "not-run"
+}

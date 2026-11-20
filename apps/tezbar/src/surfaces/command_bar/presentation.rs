@@ -172,6 +172,9 @@ pub struct Field {
     pub dropdown: bool,
 }
 pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
+    arguments_for(row, false)
+}
+pub fn arguments_for(row: &Row, edit_optional: bool) -> Option<(Arguments, Vec<Field>)> {
     let Action::RunExtensionCommand { extra, .. } = &row.action else {
         return None;
     };
@@ -192,7 +195,8 @@ pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
     if defs.is_empty() {
         return None;
     }
-    if !inline.is_object()
+    if !edit_optional
+        && !inline.is_object()
         && !defs
             .iter()
             .any(|definition| definition["required"].as_bool().unwrap_or(false))
@@ -246,7 +250,7 @@ pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
     let mut args = Arguments::new(row.id.clone(), fields);
     args.values = initial;
     // Pre-supplied complete argument values skip the form.
-    if args.submit().is_ok() && wire["argumentValues"].is_object() {
+    if !edit_optional && args.submit().is_ok() && wire["argumentValues"].is_object() {
         None
     } else {
         Some((args, labels))
@@ -255,6 +259,7 @@ pub fn arguments(row: &Row) -> Option<(Arguments, Vec<Field>)> {
 #[derive(Clone, Debug)]
 pub enum RowAction {
     Open,
+    Arguments,
     Reveal,
     Copy,
     Paste,
@@ -263,6 +268,9 @@ pub enum RowAction {
 }
 pub fn menu(row: &Row) -> Vec<(&'static str, RowAction)> {
     let mut a = vec![("Open", RowAction::Open)];
+    if arguments_for(row, true).is_some() {
+        a.push(("Run with Arguments... (Shift+Enter)", RowAction::Arguments));
+    }
     if matches!(
         row.action,
         Action::OpenFile { .. } | Action::OpenWithApp { .. }

@@ -3,6 +3,7 @@ pub mod assets;
 pub mod common;
 pub mod extension_worker;
 pub mod extensions;
+mod extension_feedback;
 mod fts_rank;
 #[cfg(feature = "native-ui-instant")]
 pub mod instant;
@@ -67,6 +68,7 @@ pub struct NativeCore {
     pub platform: platform::PlatformCore,
     pub system: system::SystemCore,
     pub vault: vault::VaultService,
+    extension_feedback: extension_feedback::Feedback,
     initialized: AtomicBool,
     ready: tokio::sync::Notify,
     closing: AtomicBool,
@@ -103,6 +105,7 @@ impl NativeCore {
             system: system::SystemCore::new(ctx.clone()),
             vault: vault::VaultService::new(ctx.paths.data_dir.clone(), Some(ctx.host.clone())),
             ctx: ctx.clone(),
+            extension_feedback: Default::default(),
             initialized: AtomicBool::new(false),
             ready: tokio::sync::Notify::new(),
             closing: AtomicBool::new(false),
@@ -289,7 +292,16 @@ impl NativeCore {
             }
             return result;
         }
-        if let Some(result) = self.extensions.handle(channel, args).await {
+        if let Some(mut result) = self.extensions.handle(channel, args).await {
+            if matches!(channel, "extension:run-command" | "extension:invoke-action") {
+                extension_feedback::strip_native_feedback(&mut result);
+                if let Err(error) = self.extension_feedback.present(
+                    channel, self.ctx.host.launcher_hidden(), &mut result,
+                    |message| self.ctx.host.notify(host::NotificationSpec::ExtensionFeedback(message)),
+                ).await {
+                    log::debug!("Extension feedback unavailable: {error}");
+                }
+            }
             return result;
         }
         if let Some(result) = self.platform.handle(channel, args).await {

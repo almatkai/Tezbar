@@ -514,11 +514,16 @@ describe('extension runtime list pagination', () => {
       if (!initial.ok || initial.mode !== 'view') return
       expect(initial.root.props.markdown).toBe('initial:loading')
 
-      await new Promise((resolve) => setTimeout(resolve, 40))
-      const refreshed = await refreshExtensionSession({ sessionId: initial.sessionId })
-      expect(refreshed.ok, JSON.stringify(refreshed)).toBe(true)
-      if (!refreshed.ok || refreshed.mode !== 'view') return
-      expect(refreshed.root.props.markdown).toBe('changed:remote-ready:remote-ready')
+      // An unchanged poll means the HTTP effects are still in flight, not success.
+      // Keep the server alive until both Axios calls have reached the view.
+      await vi.waitFor(async () => {
+        const refreshed = await refreshExtensionSession({ sessionId: initial.sessionId })
+        expect(refreshed.ok, JSON.stringify(refreshed)).toBe(true)
+        expect(refreshed.mode).toBe('view')
+        if (refreshed.ok && refreshed.mode === 'view') {
+          expect(refreshed.root.props.markdown).toBe('changed:remote-ready:remote-ready')
+        }
+      })
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
       rmSync(extensionRoot, { recursive: true, force: true })

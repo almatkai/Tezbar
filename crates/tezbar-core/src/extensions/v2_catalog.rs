@@ -109,7 +109,8 @@ fn store_icon_url(native: &Value) -> Option<String> {
     // Packages keep the replaced extension's `assets/<file>` under resources/ (or resources/assets/).
     let file = icon
         .strip_prefix("resources/assets/")
-        .or_else(|| icon.strip_prefix("resources/"))?;
+        .or_else(|| icon.strip_prefix("resources/"))
+        .or_else(|| icon.strip_prefix("assets/"))?;
     let slug = native["replaces"]
         .as_array()?
         .iter()
@@ -143,6 +144,8 @@ mod store_icon_tests {
             let url = store_icon_url(&native).unwrap_or_else(|| panic!("{}", native["id"]));
             assert!(url.starts_with(&prefix), "{url}");
         }
+        let assets = json!({"icon":"assets/extension-icon.png","replaces":["raycast.language-tool"]});
+        assert_eq!(store_icon_url(&assets), Some(format!("{prefix}language-tool/assets/extension-icon.png")));
         let traversal = json!({"icon":"resources/assets/../x.png","replaces":["raycast.a"]});
         assert_eq!(store_icon_url(&traversal), None);
         let direct = json!({"icon":"https://example.com/i.png"});
@@ -189,6 +192,25 @@ pub(crate) async fn cli_install(ctx: &CoreContext, id: &str) -> CoreResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn batch2_development_metadata_preserves_identity_without_pins() {
+        let catalog = source();
+        let loved: Value = serde_json::from_str(include_str!("loved_extensions.json")).unwrap();
+        for slug in ["json-editor", "emoji", "random-data-generator", "dictionary", "one-time-password", "language-tool", "image-search", "image-host"] {
+            let id = format!("com.tezbar.native.{slug}");
+            let entries: Vec<_> = catalog.iter().filter(|m| m["id"] == id).collect();
+            assert_eq!(entries.len(), 1);
+            let m = entries[0];
+            assert_eq!(m["replaces"], json!([format!("raycast.{slug}"), format!("com.tezbar.{slug}")]));
+            assert_eq!(m["artifacts"], json!({}));
+            let rows: Vec<_> = loved.as_array().unwrap().iter().filter(|r| r["id"] == format!("raycast.{slug}")).collect();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0]["nativePort"]["id"], id);
+            assert_eq!(rows[0]["nativePort"]["releaseAvailable"], false);
+            let names = |value: &Value| value["commands"].as_array().unwrap().iter().map(|c| c["name"].as_str().unwrap().to_owned()).collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(names(rows[0]), names(m));
+        }
+    }
     #[test]
     fn catalog_without_pins_never_claims_installability() {
         for m in source().into_iter().map(describe) {

@@ -286,6 +286,12 @@ impl Launcher {
             v.update(cx, |v, cx| v.dispose(cx));
         }
     }
+    pub(crate) fn extension_pop_to_root(&mut self, clear_search: bool, w: &mut Window, cx: &mut Context<Self>) {
+        let query = if clear_search { String::new() } else { self.input.read(cx).content.to_string() };
+        self.extension_back(w,cx);
+        self.input.update(cx, |f,cx| f.set_text(&query,w,cx));
+        self.query(query,cx);
+    }
     pub(crate) fn extension_back(&mut self, w: &mut Window, cx: &mut Context<Self>) {
         if let Some(v) = &self.extensions.runtime {
             v.update(cx, |v, cx| v.dispose(cx));

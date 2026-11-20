@@ -1,0 +1,98 @@
+[
+  {
+    "id": "com.tezbar.native.base64",
+    "version": "0.1.0",
+    "target": "x86_64-pc-windows-msvc",
+    "archiveSha256": "c209307336a31474df364af3be85e867ec10ffcf29cc49b24ac0ef43afbac884",
+    "productionImport": "passed",
+    "installedProtocolInfo": "passed",
+    "compiledCatalogDiscovery": "passed",
+    "commands": [
+      "decode",
+      "encode",
+      "index"
+    ],
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "id": "com.tezbar.native.counter",
+    "version": "1.0.0",
+    "target": "x86_64-pc-windows-msvc",
+    "archiveSha256": "21530425b43c94a468e956a99df313ca5944a4b0e58f48329f05dcbf495e469d",
+    "productionImport": "passed",
+    "installedProtocolInfo": "passed",
+    "compiledCatalogDiscovery": "passed",
+    "commands": [
+      "decrement-counter",
+      "increment-counter",
+      "reset-counter"
+    ],
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "id": "com.tezbar.native.unicode-symbols",
+    "version": "0.1.0",
+    "target": "x86_64-pc-windows-msvc",
+    "archiveSha256": "4979173239c6237d3033f59d6dbbd9bce2ac51676d9340b3110ea9affb828e7c",
+    "productionImport": "passed",
+    "installedProtocolInfo": "passed",
+    "compiledCatalogDiscovery": "passed",
+    "commands": [
+      "index"
+    ],
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "id": "com.tezbar.native.color-shades",
+    "version": "1.0.0",
+    "target": "x86_64-pc-windows-msvc",
+    "archiveSha256": "6557d223c9043e23ea37c4bf46011b1961e4c75dedcc6349c9f4b8f95e361bf8",
+    "productionImport": "passed",
+    "installedProtocolInfo": "passed",
+    "compiledCatalogDiscovery": "passed",
+    "commands": [
+      "generate-color-shades",
+      "view-color-shades"
+    ],
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "id": "com.tezbar.native.paste-as-plain-text",
+    "version": "1.0.0",
+    "target": "x86_64-pc-windows-msvc",
+    "archiveSha256": "f15dbf70a391ed5f07e31b82855c50b6913d02bea18089718d396a2eae370470",
+    "productionImport": "passed",
+    "installedProtocolInfo": "passed",
+    "compiledCatalogDiscovery": "passed",
+    "commands": [
+      "paste-as-plain-text"
+    ],
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "id": "com.tezbar.native.markdown-table-generator",
+    "version": "0.1.0",
+    "target": "x86_64-pc-windows-msvc",
+    "archiveSha256": "e21181378c785719002e6c1ae481682d78644049b55fd0126e18b5169f974975",
+    "productionImport": "passed",
+    "installedProtocolInfo": "passed",
+    "compiledCatalogDiscovery": "passed",
+    "commands": [
+      "generate-markdown-table"
+    ],
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "id": "com.tezbar.native.markdown-image-to-html",
+    "version": "0.2.0",
+    "target": "x86_64-pc-windows-msvc",
+    "archiveSha256": "5881cd1ab06850c902c127ddc4b6d2ee5103f60016c7002952eb9f3185f0dba5",
+    "productionImport": "passed",
+    "installedProtocolInfo": "passed",
+    "compiledCatalogDiscovery": "passed",
+    "commands": [
+      "index"
+    ],
+    "desktopAcceptance": "not-run"
+  }
+]

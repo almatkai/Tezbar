@@ -1,0 +1,594 @@
+{
+  "schemaVersion": 3,
+  "id": "com.tezbar.native.arc",
+  "slug": "arc",
+  "name": "Arc",
+  "version": "0.1.0",
+  "description": "Search Arc browser tabs, spaces, history and downloads, switch to any open tab, and open new windows, Little Arc and incognito windows.",
+  "author": "thomas",
+  "icon": "resources/icon.png",
+  "runtime": "rust",
+  "replaces": [
+    "raycast.arc"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "preferences": [],
+  "commands": [
+    {
+      "name": "search-history",
+      "title": "Search History",
+      "subtitle": "Arc",
+      "description": "Search your browsing history",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-window",
+      "title": "Open New Window",
+      "description": "Create and open a new window",
+      "mode": "no-view",
+      "subtitle": "Arc",
+      "preferences": [
+        {
+          "name": "space",
+          "title": "Space",
+          "description": "The Space to open the new tab in",
+          "type": "textfield",
+          "required": false
+        }
+      ],
+      "arguments": [
+        {
+          "name": "space",
+          "placeholder": "Space",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-blank-window",
+      "title": "Open New Blank Window",
+      "description": "Create and open a new blank window",
+      "mode": "no-view",
+      "subtitle": "Arc",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-little-arc",
+      "title": "Open New Little Arc Window",
+      "description": "Create and open a new little arc window",
+      "mode": "no-view",
+      "subtitle": "Arc",
+      "preferences": [
+        {
+          "name": "url",
+          "title": "Default URL",
+          "description": "The URL to open in the new tab if no argument is provided",
+          "type": "textfield",
+          "required": false,
+          "default": "https://google.com"
+        },
+        {
+          "name": "engine",
+          "title": "Search Engine",
+          "description": "Search engine used when opening mini arc with a non-url argument",
+          "type": "dropdown",
+          "required": false,
+          "default": "google",
+          "data": [
+            {
+              "title": "Google",
+              "value": "google"
+            },
+            {
+              "title": "DuckDuckGo",
+              "value": "duckduckgo"
+            },
+            {
+              "title": "Bing",
+              "value": "bing"
+            },
+            {
+              "title": "Yahoo!",
+              "value": "yahoo"
+            },
+            {
+              "title": "Ecosia",
+              "value": "ecosia"
+            },
+            {
+              "title": "Kagi",
+              "value": "kagi"
+            },
+            {
+              "title": "UnDuck",
+              "value": "unduck"
+            }
+          ]
+        }
+      ],
+      "arguments": [
+        {
+          "name": "url",
+          "placeholder": "URL",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-spaces",
+      "title": "Search Spaces",
+      "subtitle": "Arc",
+      "description": "Search and select your spaces",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-tabs",
+      "title": "Search Tabs",
+      "subtitle": "Arc",
+      "description": "Search and select your tabs",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-space-tabs",
+      "title": "Search Space Tabs",
+      "subtitle": "Arc",
+      "description": "Search and select tabs in your current space",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search-downloads",
+      "title": "Search Downloads",
+      "subtitle": "Arc",
+      "description": "Search your downloads",
+      "mode": "view",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-incognito-window",
+      "title": "Open New Incognito Window",
+      "subtitle": "Arc",
+      "description": "Create and open a new incognito window",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "url",
+          "title": "Default URL",
+          "description": "The URL to open in the new tab if no argument is provided",
+          "type": "textfield",
+          "required": false,
+          "default": "https://google.com"
+        },
+        {
+          "name": "engine",
+          "title": "Search Engine",
+          "description": "Search engine used when opening incognito window with a non-url argument",
+          "type": "dropdown",
+          "required": false,
+          "default": "google",
+          "data": [
+            {
+              "title": "Google",
+              "value": "google"
+            },
+            {
+              "title": "DuckDuckGo",
+              "value": "duckduckgo"
+            },
+            {
+              "title": "Bing",
+              "value": "bing"
+            },
+            {
+              "title": "Yahoo!",
+              "value": "yahoo"
+            },
+            {
+              "title": "Ecosia",
+              "value": "ecosia"
+            },
+            {
+              "title": "Kagi",
+              "value": "kagi"
+            },
+            {
+              "title": "UnDuck",
+              "value": "unduck"
+            }
+          ]
+        }
+      ],
+      "arguments": [
+        {
+          "name": "url",
+          "placeholder": "URL",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-tab",
+      "title": "Open New Tab",
+      "subtitle": "Arc",
+      "description": "Create and open a new tab in the current window",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "url",
+          "title": "URL",
+          "description": "The URL to open in the new tab",
+          "type": "textfield",
+          "required": false
+        },
+        {
+          "name": "space",
+          "title": "Space",
+          "description": "The Space to open the new tab in",
+          "type": "textfield",
+          "required": false
+        }
+      ],
+      "arguments": [
+        {
+          "name": "url",
+          "placeholder": "URL",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "space",
+          "placeholder": "Space",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "menu-bar",
+      "title": "Access Spaces and Favorites",
+      "description": "Access your spaces and favorites from the menu bar",
+      "mode": "menu-bar",
+      "interval": "10m",
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "search",
+      "title": "Search Arc",
+      "description": "Search tabs, history and search suggestions",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "engine",
+          "title": "Search Engine",
+          "description": "Search engine used for suggestions",
+          "type": "dropdown",
+          "required": false,
+          "default": "google",
+          "data": [
+            {
+              "title": "Google",
+              "value": "google"
+            },
+            {
+              "title": "DuckDuckGo",
+              "value": "duckduckgo"
+            },
+            {
+              "title": "Bing",
+              "value": "bing"
+            },
+            {
+              "title": "Yahoo!",
+              "value": "yahoo"
+            },
+            {
+              "title": "Ecosia",
+              "value": "ecosia"
+            },
+            {
+              "title": "Kagi",
+              "value": "kagi"
+            },
+            {
+              "title": "UnDuck",
+              "value": "unduck"
+            }
+          ]
+        },
+        {
+          "name": "sorting",
+          "title": "Sorting",
+          "description": "Sorting of sections in search results",
+          "type": "dropdown",
+          "required": false,
+          "default": "asc",
+          "data": [
+            {
+              "title": "Tabs → History → Suggestions",
+              "value": "tabsHistorySuggestions"
+            },
+            {
+              "title": "History → Tabs → Suggestions",
+              "value": "historyTabsSuggestions"
+            }
+          ]
+        },
+        {
+          "name": "favoritesTabsOrder",
+          "title": "Favorites Tabs Order",
+          "label": "Favorites Tabs Order",
+          "description": "Order of favorites tabs in search results",
+          "type": "dropdown",
+          "required": false,
+          "default": "1",
+          "data": [
+            {
+              "title": "1",
+              "value": "1"
+            },
+            {
+              "title": "2",
+              "value": "2"
+            },
+            {
+              "title": "3",
+              "value": "3"
+            }
+          ]
+        },
+        {
+          "name": "pinnedTabsOrder",
+          "title": "Pinned Tabs Order",
+          "label": "Pinned Tabs Order",
+          "description": "Order of pinned tabs in search results",
+          "type": "dropdown",
+          "required": false,
+          "default": "2",
+          "data": [
+            {
+              "title": "1",
+              "value": "1"
+            },
+            {
+              "title": "2",
+              "value": "2"
+            },
+            {
+              "title": "3",
+              "value": "3"
+            }
+          ]
+        },
+        {
+          "name": "unpinnedTabsOrder",
+          "title": "Unpinned Tabs Order",
+          "label": "Unpinned Tabs Order",
+          "description": "Order of unpinned tabs in search results",
+          "type": "dropdown",
+          "required": false,
+          "default": "3",
+          "data": [
+            {
+              "title": "1",
+              "value": "1"
+            },
+            {
+              "title": "2",
+              "value": "2"
+            },
+            {
+              "title": "3",
+              "value": "3"
+            }
+          ]
+        },
+        {
+          "name": "showFavorites",
+          "title": "Sections",
+          "label": "Show Favorites",
+          "description": "Show favorites in search results",
+          "type": "checkbox",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "showPinnedTabs",
+          "label": "Show Pinned Tabs",
+          "description": "Show pinned tabs in search results",
+          "type": "checkbox",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "showUnpinnedTabs",
+          "label": "Show Unpinned Tabs",
+          "description": "Show unpinned tabs in search results",
+          "type": "checkbox",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "showHistory",
+          "label": "Show History",
+          "description": "Show history in search results",
+          "type": "checkbox",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "showSuggestions",
+          "label": "Show Suggestions",
+          "description": "Show suggestions in search results",
+          "type": "checkbox",
+          "required": false,
+          "default": true
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "release-notes",
+      "title": "Open Arc Release Notes",
+      "subtitle": "Arc",
+      "description": "Open the Arc release notes",
+      "mode": "no-view",
+      "disabledByDefault": true,
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "boost-gallery",
+      "title": "Open Arc Boost Gallery",
+      "subtitle": "Arc",
+      "description": "Open the Arc Boost Gallery",
+      "mode": "no-view",
+      "disabledByDefault": true,
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "new-easel",
+      "title": "Open New Easel",
+      "subtitle": "Arc",
+      "description": "Open a new easel",
+      "mode": "no-view",
+      "disabledByDefault": true,
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    },
+    {
+      "name": "reset-space-tabs",
+      "title": "Reset All Tabs in Current Space",
+      "subtitle": "Arc",
+      "description": "Reset all tabs in the currently active space",
+      "mode": "no-view",
+      "disabledByDefault": true,
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null
+    }
+  ],
+  "execution": "process",
+  "protocolVersion": 1,
+  "repository": "https://github.com/almatkai/arc",
+  "capabilities": [
+    "clipboard.write",
+    "selection.read",
+    "window.visibility",
+    "dialog.confirm",
+    "shell.open",
+    "shell.reveal",
+    "shell.openWithApp",
+    "apps.list",
+    "settings.open",
+    "host.quicklinks.create",
+    "background.retain",
+    "background.release",
+    "tray.set",
+    "tray.remove"
+  ],
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/arc/releases/download/v0.1.0/arc-aarch64-apple-darwin-development.zip",
+      "sha256": "7ad10f5fc2e7589f19bd09ab0fbadcca32fe2cc03080957688479bbd9a93d06a",
+      "executable": "bin/tezbar-arc",
+      "executableSha256": "8a217257ee208e572e250b552e775ecbe5916913f6f50ac90a2e7bbcc85b06ae"
+    }
+  },
+  "files": {},
+  "verification": [
+    {
+      "platform": "macOS",
+      "state": "not-run",
+      "note": "Requires Tezbar beta.12. Synthetic protocol fixtures do not establish live macOS Arc acceptance."
+    }
+  ],
+  "minHostVersion": "0.3.0-beta.12"
+}

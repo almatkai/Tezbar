@@ -1,0 +1,17 @@
+{
+  "slug": "arc",
+  "sourceCommit": "d12abb43ed3961e6f6bf2f229a34d5d7bd45806f",
+  "release": "https://github.com/almatkai/arc/releases/tag/v0.1.0",
+  "downloads": "passed",
+  "inventoriesAndPolicies": "passed",
+  "targetPins": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/arc/releases/download/v0.1.0/arc-aarch64-apple-darwin-development.zip",
+      "sha256": "7ad10f5fc2e7589f19bd09ab0fbadcca32fe2cc03080957688479bbd9a93d06a",
+      "executable": "bin/tezbar-arc",
+      "executableSha256": "8a217257ee208e572e250b552e775ecbe5916913f6f50ac90a2e7bbcc85b06ae"
+    }
+  },
+  "requiresHost": "0.3.0-beta.12",
+  "desktopAcceptance": "not-run"
+}

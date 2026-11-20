@@ -59,6 +59,10 @@ pub(super) const METHODS: &[&str] = &[
     "host.safety.authorize",
     "host.safety.record",
     "host.launcher.publish",
+    "host.quicklinks.create",
+    "host.audio.play",
+    "host.audio.stop",
+    "host.navigation.popToRoot",
 ];
 fn valid_capability(cap: &str) -> bool {
     CAPABILITY_GROUPS.contains(&cap)
@@ -162,6 +166,15 @@ pub(super) fn component(s: &str) -> Result<(), String> {
     }
     Ok(())
 }
+pub(super) fn migration_relative(s: &str) -> Result<PathBuf, String> {
+    if !s.is_ascii() || s.contains('~') {
+        return Err(
+            "Migration paths must use ASCII names without '~'; other paths require deliberate manual recovery"
+                .into(),
+        );
+    }
+    relative(s)
+}
 pub(super) fn relative(s: &str) -> Result<PathBuf, String> {
     // Reject cross-platform path syntax even when verifying on Unix.
     if s.is_empty()
@@ -255,7 +268,7 @@ pub(super) fn validate(manifest: &Value) -> Result<(), String> {
         }
         for (key, path) in paths {
             component(key)?;
-            relative(path.as_str().ok_or("Invalid migration path")?)?;
+            migration_relative(path.as_str().ok_or("Invalid migration path")?)?;
         }
     }
     if let Some(probe) = manifest.get("startupProbe") {
@@ -418,7 +431,11 @@ pub(super) struct Package {
     pub dir: PathBuf,
     pub executable: PathBuf,
 }
+#[cfg(test)]
+thread_local! { pub(super) static RESOLVED_IDS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) }; }
 pub(super) fn resolve(ctx: &CoreContext, id: &str) -> Result<Package, String> {
+    #[cfg(test)]
+    RESOLVED_IDS.with(|ids| ids.borrow_mut().push(id.to_owned()));
     let root = root(ctx, id)?;
     let active = read_json(&root.join("active.json")).map_err(|_| {
         "Binary package not installed; existing schema-2 package needs upgrade".to_string()

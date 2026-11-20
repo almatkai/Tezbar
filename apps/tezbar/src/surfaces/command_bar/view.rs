@@ -198,6 +198,11 @@ impl Launcher {
     fn row_action(&mut self, row: Row, action: RowAction, cx: &mut Context<Self>) {
         self.menu = None;
         match action {
+            RowAction::Arguments => {
+                self.edit_arguments_for = Some(row.id.clone());
+                self.click(self.model.session.generation, row.id, cx);
+                self.edit_arguments_for = None;
+            }
             RowAction::Open => self.click(self.model.session.generation, row.id, cx),
             RowAction::Pin => self.toggle_pin(row, cx),
             RowAction::QuickLook => {
@@ -246,7 +251,7 @@ impl Launcher {
         let Some(form) = self.form.as_ref() else {
             return;
         };
-        let values = match form.args.submit() {
+        let mut values = match form.args.submit() {
             Ok(v) => v,
             Err(e) => {
                 self.error = Some(e);
@@ -254,6 +259,11 @@ impl Launcher {
                 return;
             }
         };
+        for field in &form.args.fields {
+            if !field.required && values.get(&field.name).is_some_and(String::is_empty) {
+                values.remove(&field.name);
+            }
+        }
         let Some(mut a) = self.form_activation.take() else {
             return;
         };
@@ -856,6 +866,14 @@ impl Launcher {
             }) = self.selected()
             {
                 self.vault_copy(item_id, cx);
+                w.prevent_default();
+                cx.stop_propagation();
+                return;
+            }
+        }
+        if key == "enter" && shift && !primary && !alt && !e.is_held {
+            if let Some(row) = self.selected().filter(|r| presentation::arguments_for(r, true).is_some()) {
+                self.row_action(row, RowAction::Arguments, cx);
                 w.prevent_default();
                 cx.stop_propagation();
                 return;

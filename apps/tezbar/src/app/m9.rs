@@ -27,6 +27,11 @@ impl Owner {
                     .launcher
                     .update(cx, |view, _, cx| view.extension_preferences(cx));
             }
+            ExtensionEffect::PopToRoot { clear_search } => {
+                let _ = self.launcher.update(cx, |v,w,cx| {
+                    v.extension_pop_to_root(clear_search,w,cx);
+                });
+            }
             ExtensionEffect::Back => {
                 let _ = self.launcher.update(cx, |v, w, cx| v.extension_back(w, cx));
             }

@@ -1,0 +1,65 @@
+[
+  {
+    "slug": "arc",
+    "sourceCommit": "d12abb43ed3961e6f6bf2f229a34d5d7bd45806f",
+    "release": "https://github.com/almatkai/arc/releases/tag/v0.1.0",
+    "downloads": "passed",
+    "inventoriesAndPolicies": "passed",
+    "targetPins": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/arc/releases/download/v0.1.0/arc-aarch64-apple-darwin-development.zip",
+        "sha256": "7ad10f5fc2e7589f19bd09ab0fbadcca32fe2cc03080957688479bbd9a93d06a",
+        "executable": "bin/tezbar-arc",
+        "executableSha256": "8a217257ee208e572e250b552e775ecbe5916913f6f50ac90a2e7bbcc85b06ae"
+      }
+    },
+    "requiresHost": "0.3.0-beta.12",
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "slug": "notion",
+    "sourceCommit": "2bccd7ab9143432c25b350708a4697cab6d2405e",
+    "release": "https://github.com/almatkai/notion/releases/tag/v0.1.0",
+    "downloads": "passed",
+    "inventoriesAndPolicies": "passed",
+    "targetPins": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/notion/releases/download/v0.1.0/notion-aarch64-apple-darwin-development.zip",
+        "sha256": "a8cd83015b09bd5ca8b0023ed35a31020b8b32e3b8e83c984f2a252daa666464",
+        "executable": "bin/tezbar-notion",
+        "executableSha256": "e06ed0476b6900aa0b81ef0acbeae055230e20ee675c76d89432a01235a1f325"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/notion/releases/download/v0.1.0/notion-x86_64-pc-windows-msvc-development.zip",
+        "sha256": "96ed7484d1d742b0136e60d98e926b717188c33f7563f74381f80ec0c6f1b6d3",
+        "executable": "bin/tezbar-notion.exe",
+        "executableSha256": "abf3fc8dfe958804ffd3c15318cc43a4fc302b90d2e56c21f1cc31eea539043a"
+      }
+    },
+    "requiresHost": "0.3.0-beta.12",
+    "desktopAcceptance": "not-run"
+  },
+  {
+    "slug": "visual-studio-code",
+    "sourceCommit": "42c277a52d040f2fe49c681983a38ee6a8cfa4a0",
+    "release": "https://github.com/almatkai/visual-studio-code/releases/tag/v0.1.1",
+    "downloads": "passed",
+    "inventoriesAndPolicies": "passed",
+    "targetPins": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/visual-studio-code/releases/download/v0.1.1/visual-studio-code-aarch64-apple-darwin.zip",
+        "sha256": "cecdfbec7f0943f29bdf980d1d6d1eb578be6cd86813bd0c77971798d1679ead",
+        "executable": "bin/tezbar-visual-studio-code",
+        "executableSha256": "69a66a5cc9fb4f0e4af079d490d7c97db516486402efe9a9ca70e1330aab67cc"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/visual-studio-code/releases/download/v0.1.1/visual-studio-code-x86_64-pc-windows-msvc.zip",
+        "sha256": "c8c48938f8ca210378c4e5108b152cb2a25d92fbd8854068b6c1db994eb57f8a",
+        "executable": "bin/tezbar-visual-studio-code.exe",
+        "executableSha256": "e1f70268a4a3338a61c55700dfc239a727f0b636137f03760395b8a77703f6c5"
+      }
+    },
+    "requiresHost": "0.3.0-beta.12",
+    "desktopAcceptance": "not-run"
+  }
+]

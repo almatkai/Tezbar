@@ -9,6 +9,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Each worker loads a TS/React runtime and some spawn esbuild/PowerShell.
+    // Bound concurrent integration processes instead of oversubscribing Windows.
+    maxWorkers: process.platform === 'win32' ? 2 : undefined,
     globalSetup: ['scripts/vitest-global-setup.ts'],
     environment: 'node',
     include: ['src/**/*.test.ts', 'tests/oracles/**/*.test.ts'],

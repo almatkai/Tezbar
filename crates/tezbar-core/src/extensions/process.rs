@@ -17,6 +17,13 @@ use tokio::{
     sync::{mpsc, oneshot, watch, Notify},
 };
 
+// Opt-in phase metadata only: never protocol payloads or clipboard contents.
+pub(super) fn latency_phase(phase: &str) {
+    if std::env::var_os("TEZBAR_NATIVE_LATENCY_TRACE").is_some() {
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
+        log::info!("NATIVE_LATENCY unix_ms={} phase={}", ms, phase);
+    }
+}
 pub(super) const MAX_FRAME: usize = 16 * 1024 * 1024;
 const MAX_PENDING: usize = 128;
 fn child_environment(
@@ -58,6 +65,7 @@ pub(super) struct Process {
     cancelled: Mutex<std::collections::HashSet<String>>,
     inflight: AtomicUsize,
     pub sessions: Mutex<HashMap<String, u64>>,
+    pub service_features: Mutex<std::collections::HashSet<String>>,
     pub changed: Notify,
     pub generation: String,
 }
@@ -91,9 +99,11 @@ impl Process {
         #[cfg(windows)]
         // Start suspended so helpers cannot escape before job assignment.
         command.creation_flags(0x08000000 | 0x00000004);
+        latency_phase("process_exec_begin");
         let mut child = command
             .spawn()
             .map_err(|e| format!("Cannot launch extension executable: {e}"))?;
+        latency_phase("process_exec_return");
         let pid = child.id().ok_or("Missing extension PID")?;
         let mut tree = ProcessTree::new(pid)?;
         let mut stdin = child.stdin.take().ok_or("Missing stdin")?;
@@ -115,6 +125,7 @@ impl Process {
             cancelled: Mutex::new(std::collections::HashSet::new()),
             inflight: AtomicUsize::new(0),
             sessions: Mutex::new(HashMap::new()),
+            service_features: Mutex::default(),
             changed: Notify::new(),
             generation: uuid::Uuid::new_v4().to_string(),
         });
@@ -209,11 +220,15 @@ impl Process {
         {
             return Err("Extension hello identity/version/protocol mismatch".into());
         }
+        latency_phase("hello_received");
         let paths = process.host.paths()?;
-        let result=process.call("initialize",json!({"protocol":1,"extensionId":process.package.manifest["id"],"platform":super::process_install::target(),"packageDir":process.package.dir,"dataDir":paths.0,"tempDir":paths.1,"grantedCapabilities":process.package.manifest["capabilities"],"reason":reason,"migrationPaths":process.host.migration_paths(),"hostFeatures":[super::launcher::FEATURE]}),Duration::from_secs(20)).await?;
+        latency_phase("initialize_begin");
+        let result=process.call("initialize",json!({"protocol":1,"extensionId":process.package.manifest["id"],"platform":super::process_install::target(),"packageDir":process.package.dir,"dataDir":paths.0,"tempDir":paths.1,"grantedCapabilities":process.package.manifest["capabilities"],"reason":reason,"migrationPaths":process.host.migration_paths()?,"hostFeatures": if cfg!(target_os="windows") { vec![super::launcher::FEATURE,"screen.capture.targets.v1","audio.local.v1","navigation.session.v1"] } else { vec![super::launcher::FEATURE,"audio.local.v1","navigation.session.v1"] }}),Duration::from_secs(20)).await?;
         if result["ready"] != true {
             return Err("Extension initialization did not acknowledge ready".into());
         }
+        latency_phase("initialize_ack");
+        *process.service_features.lock().map_err(|e|e.to_string())? = result["features"].as_array().into_iter().flatten().filter_map(|v|v.as_str().map(str::to_owned)).collect();
         process.initialized.store(true, Ordering::Release);
         let negotiated = [&hello["features"], &result["features"]].iter().all(|v| {
             v.as_array()
@@ -275,6 +290,7 @@ impl Process {
     }
     pub fn fail(&self, reason: &str) {
         self.dead.send_replace(true);
+        self.host.stop_all_audio();
         for (_, sender) in self
             .pending
             .lock()
@@ -302,6 +318,7 @@ impl Process {
         }
     }
     pub async fn send(&self, message: Value) -> Result<(), String> {
+        latency_phase("request_begin");
         if !self.alive() {
             return Err("Extension is not running".into());
         }
@@ -342,11 +359,13 @@ impl Process {
         )
         .await
         .map_err(|_| "Extension request deadline exceeded")??;
-        let result = tokio::time::timeout_at(expires, rx)
+        let mut result = tokio::time::timeout_at(expires, rx)
             .await
             .map_err(|_| "Extension request deadline exceeded")?
             .map_err(|_| "Extension response channel closed")?;
         guard.complete = true;
+        crate::extension_feedback::strip_native_feedback(&mut result);
+        latency_phase("request_ack");
         result
     }
     pub async fn background_event(self: &Arc<Self>, params: Value) -> CoreResult {
@@ -366,6 +385,7 @@ impl Process {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(id);
+        self.host.stop_session_audio(id);
         self.changed.notify_one();
         if self.alive()
             && self

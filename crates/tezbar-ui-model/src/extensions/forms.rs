@@ -11,6 +11,7 @@ pub struct Field {
     pub required: bool,
     pub options: Vec<String>,
     pub multiple: bool,
+    replacement_id: Option<String>,
 }
 #[derive(Default)]
 pub struct FormState {
@@ -62,6 +63,15 @@ impl FormState {
                         .map(str::to_owned),
                 );
             }
+            let previous = self.fields.get(&id).filter(|old| old.kind == n.kind);
+            let replacement = matches!(n.kind, NodeKind::TextField | NodeKind::TextArea)
+                .then(|| {
+                    n.string("replacementId")
+                        .filter(|id| !id.is_empty())
+                        .zip(n.string("replacementBase"))
+                        .filter(|_| n.string("value").is_some())
+                })
+                .flatten();
             let field = Field {
                 id: id.clone(),
                 kind: n.kind,
@@ -74,11 +84,19 @@ impl FormState {
                 required: n.props.get("required") == Some(&Value::Bool(true)),
                 options,
                 multiple: n.props.get("allowMultipleSelection") == Some(&Value::Bool(true)),
+                replacement_id: replacement
+                    .map(|(id, _)| id.to_owned())
+                    .or_else(|| previous.and_then(|field| field.replacement_id.clone())),
             };
-            let keep = self.fields.get(&id).is_some_and(|old| {
-                old.kind == field.kind
-                    && (field.server_value.is_none()
-                        || (field.callback.is_none() && old.server_value == field.server_value))
+            let keep = previous.is_some_and(|old| match replacement {
+                Some((token, base)) => {
+                    old.replacement_id.as_deref() == Some(token)
+                        || self.values.get(&id).and_then(Value::as_str) != Some(base)
+                }
+                None => {
+                    field.server_value.is_none()
+                        || (field.callback.is_none() && old.server_value == field.server_value)
+                }
             });
             let value = if keep {
                 self.values.get(&id).cloned()

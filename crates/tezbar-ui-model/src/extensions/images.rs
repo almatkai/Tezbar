@@ -3,6 +3,21 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Component, Path, PathBuf},
 };
+use unicode_segmentation::UnicodeSegmentation;
+
+#[cfg(test)]
+mod batch2_glyph_tests {
+    use super::*;
+    #[test]
+    fn complete_zwj_sequence_is_one_glyph() {
+        let root = Path::new("assets");
+        for glyph in ["👨‍👩‍👧‍👦", "👩🏽‍❤️‍💋‍👩🏻", "🇰🇿"] {
+            assert!(matches!(resolve(glyph, root, &BTreeSet::new()), Ok(Source::Glyph(s)) if s == glyph));
+        }
+        assert!(!matches!(resolve("😀😀", root, &BTreeSet::new()), Ok(Source::Glyph(_))));
+        assert!(!matches!(resolve(&"😀".repeat(100), root, &BTreeSet::new()), Ok(Source::Glyph(_))));
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Variant {
     Icon,
@@ -97,7 +112,7 @@ pub fn resolve(
             _ => return Err("Unsupported image scheme"),
         }
     }
-    if raw.chars().count() <= 4 && !raw.is_ascii() {
+    if raw.len() <= 256 && !raw.is_ascii() && raw.graphemes(true).count() == 1 {
         return Ok(Source::Glyph(raw.into()));
     }
     let path = Path::new(raw);

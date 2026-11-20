@@ -21,6 +21,7 @@ pub(super) struct Installed {
     id: String,
     slug: String,
     path: PathBuf,
+    package_dir: Option<PathBuf>,
     manifest: Value,
     data_dir: PathBuf,
 }
@@ -30,6 +31,7 @@ fn slug(id: &str) -> Result<String, String> {
         .trim()
         .strip_prefix("com.tezbar.native.")
         .or_else(|| id.trim().strip_prefix("raycast."))
+        .or_else(|| id.trim().strip_prefix("com.tezbar."))
         .unwrap_or(id.trim());
     if name.is_empty()
         || name.len() > 200
@@ -43,12 +45,16 @@ fn slug(id: &str) -> Result<String, String> {
     Ok(name.into())
 }
 
-fn managed_roots(ctx: &CoreContext) -> Vec<PathBuf> {
+fn profile_roots(data_dir: &Path) -> Vec<PathBuf> {
     vec![
-        ctx.paths.data_dir.join("extensions"),
-        ctx.paths.data_dir.join("extensions/packages"),
-        ctx.paths.data_dir.join("extension-registry/packages"),
+        data_dir.join("extensions"),
+        data_dir.join("extensions/packages"),
+        data_dir.join("extension-registry/packages"),
     ]
+}
+
+fn managed_roots(ctx: &CoreContext) -> Vec<PathBuf> {
+    profile_roots(&ctx.paths.data_dir)
 }
 
 fn roots(ctx: &CoreContext) -> Vec<PathBuf> {
@@ -59,37 +65,242 @@ fn roots(ctx: &CoreContext) -> Vec<PathBuf> {
     result
 }
 
+// One discovery implementation for the launcher and migration ownership. The
+// launcher tolerates unreadable roots; migration cannot treat them as absence.
+fn root_discovery_paths(root: &Path, strict: bool) -> Result<Vec<PathBuf>, String> {
+    let mut paths = if root.join("package.json").is_file() {
+        vec![root.to_path_buf()]
+    } else {
+        match std::fs::read_dir(root) {
+            Ok(entries) => {
+                let mut paths = Vec::new();
+                for entry in entries {
+                    match entry {
+                        Ok(entry) => paths.push(entry.path()),
+                        Err(e) if strict => return Err(e.to_string()),
+                        Err(_) => {}
+                    }
+                }
+                paths
+            }
+            Err(e) if strict && e.kind() != std::io::ErrorKind::NotFound => {
+                return Err(e.to_string())
+            }
+            Err(_) => Vec::new(),
+        }
+    };
+    // Discovery is flat → managed → registry, then bare slug → raycast.slug
+    // within each root. Preference migration must select this same owner.
+    paths.sort_by_key(|path| {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        (
+            slug(name).unwrap_or_else(|_| name.into()),
+            name.starts_with("raycast."),
+            name.to_owned(),
+        )
+    });
+    Ok(paths)
+}
+
 fn discovery_paths(ctx: &CoreContext) -> Vec<PathBuf> {
-    let mut result = Vec::new();
-    for root in roots(ctx) {
-        let mut paths = if root.join("package.json").is_file() {
-            vec![root]
+    roots(ctx)
+        .iter()
+        .flat_map(|root| root_discovery_paths(root, false).unwrap_or_default())
+        .collect()
+}
+
+fn package_identity(path: &Path) -> Option<(String, String, bool)> {
+    let name = path.file_name()?.to_str()?;
+    let slug = slug(name).ok()?;
+    let native = name.starts_with("com.tezbar.native.");
+    let id = if native {
+        name.to_owned()
+    } else {
+        format!("raycast.{slug}")
+    };
+    Some((id, slug, native))
+}
+
+/// Parse a declaration's directory-identity slot, not an arbitrary ancestor.
+/// The overlapping `extensions/packages` namespace has two structural roles:
+/// direct files (or dot-prefixed support paths) can belong to flat `packages`,
+/// but a directory-identity component below it names a managed slot. Root
+/// package masking must never turn that managed slot into flat-package support.
+/// This grammar is independent of source-file presence, validity and config.
+/// Only the caller's original declaration is granted; this path is identity only.
+pub(super) fn legacy_migration_slot(relative: &Path) -> Option<PathBuf> {
+    let parts: Vec<_> = relative.components().map(|c| c.as_os_str()).collect();
+    let is = |index: usize, name: &str| {
+        parts
+            .get(index)
+            .and_then(|p| p.to_str())
+            .is_some_and(|p| p.eq_ignore_ascii_case(name))
+    };
+    let slot_len = if is(0, "extensions") {
+        if is(1, "packages")
+            && parts.len() >= 4
+            && package_identity(&parts[..3].iter().collect::<PathBuf>()).is_some()
+        {
+            3
         } else {
-            std::fs::read_dir(root)
-                .into_iter()
-                .flatten()
-                .filter_map(Result::ok)
-                .map(|e| e.path())
-                .collect()
-        };
-        paths.sort();
-        result.extend(paths);
+            2
+        }
+    } else if is(0, "extension-registry") && is(1, "packages") {
+        3
+    } else {
+        return None;
+    };
+    if parts.len() <= slot_len {
+        return None; // Discovery-root manifests and directories are not slots.
     }
-    result
+    let slot: PathBuf = parts[..slot_len].iter().collect();
+    let (_, _, native) = package_identity(&slot)?;
+    (!native).then_some(slot)
+}
+
+// Both readers skip malformed/non-object manifests. Only the migration reader
+// propagates I/O failures: an unobservable candidate may be the selected owner.
+fn legacy_manifest(path: &Path) -> Result<Option<Value>, std::io::Error> {
+    let bytes = match std::fs::read(path.join("package.json")) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    Ok(serde_json::from_slice::<Value>(&bytes)
+        .ok()
+        .filter(Value::is_object))
+}
+
+/// Observe actual discovery identities before applying any file grant filter.
+/// Do not reuse the narrower preference fallback scanner: it has a different
+/// compatibility boundary and intentionally does not search external roots.
+pub(super) fn legacy_migration_owners(
+    ctx: &CoreContext,
+    ids: &HashSet<String>,
+) -> Result<Vec<PathBuf>, String> {
+    let mut remaining = ids.clone();
+    let mut owners = Vec::new();
+    for root in roots(ctx) {
+        if remaining.is_empty() {
+            break;
+        }
+        // A root manifest masks children even when malformed. Check the evidence
+        // itself before is_file()/read_dir can silently erase it.
+        let base = if root.starts_with(&ctx.paths.data_dir) {
+            &ctx.paths.data_dir
+        } else {
+            &root
+        };
+        migration_metadata(base, &root)?;
+        let root_manifest = root.join("package.json");
+        if let Some(metadata) = migration_metadata(base, &root_manifest)? {
+            if !metadata.is_file() {
+                return Err(migration_error(
+                    &root_manifest,
+                    "root manifest is not a regular file",
+                ));
+            }
+            std::fs::File::open(&root_manifest)
+                .map_err(|e| migration_error(&root_manifest, &e.to_string()))?;
+        }
+        for path in root_discovery_paths(&root, true).map_err(|e| migration_error(&root, &e))? {
+            let Some((id, _, native)) = package_identity(&path) else {
+                continue;
+            };
+            if native || !remaining.contains(&id.to_lowercase()) {
+                continue;
+            }
+            // Selection follows the same manifests as collect(), including
+            // symlink-selected directories/metadata. Safety cannot erase an
+            // otherwise selected identity and promote a lower duplicate.
+            // Refuse special/unobservable files before attempting a read.
+            let manifest = path.join("package.json");
+            match std::fs::metadata(&manifest) {
+                Ok(metadata) if !metadata.is_file() => {
+                    return Err(migration_error(
+                        &manifest,
+                        "candidate manifest is not a regular file",
+                    ));
+                }
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(migration_error(&manifest, &e.to_string()));
+                }
+                _ => {}
+            }
+            if legacy_manifest(&path)
+                .map_err(|e| migration_error(&path, &e.to_string()))?
+                .is_some()
+            {
+                migration_metadata(base, &path)?;
+                migration_metadata(base, &manifest)?;
+                remaining.remove(&id.to_lowercase());
+                owners.push(path);
+            }
+        }
+    }
+    Ok(owners)
+}
+
+pub(super) fn migration_error(path: &Path, reason: &str) -> String {
+    format!("Legacy migration cannot establish safe source evidence at {}: {reason}. Repair the source path/permissions and retry; no migration was initialized.", path.display())
+}
+
+/// Missing is evidence only after every existing ancestor has been observed.
+/// Never follow symlinks (including dangling ones) or accept special files.
+pub(super) fn migration_metadata(
+    base: &Path,
+    path: &Path,
+) -> Result<Option<std::fs::Metadata>, String> {
+    let relative = path
+        .strip_prefix(base)
+        .map_err(|e| migration_error(path, &e.to_string()))?;
+    let mut current = base.to_path_buf();
+    let mut parts = relative.components().peekable();
+    loop {
+        let metadata = match std::fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(migration_error(&current, &e.to_string())),
+        };
+        if metadata.file_type().is_symlink()
+            || (!metadata.is_file() && !metadata.is_dir())
+            || (parts.peek().is_some() && !metadata.is_dir())
+        {
+            return Err(migration_error(
+                &current,
+                "symlink or non-regular path rejected",
+            ));
+        }
+        let Some(part) = parts.next() else {
+            return Ok(Some(metadata));
+        };
+        if !matches!(part, Component::Normal(_)) {
+            return Err(migration_error(path, "invalid path component"));
+        }
+        current.push(part);
+    }
 }
 
 fn collect(ctx: &CoreContext) -> Vec<Installed> {
+    collect_paths(ctx, discovery_paths(ctx))
+}
+
+fn collect_paths(ctx: &CoreContext, paths: impl IntoIterator<Item = PathBuf>) -> Vec<Installed> {
     let mut found = Vec::new();
     let mut seen = HashSet::new();
-    for path in discovery_paths(ctx) {
+    for path in paths {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
         let Ok(slug) = slug(name) else { continue };
         let native = name.starts_with("com.tezbar.native.");
+        let mut package_dir = None;
         let mut manifest = if native {
             match super::process_install::resolve(ctx, name) {
-                Ok(package) => package.manifest,
+                Ok(package) => {
+                    package_dir = Some(package.dir);
+                    package.manifest
+                }
                 Err(error) => {
                     // A damaged canonical directory is NEVER a Raycast package.
                     let mut value = read_json(&path.join("package.json"))
@@ -122,6 +333,7 @@ fn collect(ctx: &CoreContext) -> Vec<Installed> {
             id,
             slug,
             path,
+            package_dir,
             manifest,
             data_dir: ctx.paths.data_dir.clone(),
         });
@@ -132,17 +344,23 @@ fn collect(ctx: &CoreContext) -> Vec<Installed> {
 fn installed(ctx: &CoreContext, id: &str) -> Result<Installed, String> {
     let wanted = slug(id)?;
     let canonical = id.trim().starts_with("com.tezbar.native.");
-    collect(ctx)
-        .into_iter()
-        .find(|entry| {
-            entry.slug == wanted && entry.id.starts_with("com.tezbar.native.") == canonical
+    // Keep discovery precedence and selected-package validation, but do not hash
+    // every installed executable to retrieve one command's preferences.
+    let paths = discovery_paths(ctx).into_iter().filter(|path| {
+        path.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
+            name.starts_with("com.tezbar.native.") == canonical
+                && slug(name).is_ok_and(|name| name == wanted)
         })
+    });
+    collect_paths(ctx, paths)
+        .into_iter()
+        .next()
         .ok_or_else(|| format!("Extension is not installed: {id}"))
 }
 
 /// Native implementations use the same discovery and platform rules as the launcher.
 pub(super) fn installed_command(ctx: &CoreContext, id: &str, command: &str) -> Option<Installed> {
-    let native = if id.starts_with("raycast.") {
+    let native = if id.starts_with("raycast.") || id.starts_with("com.tezbar.") && !id.starts_with("com.tezbar.native.") {
         let slug = slug(id).ok()?;
         let canonical = super::v2_runtime::canonical_id(&slug);
         installed(ctx, &canonical).ok()
@@ -246,41 +464,71 @@ fn fallback<'a>(value: &'a Value, key: &str, default: &'a str) -> &'a str {
 }
 
 fn icon_path(extension: &Installed) -> Option<String> {
+    resource_root(extension)?;
     let name = fallback(&extension.manifest, "icon", "icon.png");
     if name.starts_with("https://") || name.starts_with("http://") {
         return Some(name.into());
     }
-    let relative = Path::new(name.strip_prefix("./").unwrap_or(name));
-    if relative
-        .components()
-        .any(|c| !matches!(c, Component::Normal(_)))
-    {
-        return None;
-    }
-    icon_candidates(extension, relative)
+    let relative = icon_relative(name)?;
+    icon_candidates(extension, &relative)
         .into_iter()
-        .find(|p| p.is_file())
+        .find(|p| contained_icon_file(extension, p))
         .map(|p| p.to_string_lossy().into())
 }
 
-fn icon_candidates(extension: &Installed, relative: &Path) -> Vec<PathBuf> {
-    let mut candidates = vec![
-        extension.path.join(relative),
-        extension.path.join("assets").join(relative),
-    ];
+fn resource_root(extension: &Installed) -> Option<&Path> {
     if extension.id.starts_with("com.tezbar.native.") {
-        if let Some(packages) = extension.path.parent() {
-            if let Some(extensions) = packages.parent() {
-                let legacy = extensions.join(&extension.slug);
-                candidates.push(legacy.join(relative));
-                candidates.push(legacy.join("assets").join(relative));
+        extension.package_dir.as_deref()
+    } else {
+        Some(&extension.path)
+    }
+}
+
+fn icon_relative(name: &str) -> Option<PathBuf> {
+    // Apply Windows path rules on every host, preserving the legacy ./ spelling.
+    super::process_install::relative(name.strip_prefix("./").unwrap_or(name)).ok()
+}
+
+fn icon_candidates(extension: &Installed, relative: &Path) -> Vec<PathBuf> {
+    let Some(root) = resource_root(extension) else {
+        return vec![];
+    };
+    vec![root.join(relative), root.join("assets").join(relative)]
+}
+
+fn contained_icon_file(extension: &Installed, path: &Path) -> bool {
+    let Some(root) = resource_root(extension) else {
+        return false;
+    };
+    if extension.package_dir.is_some() {
+        let Some(member) = path.strip_prefix(root).ok().and_then(Path::to_str) else {
+            return false;
+        };
+        let key = member.replace(std::path::MAIN_SEPARATOR, "/");
+        if extension.manifest["files"].get(&key).is_none() {
+            return false;
+        }
+        // Recheck managed descendants when used, including the active directory:
+        // replacing it with a symlink after collection must not redirect reads.
+        let Ok(relative) = path.strip_prefix(&extension.data_dir) else {
+            return false;
+        };
+        let mut current = extension.data_dir.clone();
+        for part in relative.components() {
+            if !matches!(part, Component::Normal(_)) {
+                return false;
             }
-            let legacy = packages.join(format!("raycast.{}", extension.slug));
-            candidates.push(legacy.join(relative));
-            candidates.push(legacy.join("assets").join(relative));
+            current.push(part);
+            if !std::fs::symlink_metadata(&current).is_ok_and(|m| !m.file_type().is_symlink()) {
+                return false;
+            }
         }
     }
-    candidates
+    // Legacy roots retain their own resources; links cannot escape that root.
+    let (Ok(root), Ok(resolved)) = (root.canonicalize(), path.canonicalize()) else {
+        return false;
+    };
+    resolved.starts_with(root) && resolved.is_file()
 }
 
 fn icon_data(extension: &Installed) -> Value {
@@ -314,20 +562,15 @@ fn icon_data(extension: &Installed) -> Value {
 }
 
 fn command_icon_path(extension: &Installed, cmd: &Value) -> Option<String> {
+    resource_root(extension)?;
     let name = cmd["icon"].as_str().or_else(|| cmd["iconPath"].as_str())?;
     if name.starts_with("https://") || name.starts_with("http://") {
         return Some(name.into());
     }
-    let relative = Path::new(name.strip_prefix("./").unwrap_or(name));
-    if relative
-        .components()
-        .any(|c| !matches!(c, Component::Normal(_)))
-    {
-        return None;
-    }
-    icon_candidates(extension, relative)
+    let relative = icon_relative(name)?;
+    icon_candidates(extension, &relative)
         .into_iter()
-        .find(|p| p.is_file())
+        .find(|p| contained_icon_file(extension, p))
         .map(|p| p.to_string_lossy().into())
 }
 
@@ -469,7 +712,7 @@ pub(super) fn preferences(extension: &Installed, command: Option<&str>) -> CoreR
     }
     let saved = ConfigStore::new(preferences_path(extension)?).read()?;
     if let Some(saved) = saved.as_object() {
-        values.extend(saved.clone());
+        values.extend(saved.iter().filter(|(key, _)| key.as_str() != "__tezbar_identity_migration_v1").map(|(key, value)| (key.clone(), value.clone())));
     }
     if let Some(command) = command {
         if let Some(saved) = saved["commands"][command].as_object() {
@@ -520,6 +763,95 @@ fn retained_preferences_path(extension: &Installed) -> PathBuf {
         .join(format!("{}.json", extension.id))
 }
 
+fn migrate_command_settings(ctx: &CoreContext, extension: &Installed) -> Result<(), String> {
+    let current = ctx.config.read()?;
+    for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
+        if current.get(key).is_some_and(|v| !v.is_object()) {
+            return Err(format!("Identity migration: invalid {key}; configuration retained"));
+        }
+    }
+    if current[format!("identityMigration:{}", extension.id)] == true { return Ok(()); }
+    ctx.config.update(|config| {
+        for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
+            if config.get(key).is_some_and(|v| !v.is_object()) {
+                return Err(format!("Identity migration: invalid {key}; configuration retained"));
+            }
+        }
+        let marker = format!("identityMigration:{}", extension.id);
+        if config[&marker] == true { return Ok(()); }
+        for command in extension.manifest["commands"].as_array().into_iter().flatten() {
+            let Some(name) = command["name"].as_str() else { continue; };
+            let target = format!("extcmd:{}:{name}", extension.id);
+            for key in ["disabledCommands", "commandAliases", "commandHotkeys"] {
+                if config[key].get(&target).is_some() { continue; }
+                for alias in [format!("raycast.{}", extension.slug), format!("com.tezbar.{}", extension.slug)] {
+                    if let Some(value) = config[key].get(format!("extcmd:{alias}:{name}")).cloned() {
+                        if config.get(key).is_none() { config[key] = json!({}); }
+                        config[key][&target] = value;
+                        break;
+                    }
+                }
+            }
+        }
+        config[marker] = json!(true);
+        Ok(())
+    })?;
+    Ok(())
+}
+
+fn validate_preference_snapshot(value: &Value) -> Result<(), String> {
+    if !value.is_object() || value.get("commands").is_some_and(|v| !v.is_object() || v.as_object().unwrap().values().any(|c| !c.is_object())) {
+        return Err("Legacy preference migration: invalid object/scopes; sources retained".into());
+    }
+    Ok(())
+}
+fn merge_legacy_preferences(target: &mut Value, source: &Value, canonical: &Value) -> Result<(), String> {
+    for (key, value) in source.as_object().unwrap() {
+        if key == "commands" {
+            for (command, prefs) in value.as_object().unwrap() {
+                for (name, value) in prefs.as_object().unwrap() {
+                    if canonical["commands"][command].get(name).is_none()
+                        && target["commands"][command].get(name).is_some_and(|old| old != value) {
+                        return Err("Preference migration: conflicting legacy command settings; sources retained".into());
+                    }
+                }
+            }
+        } else if canonical.get(key).is_none() && target.get(key).is_some_and(|old| old != value) {
+            return Err("Preference migration: conflicting legacy settings; sources retained".into());
+        }
+    }
+    merge_preferences(target, source);
+    Ok(())
+}
+
+fn merge_preferences(target: &mut Value, source: &Value) {
+    for (key, value) in source.as_object().unwrap() {
+        if key == "commands" {
+            if target.get(key).is_none() { target[key] = json!({}); }
+            for (command, prefs) in value.as_object().unwrap() {
+                if target[key].get(command).is_none() { target[key][command] = json!({}); }
+                target[key][command].as_object_mut().unwrap().extend(prefs.as_object().unwrap().clone());
+            }
+        } else { target[key] = value.clone(); }
+    }
+}
+
+// Select the discoverable package before checking for saved values. A stale
+// duplicate cannot supply preferences just because the active owner has none.
+fn legacy_preferences_owner(base: &Path, name: &str) -> Result<Option<PathBuf>, String> {
+    for root in profile_roots(base) {
+        for path in root_discovery_paths(&root, true)? {
+            let Some((_, slug, native)) = package_identity(&path) else { continue };
+            if native || !slug.eq_ignore_ascii_case(name) { continue; }
+            if preference_file(base, &path.join("package.json"))?
+                && legacy_manifest(&path).map_err(|e| e.to_string())?.is_some() {
+                return Ok(Some(path));
+            }
+        }
+    }
+    Ok(None)
+}
+
 fn preferences_path(extension: &Installed) -> Result<PathBuf, String> {
     let own = extension.path.join("preferences.json");
     if !extension.id.starts_with("com.tezbar.native.") {
@@ -532,29 +864,61 @@ fn preferences_path(extension: &Installed) -> Result<PathBuf, String> {
     } else {
         extension.path.parent().unwrap_or(&extension.path)
     };
-    if preference_file(base, &own)? {
+    let batch2 = matches!(extension.slug.as_str(), "json-editor" | "emoji" | "random-data-generator" | "dictionary" | "one-time-password" | "language-tool" | "image-search" | "image-host");
+    let retained = retained_preferences_path(extension);
+    let retained_snapshot = if batch2 && preference_file(&extension.data_dir, &retained)? {
+        let value = read_json(&retained).map_err(|_| "Canonical preference migration: invalid JSON; snapshot retained".to_string())?;
+        validate_preference_snapshot(&value)?;
+        if value["__tezbar_identity_migration_v1"] == true { return Ok(retained); }
+        Some(value)
+    } else { None };
+    // A retained canonical snapshot is the migration commit. Do not re-import
+    // deleted settings on restart; preserve legacy files for JS rollback.
+    if !batch2 && preference_file(base, &own)? {
         return Ok(own);
     }
-    let retained = retained_preferences_path(extension);
-    if preference_file(&extension.data_dir, &retained)? {
+    if !batch2 && preference_file(&extension.data_dir, &retained)? {
         return Ok(retained);
     }
-    let packages = extension.path.parent().unwrap_or(&extension.path);
-    let extensions = packages.parent().unwrap_or(packages);
-    for legacy in [
-        extensions.join(&extension.slug).join("preferences.json"),
-        packages
-            .join(format!("raycast.{}", extension.slug))
-            .join("preferences.json"),
-    ] {
-        let base = if legacy.starts_with(&extension.data_dir) {
-            &extension.data_dir
-        } else {
-            extensions
-        };
-        if preference_file(base, &legacy)? {
-            return Ok(legacy);
+    // Older ports retain their existing retention contract; Batch2 opts into
+    // snapshot migration without changing the unrelated installed-port policy.
+    if !batch2 {
+        if profile_roots(&extension.data_dir).iter().any(|root| extension.path.parent() == Some(root)) {
+            if let Some(owner) = legacy_preferences_owner(&extension.data_dir, &extension.slug)? {
+                let source = owner.join("preferences.json");
+                if preference_file(&extension.data_dir, &source)? { return Ok(source); }
+            }
         }
+        return Ok(own);
+    }
+    let mut canonical = retained_snapshot.clone().unwrap_or(json!({}));
+    let has_own = preference_file(base, &own)?;
+    if has_own {
+        let value = read_json(&own).map_err(|_| "Canonical preference migration: invalid JSON".to_string())?;
+        validate_preference_snapshot(&value)?;
+        merge_preferences(&mut canonical, &value);
+    }
+    let mut merged = json!({});
+    let mut found = false;
+    for root in ["extensions", "extensions/packages", "extension-registry/packages"] {
+        for identity in [extension.slug.clone(), format!("com.tezbar.{}", extension.slug), format!("raycast.{}", extension.slug)] {
+            let source = extension.data_dir.join(root).join(identity).join("preferences.json");
+            if preference_file(&extension.data_dir, &source)? {
+                let value = read_json(&source).map_err(|_| "Legacy preference migration: invalid JSON".to_string())?;
+                validate_preference_snapshot(&value)?;
+                merge_legacy_preferences(&mut merged, &value, &canonical)?;
+                found = true;
+            }
+        }
+    }
+    if has_own || retained_snapshot.is_some() {
+        merge_preferences(&mut merged, &canonical);
+        found = true;
+    }
+    if found {
+        merged["__tezbar_identity_migration_v1"] = json!(true);
+        write_json_atomic(&retained, &merged)?;
+        return Ok(retained);
     }
     Ok(own)
 }
@@ -579,6 +943,7 @@ fn retain_preferences(ctx: &CoreContext, id: &str) -> Result<(), String> {
         id: id.into(),
         slug: slug(id)?,
         path,
+        package_dir: None,
         manifest: Value::Null,
         data_dir: ctx.paths.data_dir.clone(),
     };
@@ -781,6 +1146,11 @@ pub(super) fn handle(ctx: &CoreContext, channel: &str, args: &[Value]) -> CoreRe
         "extension:list" => Ok(list(ctx)),
         "core:extensions:commands" => {
             let mut extensions = collect(ctx);
+            for extension in &extensions {
+                if extension.id.starts_with("com.tezbar.native.") && extension.manifest["healthError"].is_null() {
+                    migrate_command_settings(ctx, extension)?;
+                }
+            }
             // Prefer each native command once; keep uncovered legacy commands
             // and both installed packages available for settings/uninstallation.
             extensions.sort_by_key(|entry| !entry.id.starts_with("com.tezbar.native."));
@@ -907,6 +1277,99 @@ mod tests {
         })
     }
     #[test]
+    fn batch2_disabled_aliases_import_once_and_allow_reenable() {
+        for alias in ["raycast.emoji", "com.tezbar.emoji"] {
+            let temp = tempfile::tempdir().unwrap();
+            let ctx = context(temp.path());
+            let extension = Installed { id:"com.tezbar.native.emoji".into(), slug:"emoji".into(), path:temp.path().join("extensions/packages/com.tezbar.native.emoji"), package_dir:None, manifest:json!({"id":"com.tezbar.native.emoji","commands":[{"name":"search"}]}), data_dir:temp.path().into() };
+            let old = format!("extcmd:{alias}:search");
+            ctx.config.update(|v| { v["disabledCommands"] = json!({old.clone():true}); Ok(()) }).unwrap();
+            migrate_command_settings(&ctx, &extension).unwrap();
+            let target = "extcmd:com.tezbar.native.emoji:search";
+            assert_eq!(ctx.config.read().unwrap()["disabledCommands"][target], true);
+            assert!(!super::super::launcher::enabled(&ctx, &extension.manifest, "search"));
+            ctx.config.update(|v| { v["disabledCommands"].as_object_mut().unwrap().remove(target); Ok(()) }).unwrap();
+            migrate_command_settings(&ctx, &extension).unwrap();
+            assert!(super::super::launcher::enabled(&ctx, &extension.manifest, "search"));
+            assert_eq!(ctx.config.read().unwrap()["disabledCommands"][&old], true);
+        }
+    }
+    #[test]
+    fn batch2_conflicts_abort_unless_canonical_field_exists() {
+        let mut target = json!({"secret":"synthetic-a","commands":{"run":{"empty":true}}});
+        let source = json!({"secret":"synthetic-b","commands":{"run":{"empty":false}}});
+        assert!(merge_legacy_preferences(&mut target, &source, &json!({})).is_err());
+        assert!(merge_legacy_preferences(&mut target, &source, &json!({"secret":null})).is_err());
+        let canonical = json!({"secret":null,"commands":{"run":{"empty":false}}});
+        merge_legacy_preferences(&mut target, &source, &canonical).unwrap();
+        merge_preferences(&mut target, &canonical);
+        assert_eq!(target["secret"], Value::Null);
+        assert_eq!(target["commands"]["run"]["empty"], false);
+    }
+    #[test]
+    fn batch2_identity_migration_aliases_restart_and_corruption() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = context(temp.path());
+        let extension = Installed { id: "com.tezbar.native.emoji".into(), slug: "emoji".into(), path: temp.path().join("extensions/packages/com.tezbar.native.emoji"), package_dir: None, manifest: json!({"id":"com.tezbar.native.emoji","commands":[{"name":"search"}]}), data_dir: temp.path().into() };
+        let a = temp.path().join("extensions/packages/raycast.emoji/preferences.json");
+        let b = temp.path().join("extensions/packages/com.tezbar.emoji/preferences.json");
+        write_json_atomic(&a, &json!({"theme":"old","commands":{"search":{"a":1}}})).unwrap();
+        write_json_atomic(&b, &json!({"locale":"kk","commands":{"search":{"b":2}}})).unwrap();
+        let before = std::fs::read(&a).unwrap();
+        write_json_atomic(&retained_preferences_path(&extension), &json!({"retainedOnly":false,"theme":"previous-native"})).unwrap();
+        write_json_atomic(&extension.path.join("preferences.json"), &json!({"theme":"native","commands":{"search":{"a":9}}})).unwrap();
+        let path = preferences_path(&extension).unwrap();
+        let saved = read_json(&path).unwrap();
+        assert_eq!(saved["locale"], "kk");
+        assert_eq!(saved["retainedOnly"], false);
+        assert_eq!(saved["__tezbar_identity_migration_v1"], true);
+        assert!(preferences(&extension, None).unwrap().get("__tezbar_identity_migration_v1").is_none());
+        assert_eq!(preferences(&extension, Some("search")).unwrap()["a"], 9);
+        assert_eq!(preferences(&extension, Some("search")).unwrap()["b"], 2);
+        assert_eq!(saved["theme"], "native");
+        assert_eq!(saved["commands"]["search"], json!({"a":9,"b":2}));
+        std::fs::write(&a, "corrupt after commit").unwrap();
+        assert_eq!(preferences_path(&extension).unwrap(), path);
+        assert_eq!(read_json(&path).unwrap(), saved);
+        std::fs::remove_file(&path).unwrap();
+        assert!(preferences_path(&extension).unwrap_err().contains("invalid JSON"));
+        assert!(!path.exists());
+        std::fs::write(&a, before).unwrap();
+        ctx.config.update(|v| { *v = json!({"disabledCommands":{"extcmd:raycast.emoji:search":true,"extcmd:com.tezbar.native.emoji:search":false},"commandAliases":{"extcmd:com.tezbar.emoji:search":"find"}}); Ok(()) }).unwrap();
+        migrate_command_settings(&ctx, &extension).unwrap();
+        let config = ctx.config.read().unwrap();
+        assert_eq!(config["disabledCommands"]["extcmd:com.tezbar.native.emoji:search"], false);
+        assert_eq!(config["commandAliases"]["extcmd:com.tezbar.native.emoji:search"], "find");
+        assert_eq!(config["disabledCommands"]["extcmd:raycast.emoji:search"], true);
+        migrate_command_settings(&ctx, &extension).unwrap();
+        assert_eq!(ctx.config.read().unwrap(), config);
+        assert!(super::super::launcher::enabled(&ctx, &extension.manifest, "search"));
+        let restarted = context(temp.path());
+        assert_eq!(restarted.config.read().unwrap(), config);
+        assert!(super::super::launcher::enabled(&restarted, &extension.manifest, "search"));
+        restarted.config.update(|v| { v["disabledCommands"] = json!([]); Ok(()) }).unwrap();
+        assert!(migrate_command_settings(&restarted, &extension).unwrap_err().contains("invalid disabledCommands"));
+    }
+    #[test]
+    fn targeted_lookup_bounds_verification_and_rejects_target_tampering() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = context(temp.path());
+        super::super::process_install::test_install(&ctx, "normal");
+        for i in 0..32 {
+            let path = temp.path().join(format!("extensions/packages/com.tezbar.native.unrelated-{i}"));
+            std::fs::create_dir_all(path).unwrap();
+        }
+        let id = "com.tezbar.native.perplexity";
+        super::super::process_install::RESOLVED_IDS.with(|ids| ids.borrow_mut().clear());
+        assert!(installed_command(&ctx, id, "ask-perplexity").is_some());
+        super::super::process_install::RESOLVED_IDS.with(|ids| assert_eq!(&*ids.borrow(), &[id]));
+        let package = super::super::process_install::resolve(&ctx, id).unwrap();
+        std::fs::write(package.executable, b"tampered").unwrap();
+        assert!(installed_command(&ctx, id, "ask-perplexity").is_none());
+        assert!(installed_command(&ctx, "raycast.perplexity", "ask-perplexity").is_none());
+    }
+
+    #[test]
     fn legacy_preferences_preserve_scopes_and_unknown_keys() {
         let temp = tempfile::tempdir().unwrap();
         let ctx = context(temp.path());
@@ -939,6 +1402,39 @@ mod tests {
             assert!(installed(&ctx, id).is_err());
         }
     }
+    #[test]
+    fn native_icon_prefers_active_version_inventory() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("com.tezbar.native.fixture");
+        let package_dir = path.join("versions/1");
+        let relative = "resources/icon.png";
+        for root in [&path, &package_dir] {
+            let icon = root.join(relative);
+            std::fs::create_dir_all(icon.parent().unwrap()).unwrap();
+            std::fs::write(icon, b"icon fixture").unwrap();
+        }
+        let mut extension = Installed {
+            id: "com.tezbar.native.fixture".into(),
+            slug: "fixture".into(),
+            path: path.clone(),
+            package_dir: Some(package_dir.clone()),
+            manifest: json!({"icon":relative,"files":{relative:"verified digest"}}),
+            data_dir: temp.path().into(),
+        };
+        let command = json!({"icon":relative});
+        assert_eq!(
+            icon_path(&extension).as_deref(),
+            package_dir.join(relative).to_str()
+        );
+        assert_eq!(
+            command_icon_path(&extension, &command).as_deref(),
+            package_dir.join(relative).to_str()
+        );
+        extension.manifest["files"] = json!({});
+        assert!(icon_path(&extension).is_none());
+        assert!(command_icon_path(&extension, &command).is_none());
+    }
+
     #[test]
     fn detects_missing_and_tampered_legacy_scripts() {
         let temp = tempfile::tempdir().unwrap();
@@ -1415,7 +1911,8 @@ mod tests {
         let legacy = ctx
             .paths
             .data_dir
-            .join("extension-registry/perplexity/preferences.json");
+            .join("extension-registry/packages/perplexity/preferences.json");
+        write_json_atomic(&legacy.with_file_name("package.json"), &json!({"name":"perplexity"})).unwrap();
         let saved = json!({"global":"saved","commands":{"ask-perplexity":{"value":"saved"}}});
         write_json_atomic(&legacy, &saved).unwrap();
         let legacy_bytes = std::fs::read(&legacy).unwrap();

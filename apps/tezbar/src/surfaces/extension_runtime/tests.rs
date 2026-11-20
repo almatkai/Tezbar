@@ -685,3 +685,101 @@ fn chosen_menubar_lifetime_survives_hide_switch_and_temporary_empty_root(cx: &mu
     assert_eq!(disposed.len(), 1);
     assert_eq!(disposed[0].1[0]["sessionId"], "ordinary");
 }
+
+#[test]
+fn dropdown_caption_resolves_option_not_container_or_section() {
+    let root: Node = serde_json::from_value(json!({"type":"Form.Dropdown",
+        "props":{"id":"source","title":"","value":"new"},"children":[
+        {"type":"Form.Dropdown.Section","props":{"title":"History","value":"new"},"children":[
+        {"type":"Form.Dropdown.Item","props":{"value":"new","title":"New Test String"}}]}]})).unwrap();
+    let mut nodes = vec![];
+    root.visit(&mut nodes);
+    assert_eq!(view::selected_option_title(&nodes, &json!("new")), Some("New Test String"));
+    assert_eq!(view::selected_option_title(&nodes, &json!("missing")), None);
+    assert_eq!(root.string("title"), Some(""));
+}
+
+#[test]
+fn static_form_content_preserves_real_labels_without_exposing_generated_ids() {
+    for (kind, title, expected) in [
+        ("Form.Description", None, ""),
+        ("Form.Description", Some("Statistics"), "Statistics"),
+        ("Form.TextField", Some("Password"), "Password"),
+        ("Form.TextField", Some(""), ""),
+        ("Form.TextField", None, "input"),
+    ] {
+        let mut props = json!({});
+        if let Some(title) = title { props["title"] = json!(title); }
+        let node: Node = serde_json::from_value(json!({"type":kind,"props":props})).unwrap();
+        assert_eq!(view::form_label(&node, "input"), expected);
+    }
+}
+#[gpui::test]
+fn native_navigation_is_session_generation_and_boolean_scoped(cx: &mut TestAppContext) {
+    let rt=runtime(cx);let fake=Arc::new(Fake::default());
+    let (view,cx)=cx.add_window_view(|w,cx|RuntimeView::new(fake,Arc::new(NoAssets),w,cx));
+    let seen=Arc::new(Mutex::new(Vec::new()));let record=seen.clone();
+    let _sub=cx.update(|_,cx|cx.subscribe(&view,move|_,e:&ExtensionEffectEmission,_|{
+        if let ExtensionEffect::PopToRoot{clear_search}=e.effect {record.lock().unwrap().push(clear_search);}
+    }));
+    cx.update(|w,cx|view.update(cx,|v,cx|{
+        let mut wire=reply(json!({"type":"Detail","props":{"markdown":"fixture"}}));wire["generation"]=json!("current");v.activate(wire,1,w,cx).unwrap();
+        for payload in [json!({"sessionId":"other","generation":"current","clearSearch":true}),json!({"sessionId":"session","generation":"stale","clearSearch":true}),json!({"sessionId":"session","generation":"current","clearSearch":"true"}),json!({"sessionId":"session","generation":"current","clearSearch":false})] {
+            v.core_event(&CoreEvent::Other{channel:"extension:native-navigation".into(),payload},w,cx);
+        }
+    }));settle(&rt,cx);assert_eq!(*seen.lock().unwrap(),vec![false]);
+}
+#[gpui::test]
+fn form_submission_reports_focused_field_after_action_panel(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) = cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| {
+        let mut wire = reply(json!({
+            "type":"Form", "props":{"focusedFieldId":"first"},
+            "children":[
+                {"type":"Form.TextField","props":{"id":"first","value":"1"}},
+                {"type":"Form.TextField","props":{"id":"second","value":"2"}}
+            ]
+        }));
+        wire["actions"] = json!([{"id":"copy","title":"Copy Focused","kind":"submit-form"}]);
+        v.activate(wire, 1, w, cx).unwrap();
+        assert!(v.fields["first"].input.focus_handle(cx).is_focused(w));
+        v.fields["second"].input.focus_handle(cx).focus(w, cx);
+        for (key, modifiers) in [
+            ("escape", gpui::Modifiers::default()),
+            (
+                "k",
+                gpui::Modifiers {
+                    platform: cfg!(target_os = "macos"),
+                    control: cfg!(not(target_os = "macos")),
+                    ..Default::default()
+                },
+            ),
+        ] {
+            v.event(UiEvent::OpenActions, w, cx);
+            v.key(
+                &KeyDownEvent {
+                    keystroke: gpui::Keystroke {
+                        key: key.into(),
+                        key_char: None,
+                        modifiers,
+                    },
+                    is_held: false,
+                    prefer_character_input: false,
+                },
+                w,
+                cx,
+            );
+            assert!(!v.session.as_ref().unwrap().action_panel);
+            assert!(v.fields["second"].input.focus_handle(cx).is_focused(w));
+        }
+        v.event(UiEvent::OpenActions, w, cx);
+        v.event(UiEvent::Action("copy".into()), w, cx);
+    }));
+    settle(&rt, cx);
+    let calls = fake.calls.lock().unwrap();
+    assert!(calls.iter().any(|(channel, args)| *channel == "extension:invoke-action"
+        && args[0]["formValues"]["_focusedField"] == "second"
+        && args[0]["formValues"]["second"] == "2"));
+}

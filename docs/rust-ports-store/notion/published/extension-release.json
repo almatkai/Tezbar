@@ -1,0 +1,276 @@
+{
+  "schemaVersion": 3,
+  "id": "com.tezbar.native.notion",
+  "slug": "notion",
+  "name": "Notion",
+  "description": "Search, create and update Notion pages and databases, add text to pages, and quickly capture notes to Notion, with Raycast AI tools.",
+  "version": "0.1.0",
+  "author": "HenriChabrand",
+  "repository": "https://github.com/almatkai/notion",
+  "platforms": [
+    "Windows",
+    "macOS"
+  ],
+  "icon": "resources/assets/notion-logo.png",
+  "runtime": "rust",
+  "execution": "process",
+  "protocolVersion": 1,
+  "minHostVersion": "0.3.0-beta.12",
+  "replaces": [
+    "raycast.notion"
+  ],
+  "preferences": [
+    {
+      "name": "notion_token",
+      "type": "password",
+      "title": "Internal Integration Secret",
+      "required": false,
+      "description": "In Notion, go to Settings & members > My connections > Develop or manage integrations > New integration",
+      "placeholder": "ntn_..."
+    },
+    {
+      "name": "open_in",
+      "type": "appPicker",
+      "title": "Open Page in",
+      "required": false,
+      "default": "Notion",
+      "description": "Choose where to open Notion page."
+    },
+    {
+      "name": "properties_in_page_previews",
+      "type": "checkbox",
+      "title": "Properties in Previews",
+      "required": false,
+      "default": false,
+      "description": "Show properties in page previews.",
+      "label": "Show properties in page previews."
+    }
+  ],
+  "commands": [
+    {
+      "name": "manage-connection",
+      "title": "Manage Notion Connection",
+      "description": "Test your Notion connection, reconnect, or manage page access.",
+      "mode": "view",
+      "platforms": [
+        "Windows",
+        "macOS"
+      ],
+      "runtime": "rust",
+      "refreshMs": null,
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 55000
+    },
+    {
+      "name": "create-database-page",
+      "title": "Create Database Page",
+      "subtitle": "Notion",
+      "description": "Create a page in a Notion database.",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "closeAfterCreate",
+          "type": "checkbox",
+          "label": "Close Raycast after creating the page",
+          "required": false,
+          "default": false,
+          "description": "This action will be set as the primary action (⌘ + ⏎)."
+        },
+        {
+          "name": "useClipboard",
+          "type": "dropdown",
+          "title": "Use Clipboard to autofill",
+          "required": false,
+          "data": [
+            {
+              "title": "Don't use Clipboard",
+              "value": ""
+            },
+            {
+              "title": "Name (Title)",
+              "value": "title"
+            },
+            {
+              "title": "Content",
+              "value": "content"
+            }
+          ],
+          "default": "",
+          "description": "Specify if Clipboard is used to autofill Title or Content"
+        }
+      ],
+      "platforms": [
+        "Windows",
+        "macOS"
+      ],
+      "runtime": "rust",
+      "refreshMs": null,
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 55000
+    },
+    {
+      "name": "search-page",
+      "title": "Search Notion",
+      "description": "Search for Notion databases and pages.",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "primaryAction",
+          "type": "dropdown",
+          "title": "Primary Action",
+          "required": false,
+          "default": "notion",
+          "data": [
+            {
+              "title": "Open in Notion",
+              "value": "notion"
+            },
+            {
+              "title": "Preview in Raycast",
+              "value": "raycast"
+            }
+          ],
+          "description": "Choose the primary action for the Notion Pages list."
+        }
+      ],
+      "platforms": [
+        "Windows",
+        "macOS"
+      ],
+      "runtime": "rust",
+      "refreshMs": null,
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 55000
+    },
+    {
+      "name": "quick-capture",
+      "title": "Quick Capture",
+      "description": "Capture something and put it out in a Notion page.",
+      "mode": "view",
+      "platforms": [
+        "Windows",
+        "macOS"
+      ],
+      "runtime": "rust",
+      "refreshMs": null,
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 55000
+    },
+    {
+      "name": "add-note",
+      "title": "Add Note",
+      "subtitle": "Notion",
+      "description": "Write a quick note into a daily page inside your notes page.",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "note",
+          "type": "text",
+          "title": "Note",
+          "placeholder": "Note",
+          "required": false
+        }
+      ],
+      "preferences": [
+        {
+          "name": "notes_page_name",
+          "type": "textfield",
+          "title": "Notes Page",
+          "required": false,
+          "default": "NOTES",
+          "description": "Name of the Notion page holding the daily note pages. It is created automatically if you pick a parent page in the form."
+        },
+        {
+          "name": "note_date_format",
+          "type": "textfield",
+          "title": "Date Page Format",
+          "required": false,
+          "default": "yyyy-MM-dd",
+          "description": "date-fns format used as the title of the daily page, e.g. yyyy-MM-dd or 'dd MMM yyyy'."
+        },
+        {
+          "name": "note_style",
+          "type": "dropdown",
+          "title": "Note Style",
+          "required": false,
+          "default": "bulleted",
+          "data": [
+            {
+              "title": "Bulleted List",
+              "value": "bulleted"
+            },
+            {
+              "title": "To-do Checkbox",
+              "value": "todo"
+            },
+            {
+              "title": "Plain Paragraph",
+              "value": "paragraph"
+            }
+          ],
+          "description": "How each note is written to the daily page."
+        }
+      ],
+      "platforms": [
+        "Windows",
+        "macOS"
+      ],
+      "runtime": "rust",
+      "refreshMs": null,
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 55000
+    },
+    {
+      "description": "Append or prepend text, along with date, to a Notion page.",
+      "mode": "view",
+      "name": "add-text-to-page",
+      "subtitle": "Notion",
+      "title": "Add Text to Page",
+      "arguments": [
+        {
+          "name": "text",
+          "type": "text",
+          "title": "Text",
+          "placeholder": "Text",
+          "required": false
+        }
+      ],
+      "platforms": [
+        "Windows",
+        "macOS"
+      ],
+      "runtime": "rust",
+      "refreshMs": null,
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 55000
+    }
+  ],
+  "capabilities": [
+    "host.settings.open",
+    "host.shell.open",
+    "host.shell.openWithApp",
+    "host.clipboard.read",
+    "host.clipboard.write",
+    "host.clipboard.pasteText",
+    "host.selection.read",
+    "host.dialog.confirm",
+    "host.window.visibility",
+    "host.ai.ask",
+    "host.quicklinks.create"
+  ],
+  "files": {},
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/notion/releases/download/v0.1.0/notion-aarch64-apple-darwin-development.zip",
+      "sha256": "a8cd83015b09bd5ca8b0023ed35a31020b8b32e3b8e83c984f2a252daa666464",
+      "executable": "bin/tezbar-notion",
+      "executableSha256": "e06ed0476b6900aa0b81ef0acbeae055230e20ee675c76d89432a01235a1f325"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/notion/releases/download/v0.1.0/notion-x86_64-pc-windows-msvc-development.zip",
+      "sha256": "96ed7484d1d742b0136e60d98e926b717188c33f7563f74381f80ec0c6f1b6d3",
+      "executable": "bin/tezbar-notion.exe",
+      "executableSha256": "abf3fc8dfe958804ffd3c15318cc43a4fc302b90d2e56c21f1cc31eea539043a"
+    }
+  }
+}

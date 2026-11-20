@@ -1,4 +1,7 @@
 //! Lightweight rich-format clipboard access; arboard owns text and pixel formats.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+const MAX_SNAPSHOT_BYTES: usize = 16 * 1024 * 1024;
+
 #[cfg(target_os = "macos")]
 mod platform {
     use std::ffi::{c_char, c_void, CStr, CString};
@@ -85,6 +88,56 @@ mod platform {
         let c = CString::new(value).map_err(|e| e.to_string())?;
         Ok(s1(class("NSString"), "stringWithUTF8String:", c.as_ptr()))
     }
+    pub fn content() -> Result<(Option<String>, bool), String> {
+        unsafe {
+            let _pool = Pool::new();
+            let pb = board();
+            if pb.is_null() {
+                return Err("Clipboard unavailable".into());
+            }
+            let before: isize = s0(pb, "changeCount");
+            let file_types = [
+                ns_string("public.file-url")?,
+                ns_string("NSFilenamesPboardType")?,
+                ns_string("com.apple.pasteboard.promised-file-url")?,
+                ns_string("NSFilesPromisePboardType")?,
+            ];
+            let file_types: Id = s2(
+                class("NSArray"),
+                "arrayWithObjects:count:",
+                file_types.as_ptr(),
+                file_types.len(),
+            );
+            let file_type: Id = s1(pb, "availableTypeFromArray:", file_types);
+            let text_type = ns_string("public.utf8-plain-text")?;
+            let text_types: Id = s1(class("NSArray"), "arrayWithObject:", text_type);
+            let available: Id = s1(pb, "availableTypeFromArray:", text_types);
+            let text = if available.is_null() {
+                None
+            } else {
+                let value: Id = s1(pb, "stringForType:", text_type);
+                if value.is_null() {
+                    return Err("Clipboard text unavailable".into());
+                }
+                let len: usize = s1(value, "lengthOfBytesUsingEncoding:", 4usize);
+                if len > super::MAX_SNAPSHOT_BYTES {
+                    return Err("Clipboard text exceeds snapshot limit".into());
+                }
+                let bytes: *const u8 = s0(value, "UTF8String");
+                if bytes.is_null() {
+                    return Err("Clipboard text unavailable".into());
+                }
+                let text = std::str::from_utf8(std::slice::from_raw_parts(bytes, len))
+                    .map_err(|_| "Invalid clipboard text")?;
+                Some(text.to_owned())
+            };
+            let after: isize = s0(pb, "changeCount");
+            if before != after {
+                return Err("Clipboard changed during read".into());
+            }
+            Ok((text, !file_type.is_null()))
+        }
+    }
     /// Pasteboard type identifiers of the current contents.
     pub fn types() -> Vec<String> {
         unsafe {
@@ -160,6 +213,7 @@ mod platform {
     extern "system" {
         fn GetClipboardSequenceNumber() -> u32;
         fn OpenClipboard(h: Handle) -> i32;
+        fn IsClipboardFormatAvailable(format: u32) -> i32;
         fn CloseClipboard() -> i32;
         fn EmptyClipboard() -> i32;
         fn GetClipboardData(format: u32) -> Handle;
@@ -191,6 +245,7 @@ mod platform {
     extern "system" {
         fn GlobalAlloc(flags: u32, size: usize) -> Handle;
         fn GlobalLock(h: Handle) -> Handle;
+        fn GlobalSize(h: Handle) -> usize;
         fn GlobalUnlock(h: Handle) -> i32;
         fn GlobalFree(h: Handle) -> Handle;
     }
@@ -359,6 +414,49 @@ mod platform {
     pub fn sequence() -> Option<u64> {
         Some(unsafe { GetClipboardSequenceNumber() } as u64)
     }
+    pub fn content() -> Result<(Option<String>, bool), String> {
+        unsafe {
+            // Holding the clipboard open covers both checks and the text read.
+            if OpenClipboard(std::ptr::null_mut()) == 0 {
+                return Err("Clipboard is busy".into());
+            }
+            let _board = Board;
+            const CF_HDROP: u32 = 15;
+            let mut has_files = IsClipboardFormatAvailable(CF_HDROP) != 0;
+            for name in ["FileGroupDescriptor", "FileGroupDescriptorW"] {
+                let format = RegisterClipboardFormatW(wide(name).as_ptr());
+                if format == 0 {
+                    return Err("Clipboard format unavailable".into());
+                }
+                has_files |= IsClipboardFormatAvailable(format) != 0;
+            }
+            if IsClipboardFormatAvailable(CF_UNICODETEXT) == 0 {
+                return Ok((None, has_files));
+            }
+            let handle = GetClipboardData(CF_UNICODETEXT);
+            if handle.is_null() {
+                return Err("Clipboard text unavailable".into());
+            }
+            let size = GlobalSize(handle);
+            if size == 0 || size % 2 != 0 || size > super::MAX_SNAPSHOT_BYTES {
+                return Err("Invalid clipboard text size".into());
+            }
+            let buffer = GlobalLock(handle).cast::<u16>();
+            if buffer.is_null() {
+                return Err("Clipboard text unavailable".into());
+            }
+            let units = std::slice::from_raw_parts(buffer, size / 2);
+            let result = units
+                .iter()
+                .position(|unit| *unit == 0)
+                .ok_or("Unterminated clipboard text")
+                .and_then(|end| {
+                    String::from_utf16(&units[..end]).map_err(|_| "Invalid clipboard text")
+                });
+            GlobalUnlock(handle);
+            Ok((Some(result?), has_files))
+        }
+    }
     pub fn files() -> Vec<String> {
         unsafe {
             if OpenClipboard(std::ptr::null_mut()) == 0 {
@@ -430,6 +528,9 @@ mod platform {
 }
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod platform {
+    pub fn content() -> Result<(Option<String>, bool), String> {
+        Err("Clipboard content snapshots unavailable on this platform".into())
+    }
     pub fn types() -> Vec<String> {
         vec![]
     }

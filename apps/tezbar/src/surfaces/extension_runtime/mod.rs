@@ -35,6 +35,7 @@ use tezbar_ui_model::extensions::runtime::{
 pub enum ExtensionEffect {
     Preferences,
     Back,
+    PopToRoot { clear_search: bool },
     Close,
     PickFiles { ticket: u64, multiple: bool },
     Notice(String),
@@ -79,6 +80,7 @@ pub struct RuntimeView {
     viewport_pending: bool,
     action_signature: Vec<String>,
     action_index: usize,
+    action_form_focus: Option<String>,
     action_scroll: UniformListScrollHandle,
     field_picker: Option<String>,
     dropdown_open: bool,
@@ -118,6 +120,15 @@ impl RuntimeView {
     }
 
     pub(super) fn focus_content(&self, w: &mut Window, cx: &mut Context<Self>) {
+        if let Some(entry) = self.form_focus_default().and_then(|default| {
+            self.focused_form_field(w, cx)
+                .or(self.action_form_focus.as_deref())
+                .and_then(|id| self.fields.get(id))
+                .or_else(|| self.fields.get(default))
+        }) {
+            entry.input.focus_handle(cx).focus(w, cx);
+            return;
+        }
         if self
             .session
             .as_ref()
@@ -127,6 +138,20 @@ impl RuntimeView {
         } else {
             self.focus.focus(w, cx);
         }
+    }
+    fn form_focus_default(&self) -> Option<&str> {
+        let root = &self.session.as_ref()?.root;
+        (root.kind == NodeKind::Form)
+            .then(|| root.string("focusedFieldId"))
+            .flatten()
+    }
+
+    fn focused_form_field(&self, w: &Window, cx: &App) -> Option<&str> {
+        self.form_focus_default()?;
+        self.fields
+            .iter()
+            .find(|(_, field)| field.input.focus_handle(cx).is_focused(w))
+            .map(|(id, _)| id.as_str())
     }
     pub fn host_generation(&self) -> u64 {
         self.host_generation
@@ -191,6 +216,7 @@ impl RuntimeView {
             viewport_pending: false,
             action_signature: Vec::new(),
             action_index: 0,
+            action_form_focus: None,
             action_scroll: UniformListScrollHandle::new(),
             field_picker: None,
             dropdown_open: false,
@@ -234,6 +260,7 @@ impl RuntimeView {
                     "extension:session-invalidated",
                     "extension-worker-status",
                     "extension:ui",
+                    "extension:native-navigation",
                     "extension:session-disposed",
                 ]
                 .map(str::to_owned)
@@ -310,15 +337,7 @@ impl RuntimeView {
         self.prepare(w, cx);
         self.drain_model_effects(w, cx);
         self.resolve_scope(cx);
-        if self
-            .session
-            .as_ref()
-            .is_some_and(|s| view::shows_search(&s.root))
-        {
-            self.search.focus_handle(cx).focus(w, cx);
-        } else {
-            self.focus.focus(w, cx);
-        }
+        self.focus_content(w, cx);
         self.arm(cx);
         cx.notify();
         Ok(())
@@ -376,6 +395,14 @@ impl RuntimeView {
             self.retire(cx);
             self.error = Some("Extension session ended. Run the command again.");
             cx.notify();
+            return;
+        }
+        if channel == "extension:native-navigation" {
+            if self.visible && !self.disposed && self.session.as_ref().is_some_and(|s| payload["sessionId"] == s.key.session_id && payload["generation"].as_str() == s.generation.as_deref()) {
+                if let Some(clear_search) = payload["clearSearch"].as_bool() {
+                    self.emit_effect(ExtensionEffect::PopToRoot { clear_search }, cx);
+                }
+            }
             return;
         }
         if channel == "extension:ui" {
@@ -450,6 +477,7 @@ impl RuntimeView {
         self.release_images(cx);
         self.scope = None;
         self.fields.clear();
+        self.action_form_focus = None;
         self.documents.clear();
         self.rows.clear();
         self.preference = Default::default();
@@ -546,6 +574,7 @@ impl RuntimeView {
             _ => {}
         }
         if open_actions {
+            self.action_form_focus = self.focused_form_field(w, cx).map(str::to_owned);
             self.action_index = 0;
             self.action_scroll.scroll_to_item(0, ScrollStrategy::Top);
             self.dropdown_open = false;
@@ -553,6 +582,7 @@ impl RuntimeView {
             self.action_search.focus_handle(cx).focus(w, cx);
         } else if close_actions {
             self.focus_content(w, cx);
+            self.action_form_focus = None;
         }
         self.prepare(w, cx);
         self.schedule_viewport(w, cx);
@@ -593,16 +623,29 @@ impl RuntimeView {
             Effect::Invoke {
                 token: t,
                 action_id,
-                form_values,
-            } => (
-                t.clone(),
-                ExtensionRequest::InvokeOwned {
-                    source: self.host_generation,
-                    session: t.key.session_id.clone(),
-                    action: action_id,
-                    values: form_values,
-                },
-            ),
+                mut form_values,
+            } => {
+                if let Some(values) = form_values.as_mut() {
+                    let focused = self.focused_form_field(w, cx).or_else(|| {
+                        self.form_focus_default()?;
+                        self.action_form_focus.as_deref().filter(|_| {
+                            self.session.as_ref().is_some_and(|s| s.action_panel)
+                        })
+                    });
+                    if let Some(id) = focused.filter(|id| values.contains_key(*id)) {
+                        values.insert("_focusedField".into(), json!(id));
+                    }
+                }
+                (
+                    t.clone(),
+                    ExtensionRequest::InvokeOwned {
+                        source: self.host_generation,
+                        session: t.key.session_id.clone(),
+                        action: action_id,
+                        values: form_values,
+                    },
+                )
+            }
             Effect::Leave => {
                 self.emit_effect(ExtensionEffect::Back, cx);
                 return;
@@ -748,6 +791,10 @@ impl RuntimeView {
                     v["effectSequence"].as_u64(),
                     now,
                 );
+                if v["nativeFeedback"] == true {
+                    s.notice = None;
+                    s.notice_message = None;
+                }
                 None
             }
             _ => {

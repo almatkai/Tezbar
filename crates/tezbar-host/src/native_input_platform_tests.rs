@@ -84,3 +84,13 @@ async fn cancelling_capture_request_keeps_blocking_task_cleanup_alive() {
         .unwrap()
         .unwrap();
 }
+
+#[cfg(target_os="windows")]
+#[tokio::test]
+async fn capture_targets_cancel_before_os_and_unknown_target_rejected() {
+    use std::sync::{Arc, atomic::AtomicBool};
+    assert!(super::capture_targets_protected("all".into(),Arc::new(AtomicBool::new(true)),||Ok(vec![])).await.unwrap().is_empty());
+    assert!(super::capture_targets_protected("unknown".into(),Arc::new(AtomicBool::new(false)),||Ok(vec![])).await.unwrap_err().contains("target"));
+    // Protection failure prevents the operation; no desktop is read by this test.
+    assert!(super::capture_targets_protected("all".into(),Arc::new(AtomicBool::new(false)),||Err("permission denied".into())).await.unwrap_err().contains("permission"));
+}

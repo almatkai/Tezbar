@@ -1,0 +1,63 @@
+{
+  "applied": true,
+  "results": [
+    {
+      "id": "com.tezbar.native.code-review-emojis",
+      "status": "excluded-policy-mismatch"
+    },
+    {
+      "id": "com.tezbar.native.base64",
+      "status": "verified-public-dual-target",
+      "desktopAcceptance": "unchanged",
+      "productionImporter": "separate-check-required"
+    },
+    {
+      "id": "com.tezbar.native.counter",
+      "status": "verified-public-dual-target",
+      "desktopAcceptance": "unchanged",
+      "productionImporter": "separate-check-required"
+    },
+    {
+      "id": "com.tezbar.native.text-rewrap",
+      "status": "excluded-policy-mismatch"
+    },
+    {
+      "id": "com.tezbar.native.unicode-symbols",
+      "status": "verified-public-dual-target",
+      "desktopAcceptance": "unchanged",
+      "productionImporter": "separate-check-required"
+    },
+    {
+      "id": "com.tezbar.native.color-shades",
+      "status": "verified-public-dual-target",
+      "desktopAcceptance": "unchanged",
+      "productionImporter": "separate-check-required"
+    },
+    {
+      "id": "com.tezbar.native.paste-as-plain-text",
+      "status": "verified-public-dual-target",
+      "desktopAcceptance": "unchanged",
+      "productionImporter": "separate-check-required"
+    },
+    {
+      "id": "com.tezbar.native.convert-px-to-vw-vh",
+      "status": "excluded-policy-mismatch"
+    },
+    {
+      "id": "com.tezbar.native.markdown-table-generator",
+      "status": "verified-public-dual-target",
+      "desktopAcceptance": "unchanged",
+      "productionImporter": "separate-check-required"
+    },
+    {
+      "id": "com.tezbar.native.markdown-reference",
+      "status": "excluded-policy-mismatch"
+    },
+    {
+      "id": "com.tezbar.native.markdown-image-to-html",
+      "status": "verified-public-dual-target",
+      "desktopAcceptance": "unchanged",
+      "productionImporter": "separate-check-required"
+    }
+  ]
+}
