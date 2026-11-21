@@ -2455,20 +2455,7 @@
     "execution": "process",
     "protocolVersion": 1,
     "repository": "https://github.com/almatkai/port-manager",
-    "artifacts": {
-      "aarch64-apple-darwin": {
-        "url": "https://github.com/almatkai/port-manager/releases/download/v1.0.0/port-manager-aarch64-apple-darwin.zip",
-        "sha256": "9f5fd622d68bc3c655d9eb71a1cf8de6a7411960e6922d907073bd74dedc6fdc",
-        "executable": "bin/tezbar-port-manager",
-        "executableSha256": "f36515ab14e7df39c0194b76798c9f7bc884319539ed5bf8b368bd2a7dcd3e72"
-      },
-      "x86_64-pc-windows-msvc": {
-        "url": "https://github.com/almatkai/port-manager/releases/download/v1.0.0/port-manager-x86_64-pc-windows-msvc.zip",
-        "sha256": "38eef2282a3ecc88d715e97a1d8d0daedcf3adeaaf31d44c41f090e1fa93e5ca",
-        "executable": "bin/tezbar-port-manager.exe",
-        "executableSha256": "826738b064cf4f2edd12c4cea952f09dfef7535fd54cce67896ac5cc84fbbdd8"
-      }
-    },
+    "artifacts": {},
     "capabilities": [
       "clipboard.write",
       "dialog.confirm",
