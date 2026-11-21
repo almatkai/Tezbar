@@ -497,9 +497,12 @@ pub(super) fn resolve(ctx: &CoreContext, id: &str) -> Result<Package, String> {
 }
 
 /// Every successful update appends a version directory. The package marker
-/// doesn't identify which activation wrote it, so only commands common to all
-/// retained versions are candidates for an old clear. installed.json and the
-/// discovery copy describe the current activation only.
+/// doesn't identify which activation wrote it. A command published in the v1
+/// baseline (9b9d7d6) has proven historical coverage even across intermediate
+/// remove/readd versions, so any historical clear is preserved. Genuinely newly
+/// covered commands (not in baseline and never seen in previous versions) are
+/// not treated as cleared. Histories that cannot distinguish a clear from a
+/// newly covered command defer conservatively.
 pub(super) fn retained_command_coverage(
     ctx: &CoreContext, id: &str, active_dir: &Path, active: &Value,
 ) -> Result<HashSet<String>, String> {
@@ -508,9 +511,9 @@ pub(super) fn retained_command_coverage(
             .filter_map(|cmd| cmd["name"].as_str().map(str::to_owned)).collect()
     };
     let versions = root(ctx, id)?.join("versions");
-    let mut covered = names(active);
+    let active_commands = names(active);
     let mut found_active = false;
-    let mut found_previous = false;
+    let mut previous_versions = Vec::new();
     for entry in std::fs::read_dir(versions).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let dir = entry.path();
@@ -526,21 +529,33 @@ pub(super) fn retained_command_coverage(
         validate(&manifest)?;
         if manifest["id"] != id { return Err("Retained package identity mismatch".into()); }
         verify_files(&dir, &manifest, artifact(&manifest)?)?;
-        found_previous = true;
-        let previous = names(&manifest);
-        covered.retain(|name| previous.contains(name));
+        previous_versions.push(names(&manifest));
     }
     if !found_active { return Err("Missing active version directory".into()); }
-    if !found_previous {
-        // A sole active directory could also be a reinstall. For this ambiguous
-        // case honor presumed clears only within the published beta.11 command
-        // baseline (9b9d7d6), independent of future catalog promotions.
-        let baseline: Value = serde_json::from_str(include_str!("v1_hotkey_coverage.json"))
-            .expect("bundled historical command names");
-        let Some(commands) = baseline[id].as_array() else {
-            return Err(format!("Package {id} not recognized in published v1 baseline"));
-        };
-        covered.retain(|name| commands.iter().any(|cmd| cmd.as_str() == Some(name.as_str())));
+
+    let baseline: Value = serde_json::from_str(include_str!("v1_hotkey_coverage.json"))
+        .expect("bundled historical command names");
+    let Some(commands) = baseline[id].as_array() else {
+        return Err(format!("Package {id} not recognized in published v1 baseline"));
+    };
+    let baseline_cmds: HashSet<String> = commands.iter()
+        .filter_map(|cmd| cmd.as_str().map(str::to_owned)).collect();
+
+    let mut covered = HashSet::new();
+    for cmd in &active_commands {
+        if baseline_cmds.contains(cmd) {
+            // Proven historical coverage from published v1 baseline: preserve clears
+            // even if intermediate retained versions temporarily removed the command.
+            covered.insert(cmd.clone());
+        } else {
+            // Not in published v1 baseline. If any previous retained version contained it,
+            // we cannot determine whether the old marker covered it.
+            let seen_in_previous = previous_versions.iter().any(|prev| prev.contains(cmd));
+            if seen_in_previous {
+                return Err(format!("Identity migration: ambiguous retained history for {id}"));
+            }
+            // Genuinely newly covered command (not in baseline and never seen in prior versions).
+        }
     }
     Ok(covered)
 }
