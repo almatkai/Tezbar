@@ -496,6 +496,55 @@ pub(super) fn resolve(ctx: &CoreContext, id: &str) -> Result<Package, String> {
     })
 }
 
+/// Every successful update appends a version directory. The package marker
+/// doesn't identify which activation wrote it, so only commands common to all
+/// retained versions are candidates for an old clear. installed.json and the
+/// discovery copy describe the current activation only.
+pub(super) fn retained_command_coverage(
+    ctx: &CoreContext, id: &str, active_dir: &Path, active: &Value,
+) -> Result<HashSet<String>, String> {
+    let names = |manifest: &Value| -> HashSet<String> {
+        manifest["commands"].as_array().into_iter().flatten()
+            .filter_map(|cmd| cmd["name"].as_str().map(str::to_owned)).collect()
+    };
+    let versions = root(ctx, id)?.join("versions");
+    let mut covered = names(active);
+    let mut found_active = false;
+    let mut found_previous = false;
+    for entry in std::fs::read_dir(versions).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let dir = entry.path();
+        if dir == active_dir || active_dir.file_name().is_some_and(|f| f == entry.file_name()) {
+            found_active = true;
+            continue;
+        }
+        if entry.file_name().to_string_lossy().starts_with(".stage-") { continue; }
+        if !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            return Err("Invalid retained version directory".into());
+        }
+        let manifest = read_json(&regular(&dir, "extension.json")?)?;
+        validate(&manifest)?;
+        if manifest["id"] != id { return Err("Retained package identity mismatch".into()); }
+        verify_files(&dir, &manifest, artifact(&manifest)?)?;
+        found_previous = true;
+        let previous = names(&manifest);
+        covered.retain(|name| previous.contains(name));
+    }
+    if !found_active { return Err("Missing active version directory".into()); }
+    if !found_previous {
+        // A sole active directory could also be a reinstall. For this ambiguous
+        // case honor presumed clears only within the published beta.11 command
+        // baseline (9b9d7d6), independent of future catalog promotions.
+        let baseline: Value = serde_json::from_str(include_str!("v1_hotkey_coverage.json"))
+            .expect("bundled historical command names");
+        let Some(commands) = baseline[id].as_array() else {
+            return Err(format!("Package {id} not recognized in published v1 baseline"));
+        };
+        covered.retain(|name| commands.iter().any(|cmd| cmd.as_str() == Some(name.as_str())));
+    }
+    Ok(covered)
+}
+
 /// Trusted catalog manifest, or an explicitly user-selected local manifest + ZIP.
 /// Local import grants the selected publisher code execution; it is not a sandbox.
 pub(super) async fn install(

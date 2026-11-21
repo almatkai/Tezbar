@@ -198,6 +198,9 @@ impl NativeCore {
             .flatten()
             .find(|row| {
                 row["id"].as_str() == Some(command) || settings_id.is_some_and(|(extension, name)| {
+                    if extension.starts_with("com.tezbar.native.") {
+                        return row["extensionId"] == extension && row["cmdName"] == name;
+                    }
                     let js_slug = row["extensionId"].as_str().and_then(|id| id.strip_prefix("raycast."));
                     let legacy_slug = extension.strip_prefix("com.tezbar.")
                         .filter(|_| !extension.starts_with("com.tezbar.native."));

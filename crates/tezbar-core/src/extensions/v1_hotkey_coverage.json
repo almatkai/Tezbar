@@ -1,0 +1,13 @@
+{
+  "com.tezbar.native.amphetamine": ["amp-start", "quick-start", "amp-end", "remaining", "amp-duration"],
+  "com.tezbar.native.audio-device": ["set-output-device", "set-input-device", "set-volume", "set-input-volume", "auto-switch-input", "auto-switch-output", "customize-order", "favourite", "toggle-favourites", "use-combo1", "use-combo2", "use-combo3"],
+  "com.tezbar.native.cleanshotx": ["open-history", "open-settings", "view-uploads", "all-in-one", "capture-fullscreen", "capture-area", "capture-previous-area", "capture-window", "self-timer", "scrolling-capture", "record-screen", "capture-text", "annotate", "open-from-clipboard", "toggle-desktop-icons", "hide-desktop-icons", "show-desktop-icons", "restore-recently-closed", "add-quick-access-overlay", "pin", "capture-area-raycast-aichat", "record-screen-preset", "manage-recording-presets"],
+  "com.tezbar.native.color-picker": ["pick-color", "extract-color", "menu-bar", "organize-colors", "favorite-colors", "generate-colors", "color-names", "color-wheel", "convert-color"],
+  "com.tezbar.native.gif-search": ["search", "favorites", "recents"],
+  "com.tezbar.native.google-calendar": ["create-event", "create-quick-event", "search-contacts", "list-events", "list-calendars"],
+  "com.tezbar.native.google-search": ["index", "searchSelectText"],
+  "com.tezbar.native.perplexity": ["ask-perplexity"],
+  "com.tezbar.native.port-manager": ["kill-listening-process", "named-ports", "open-ports", "open-ports-menu-bar"],
+  "com.tezbar.native.speedtest": ["index"],
+  "com.tezbar.native.timers": ["start2MinuteTimer", "start5MinuteTimer", "start10MinuteTimer", "start15MinuteTimer", "start25MinuteTimer", "start30MinuteTimer", "start45MinuteTimer", "start60MinuteTimer", "start90MinuteTimer", "startCustomTimer", "manageTimers", "timersMenuBar", "startStopwatch", "manageStopwatches", "dismissTimerAlert", "stopwatchMenuBar", "previewAlertSounds", "stopRunningTimer", "configureMenubarPresets"]
+}

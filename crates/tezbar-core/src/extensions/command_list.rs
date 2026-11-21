@@ -123,7 +123,7 @@ impl CommandList {
                     }
                 }
             }
-            let commands = registry::handle(ctx, "core:extensions:commands", &[])?;
+            let (commands, migrations_complete) = registry::command_rows(ctx)?;
             // Do not publish a result observed across external CLI activation,
             // icon replacement, discovery changes, or an in-process mutation.
             #[cfg(test)]
@@ -141,7 +141,7 @@ impl CommandList {
             if after.as_ref().ok() != Some(&inputs) {
                 continue;
             }
-            if cacheable {
+            if cacheable && migrations_complete {
                 state.snapshot = Some(Snapshot {
                     inputs,
                     commands: commands.clone(),
