@@ -3318,7 +3318,7 @@
     "id": "com.tezbar.native.google-translate",
     "slug": "google-translate",
     "name": "Google Translate",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Simple translation using Google Translate",
     "author": "gebeto",
     "icon": "resources/assets/google-translate.png",
@@ -3369,7 +3369,7 @@
         "title": "Quick Translate",
         "subtitle": "Google Translate",
         "description": "Quickly translate to multiple languages",
-        "mode": "view",
+        "mode": "no-view",
         "platforms": [
           "macOS",
           "Windows"
@@ -3377,6 +3377,20 @@
         "runtime": "rust",
         "concurrency": "serialize",
         "refreshMs": null
+      },
+      {
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "name": "quick-translate-view",
+        "title": "Quick Translate Results",
+        "subtitle": "Google Translate",
+        "description": "Display the translation results opened by Quick Translate",
+        "mode": "view"
       },
       {
         "name": "instant-translate-copy",
@@ -6498,7 +6512,22 @@
       "clipboard.pasteText",
       "shell.open"
     ],
-    "artifacts": {}
+    "files": {},
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/google-translate/releases/download/v0.1.1/google-translate-aarch64-apple-darwin.zip",
+        "sha256": "1f9ac6db720e158b0726a78c77b76a68aa1590cca767742dbc97ef66a10f6b75",
+        "executable": "bin/tezbar-google-translate",
+        "executableSha256": "4b127214c695cad018a2eb0b499f50ef1c20155904e94558d30741a1c949ebcb"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/google-translate/releases/download/v0.1.1/google-translate-x86_64-pc-windows-msvc.zip",
+        "sha256": "4cd11e982a1e6ab912171c99c11e475721d7539493af1214a654b8533f1c80ca",
+        "executable": "bin/tezbar-google-translate.exe",
+        "executableSha256": "a1d65dcc64e33b74ec601e6f5ba625c763478f25af74719068d4e2224ca83fa2"
+      }
+    },
+    "minHostVersion": "0.3.0-beta.12"
   },
   {
     "description": "A quick way to generate UUIDs without opening the browser",
@@ -19716,5 +19745,2918 @@
         "executableSha256": "abf3fc8dfe958804ffd3c15318cc43a4fc302b90d2e56c21f1cc31eea539043a"
       }
     }
+  },
+  {
+    "schemaVersion": 3,
+    "id": "com.tezbar.native.github",
+    "slug": "github",
+    "name": "GitHub",
+    "description": "Search GitHub repositories, create and merge pull requests, manage issues and Actions workflows, and track your GitHub notifications.",
+    "version": "0.1.0",
+    "author": "thomaslombart",
+    "repository": "https://github.com/almatkai/github",
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "icon": "resources/assets/icon.png",
+    "runtime": "rust",
+    "execution": "process",
+    "protocolVersion": 1,
+    "minHostVersion": "0.3.0-beta.12",
+    "replaces": [
+      "raycast.github"
+    ],
+    "preferences": [
+      {
+        "name": "personalAccessToken",
+        "type": "password",
+        "required": false,
+        "title": "GitHub Token",
+        "description": "Your GitHub's personal access token. Required scopes: notifications repo project read:org read:user. Add read:packages to use the My Packages commands.",
+        "link": "https://github.com/settings/tokens",
+        "placeholder": "Enter your personal access token"
+      },
+      {
+        "name": "defaultSearchTerms",
+        "type": "textfield",
+        "required": false,
+        "title": "Default Search Terms",
+        "description": "Default search to be populated when searching issues, pull requests and discussions.",
+        "default": "author:@me"
+      },
+      {
+        "name": "numberOfResults",
+        "type": "textfield",
+        "required": false,
+        "title": "Search Results per Page",
+        "description": "For repository, issue, discussion, or pull request searches, this is the number of results requested per page. Fewer results per page will load faster.",
+        "placeholder": "25"
+      },
+      {
+        "name": "baseClonePath",
+        "type": "directory",
+        "required": false,
+        "title": "Default Clone Path",
+        "description": "Used by the 'Clone and Open' action. 'Clone with Options' starts here but lets you choose a different directory."
+      },
+      {
+        "name": "vscodeBuild",
+        "type": "dropdown",
+        "required": false,
+        "title": "VS Code Build",
+        "description": "Which editor to use for the Clone in VS Code action. Applies to Search Repositories, My Latest Repositories, and My Starred Repositories.",
+        "default": "vscode",
+        "data": [
+          {
+            "title": "VS Code",
+            "value": "vscode"
+          },
+          {
+            "title": "Cursor",
+            "value": "cursor"
+          }
+        ]
+      },
+      {
+        "name": "repositoryCloneProtocol",
+        "title": "Repository Clone Protocol",
+        "label": "Protocol for Cloning Repositories",
+        "description": "The protocol to use when cloning a repository.",
+        "type": "dropdown",
+        "required": false,
+        "default": "https",
+        "data": [
+          {
+            "title": "HTTPS",
+            "value": "https"
+          },
+          {
+            "title": "SSH",
+            "value": "ssh"
+          }
+        ]
+      },
+      {
+        "type": "checkbox",
+        "title": "Actions",
+        "label": "Open PRs in browser by default",
+        "name": "isOpenInBrowser",
+        "description": "If checked, pull requests will be opened in the browser by default instead of viewing them within Raycast.",
+        "default": false,
+        "required": false
+      },
+      {
+        "name": "includeTeamReviewRequests",
+        "type": "checkbox",
+        "required": false,
+        "title": "Advanced",
+        "default": true,
+        "label": "PRs include team review requests",
+        "description": "Include PRs where your team's review was requested as well as your own."
+      },
+      {
+        "name": "repositoryFilterMode",
+        "type": "dropdown",
+        "required": false,
+        "default": "all",
+        "title": "Repository Filter Mode",
+        "description": "How to filter repositories",
+        "data": [
+          {
+            "title": "All Repositories",
+            "value": "all"
+          },
+          {
+            "title": "Include Only Listed Repositories",
+            "value": "include"
+          },
+          {
+            "title": "Exclude Listed Repositories",
+            "value": "exclude"
+          }
+        ]
+      },
+      {
+        "name": "repositoryList",
+        "type": "textfield",
+        "required": false,
+        "title": "Repository List",
+        "description": "Comma-separated list of repositories to include/exclude (e.g., 'owner/repo1, owner/repo2')",
+        "placeholder": "owner/repo1, owner/repo2, owner/repo3"
+      }
+    ],
+    "commands": [
+      {
+        "name": "my-pull-requests",
+        "title": "My Pull Requests",
+        "description": "List pull requests you created, participated in, or were mentioned in.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "includeAssigned",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Assigned",
+            "title": "Categories to Display",
+            "description": "Includes pull request you were assigned to in the menu list."
+          },
+          {
+            "name": "includeMentioned",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Mentioned",
+            "description": "Includes pull request you were mentioned in the menu list."
+          },
+          {
+            "name": "includeReviewRequests",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Review Requests",
+            "description": "Includes pull request you were requested to review in the menu list."
+          },
+          {
+            "name": "includeReviewed",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "label": "Reviewed",
+            "description": "Includes pull request you reviewed in the menu list."
+          },
+          {
+            "name": "includeRecentlyClosed",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "label": "Recently Closed",
+            "description": "Includes pull request you recently closed in the menu list."
+          },
+          {
+            "name": "includeDrafts",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Drafts",
+            "description": "Include draft pull requests in the list."
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "search-pull-requests",
+        "title": "Search Pull Requests",
+        "description": "Search recent pull requests globally in all repositories.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "create-pull-request",
+        "title": "Create Pull Request",
+        "description": "Create a pull request in one of your GitHub repositories.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-issues",
+        "title": "My Issues",
+        "description": "List issues created by you, assigned to you or mentioning you.",
+        "mode": "view",
+        "keywords": [
+          "open issues",
+          "created issues"
+        ],
+        "preferences": [
+          {
+            "name": "showCreated",
+            "description": "Show issues you created",
+            "type": "checkbox",
+            "required": false,
+            "label": "Created",
+            "title": "Categories to Display",
+            "default": true
+          },
+          {
+            "name": "showAssigned",
+            "description": "Show issues assigned to you",
+            "type": "checkbox",
+            "required": false,
+            "label": "Assigned",
+            "default": true
+          },
+          {
+            "name": "showMentioned",
+            "description": "Show issues where you are mentioned",
+            "type": "checkbox",
+            "required": false,
+            "label": "Mentioned",
+            "default": true
+          },
+          {
+            "name": "showRecentlyClosed",
+            "description": "Show recently closed issues",
+            "type": "checkbox",
+            "required": false,
+            "label": "Recently Closed",
+            "default": false
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "search-issues",
+        "title": "Search Issues",
+        "description": "Search recent issues globally in all repositories.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "create-issue",
+        "title": "Create Issue",
+        "description": "Create an issue in one of your GitHub repositories.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "openInBrowserAfterCreate",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "title": "After Creating",
+            "label": "Open issue in browser",
+            "description": "If checked, newly created issues will be opened in your default browser."
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "create-branch",
+        "title": "Create Branch",
+        "description": "Create a branch in one of your GitHub repositories",
+        "mode": "view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "create-release",
+        "title": "Create Release",
+        "description": "Create a release in one of your GitHub repositories.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "create-repository",
+        "title": "Create Repository",
+        "description": "Create a repository on your GitHub account or in one of your organizations",
+        "mode": "view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "search-repositories",
+        "title": "Search Repositories",
+        "description": "Search in your public or private repositories by name.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "application",
+            "type": "appPicker",
+            "required": false,
+            "title": "IDE Application",
+            "default": "/Applications/Visual Studio Code.app",
+            "placeholder": "/Applications/Visual Studio Code.app",
+            "description": "Will be used to open the cloned repository."
+          },
+          {
+            "name": "includeForks",
+            "type": "checkbox",
+            "required": false,
+            "title": "Options",
+            "default": true,
+            "label": "Include Forks",
+            "description": "Includes forked repositories in search results"
+          },
+          {
+            "name": "includeArchived",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "label": "Include Archived",
+            "description": "Includes archived repositories in search results"
+          },
+          {
+            "name": "displayOwnerName",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "label": "Display Owner Names",
+            "description": "Display owner name alongside repository name in search results"
+          },
+          {
+            "name": "disableThrottle",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "label": "Disable Throttle",
+            "description": "Disable search input throttling for immediate search on each keystroke"
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-latest-repositories",
+        "title": "My Latest Repositories",
+        "description": "List your repositories by latest updated",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-starred-repositories",
+        "title": "My Starred Repositories",
+        "description": "List repositories you have starred",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-packages",
+        "title": "My Packages",
+        "description": "List packages you published to GitHub Packages",
+        "mode": "view",
+        "keywords": [
+          "container",
+          "npm",
+          "maven",
+          "docker",
+          "nuget",
+          "rubygems",
+          "registry"
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "workflow-runs",
+        "title": "Workflow Runs",
+        "description": "Manage workflow runs for a selected GitHub repository.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "dispatch-workflow",
+        "title": "Dispatch Workflow",
+        "description": "Trigger a workflow_dispatch workflow in one of your GitHub repositories.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "notifications",
+        "title": "Notifications",
+        "description": "List inbox notifications from all repositories or a selected repository.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "unread-notifications",
+        "title": "Unread Notifications",
+        "description": "Shows unread notifications in the macOS menu bar.",
+        "mode": "menu-bar",
+        "interval": "15m",
+        "preferences": [
+          {
+            "type": "checkbox",
+            "label": "Always Show",
+            "name": "alwaysShow",
+            "description": "Show the menu bar extra even when you don't have any unread notifications.",
+            "default": true,
+            "required": false
+          },
+          {
+            "type": "checkbox",
+            "label": "Show unread count",
+            "name": "showUnreadCount",
+            "description": "Show the unread count in the menu bar.",
+            "default": true,
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "search-discussions",
+        "title": "Search Discussions",
+        "description": "Search recent Discussions globally in all repositories",
+        "mode": "view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-discussions",
+        "title": "My Discussions",
+        "description": "Show your Discussions",
+        "mode": "view",
+        "disabledByDefault": true,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-projects",
+        "title": "My Projects",
+        "description": "Show your Projects",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-issues-menu",
+        "title": "My Issues Menu Bar",
+        "description": "Display My Issues in the Menu Bar",
+        "mode": "menu-bar",
+        "keywords": [
+          "open issues"
+        ],
+        "interval": "15m",
+        "preferences": [
+          {
+            "name": "showtext",
+            "description": "Show issues count with menu bar icon.",
+            "type": "checkbox",
+            "required": false,
+            "label": "Show Count",
+            "title": "Appearance",
+            "default": true
+          },
+          {
+            "name": "useUnreadIndicator",
+            "description": "Show unread indicator for pull requests.",
+            "type": "checkbox",
+            "required": false,
+            "label": "Unread Indicator",
+            "default": false
+          },
+          {
+            "name": "maxitems",
+            "description": "Maximum issues shown per category.",
+            "type": "textfield",
+            "required": false,
+            "title": "Max Issues per category",
+            "placeholder": "10"
+          },
+          {
+            "name": "showCreated",
+            "description": "Show issues you created",
+            "type": "checkbox",
+            "required": false,
+            "label": "Created",
+            "title": "Categories to Display",
+            "default": true
+          },
+          {
+            "name": "showAssigned",
+            "description": "Show issues assigned to you",
+            "type": "checkbox",
+            "required": false,
+            "label": "Assigned",
+            "default": true
+          },
+          {
+            "name": "showMentioned",
+            "description": "Show issues where you are mentioned",
+            "type": "checkbox",
+            "required": false,
+            "label": "Mentioned",
+            "default": true
+          },
+          {
+            "name": "showRecentlyClosed",
+            "description": "Show recently closed issues",
+            "type": "checkbox",
+            "required": false,
+            "label": "Recently Closed",
+            "default": false
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-stats-menu",
+        "title": "My GitHub Stats Menu Bar",
+        "description": "Display your GitHub profile stats (followers, stars received, PRs, issues, commits) in the Menu Bar",
+        "mode": "menu-bar",
+        "interval": "15m",
+        "preferences": [
+          {
+            "name": "useAvatarAsIcon",
+            "description": "Show your GitHub avatar as the menu bar icon instead of the GitHub logo",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Avatar",
+            "title": "Menu Bar Icon"
+          },
+          {
+            "name": "notifyOnNewStars",
+            "description": "Show a badge in the menu bar title and a 'What's New' section when your repositories receive new stars",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Notify on new stars",
+            "title": "New Stars Notification"
+          },
+          {
+            "name": "refreshFrequency",
+            "description": "How often to refresh stats in the background. Lower values keep the data fresher but use more GitHub API quota.",
+            "type": "dropdown",
+            "required": false,
+            "default": "30m",
+            "title": "Refresh Frequency",
+            "data": [
+              {
+                "title": "15 minutes",
+                "value": "15m"
+              },
+              {
+                "title": "30 minutes",
+                "value": "30m"
+              },
+              {
+                "title": "1 hour",
+                "value": "1h"
+              },
+              {
+                "title": "2 hours",
+                "value": "2h"
+              }
+            ]
+          },
+          {
+            "name": "titleMetric",
+            "description": "The metric shown next to the menu bar icon",
+            "type": "dropdown",
+            "required": false,
+            "default": "followers",
+            "title": "Menu Bar Title",
+            "data": [
+              {
+                "title": "Followers",
+                "value": "followers"
+              },
+              {
+                "title": "Stars Received",
+                "value": "stars"
+              },
+              {
+                "title": "Open PRs",
+                "value": "prsOpen"
+              },
+              {
+                "title": "Open Issues",
+                "value": "issuesOpen"
+              },
+              {
+                "title": "Icon Only",
+                "value": "none"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-pull-requests-menu",
+        "title": "My Pull Requests Menu Bar",
+        "description": "Display My Pull Requests in the Menu Bar",
+        "mode": "menu-bar",
+        "interval": "15m",
+        "preferences": [
+          {
+            "name": "showtext",
+            "description": "Show pull requests count with menu bar icon.",
+            "type": "checkbox",
+            "required": false,
+            "label": "Show",
+            "title": "Icon Count",
+            "default": true
+          },
+          {
+            "name": "useUnreadIndicator",
+            "description": "Show unread indicator for pull requests.",
+            "type": "checkbox",
+            "required": false,
+            "label": "Unread Indicator",
+            "default": false
+          },
+          {
+            "name": "includeAssigned",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Assigned",
+            "title": "Categories to Display",
+            "description": "Includes pull request you were assigned to in the menu list."
+          },
+          {
+            "name": "includeMentioned",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Mentioned",
+            "description": "Includes pull request you were mentioned in the menu list."
+          },
+          {
+            "name": "includeReviewRequests",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Review Requests",
+            "description": "Includes pull request you were requested to review in the menu list."
+          },
+          {
+            "name": "includeReviewed",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "label": "Reviewed",
+            "description": "Includes pull request you reviewed in the menu list."
+          },
+          {
+            "name": "includeRecentlyClosed",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "label": "Recently Closed",
+            "description": "Includes pull request you recently closed in the menu list."
+          },
+          {
+            "name": "includeDrafts",
+            "type": "checkbox",
+            "required": false,
+            "default": true,
+            "label": "Drafts",
+            "description": "Include draft pull requests in the menu list."
+          },
+          {
+            "name": "maxitems",
+            "description": "Maximum pull requests shown per category.",
+            "type": "textfield",
+            "required": false,
+            "title": "Max Pull Requests per category",
+            "placeholder": "5"
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "my-packages-menu",
+        "title": "My Packages Menu Bar",
+        "description": "Display My Packages in the Menu Bar",
+        "mode": "menu-bar",
+        "interval": "30m",
+        "preferences": [
+          {
+            "name": "titlePackage",
+            "description": "Show this package's name and total download count in the menu bar title. Leave empty to show the number of packages instead. GitHub publishes download counts only on public package pages, so a private package shows just its name.",
+            "type": "textfield",
+            "required": false,
+            "title": "Menu Bar Title",
+            "placeholder": "package-name"
+          },
+          {
+            "name": "showtext",
+            "description": "Show packages count with menu bar icon. Ignored when a package name is set above.",
+            "type": "checkbox",
+            "required": false,
+            "label": "Show Count",
+            "title": "Appearance",
+            "default": true
+          },
+          {
+            "name": "maxitems",
+            "description": "Maximum packages shown per package type.",
+            "type": "textfield",
+            "required": false,
+            "title": "Max Packages per Package Type",
+            "placeholder": "10"
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      },
+      {
+        "name": "download-repository",
+        "title": "Download Repository as ZIP",
+        "subtitle": "GitHub",
+        "description": "Download a repository or directory as a ZIP archive (does not create a Git clone)",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "refreshMs": null,
+        "concurrency": "reject-while-busy",
+        "timeoutMs": 55000
+      }
+    ],
+    "capabilities": [
+      "host.settings.open",
+      "host.shell.open",
+      "host.shell.openWithApp",
+      "host.shell.reveal",
+      "host.clipboard.read",
+      "host.clipboard.write",
+      "host.dialog.confirm",
+      "host.tray.set",
+      "host.tray.remove",
+      "host.background.retain",
+      "host.background.release",
+      "host.notifications.show"
+    ],
+    "files": {},
+    "artifacts": {
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/github/releases/download/v0.1.0/github-x86_64-pc-windows-msvc-development.zip",
+        "sha256": "742dda4daacd47e4b950c88ecf189f0d0985ceec04f2834eaed39bb4c2c28a72",
+        "executable": "bin/tezbar-github.exe",
+        "executableSha256": "17670999381419043c212c9ded468cec7d475cf4b1705fef5db5627fb810e447"
+      },
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/github/releases/download/v0.1.0/github-aarch64-apple-darwin-development.zip",
+        "sha256": "d3aeb8b550f4f667a7dd19f15761726545f3115c96dd4a19d23bbfbf5beb0d78",
+        "executable": "bin/tezbar-github",
+        "executableSha256": "d08ec25bc6db1c60504094c863b812b948a76cdd8ba290b3f0a3b1871eccd212"
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "id": "com.tezbar.native.obsidian",
+    "slug": "obsidian",
+    "name": "Obsidian",
+    "version": "0.1.0",
+    "description": "Search, open, create and edit Obsidian notes, append to your daily note, add tasks, open vaults and pin notes in the menu bar.",
+    "author": "marcjulian",
+    "icon": "resources/extension_icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.obsidian"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "vaultPath",
+        "type": "textfield",
+        "placeholder": "path/to/vault",
+        "title": "Path to Vault",
+        "required": false,
+        "description": "Specify the path or multiple paths (comma separated) to your vault/vaults"
+      },
+      {
+        "name": "configFileName",
+        "type": "textfield",
+        "placeholder": ".obsidian",
+        "title": "Config filename",
+        "required": false,
+        "default": ".obsidian",
+        "description": "Override the vault config filename (default: .obsidian)"
+      },
+      {
+        "name": "excludedFolders",
+        "type": "textfield",
+        "placeholder": "folder1, folder2, ...",
+        "title": "Exclude following folders",
+        "required": false,
+        "description": "Specify which folders to exclude (comma separated)"
+      },
+      {
+        "name": "removeYAML",
+        "title": "Remove content",
+        "label": "Hide YAML frontmatter",
+        "type": "checkbox",
+        "required": false,
+        "description": "Hide YAML frontmatter for copying and viewing notes"
+      },
+      {
+        "name": "removeLatex",
+        "label": "Hide LaTeX",
+        "type": "checkbox",
+        "required": false,
+        "description": "Hide LaTeX (surrounded by $$ or $) for copying and viewing notes"
+      },
+      {
+        "name": "removeLinks",
+        "label": "Hide Links",
+        "type": "checkbox",
+        "required": false,
+        "description": "Hide links for copying and viewing notes"
+      }
+    ],
+    "commands": [
+      {
+        "name": "searchNoteCommand",
+        "title": "Search Note",
+        "subtitle": "Obsidian",
+        "description": "Search, open, view, copy, paste and edit any note in Obsidian.",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "searchArgument",
+            "placeholder": "Note",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "tagArgument",
+            "placeholder": "Tag",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "preferences": [
+          {
+            "name": "appendTemplate",
+            "type": "textfield",
+            "title": "Template for Append action",
+            "required": false,
+            "description": "Specify a template for Append action (e.g. '- {content}')"
+          },
+          {
+            "name": "appendSelectedTemplate",
+            "type": "textfield",
+            "title": "Template for Append Selected Text action",
+            "required": false,
+            "description": "Specify a template for Append Selected Text action (e.g. '- {content}')"
+          },
+          {
+            "name": "showDetail",
+            "type": "checkbox",
+            "label": "Show Detail",
+            "title": "Show Detail",
+            "required": false,
+            "description": "Show the notes content in a detail view",
+            "default": true
+          },
+          {
+            "name": "showMetadata",
+            "type": "checkbox",
+            "label": "Show Metadata",
+            "title": "Show Metadata",
+            "required": false,
+            "description": "Show the notes metadata in a detail view (only works when Show Detail is enabled)",
+            "default": false
+          },
+          {
+            "name": "searchContent",
+            "type": "checkbox",
+            "label": "Search Content",
+            "title": "Search Content",
+            "required": false,
+            "description": "Use the content of notes for searching",
+            "default": false
+          },
+          {
+            "name": "fuzzySearch",
+            "type": "checkbox",
+            "label": "Use Fuzzy Search",
+            "title": "Use Fuzzy Search",
+            "required": false,
+            "description": "If fuzzy search should be used",
+            "default": false
+          },
+          {
+            "name": "primaryAction",
+            "type": "dropdown",
+            "title": "Primary Action",
+            "required": false,
+            "description": "Select a primary action to be executed on enter",
+            "defaultValue": "quicklook",
+            "data": [
+              {
+                "title": "Quick Look",
+                "value": "quicklook"
+              },
+              {
+                "title": "Open in Obsidian",
+                "value": "obsidian"
+              },
+              {
+                "title": "Open in new Obsidian tab",
+                "value": "newpane"
+              },
+              {
+                "title": "Open in default app",
+                "value": "defaultapp"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "starredNotesCommand",
+        "title": "Bookmarked Notes",
+        "subtitle": "Obsidian",
+        "description": "Search, open, view, copy, paste and edit bookmarked notes in Obsidian.",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "searchArgument",
+            "placeholder": "Note",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "tagArgument",
+            "placeholder": "Tag",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "preferences": [
+          {
+            "name": "appendTemplate",
+            "type": "textfield",
+            "title": "Template for Append action",
+            "required": false,
+            "description": "Specify a template for Append action (e.g. '- {content}')"
+          },
+          {
+            "name": "appendSelectedTemplate",
+            "type": "textfield",
+            "title": "Template for Append Selected Text action",
+            "required": false,
+            "description": "Specify a template for Append Selected Text action (e.g. '- {content}')"
+          },
+          {
+            "name": "showDetail",
+            "type": "checkbox",
+            "label": "Show Detail",
+            "title": "Show Detail",
+            "required": false,
+            "description": "Show the notes content in a detail view",
+            "default": true
+          },
+          {
+            "name": "showMetadata",
+            "type": "checkbox",
+            "label": "Show Metadata",
+            "title": "Show Metadata",
+            "required": false,
+            "description": "Show the notes metadata in a detail view (only works when Show Detail is enabled)",
+            "default": false
+          },
+          {
+            "name": "searchContent",
+            "type": "checkbox",
+            "label": "Search Content",
+            "title": "Search Content",
+            "required": false,
+            "description": "Use the content of notes for searching",
+            "default": false
+          },
+          {
+            "name": "primaryAction",
+            "type": "dropdown",
+            "title": "Primary Action",
+            "required": false,
+            "description": "Select a primary action to be executed on enter",
+            "defaultValue": "quicklook",
+            "data": [
+              {
+                "title": "Quick Look",
+                "value": "quicklook"
+              },
+              {
+                "title": "Open in Obsidian",
+                "value": "obsidian"
+              },
+              {
+                "title": "Open in new Obsidian tab",
+                "value": "newpane"
+              },
+              {
+                "title": "Open in default app",
+                "value": "defaultapp"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "openVaultCommand",
+        "title": "Open Vault",
+        "subtitle": "Obsidian",
+        "description": "Open a vault in Obsidian.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "openWorkspaceCommand",
+        "title": "Open Workspace",
+        "subtitle": "Obsidian",
+        "description": "Open a workspace in Obsidian.",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "dailyNoteAppendCommand",
+        "title": "Append to Daily Note",
+        "subtitle": "Obsidian",
+        "description": "Append text to your daily note",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "text",
+            "placeholder": "Take out the trash",
+            "type": "text",
+            "required": true
+          }
+        ],
+        "preferences": [
+          {
+            "name": "appendTemplate",
+            "type": "textfield",
+            "title": "Template for Daily Note Append action",
+            "required": false,
+            "description": "Specify a template for Daily Note Append action (e.g. '- {content}')"
+          },
+          {
+            "name": "vaultName",
+            "type": "textfield",
+            "title": "Name of Obsidian vault where note is",
+            "required": false,
+            "description": "Name of Obsidian vault where note is"
+          },
+          {
+            "name": "heading",
+            "type": "textfield",
+            "title": "Name of heading in note in which to append",
+            "required": false,
+            "description": "If no heading is set, text will be appended to the end of the daily note"
+          },
+          {
+            "name": "prepend",
+            "type": "checkbox",
+            "label": "Prepend",
+            "title": "Prepend",
+            "required": false,
+            "description": "Prepend the text instead of appending",
+            "default": false
+          },
+          {
+            "name": "silent",
+            "type": "checkbox",
+            "label": "Silent Mode",
+            "title": "Silent Mode",
+            "required": false,
+            "description": "Don't open daily note when appending to the daily note.",
+            "default": true
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "dailyNoteCommand",
+        "title": "Daily Note",
+        "subtitle": "Obsidian",
+        "description": "Open daily note in Obsidian. Will create new daily note when it doesn't exist yet.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "vaultName",
+            "type": "textfield",
+            "title": "Obsidian Vault",
+            "required": false,
+            "description": "Name of Obsidian vault. If not given, a selector is presented."
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "createNoteCommand",
+        "title": "Create Note",
+        "subtitle": "Obsidian",
+        "description": "Create new note",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "blankNote",
+            "type": "checkbox",
+            "label": "Blank Note",
+            "title": "Blank Note",
+            "required": false,
+            "description": "Create a blank note",
+            "default": false
+          },
+          {
+            "name": "focusContentArea",
+            "type": "checkbox",
+            "label": "Auto Focus Content Field",
+            "title": "Auto Focus Content Field",
+            "required": false,
+            "description": "Let's you auto focus on the content field rather than the name field",
+            "default": false
+          },
+          {
+            "name": "openOnCreate",
+            "type": "checkbox",
+            "title": "Open Note on Creation",
+            "label": "Open Note on Creation",
+            "default": true,
+            "required": false,
+            "description": "Open the created note in Obsidian"
+          },
+          {
+            "name": "prefPath",
+            "type": "textfield",
+            "placeholder": "path/to/note",
+            "title": "Default Path",
+            "required": false,
+            "description": "The default path where a new note will be created",
+            "default": ""
+          },
+          {
+            "name": "prefNoteName",
+            "type": "textfield",
+            "title": "Default Note Name",
+            "required": false,
+            "description": "The default note name if no name is specified",
+            "default": "Untitled"
+          },
+          {
+            "name": "prefNoteContent",
+            "type": "textfield",
+            "title": "Default Note Content",
+            "required": false,
+            "description": "The default note content (supports templates)",
+            "default": ""
+          },
+          {
+            "name": "fillFormWithDefaults",
+            "type": "checkbox",
+            "label": "Fill form with defaults",
+            "title": "Fill form with defaults",
+            "required": false,
+            "default": false,
+            "description": "Fill form with default values"
+          },
+          {
+            "name": "prefTag",
+            "type": "textfield",
+            "placeholder": "untagged",
+            "title": "Default Tag",
+            "required": false,
+            "description": "The default selected tag",
+            "default": ""
+          },
+          {
+            "name": "tags",
+            "type": "textfield",
+            "placeholder": "tag1, tag2, tag3, ...",
+            "title": "Tags",
+            "required": false,
+            "description": "The tags which will be suggested on note creation",
+            "default": ""
+          },
+          {
+            "name": "folderActions",
+            "type": "textfield",
+            "placeholder": "folder1, folder2, folder3, ...",
+            "title": "Folder Actions",
+            "required": false,
+            "description": "Add actions to folders (comma separated)",
+            "default": ""
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "randomNoteCommand",
+        "title": "Random Note",
+        "subtitle": "Obsidian",
+        "description": "Open random note",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "appendTemplate",
+            "type": "textfield",
+            "title": "Template for Append action",
+            "required": false,
+            "description": "Specify a template for Append action (e.g. '- {content}')"
+          },
+          {
+            "name": "appendSelectedTemplate",
+            "type": "textfield",
+            "title": "Template for Append Selected Text action",
+            "required": false,
+            "description": "Specify a template for Append Selected Text action (e.g. '- {content}')"
+          },
+          {
+            "name": "primaryAction",
+            "type": "dropdown",
+            "title": "Primary Action",
+            "required": false,
+            "description": "Select a primary action to be executed on enter",
+            "defaultValue": "quicklook",
+            "data": [
+              {
+                "title": "Quick Look",
+                "value": "quicklook"
+              },
+              {
+                "title": "Open in Obsidian",
+                "value": "obsidian"
+              },
+              {
+                "title": "Open in new Obsidian tab",
+                "value": "newpane"
+              },
+              {
+                "title": "Open in default app",
+                "value": "defaultapp"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "searchMedia",
+        "title": "Search Media",
+        "subtitle": "Obsidian",
+        "description": "Search for media in your vault",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "searchArgument",
+            "placeholder": "Name",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "typeArgument",
+            "placeholder": "Type",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "preferences": [
+          {
+            "name": "excludedFolders",
+            "type": "textfield",
+            "placeholder": "folder1, folder2, ...",
+            "title": "Exclude following folders",
+            "required": false,
+            "description": "Specify which folders to exclude (comma separated)"
+          },
+          {
+            "name": "imageSize",
+            "type": "dropdown",
+            "title": "Image Size",
+            "required": false,
+            "description": "Select the image size to display",
+            "defaultValue": "medium",
+            "data": [
+              {
+                "title": "Small",
+                "value": "small"
+              },
+              {
+                "title": "Medium",
+                "value": "medium"
+              },
+              {
+                "title": "Large",
+                "value": "large"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "obsidianMenuBar",
+        "title": "Obsidian Menu Bar",
+        "subtitle": "Obsidian",
+        "description": "See your pinned notes at a glance and control actions from the menu bar.",
+        "mode": "menu-bar",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "appendTaskCommand",
+        "title": "Append Task",
+        "subtitle": "Obsidian",
+        "description": "Append a task to a note of your choice",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "text",
+            "placeholder": "Your task",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "dueDate",
+            "placeholder": "YYYY-MM-DD",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "preferences": [
+          {
+            "description": "Path of note",
+            "name": "notePath",
+            "required": true,
+            "title": "Path of the note you wish to append the task to",
+            "type": "textfield"
+          },
+          {
+            "name": "noteTag",
+            "required": false,
+            "title": "Tag to append to the beginning of the task.",
+            "description": "Defaults to #task for compatibility with Obsidian Tasks.",
+            "type": "textfield",
+            "default": "#task"
+          },
+          {
+            "name": "creationDate",
+            "type": "checkbox",
+            "title": "Creation Date",
+            "label": "Append creation date to the task",
+            "required": false,
+            "description": "➕ YYYY-MM-DD (Current date)",
+            "default": false
+          },
+          {
+            "description": "Name of Obsidian vault where note is",
+            "name": "vaultName",
+            "required": false,
+            "title": "Name of Obsidian vault where note is",
+            "type": "textfield"
+          },
+          {
+            "description": "If no heading is not set, text will be appended to the end of the note",
+            "name": "heading",
+            "required": false,
+            "title": "Name of heading in note in which to append",
+            "type": "textfield"
+          },
+          {
+            "default": true,
+            "description": "Don't open note when appending.",
+            "label": "Silent Mode",
+            "name": "silent",
+            "required": false,
+            "title": "Silent Mode",
+            "type": "checkbox"
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "runActionCommand",
+        "title": "Custom Actions",
+        "subtitle": "Obsidian",
+        "description": "Manage and run custom append actions",
+        "mode": "view",
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "quickCaptureCommand",
+        "title": "Quick Capture",
+        "subtitle": "Obsidian",
+        "description": "Capture a note, task, or shopping item without the Advanced URI plugin.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "vaultName",
+            "type": "textfield",
+            "title": "Obsidian Vault",
+            "required": false,
+            "description": "Name of the vault that contains the capture files. If omitted, the first available vault is used."
+          },
+          {
+            "name": "dailyNotePath",
+            "type": "textfield",
+            "title": "Daily Note Path",
+            "required": false,
+            "description": "Existing Markdown file path within the vault, for example Daily Notes/{date}.md"
+          },
+          {
+            "name": "todoNotePath",
+            "type": "textfield",
+            "title": "To Do Note Path",
+            "required": false,
+            "description": "Existing Markdown file path within the vault."
+          },
+          {
+            "name": "shoppingNotePath",
+            "type": "textfield",
+            "title": "Shopping Note Path",
+            "required": false,
+            "description": "Existing Markdown file path within the vault."
+          }
+        ],
+        "platforms": [
+          "macOS",
+          "Windows"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      }
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/obsidian",
+    "capabilities": [
+      "clipboard.write",
+      "clipboard.read",
+      "clipboard.pasteText",
+      "selection.read",
+      "shell.open",
+      "shell.reveal",
+      "window.visibility",
+      "dialog.confirm",
+      "background.retain",
+      "background.release",
+      "tray.set",
+      "tray.remove",
+      "settings.open"
+    ],
+    "artifacts": {
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/obsidian/releases/download/v0.1.0/obsidian-x86_64-pc-windows-msvc-development.zip",
+        "sha256": "b5d99d8b9c558019a642ab131015fbe913783b1181b05ef4e9836e6f0e50f9a2",
+        "executable": "bin/tezbar-obsidian.exe",
+        "executableSha256": "c4637e846c399e73209b9ad8876575104097bb4c379333bbf12cf38fe592a657"
+      },
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/obsidian/releases/download/v0.1.0/obsidian-aarch64-apple-darwin-development.zip",
+        "sha256": "fbee4a9e50292ae7acc5423c9d14d3177eff0c998a858f0b73300b1cb58c1e19",
+        "executable": "bin/tezbar-obsidian",
+        "executableSha256": "340376e01da247366276e6cd3ce19f80b4f6e6e2e4057e5abe8bc05a413311f2"
+      }
+    },
+    "files": {},
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run",
+        "note": "Synthetic fixtures and package checks are distinct from live Obsidian and desktop acceptance."
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run",
+        "note": "Synthetic fixtures and package checks are distinct from live Obsidian and desktop acceptance."
+      }
+    ],
+    "minHostVersion": "0.3.0-beta.12"
+  },
+  {
+    "schemaVersion": 3,
+    "id": "com.tezbar.native.coffee",
+    "slug": "coffee",
+    "name": "Coffee",
+    "version": "0.1.0",
+    "description": "Keep your computer awake and prevent sleep for a set time, until a time, while an app runs, or on a schedule, with menu bar status. Like caffeinate.",
+    "author": "mooxl",
+    "icon": "resources/logo.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.coffee"
+    ],
+    "platforms": [
+      "macOS",
+      "Windows"
+    ],
+    "preferences": [
+      {
+        "name": "preventDisplay",
+        "description": "Prevent the display from sleeping",
+        "type": "checkbox",
+        "required": false,
+        "default": true,
+        "title": "Options",
+        "label": "Prevent display sleep"
+      },
+      {
+        "name": "preventSystem",
+        "description": "Prevent the system from sleeping",
+        "type": "checkbox",
+        "required": false,
+        "default": true,
+        "label": "Prevent system sleep"
+      },
+      {
+        "name": "preventDisk",
+        "description": "Prevent the disk from sleeping. This option is not supported on Windows and will have no effect",
+        "type": "checkbox",
+        "required": false,
+        "default": true,
+        "label": "Prevent disk sleep"
+      },
+      {
+        "name": "preventSleepOnAC",
+        "description": "Keep the system awake while on AC power, for example with the lid closed (caffeinate -s). This option is not supported on Windows and will have no effect",
+        "type": "checkbox",
+        "required": false,
+        "default": false,
+        "label": "Prevent system sleep on AC power"
+      },
+      {
+        "name": "icon",
+        "description": "Select icon set for Menu Bar. macOS only",
+        "type": "dropdown",
+        "required": false,
+        "default": "pot",
+        "title": "Menu Bar Icon",
+        "data": [
+          {
+            "title": "Pot",
+            "value": "pot"
+          },
+          {
+            "title": "Mug",
+            "value": "mug"
+          },
+          {
+            "title": "Cup",
+            "value": "cup"
+          },
+          {
+            "title": "Paper Cup",
+            "value": "paper-cup"
+          }
+        ]
+      },
+      {
+        "name": "startCaffeinateOnLaunch",
+        "description": "Automatically keep your computer awake (indefinitely) when Raycast starts. Requires the Caffeinate Status command (15 s interval) or the Caffeinate Status Menu Bar command (1 m interval) to be enabled (on macOS)",
+        "type": "checkbox",
+        "required": false,
+        "default": false,
+        "label": "Start caffeination when Raycast starts"
+      },
+      {
+        "name": "decaffeinatePausesSchedules",
+        "description": "When enabled, decaffeinating while a schedule is running will automatically pause the schedule instead of asking you to pause it first",
+        "type": "checkbox",
+        "required": false,
+        "default": false,
+        "label": "Decaffeinate pauses running schedules"
+      }
+    ],
+    "commands": [
+      {
+        "name": "caffeinate",
+        "title": "Caffeinate",
+        "subtitle": "Coffee",
+        "description": "Prevent your computer from sleeping",
+        "mode": "no-view",
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "decaffeinate",
+        "title": "Decaffeinate",
+        "subtitle": "Coffee",
+        "description": "Turn off the caffeine",
+        "mode": "no-view",
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "caffeinateWhile",
+        "title": "Caffeinate While",
+        "subtitle": "Coffee",
+        "description": "Prevent your computer from sleeping while a certain app is running",
+        "mode": "view",
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "index",
+        "title": "Caffeinate Status Menu Bar",
+        "subtitle": "Coffee",
+        "description": "Get the status of the current caffeination in your menu bar",
+        "mode": "menu-bar",
+        "interval": "1m",
+        "preferences": [
+          {
+            "name": "hidenWhenDecaffeinated",
+            "description": "Hide when no caffeination is detected. On macOS, external caffeinate processes also keep the icon visible",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "title": "When Decaffeinated",
+            "label": "Hide the icon"
+          }
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 60000,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "caffeinateToggle",
+        "title": "Toggle Caffeinate",
+        "subtitle": "Coffee",
+        "description": "Toggle caffeination",
+        "mode": "no-view",
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "caffeinateFor",
+        "title": "Caffeinate for ...",
+        "subtitle": "Coffee",
+        "description": "Prevent your computer from sleeping for a certain time",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "hours",
+            "placeholder": "Hours",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "minutes",
+            "placeholder": "Minutes",
+            "type": "text",
+            "required": false
+          },
+          {
+            "name": "seconds",
+            "placeholder": "Seconds",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "caffeinateUntil",
+        "title": "Caffeinate Until",
+        "subtitle": "Coffee",
+        "description": "Prevent your computer from sleeping until a certain time. Type one like 5pm, or leave the field empty to pick a date and time.",
+        "mode": "view",
+        "arguments": [
+          {
+            "name": "time",
+            "placeholder": "Time (e.g. 5pm)",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "addSchedule",
+        "title": "Schedule Caffeination",
+        "description": "Schedule caffeination",
+        "mode": "view",
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      },
+      {
+        "name": "status",
+        "title": "Caffeinate Status",
+        "description": "Show the current caffeination status",
+        "mode": "no-view",
+        "interval": "1m",
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 60000,
+        "platforms": [
+          "macOS",
+          "Windows"
+        ]
+      }
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/coffee",
+    "minHostVersion": "0.3.0-beta.12",
+    "capabilities": [
+      "background.retain",
+      "background.release",
+      "tray.set",
+      "tray.remove",
+      "settings.open",
+      "dialog.confirm"
+    ],
+    "files": {},
+    "artifacts": {
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/almatkai/coffee/releases/download/v0.1.0/coffee-x86_64-pc-windows-msvc-development.zip",
+        "sha256": "9acff6e5b296f0bd3411f8a1c8735ced2b0623074cfc3be33c2728485b913d96",
+        "executable": "bin/tezbar-coffee.exe",
+        "executableSha256": "6808c68cdd267d48df5453b4e28e580d6727e6d475eebf58a757a97aa5600eeb"
+      },
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/coffee/releases/download/v0.1.0/coffee-aarch64-apple-darwin-development.zip",
+        "sha256": "e07325a1c6c8c69b7259b32819b6195ab26e3d69b369b4635fbc34e61939d1cd",
+        "executable": "bin/tezbar-coffee",
+        "executableSha256": "564e1538ce4598e9afe73da1c5752317fdf3aa58298f7772a07469e66a52dcbf"
+      }
+    },
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run",
+        "note": "Live power, applications and desktop scheduling acceptance pending."
+      },
+      {
+        "platform": "Windows",
+        "state": "not-run",
+        "note": "Live power, applications and desktop scheduling acceptance pending."
+      }
+    ]
+  },
+  {
+    "schemaVersion": 3,
+    "id": "com.tezbar.native.apple-notes",
+    "slug": "apple-notes",
+    "name": "Apple Notes",
+    "version": "0.1.0",
+    "description": "Search and create notes in Apple Notes on your Mac, add text to existing notes and see recent and pinned notes in the menu bar.",
+    "author": "tumtum",
+    "icon": "resources/command-icon.png",
+    "runtime": "rust",
+    "execution": "process",
+    "protocolVersion": 1,
+    "repository": "https://github.com/almatkai/apple-notes",
+    "minHostVersion": "0.3.0-beta.12",
+    "replaces": [
+      "raycast.apple-notes"
+    ],
+    "platforms": [
+      "macOS"
+    ],
+    "preferences": [
+      {
+        "name": "accounts",
+        "title": "Note accessories",
+        "type": "checkbox",
+        "default": false,
+        "label": "Show account name",
+        "description": "Show the account name next to a note",
+        "required": false
+      },
+      {
+        "name": "folders",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show folder name",
+        "description": "Show the folder name next to a note",
+        "required": false
+      },
+      {
+        "name": "modificationDate",
+        "type": "checkbox",
+        "default": false,
+        "label": "Show modification date",
+        "description": "Show the modification date next to each note",
+        "required": false
+      },
+      {
+        "name": "checklist",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show checklist status",
+        "description": "Show a checklist icon with its status next to each note",
+        "required": false
+      },
+      {
+        "name": "links",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show links",
+        "description": "Show a link icon next to each note that references other notes.",
+        "required": false
+      },
+      {
+        "name": "backlinks",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show backlinks",
+        "description": "Show a backlink icon next to each note that has been referenced by other notes.",
+        "required": false
+      },
+      {
+        "name": "tags",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show tags",
+        "description": "Show a tag icon next to each note if it has any tags.",
+        "required": false
+      },
+      {
+        "name": "locked",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show if a note is password-protected",
+        "description": "Show a lock icon next to each note if it is password-protected",
+        "required": false
+      },
+      {
+        "name": "shared",
+        "type": "checkbox",
+        "default": true,
+        "label": "Show if a note is shared with someone else",
+        "description": "Show a person icon next to each note if it is shared with someone else",
+        "required": false
+      },
+      {
+        "name": "openSeparately",
+        "title": "Note actions",
+        "type": "checkbox",
+        "default": false,
+        "label": "Open notes in separate windows by default",
+        "description": "Pressing ⏎ will open notes in separate windows by default",
+        "required": false
+      },
+      {
+        "name": "maxQueryResults",
+        "title": "Maximum Query Results",
+        "type": "textfield",
+        "default": "250",
+        "description": "The maximum number of notes to query for search and AI tool calling",
+        "required": false
+      }
+    ],
+    "commands": [
+      {
+        "name": "index",
+        "title": "Search Notes",
+        "subtitle": "Apple Notes",
+        "description": "Search through your Apple notes.",
+        "mode": "view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 80000
+      },
+      {
+        "name": "new",
+        "title": "New Note",
+        "subtitle": "Apple Notes",
+        "description": "Create a new note in your Apple Notes.",
+        "mode": "no-view",
+        "keywords": [
+          "write note",
+          "add note",
+          "make note",
+          "create note"
+        ],
+        "arguments": [
+          {
+            "name": "text",
+            "type": "text",
+            "placeholder": "Text"
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 80000
+      },
+      {
+        "name": "random-note",
+        "title": "View Random Note",
+        "subtitle": "Apple Notes",
+        "description": "View a random note in your Apple Notes.",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "tags",
+            "type": "text",
+            "placeholder": "Tags"
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 75000
+      },
+      {
+        "name": "ai",
+        "title": "AI Note",
+        "subtitle": "Apple Notes",
+        "description": "Create a new note filled with AI in your Apple notes, or add to an existing one.",
+        "mode": "no-view",
+        "arguments": [
+          {
+            "name": "text",
+            "type": "text",
+            "placeholder": "Text",
+            "required": true
+          },
+          {
+            "name": "instructions",
+            "type": "text",
+            "placeholder": "Additional instructions"
+          },
+          {
+            "name": "note",
+            "type": "text",
+            "placeholder": "Existing note (optional)"
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 160000
+      },
+      {
+        "name": "menu-bar",
+        "title": "Menu Bar Notes",
+        "subtitle": "Apple Notes",
+        "description": "View your recent and pinned Apple notes in the menu bar.",
+        "mode": "menu-bar",
+        "preferences": [
+          {
+            "name": "maxResults",
+            "title": "Maximum Results",
+            "type": "textfield",
+            "default": "25",
+            "description": "The maximum number of notes to display in the menu bar",
+            "required": false
+          },
+          {
+            "name": "openSeparately",
+            "title": "Note actions",
+            "type": "checkbox",
+            "default": false,
+            "label": "Open notes in separate windows by default",
+            "description": "Pressing ⏎ will open notes in separate windows by default",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 40000
+      },
+      {
+        "name": "add-text",
+        "title": "Add Text to Note",
+        "subtitle": "Apple Notes",
+        "description": "Add some text to an Apple note.",
+        "mode": "view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 90000
+      },
+      {
+        "name": "view-selected-note",
+        "title": "View Selected Note",
+        "subtitle": "Apple Notes",
+        "description": "View the currently selected note in Raycast.",
+        "mode": "view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null,
+        "timeoutMs": 105000
+      }
+    ],
+    "capabilities": [
+      "selection.read",
+      "window.visibility",
+      "clipboard.write",
+      "shell.open",
+      "dialog.confirm",
+      "ai.ask",
+      "background.retain",
+      "background.release",
+      "tray.set",
+      "tray.remove",
+      "settings.open"
+    ],
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/apple-notes/releases/download/v0.1.0/apple-notes-aarch64-apple-darwin-development.zip",
+        "sha256": "07ad119b8d764d9d30db21f86227bc93dc25f9a0ac61bba700dad22533225549",
+        "executable": "bin/tezbar-apple-notes",
+        "executableSha256": "7b96f30fbcf8bfbf2ea86e76911fb672b1b0547c896533ad40941bb77c41454b"
+      }
+    },
+    "files": {}
+  },
+  {
+    "schemaVersion": 3,
+    "id": "com.tezbar.native.apple-reminders",
+    "slug": "apple-reminders",
+    "name": "Apple Reminders",
+    "version": "0.1.0",
+    "description": "Create, view and complete Apple Reminders, add reminders in natural language with AI, set location reminders and see them in the menu bar.",
+    "author": "thomaslombart",
+    "icon": "resources/icon.png",
+    "runtime": "rust",
+    "replaces": [
+      "raycast.apple-reminders"
+    ],
+    "platforms": [
+      "macOS"
+    ],
+    "preferences": [
+      {
+        "name": "dateFormat",
+        "type": "dropdown",
+        "title": "Date Format",
+        "description": "Preferred date format for numeric dates (e.g. 1/11).",
+        "required": false,
+        "default": "mdy",
+        "data": [
+          {
+            "title": "Month / Day (MM/DD)",
+            "value": "mdy"
+          },
+          {
+            "title": "Day / Month (DD/MM)",
+            "value": "dmy"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "name": "my-reminders",
+        "title": "My Reminders",
+        "subtitle": "Apple Reminders",
+        "description": "View and complete your reminders.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "displayCompletionDate",
+            "type": "checkbox",
+            "required": false,
+            "label": "Display Completion Date",
+            "description": "When enabled, the completion date will be displayed as a list item accessory.",
+            "default": false
+          },
+          {
+            "name": "useTimeOfDayGrouping",
+            "type": "checkbox",
+            "required": false,
+            "label": "Use Time of Day Grouping",
+            "description": "When enabled, today's reminders will be grouped by the time of day they are due.",
+            "default": false
+          },
+          {
+            "name": "displayDueDateWithTime",
+            "type": "checkbox",
+            "required": false,
+            "label": "Display Exact Due Time",
+            "description": "When enabled, list items show the exact time (e.g. 10:00 AM) instead of relative time (e.g. 'in 2 hours').",
+            "default": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "create-reminder",
+        "title": "Create Reminder",
+        "subtitle": "Apple Reminders",
+        "description": "Create and prioritize new reminders.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "selectDefaultList",
+            "type": "checkbox",
+            "label": "Initially select the default list",
+            "description": "When enabled, the Reminders's default list will be initially selected instead of the last used list.",
+            "default": false,
+            "required": false
+          },
+          {
+            "name": "selectTodayAsDefault",
+            "type": "checkbox",
+            "label": "Initially select \"Today\" for new reminders",
+            "description": "When enabled, \"Today\" will be initially selected for new reminders instead of no due date.",
+            "default": false,
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "create-reminder-from-current-tab",
+        "title": "Create Reminder from Current Tab",
+        "subtitle": "Apple Reminders",
+        "description": "Create a reminder from the active browser tab.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "createImmediately",
+            "type": "checkbox",
+            "label": "Create Reminder Immediately",
+            "description": "When enabled, the reminder is created immediately in your default list without opening the form.",
+            "default": false,
+            "required": false
+          },
+          {
+            "name": "defaultListName",
+            "type": "textfield",
+            "title": "Default List",
+            "label": "Default List",
+            "placeholder": "e.g. Inbox, Work, or Reminders",
+            "description": "Default list to add tab reminders to. Leave empty to use Reminders' default list.",
+            "required": false
+          },
+          {
+            "name": "defaultDueDate",
+            "type": "textfield",
+            "title": "Default Due Date & Time",
+            "label": "Default Due Date & Time",
+            "placeholder": "e.g. 6pm, in 2 hours, tomorrow 9am, tonight",
+            "description": "Optional default due date or time for tab reminders (e.g. \"6pm\", \"tonight\", \"tomorrow 9am\", \"in 2 hours\"). Leave empty for no due date.",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "create-reminder-from-selected-email",
+        "title": "Create Reminder from Selected Email",
+        "subtitle": "Apple Reminders",
+        "description": "Create a reminder from the selected email in Apple Mail.",
+        "mode": "view",
+        "preferences": [
+          {
+            "name": "createImmediately",
+            "type": "checkbox",
+            "label": "Create Reminder Immediately",
+            "description": "When enabled, the reminder is created immediately in your default list without opening the form.",
+            "default": false,
+            "required": false
+          },
+          {
+            "name": "defaultListName",
+            "type": "textfield",
+            "title": "Default List",
+            "label": "Default List",
+            "placeholder": "e.g. Inbox, Work, or Reminders",
+            "description": "Default list to add email reminders to. Leave empty to use Reminders' default list.",
+            "required": false
+          },
+          {
+            "name": "defaultDueDate",
+            "type": "textfield",
+            "title": "Default Due Date & Time",
+            "label": "Default Due Date & Time",
+            "placeholder": "e.g. 6pm, in 2 hours, tomorrow 9am, tonight",
+            "description": "Optional default due date or time for email reminders (e.g. \"6pm\", \"tonight\", \"tomorrow 9am\", \"in 2 hours\"). Leave empty for no due date.",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "menu-bar",
+        "title": "Menu Bar Reminders",
+        "icon": "resources/icon.png",
+        "subtitle": "Apple Reminders",
+        "description": "Manage your reminders in the menu bar.",
+        "mode": "menu-bar",
+        "preferences": [
+          {
+            "name": "titleType",
+            "type": "dropdown",
+            "data": [
+              {
+                "title": "Icon Only",
+                "value": "nothing"
+              },
+              {
+                "title": "Number of Reminders",
+                "value": "count"
+              },
+              {
+                "title": "First Reminder",
+                "value": "firstReminder"
+              }
+            ],
+            "default": "count",
+            "required": false,
+            "title": "Menu Bar Text",
+            "description": "What appears next to the icon. An upcoming reminder (see below) replaces it while it's shown."
+          },
+          {
+            "name": "countType",
+            "type": "dropdown",
+            "data": [
+              {
+                "title": "Due Today or Overdue",
+                "value": "today"
+              },
+              {
+                "title": "Reminders with a Due Date",
+                "value": "upcoming"
+              },
+              {
+                "title": "All Open Reminders",
+                "value": "all"
+              }
+            ],
+            "default": "today",
+            "required": false,
+            "title": "Number Counts",
+            "description": "Which reminders the number counts, when Menu Bar Text is set to Number of reminders."
+          },
+          {
+            "name": "hideMenuBarCountWhenEmpty",
+            "type": "checkbox",
+            "label": "Hide the number when it's 0",
+            "description": "Show only the icon when there's nothing to count.",
+            "default": false,
+            "required": false
+          },
+          {
+            "name": "nextReminderShowBefore",
+            "title": "Upcoming Reminder",
+            "description": "Show the next reminder that has a time, with a countdown such as \"Call mom · in 8m\", the way Raycast shows calendar events.",
+            "type": "dropdown",
+            "required": false,
+            "default": "never",
+            "data": [
+              {
+                "title": "Never",
+                "value": "never"
+              },
+              {
+                "title": "At Its Due Time",
+                "value": "0"
+              },
+              {
+                "title": "From 5 Minutes Before",
+                "value": "5"
+              },
+              {
+                "title": "From 10 Minutes Before",
+                "value": "10"
+              },
+              {
+                "title": "From 15 Minutes Before",
+                "value": "15"
+              },
+              {
+                "title": "From 30 Minutes Before",
+                "value": "30"
+              },
+              {
+                "title": "From 1 Hour Before",
+                "value": "60"
+              },
+              {
+                "title": "Always Show the Next One",
+                "value": "always"
+              }
+            ]
+          },
+          {
+            "name": "nextReminderHideAfter",
+            "title": "Keep It Shown",
+            "description": "How long an upcoming reminder stays in the menu bar once its time has passed.",
+            "type": "dropdown",
+            "required": false,
+            "default": "completed",
+            "data": [
+              {
+                "title": "Until I Complete It (or the Day Ends)",
+                "value": "completed"
+              },
+              {
+                "title": "5 Minutes After It's Due",
+                "value": "5"
+              },
+              {
+                "title": "15 Minutes After It's Due",
+                "value": "15"
+              },
+              {
+                "title": "1 Hour After It's Due",
+                "value": "60"
+              }
+            ]
+          },
+          {
+            "name": "hideWhenNothingDue",
+            "label": "Only show the menu bar item for an upcoming reminder",
+            "description": "Hide the icon the rest of the time. Needs Upcoming Reminder set to something other than Never.",
+            "type": "checkbox",
+            "required": false,
+            "default": false,
+            "title": "Visibility"
+          },
+          {
+            "name": "view",
+            "type": "dropdown",
+            "data": [
+              {
+                "title": "Today and Overdue",
+                "value": "today"
+              },
+              {
+                "title": "Today, Tomorrow and Upcoming",
+                "value": "upcoming"
+              },
+              {
+                "title": "All, Including No Due Date",
+                "value": "all"
+              }
+            ],
+            "default": "today",
+            "required": false,
+            "title": "Reminders in Menu",
+            "description": "Which reminders the dropdown lists."
+          },
+          {
+            "name": "sortMenuBarRemindersByDueDate",
+            "type": "checkbox",
+            "label": "Sort by due time",
+            "description": "Order the reminders in the dropdown by due time instead of list order.",
+            "default": false,
+            "required": false,
+            "title": "Menu"
+          },
+          {
+            "name": "displayListTitleForMenuBarReminders",
+            "type": "checkbox",
+            "label": "Show the list name",
+            "description": "Add the list name after each reminder, e.g. \"Call mom [Work]\".",
+            "default": false,
+            "required": false
+          }
+        ],
+        "interval": "1m",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 60000
+      },
+      {
+        "name": "next-reminder",
+        "title": "Next Reminder",
+        "subtitle": "Apple Reminders",
+        "description": "Shows your next timed reminder in its root search subtitle. Add it to Favorites to keep it at the top.",
+        "mode": "no-view",
+        "interval": "1m",
+        "preferences": [
+          {
+            "name": "showWithin",
+            "title": "Look Ahead",
+            "description": "How far ahead to look for the next reminder that has a time.",
+            "type": "dropdown",
+            "required": false,
+            "default": "60",
+            "data": [
+              {
+                "title": "15 Minutes",
+                "value": "15"
+              },
+              {
+                "title": "30 Minutes",
+                "value": "30"
+              },
+              {
+                "title": "1 Hour",
+                "value": "60"
+              },
+              {
+                "title": "2 Hours",
+                "value": "120"
+              },
+              {
+                "title": "Any Time (Always Show the Next One)",
+                "value": "always"
+              }
+            ]
+          },
+          {
+            "name": "keepShown",
+            "title": "Keep It Shown",
+            "description": "How long a reminder stays in the subtitle once its time has passed.",
+            "type": "dropdown",
+            "required": false,
+            "default": "completed",
+            "data": [
+              {
+                "title": "Until I Complete It (or the Day Ends)",
+                "value": "completed"
+              },
+              {
+                "title": "5 Minutes After It's Due",
+                "value": "5"
+              },
+              {
+                "title": "15 Minutes After It's Due",
+                "value": "15"
+              },
+              {
+                "title": "1 Hour After It's Due",
+                "value": "60"
+              }
+            ]
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": 60000
+      },
+      {
+        "name": "quick-add-reminder",
+        "title": "Quick Add Reminder",
+        "subtitle": "Apple Reminders",
+        "description": "Quickly add a reminder in Reminders.",
+        "mode": "no-view",
+        "preferences": [
+          {
+            "name": "dontUseAI",
+            "type": "checkbox",
+            "label": "Don't use the AI",
+            "description": "When enabled, the reminder is simply added to your default list with the input as the title.",
+            "default": false,
+            "required": false
+          },
+          {
+            "name": "defaultListName",
+            "type": "textfield",
+            "title": "Default List",
+            "label": "Default List",
+            "placeholder": "e.g. Inbox, Work, or Reminders",
+            "description": "Default list to add reminders to when no list is specified. Leave empty to use Reminders' default list.",
+            "required": false
+          },
+          {
+            "name": "shouldCloseMainWindow",
+            "type": "checkbox",
+            "title": "Advanced",
+            "label": "Close window immediately",
+            "description": "When enabled, the Raycast window is closed immediately, allowing you to carry on with other work.",
+            "default": true,
+            "required": false
+          }
+        ],
+        "arguments": [
+          {
+            "name": "text",
+            "placeholder": "Reminder",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "notes",
+            "placeholder": "Notes",
+            "type": "text",
+            "required": false
+          }
+        ],
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "manage-locations",
+        "title": "Manage Locations",
+        "subtitle": "Apple Reminders",
+        "description": "Manage your saved locations.",
+        "mode": "view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "customize-create-reminder-form",
+        "title": "Customize Create Reminder Form",
+        "subtitle": "Apple Reminders",
+        "description": "Choose which fields appear in the create reminder form and reorder them.",
+        "mode": "view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      },
+      {
+        "name": "manage-create-actions",
+        "title": "Manage Create Actions",
+        "subtitle": "Apple Reminders",
+        "description": "Choose which Shortcuts run after reminders are created.",
+        "mode": "view",
+        "platforms": [
+          "macOS"
+        ],
+        "runtime": "rust",
+        "concurrency": "serialize",
+        "refreshMs": null
+      }
+    ],
+    "execution": "process",
+    "protocolVersion": 1,
+    "capabilities": [
+      "host.ai.ask",
+      "dialog.confirm",
+      "background.retain",
+      "background.release",
+      "tray.set",
+      "tray.remove",
+      "window.visibility",
+      "shell.open",
+      "clipboard.write"
+    ],
+    "artifacts": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/almatkai/apple-reminders/releases/download/v0.1.0/apple-reminders-aarch64-apple-darwin-development.zip",
+        "sha256": "a4c5284ba893ba2f864e7976ffd06a6e77eeabd5fe7e97d07b0b59b3a7e3dd9f",
+        "executable": "bin/tezbar-apple-reminders",
+        "executableSha256": "58c15e4325eb0fdc0241fbe92ce2f9e962aab56ae324fad33e8221f98ee82d38"
+      }
+    },
+    "files": {},
+    "verification": [
+      {
+        "platform": "macOS",
+        "state": "not-run",
+        "note": "Source preparation only"
+      }
+    ],
+    "minHostVersion": "0.3.0-beta.12",
+    "repository": "https://github.com/almatkai/apple-reminders"
   }
 ]
