@@ -271,12 +271,19 @@ impl PlatformCore {
         Ok(())
     }
 
-    pub(crate) fn restore_legacy_owner(&self, canonical: &str, alias: &str, key: &str) -> Result<(), String> {
+    pub(crate) fn clean_obsolete_canonical(&self, canonical: &str, effective_alias: Option<(&str, &str)>) -> Result<(), String> {
         if self.shortcuts.lock().map_err(|e| e.to_string())?.initialized {
             self.set_binding(Some(canonical), "", &[])?;
-            self.set_binding(Some(alias), key, &[])?;
+            if let Some((alias, key)) = effective_alias {
+                self.set_binding(Some(alias), key, &[])?;
+            }
         }
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn restore_legacy_owner(&self, canonical: &str, alias: &str, key: &str) -> Result<(), String> {
+        self.clean_obsolete_canonical(canonical, Some((alias, key)))
     }
 
     fn save_command_hotkey(&self, requested: &str, key: &str) -> CoreResult {

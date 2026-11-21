@@ -535,24 +535,45 @@ pub(super) fn retained_command_coverage(
 
     let baseline: Value = serde_json::from_str(include_str!("v1_hotkey_coverage.json"))
         .expect("bundled historical command names");
-    let Some(commands) = baseline[id].as_array() else {
-        return Err(format!("Package {id} not recognized in published v1 baseline"));
+    let baseline_cmds: Option<HashSet<String>> = baseline[id].as_array().map(|commands| {
+        commands.iter().filter_map(|cmd| cmd.as_str().map(str::to_owned)).collect()
+    });
+
+    if previous_versions.is_empty() {
+        let Some(baseline_set) = &baseline_cmds else {
+            return Err(format!("Package {id} not recognized in published v1 baseline"));
+        };
+        return Ok(active_commands.into_iter().filter(|c| baseline_set.contains(c)).collect());
+    }
+
+    let config = ctx.config.read().ok();
+    let is_bound = |cmd_name: &str| -> bool {
+        let Some(cfg) = &config else { return false; };
+        let canonical_target = format!("extcmd:{id}:{cmd_name}");
+        let aliases = crate::extensions::command_hotkey_aliases(&canonical_target);
+        let hotkeys = &cfg["commandHotkeys"];
+        hotkeys.get(&canonical_target).and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty())
+            || aliases.iter().any(|a| hotkeys.get(a).and_then(Value::as_str).is_some_and(|s| !s.trim().is_empty()))
     };
-    let baseline_cmds: HashSet<String> = commands.iter()
-        .filter_map(|cmd| cmd.as_str().map(str::to_owned)).collect();
 
     let mut covered = HashSet::new();
     for cmd in &active_commands {
-        if baseline_cmds.contains(cmd) {
+        let in_baseline = baseline_cmds.as_ref().is_some_and(|b| b.contains(cmd));
+        if in_baseline {
             // Proven historical coverage from published v1 baseline: preserve clears
             // even if intermediate retained versions temporarily removed the command.
             covered.insert(cmd.clone());
         } else {
-            // Not in published v1 baseline. If any previous retained version contained it,
-            // we cannot determine whether the old marker covered it.
-            let seen_in_previous = previous_versions.iter().any(|prev| prev.contains(cmd));
-            if seen_in_previous {
-                return Err(format!("Identity migration: ambiguous retained history for {id}"));
+            let in_all_previous = previous_versions.iter().all(|prev| prev.contains(cmd));
+            let in_any_previous = previous_versions.iter().any(|prev| prev.contains(cmd));
+            if in_all_previous {
+                // Verified consistent retained coverage across prior valid versions.
+                covered.insert(cmd.clone());
+            } else if in_any_previous {
+                // Non-baseline command with varied history across prior versions.
+                if is_bound(cmd) {
+                    return Err(format!("Identity migration: ambiguous retained history for {id}"));
+                }
             }
             // Genuinely newly covered command (not in baseline and never seen in prior versions).
         }

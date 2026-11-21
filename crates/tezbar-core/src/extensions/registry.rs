@@ -865,18 +865,21 @@ fn migrate_command_settings(ctx: &CoreContext, extension: &Installed) -> Result<
                             || backup[alias].as_str() == Some(key.as_str())
                     }) || !config[&done].is_null();
                     if is_obsolete_copy {
-                        let has_newer_edit_or_clear = !config[&done].is_null()
-                            || aliases.iter().any(|a| config["commandHotkeys"].get(a).is_some());
-                        if !has_newer_edit_or_clear {
-                            if let Some(alias) = aliases.iter().find(|alias| backup[*alias].as_str() == Some(key.as_str())) {
-                                live(platform.restore_legacy_owner(&id, alias, &key))?;
-                                config["commandHotkeys"][alias] = json!(key);
-                            } else {
-                                live(platform.reconcile_command(&id, ""))?;
-                            }
+                        let pending_owner = config[&done].as_str()
+                            .and_then(|owner| aliases.iter().find(|alias| alias.as_str() == owner));
+                        let effective_alias: Option<(&str, &str)> = if let Some(owner) = pending_owner {
+                            let next_key = config["commandHotkeys"].get(owner).and_then(Value::as_str).unwrap_or("");
+                            Some((owner.as_str(), next_key))
+                        } else if let Some(alias) = aliases.iter().find(|a| config["commandHotkeys"].get(*a).is_some()) {
+                            let live_key = config["commandHotkeys"][alias].as_str().unwrap_or("");
+                            Some((alias.as_str(), live_key))
+                        } else if let Some(alias) = aliases.iter().find(|alias| backup[*alias].as_str() == Some(key.as_str())) {
+                            config["commandHotkeys"][alias] = json!(key);
+                            Some((alias.as_str(), key.as_str()))
                         } else {
-                            live(platform.reconcile_command(&id, ""))?;
-                        }
+                            None
+                        };
+                        live(platform.clean_obsolete_canonical(&id, effective_alias))?;
                         config["commandHotkeys"].as_object_mut().unwrap().remove(&id);
                         config[done] = json!(true);
                     }
@@ -1546,6 +1549,9 @@ mod tests {
         assert_eq!(owner("Alt+J").as_deref(), Some(canonical));
         assert_eq!(owner("Alt+S").as_deref(), Some(second));
         assert_eq!(owner("Alt+P").as_deref(), Some(js_only));
+        core.execute_command_shortcut(&owner("Alt+P").unwrap()).await.unwrap();
+        assert_eq!(host.events.lock().unwrap().last().unwrap(),
+            &("run-extension-command-from-hotkey".into(), json!({"extensionId":"raycast.perplexity","commandName":"other-platform"})));
         let schema = settings(&ctx);
         let js_commands = &schema.as_array().unwrap().iter()
             .find(|row| row["extensionId"] == "raycast.perplexity").unwrap()["commands"];
@@ -1867,8 +1873,27 @@ mod tests {
             let pending = ctx.config.read().unwrap();
             assert_eq!(pending[format!("identityMigrationHotkey:{unavailable}")], foreign);
 
-            // Run discovery twice.
-            for _ in 0..2 { ctx.request("core:extensions:commands", vec![]).await.unwrap(); }
+            let owner_before_restart = |key: &str| core.platform.command_for_shortcut(ctx.host.shortcuts().parse(key).unwrap().id());
+            if case == "rebind" {
+                assert_eq!(owner_before_restart("Alt+Q").as_deref(), Some(foreign));
+                assert_eq!(owner_before_restart("Alt+P").as_deref(), Some(unavailable));
+            } else {
+                assert_eq!(owner_before_restart("Alt+Q"), None);
+            }
+
+            // Run discovery twice, asserting immediate ownership and actual dispatch after each discovery.
+            for _ in 0..2 {
+                ctx.request("core:extensions:commands", vec![]).await.unwrap();
+                assert_eq!(owner_before_restart("Alt+P"), None);
+                if case == "rebind" {
+                    assert_eq!(owner_before_restart("Alt+Q").as_deref(), Some(foreign));
+                    core.execute_command_shortcut(&owner_before_restart("Alt+Q").unwrap()).await.unwrap();
+                    assert_eq!(host.events.lock().unwrap().last().unwrap(),
+                        &("run-extension-command-from-hotkey".into(), json!({"extensionId":"raycast.perplexity","commandName":"other-platform"})));
+                } else {
+                    assert_eq!(owner_before_restart("Alt+Q"), None);
+                }
+            }
 
             // Restart NativeCore.
             let fresh_host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
@@ -1897,6 +1922,253 @@ mod tests {
                 assert!(config["commandHotkeys"].get(foreign).is_none());
             }
         }
+    }
+
+
+    #[tokio::test]
+    async fn exact_perplexity_same_commands_with_second_unbound_and_cleared_ask_preserves_clear_and_completes() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = context(temp.path()).paths;
+        let host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let ctx = CoreContext::new(paths.clone(), Some(host.clone()));
+        let cleared = "extcmd:raycast.perplexity:ask-perplexity";
+        let target = "extcmd:com.tezbar.native.perplexity:ask-perplexity";
+        let second = "extcmd:raycast.perplexity:second";
+        let second_target = "extcmd:com.tezbar.native.perplexity:second";
+
+        write_json_atomic(&temp.path().join("extensions/perplexity/package.json"), &json!({
+            "platforms":[platform()], "commands":[{"name":"ask-perplexity"},{"name":"second"}]
+        })).unwrap();
+
+        // 1. Initial version 0.8.0 declaring both ask-perplexity and second.
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            m["version"] = json!("0.8.0");
+            let mut command = m["commands"][0].clone();
+            command["name"] = json!("second");
+            m["commands"].as_array_mut().unwrap().push(command);
+        });
+
+        // 2. Updated version 1.0.0 declaring the same commands.
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            m["version"] = json!("1.0.0");
+            let mut command = m["commands"][0].clone();
+            command["name"] = json!("second");
+            m["commands"].as_array_mut().unwrap().push(command);
+        });
+
+        // Profile: old package marker true, cleared original (canonical target absent),
+        // surviving legacy alias Alt+E, and second unbound (no shortcut).
+        ctx.config.patch(&json!({
+            "identityMigration:com.tezbar.native.perplexity": true,
+            "commandHotkeys": {cleared: "Alt+E"}
+        })).unwrap();
+
+        let core = crate::NativeCore::new(ctx.clone()).unwrap();
+        core.platform.initialize_shortcuts().unwrap();
+
+        // Discover twice before restart.
+        for _ in 0..2 { ctx.request("core:extensions:commands", vec![]).await.unwrap(); }
+
+        let config = ctx.config.read().unwrap();
+        assert!(config["commandHotkeys"].get(target).is_none());
+        assert!(config["commandHotkeys"].get(cleared).is_none());
+        assert_eq!(config["identityMigrationHotkeyBackup:com.tezbar.native.perplexity"][cleared], "Alt+E");
+        assert!(config["commandHotkeys"].get(second).is_none());
+        assert!(config["commandHotkeys"].get(second_target).is_none());
+        assert_eq!(config["identityMigrationHotkeysV2:com.tezbar.native.perplexity"], true);
+
+        // Restart NativeCore and verify chords.
+        let fresh_host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let fresh = CoreContext::new(paths, Some(fresh_host.clone()));
+        let restarted = crate::NativeCore::new(fresh.clone()).unwrap();
+        restarted.platform.initialize_shortcuts().unwrap();
+        let owner = |key: &str| restarted.platform.command_for_shortcut(fresh.host.shortcuts().parse(key).unwrap().id());
+
+        // Cleared chord stays free (proven historical clear not resurrected).
+        assert_eq!(owner("Alt+E"), None);
+        assert_eq!(owner("Alt+S"), None);
+    }
+
+    #[tokio::test]
+    async fn nonbaseline_emoji_consistent_v1_v2_known_old_clear_preserves_clear_and_completes() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = context(temp.path()).paths;
+        let host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let ctx = CoreContext::new(paths.clone(), Some(host.clone()));
+        let cleared = "extcmd:raycast.emoji:search";
+        let target = "extcmd:com.tezbar.native.emoji:search";
+
+        write_json_atomic(&temp.path().join("extensions/emoji/package.json"), &json!({
+            "name":"emoji", "platforms":[platform()], "commands":[{"name":"search"}]
+        })).unwrap();
+
+        let emoji_manifest = |m: &mut Value| {
+            m["id"] = json!("com.tezbar.native.emoji");
+            m["slug"] = json!("emoji");
+            m["commands"] = json!([{"name":"search","runtime":"rust","platforms":[platform()]}]);
+        };
+
+        // 1. Initial version 0.8.0.
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            emoji_manifest(m);
+            m["version"] = json!("0.8.0");
+        });
+
+        // 2. Version 1.0.0 with consistent commands.
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            emoji_manifest(m);
+            m["version"] = json!("1.0.0");
+        });
+
+        // Profile: old package marker true, cleared canonical target absent, surviving legacy alias Alt+E.
+        ctx.config.patch(&json!({
+            "identityMigration:com.tezbar.native.emoji": true,
+            "commandHotkeys": {cleared: "Alt+E"}
+        })).unwrap();
+
+        let core = crate::NativeCore::new(ctx.clone()).unwrap();
+        core.platform.initialize_shortcuts().unwrap();
+
+        // Discover twice before restart.
+        for _ in 0..2 { ctx.request("core:extensions:commands", vec![]).await.unwrap(); }
+
+        let config = ctx.config.read().unwrap();
+        assert!(config["commandHotkeys"].get(target).is_none());
+        assert!(config["commandHotkeys"].get(cleared).is_none());
+        assert_eq!(config["identityMigrationHotkeyBackup:com.tezbar.native.emoji"][cleared], "Alt+E");
+        assert_eq!(config["identityMigrationHotkeysV2:com.tezbar.native.emoji"], true);
+
+        // Restart NativeCore and verify chord is free.
+        let fresh_host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let fresh = CoreContext::new(paths, Some(fresh_host.clone()));
+        let restarted = crate::NativeCore::new(fresh.clone()).unwrap();
+        restarted.platform.initialize_shortcuts().unwrap();
+        let owner = |key: &str| restarted.platform.command_for_shortcut(fresh.host.shortcuts().parse(key).unwrap().id());
+        assert_eq!(owner("Alt+E"), None);
+    }
+
+    #[tokio::test]
+    async fn nonbaseline_varied_history_defers_and_preserves_legacy_chord() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = context(temp.path()).paths;
+        let host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let ctx = CoreContext::new(paths.clone(), Some(host.clone()));
+        let legacy = "extcmd:raycast.emoji:search";
+        let target = "extcmd:com.tezbar.native.emoji:search";
+
+        write_json_atomic(&temp.path().join("extensions/emoji/package.json"), &json!({
+            "name":"emoji", "platforms":[platform()], "commands":[{"name":"search"}]
+        })).unwrap();
+
+        let emoji_manifest = |m: &mut Value| {
+            m["id"] = json!("com.tezbar.native.emoji");
+            m["slug"] = json!("emoji");
+            m["commands"] = json!([{"name":"search","runtime":"rust","platforms":[platform()]}]);
+        };
+
+        // 1. Initial version 0.8.0 declaring search.
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            emoji_manifest(m);
+            m["version"] = json!("0.8.0");
+        });
+
+        // 2. Intermediate version 0.9.0 without search (varied history for non-baseline package).
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            emoji_manifest(m);
+            m["version"] = json!("0.9.0");
+            m["commands"] = json!([]);
+        });
+
+        // 3. Active version 1.0.0 restoring search.
+        super::super::process_install::test_install_with(&ctx, "normal", |m| {
+            emoji_manifest(m);
+            m["version"] = json!("1.0.0");
+        });
+
+        // Profile: old package marker true, cleared canonical target, surviving legacy alias Alt+E.
+        ctx.config.patch(&json!({
+            "identityMigration:com.tezbar.native.emoji": true,
+            "commandHotkeys": {legacy: "Alt+E"}
+        })).unwrap();
+
+        let core = crate::NativeCore::new(ctx.clone()).unwrap();
+        core.platform.initialize_shortcuts().unwrap();
+
+        let owner = |key: &str| core.platform.command_for_shortcut(ctx.host.shortcuts().parse(key).unwrap().id());
+        assert_eq!(owner("Alt+E").as_deref(), Some(legacy));
+
+        // Discover twice before restart: non-baseline varied history must defer.
+        for _ in 0..2 { ctx.request("core:extensions:commands", vec![]).await.unwrap(); }
+
+        // Migration deferred: legacy chord preserved, canonical absent, V2 marker not set.
+        let config = ctx.config.read().unwrap();
+        assert_eq!(config["commandHotkeys"][legacy], "Alt+E");
+        assert!(config["commandHotkeys"].get(target).is_none());
+        assert_ne!(config["identityMigrationHotkeysV2:com.tezbar.native.emoji"], true);
+        assert_eq!(owner("Alt+E").as_deref(), Some(legacy));
+
+        // Restart NativeCore and verify legacy owner is still preserved.
+        let fresh_host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let fresh = CoreContext::new(paths, Some(fresh_host.clone()));
+        let restarted = crate::NativeCore::new(fresh.clone()).unwrap();
+        restarted.platform.initialize_shortcuts().unwrap();
+        let fresh_owner = |key: &str| restarted.platform.command_for_shortcut(fresh.host.shortcuts().parse(key).unwrap().id());
+        assert_eq!(fresh_owner("Alt+E").as_deref(), Some(legacy));
+    }
+
+    #[tokio::test]
+    async fn obsolete_canonical_registration_failure_compensates_and_rolls_back() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = context(temp.path()).paths;
+        let host = Arc::new(crate::host::TestHost { allow_interaction:true, ..Default::default() });
+        let ctx = CoreContext::new(paths.clone(), Some(host.clone()));
+        let foreign = "extcmd:raycast.perplexity:other-platform";
+        let unavailable = "extcmd:com.tezbar.native.perplexity:other-platform";
+
+        write_json_atomic(&temp.path().join("extensions/perplexity/package.json"), &json!({
+            "platforms":[platform()], "commands":[{"name":"ask-perplexity"},{"name":"other-platform"}]
+        })).unwrap();
+
+        let add_foreign = |m: &mut Value| {
+            let mut command = m["commands"][0].clone();
+            command["name"] = json!("other-platform");
+            command["platforms"] = json!([if platform() == "macOS" { "Windows" } else { "macOS" }]);
+            m["commands"].as_array_mut().unwrap().push(command);
+        };
+        super::super::process_install::test_install_with(&ctx, "normal", add_foreign);
+
+        // Canonical Alt+P, backup alias Alt+P.
+        ctx.config.patch(&json!({
+            "identityMigration:com.tezbar.native.perplexity": true,
+            "commandHotkeys": { unavailable: "Alt+P" },
+            "identityMigrationHotkeyBackup:com.tezbar.native.perplexity": { foreign: "Alt+P" }
+        })).unwrap();
+
+        let core = crate::NativeCore::new(ctx.clone()).unwrap();
+        core.platform.initialize_shortcuts().unwrap();
+
+        let _before_config = ctx.config.read().unwrap();
+
+        // Inject OS registration failure during discovery when registering the restored alias.
+        host.shortcut_results.lock().unwrap().extend([Err("occupied".into())]);
+
+        // Discovery returns rows, but migration defers due to live registration error.
+        let rows = ctx.request("core:extensions:commands", vec![]).await.unwrap();
+        assert!(rows.as_array().unwrap().len() > 0);
+
+        // Transaction rolled back: config unchanged, canonical remains, V2 marker not committed.
+        let config = ctx.config.read().unwrap();
+        assert_eq!(config["commandHotkeys"][unavailable], "Alt+P");
+        assert_ne!(config["identityMigrationHotkeysV2:com.tezbar.native.perplexity"], true);
+
+        // Now clear the injected error and retry discovery: migration completes!
+        host.shortcut_results.lock().unwrap().clear();
+        ctx.request("core:extensions:commands", vec![]).await.unwrap();
+
+        let after_config = ctx.config.read().unwrap();
+        assert!(after_config["commandHotkeys"].get(unavailable).is_none());
+        assert_eq!(after_config["commandHotkeys"][foreign], "Alt+P");
+        assert_eq!(after_config["identityMigrationHotkeysV2:com.tezbar.native.perplexity"], true);
     }
 
     #[test]
