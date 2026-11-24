@@ -178,6 +178,16 @@ impl Utilities {
                         if self.vault.model.unlocked {
                             self.vault_list(cx);
                             self.defer_vault_form(cx);
+                        } else if self.vault.supported == Some(true) && !self.vault.busy {
+                            // Opening a locked Vault asks for Touch ID / the password right away;
+                            // a cancelled prompt leaves the locked screen and its Unlock action.
+                            self.vault.busy = true;
+                            self.request(
+                                UtilityRequest::VaultUnlock,
+                                super::Completion::Vault(Completion::Unlock(self.vault.session)),
+                                false,
+                                cx,
+                            );
                         }
                     }
                     Err(e) => self.vault.error = Some(e),
@@ -211,7 +221,13 @@ impl Utilities {
                         Ok(rows) => {
                             self.vault.rows = rows;
                             self.vault.error = None;
-                            if let Some(id) = self.vault.requested.take() {
+                            let requested = self.vault.requested.take().and_then(|id| {
+                                self.vault.visible().iter().position(|r| r.id == id)
+                            });
+                            if let Some(index) = requested {
+                                self.vault.selected = index;
+                                self.scroll.scroll_to_item(index, ScrollStrategy::Center);
+                                let id = self.vault.visible()[index].id.clone();
                                 self.vault_detail(id, cx);
                             } else {
                                 self.vault_select_first(cx);

@@ -624,13 +624,26 @@ fn terminal_session_controls_use_core_channels_and_persist_defaults(cx: &mut Tes
 #[gpui::test]
 fn vault_copy_checks_unlock_then_copies_without_replaying_effects(cx: &mut TestAppContext) {
     let rt = runtime(cx);
+    cx.update(|cx| tezbar_ui::text_input::bind_keys(cx));
     let adapter = Arc::new(Loopback::default());
     let (relay, _rx) = Relay::new();
     let (view, cx) =
         cx.add_window_view(|w, cx| Launcher::with_adapter(adapter.clone(), relay, None, w, cx));
-    view.update(cx, |v, cx| {
-        seed(v, vec![]);
-        v.vault_copy("fixture-id".into(), cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let mut row = Row::command("vault-row", "FinIQ server");
+            row.action = Action::OpenVaultItem {
+                item_id: "fixture-id".into(),
+            };
+            seed(v, vec![row]);
+            v.input.focus_handle(cx).focus(w, cx);
+        })
+    });
+    // The real keystroke: the focused text input's own Copy binding must not swallow it.
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-c"
+    } else {
+        "ctrl-c"
     });
     settle(&rt, cx);
     let channels = adapter
@@ -639,8 +652,13 @@ fn vault_copy_checks_unlock_then_copies_without_replaying_effects(cx: &mut TestA
         .unwrap()
         .iter()
         .map(|(c, _)| c.clone())
+        .filter(|c| c.starts_with("vault:"))
         .collect::<Vec<_>>();
     assert_eq!(channels, ["vault:status", "vault:unlock", "vault:copy"]);
+    assert_eq!(
+        adapter.calls.lock().unwrap().iter().find(|(c, _)| c == "vault:copy").unwrap().1,
+        [json!("fixture-id")]
+    );
     assert_eq!(
         view.read_with(cx, |v, _| v.notice.clone()).as_deref(),
         Some("Copied · clears in 30 s")

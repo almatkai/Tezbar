@@ -14,6 +14,7 @@ struct Fixture {
     vault_unlocked: std::sync::atomic::AtomicBool,
     vault_cancel: std::sync::atomic::AtomicBool,
     vault_copy_error: std::sync::atomic::AtomicBool,
+    vault_rows: std::sync::Mutex<Option<Value>>,
 }
 impl UtilityTransport for Fixture {
     fn send(
@@ -57,11 +58,11 @@ impl UtilityTransport for Fixture {
             "vault:unlock" => Ok(
                 json!({"ok":!self.vault_cancel.load(std::sync::atomic::Ordering::SeqCst),"cancelled":self.vault_cancel.load(std::sync::atomic::Ordering::SeqCst)}),
             ),
-            "vault:list" => Ok(
-                json!([{"id":"vault-fixture","name":"Synthetic password","kind":"password","createdAt":1,"updatedAt":2}]),
-            ),
+            "vault:list" => Ok(self.vault_rows.lock().unwrap().clone().unwrap_or_else(|| {
+                json!([{"id":"vault-fixture","name":"Synthetic password","kind":"password","createdAt":1,"updatedAt":2}])
+            })),
             "vault:get" => Ok(
-                json!({"id":"vault-fixture","name":"Synthetic password","kind":"password","value":"synthetic-private","note":""}),
+                json!({"id":args.first().cloned().unwrap_or(json!("vault-fixture")),"name":"Synthetic password","kind":"password","value":"synthetic-private","note":""}),
             ),
             "vault:copy"
                 if self
@@ -701,13 +702,66 @@ fn permissions_native_action_lock_refresh_and_accessible_status(cx: &mut TestApp
     assert!(view.read_with(cx, |v, _| v.permissions.banner.is_some()));
 }
 #[gpui::test]
+fn vault_opened_from_search_selects_the_requested_item(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    fixture
+        .vault_unlocked
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    *fixture.vault_rows.lock().unwrap() = Some(json!([
+        {"id":"first","name":"First","kind":"password","createdAt":1,"updatedAt":3},
+        {"id":"second","name":"Second","kind":"password","createdAt":1,"updatedAt":2},
+        {"id":"third","name":"Third","kind":"note","createdAt":1,"updatedAt":1}
+    ]));
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.navigate(
+                Navigation {
+                    nonce: 1,
+                    surface: Surface::Vault,
+                    payload: Payload::Vault {
+                        item_id: "second".into(),
+                    },
+                },
+                w,
+                cx,
+            )
+        })
+    });
+    settle(&rt, cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.vault.selected, 1, "The requested row is the selected row");
+        assert_eq!(v.vault.detail.as_ref().map(|d| d.id.as_str()), Some("second"));
+    });
+}
+#[gpui::test]
 fn vault_locked_screen_hides_browsing_and_unlock_restores_it(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let fixture = Arc::new(Fixture::default());
     let (view, cx) =
         cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    // Opening a locked Vault prompts at once; a cancelled prompt keeps the locked screen.
+    fixture
+        .vault_cancel
+        .store(true, std::sync::atomic::Ordering::SeqCst);
     cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Vault, 1), w, cx)));
     settle(&rt, cx);
+    let vault_calls = |f: &Fixture| {
+        f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(c, _)| c.clone())
+            .filter(|c| c.starts_with("vault:"))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(vault_calls(&fixture), ["vault:status", "vault:unlock"]);
+    assert!(!view.read_with(cx, |v, _| v.vault.model.unlocked));
+    fixture
+        .vault_cancel
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     let unlock = cx
         .debug_bounds("Unlock Vault")
         .expect("Visible unlock action");

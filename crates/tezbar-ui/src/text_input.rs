@@ -584,7 +584,11 @@ impl TextInput {
         self.replace_text_in_range(None, text, window, cx);
     }
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.options.password && !self.selected_range.is_empty() {
+        if self.selected_range.is_empty() {
+            // Nothing to copy: actions dispatch before key-down listeners, so an unhandled
+            // copy must fall through for the owning surface's own primary-C shortcut.
+            cx.propagate();
+        } else if !self.options.password {
             self.write_clipboard(cx);
         }
     }
