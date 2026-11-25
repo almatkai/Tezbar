@@ -103,6 +103,18 @@ struct PinDrag {
     unpin: bool,
     source: DragSource,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum RowStatusTone {
+    Busy,
+    Done,
+    Failed,
+}
+#[derive(Clone, Debug)]
+pub(super) struct RowStatus {
+    pub(super) row_id: String,
+    pub(super) text: SharedString,
+    pub(super) tone: RowStatusTone,
+}
 pub struct Launcher {
     extensions: extension_integration::Extensions,
     terminal: terminal_integration::TerminalIntegration,
@@ -208,6 +220,9 @@ pub struct Launcher {
     message_kind: Option<String>,
     message_document: Entity<MarkdownView>,
     notice_timer: Option<Task<()>>,
+    /// Inline feedback for one result row (Vault Cmd+C), drawn in place of its kind badge.
+    row_status: Option<RowStatus>,
+    row_status_timer: Option<Task<()>>,
     answer: Entity<MarkdownView>,
     answer_text: String,
     answer_revision: u64,
@@ -548,6 +563,8 @@ impl Launcher {
             message_kind: None,
             message_document,
             notice_timer: None,
+            row_status: None,
+            row_status_timer: None,
             answer,
             answer_text: String::new(),
             answer_revision: 0,
@@ -795,6 +812,8 @@ impl Launcher {
         self.notice_timer = None;
         self.notice = None;
         self.message_kind = None;
+        self.row_status_timer = None;
+        self.row_status = None;
         self.answer_revision += 1;
         let revision = self.answer_revision;
         self.message_document
@@ -1583,6 +1602,36 @@ impl Launcher {
     }
     pub(crate) fn message(&mut self, text: String, ms: u64, cx: &mut Context<Self>) {
         self.card_message(text, None, ms, cx);
+    }
+    /// Shows feedback on the row itself instead of the footer. `ms: None` keeps it until replaced.
+    pub(super) fn set_row_status(
+        &mut self,
+        row_id: String,
+        text: impl Into<SharedString>,
+        tone: RowStatusTone,
+        ms: Option<u64>,
+        cx: &mut Context<Self>,
+    ) {
+        self.row_status = Some(RowStatus {
+            row_id,
+            text: text.into(),
+            tone,
+        });
+        self.row_status_timer = ms.map(|ms| {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(ms))
+                    .await;
+                let _ = this.update(cx, |this, cx| {
+                    this.row_status = None;
+                    cx.notify();
+                });
+            })
+        });
+        cx.notify();
+    }
+    pub(super) fn row_status_for(&self, row_id: &str) -> Option<&RowStatus> {
+        self.row_status.as_ref().filter(|s| s.row_id == row_id)
     }
     fn card_message(
         &mut self,

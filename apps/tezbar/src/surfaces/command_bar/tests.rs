@@ -659,10 +659,13 @@ fn vault_copy_checks_unlock_then_copies_without_replaying_effects(cx: &mut TestA
         adapter.calls.lock().unwrap().iter().find(|(c, _)| c == "vault:copy").unwrap().1,
         [json!("fixture-id")]
     );
-    assert_eq!(
-        view.read_with(cx, |v, _| v.notice.clone()).as_deref(),
-        Some("Copied · clears in 30 s")
-    );
+    // The confirmation is drawn on the copied row, not in the footer.
+    let status = view.read_with(cx, |v, _| v.row_status_for("command:vault-row").cloned());
+    let status = status.expect("row status on the copied row");
+    assert_eq!(status.text.as_ref(), "Copied · clears in 30 s");
+    assert_eq!(status.tone, RowStatusTone::Done);
+    assert!(view.read_with(cx, |v, _| v.notice.is_none()));
+    assert!(cx.debug_bounds("result-status-0").is_some());
 }
 
 #[derive(Default)]

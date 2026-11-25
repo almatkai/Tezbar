@@ -861,11 +861,12 @@ impl Launcher {
             })
         {
             if let Some(Row {
+                id,
                 action: Action::OpenVaultItem { item_id },
                 ..
             }) = self.selected()
             {
-                self.vault_copy(item_id, cx);
+                self.vault_copy(id, item_id, cx);
                 w.prevent_default();
                 cx.stop_propagation();
                 return;
@@ -1201,7 +1202,15 @@ impl Launcher {
                     .child(controls::keycap(ui_state::slot_key(slot), t)),
             )
         })
-        .when(!grid && !instant && !path, |d| {
+        .when_some(
+            self.row_status_for(&row.id)
+                .cloned()
+                .filter(|_| !grid && !instant && !path),
+            |d, status| d.child(row_status_pill(status, index, selected, t)),
+        )
+        .when(
+            !grid && !instant && !path && self.row_status_for(&row.id).is_none(),
+            |d| {
             let badge = if let Some(activity) = activity {
                 if activity == RunActivity::WaitingForApproval || cx.reduce_motion() {
                     div().child(activity.label()).into_any_element()
@@ -1246,8 +1255,47 @@ impl Launcher {
                     .debug_selector(move || format!("result-kind-{index}"))
                     .child(badge),
             )
-        })
+            },
+        )
     }
+}
+
+/// Inline row feedback (Vault Cmd+C): a solid pill that stands out on both the
+/// accent-filled selected row and the plain rows around it.
+fn row_status_pill(status: RowStatus, index: usize, selected: bool, t: tokens::Tokens) -> Div {
+    const CHECK: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="black" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.25 5 8.75l4.5-5.5"/></svg>"#;
+    const CROSS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="none" stroke="black" stroke-width="1.6" stroke-linecap="round"><path d="M3.25 3.25l5.5 5.5M8.75 3.25l-5.5 5.5"/></svg>"#;
+    const DOTS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="black"><circle cx="2.75" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="9.25" cy="6" r="1.1"/></svg>"#;
+    let (glyph, bg, fg): (&'static [u8], Hsla, Hsla) = match status.tone {
+        RowStatusTone::Done => (CHECK, rgb(0x16a34a).into(), rgb(0xffffff).into()),
+        RowStatusTone::Failed => (CROSS, t.danger, rgb(0xffffff).into()),
+        RowStatusTone::Busy if selected => (DOTS, rgba(0xffffff29).into(), rgb(0xffffff).into()),
+        RowStatusTone::Busy => (DOTS, t.pill, t.text2),
+    };
+    div()
+        .flex_shrink_0()
+        .flex()
+        .items_center()
+        .gap(px(5. * t.zoom))
+        .max_w(px(240. * t.zoom))
+        .pl(px(6. * t.zoom))
+        .pr(px(8. * t.zoom))
+        .py(px(2. * t.zoom))
+        .rounded(px(6. * t.zoom))
+        .bg(bg)
+        .text_color(fg)
+        .text_size(px(11. * t.zoom))
+        .line_height(px(16. * t.zoom))
+        .font_weight(FontWeight::SEMIBOLD)
+        .debug_selector(move || format!("result-status-{index}"))
+        .child(
+            svg()
+                .data(glyph)
+                .size(px(12. * t.zoom))
+                .flex_shrink_0()
+                .text_color(fg),
+        )
+        .child(div().min_w_0().text_ellipsis().child(status.text))
 }
 impl Render for Launcher {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

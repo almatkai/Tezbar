@@ -227,8 +227,9 @@ impl Launcher {
             });
         }));
     }
-    pub(super) fn vault_copy(&mut self, id: String, cx: &mut Context<Self>) {
-        self.message("Copying…".into(), 2500, cx);
+    /// Cmd+C on a Vault search result. Progress and the outcome are shown on that row.
+    pub(super) fn vault_copy(&mut self, row_id: String, id: String, cx: &mut Context<Self>) {
+        self.set_row_status(row_id.clone(), "Copying…", RowStatusTone::Busy, None, cx);
         let adapter = self.adapter.clone();
         let generation = self.model.session.generation;
         self.tasks.push(cx.spawn(async move |this, cx| {
@@ -242,6 +243,7 @@ impl Launcher {
                 Ok(s) => s["unlocked"] == true,
                 Err(e) => {
                     let _ = this.update(cx, |this, cx| {
+                        this.row_status = None;
                         this.error = Some(e);
                         cx.notify();
                     });
@@ -253,7 +255,15 @@ impl Launcher {
                     .update(cx, |this, cx| {
                         let current = this.visible && generation == this.model.session.generation;
                         if current {
-                            this.message("Waiting for Touch ID…".into(), 9000, cx);
+                            this.set_row_status(
+                                row_id.clone(),
+                                "Unlocking…",
+                                RowStatusTone::Busy,
+                                None,
+                                cx,
+                            );
+                        } else {
+                            this.row_status = None;
                         }
                         current
                     })
@@ -268,10 +278,13 @@ impl Launcher {
                 .await
                 .unwrap_or_else(|e| Err(e.to_string()));
                 if !result.as_ref().is_ok_and(|v| v["ok"] != false) {
+                    let row_id = row_id.clone();
                     let _ = this.update(cx, |this, cx| {
-                        this.message(
+                        this.set_row_status(
+                            row_id,
                             result.err().unwrap_or_else(|| "Unlock cancelled".into()),
-                            2500,
+                            RowStatusTone::Failed,
+                            Some(3500),
                             cx,
                         );
                     });
@@ -279,8 +292,13 @@ impl Launcher {
                 }
             }
             let current = this
-                .update(cx, |this, _| {
-                    this.visible && generation == this.model.session.generation
+                .update(cx, |this, cx| {
+                    let current = this.visible && generation == this.model.session.generation;
+                    if !current {
+                        this.row_status = None;
+                        cx.notify();
+                    }
+                    current
                 })
                 .unwrap_or(false);
             if !current {
@@ -295,15 +313,17 @@ impl Launcher {
                 .unwrap_or_else(|e| Err(e.to_string()));
             let _ = this.update(cx, |this, cx| {
                 if this.visible && generation == this.model.session.generation {
-                    this.message(
-                        match result {
-                            Ok(v) if v["ok"] != false => "Copied · clears in 30 s".into(),
-                            Ok(_) => "Could not copy the secret".into(),
-                            Err(e) => e,
-                        },
-                        2500,
-                        cx,
-                    );
+                    let (text, tone) = match result {
+                        Ok(v) if v["ok"] != false => {
+                            ("Copied · clears in 30 s".into(), RowStatusTone::Done)
+                        }
+                        Ok(_) => ("Could not copy".into(), RowStatusTone::Failed),
+                        Err(e) => (e, RowStatusTone::Failed),
+                    };
+                    this.set_row_status(row_id, text, tone, Some(4000), cx);
+                } else {
+                    this.row_status = None;
+                    cx.notify();
                 }
             });
         }));
