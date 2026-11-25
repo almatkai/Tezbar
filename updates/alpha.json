@@ -1,21 +1,21 @@
 {
-  "version": "0.3.0-beta.11",
+  "version": "0.3.0-beta.12",
   "channel": "beta",
   "appIdentifier": "com.tezbar.app",
-  "notes": "# Tezbar 0.3.0-beta.11\r\n\r\n## AI chat\r\n\r\n- Use the redesigned native conversation view, with message actions aligned under user messages and no bulk delete button in history.\r\n- Return to the conversation list while a reply continues in the background. The list shows when an agent is starting, thinking, using tools, generating, or waiting for approval.\r\n- Keep tool calls, thinking, and response text in arrival order. Fix a crash when scrolling a populated transcript.\r\n\r\n## Startup and idle work\r\n\r\n- Register the production shortcut during startup and open the launcher with a left-click on the macOS menu-bar icon.\r\n- Validate the signed macOS app's startup requirements before packaging.\r\n- Filter ignored paths earlier, skip unchanged indexing work, and avoid idle polling in the file watcher, clipboard, and chat.\r\n",
-  "pub_date": "2026-11-19T21:42:08.750Z",
+  "notes": "# Tezbar 0.3.0-beta.12\r\n\r\nThe native extension catalog contains 116 records. Thirty-one have publicly downloadable artifacts. The testing previews include GitHub, Obsidian, Coffee and Google Translate 0.1.1 on macOS and Windows, plus Apple Notes and Apple Reminders on macOS. They join Arc 0.1.0, Google Chrome and Brew on macOS, Linear, Slack, Notion 0.1.0 and Visual Studio Code 0.1.1 on macOS and Windows, and Lorem Ipsum 0.1.1 with HTML and Markdown commands. Unavailable public download references for Port Manager have been removed; its local-import-only policy and the other local-import restrictions still apply.\r\n\r\nThe Rust host adds quicklink creation, clipboard content and capture services, audio playback and navigation. The GPUI extension views improve form focus, selected-row actions, optional launcher arguments and tray routing. Native command migration preserves cleared and rebound shortcuts, keeps supported JavaScript fallbacks active, and defers uncertain history without blocking unrelated commands. The beta.11 chat, startup activation, idle processing and installation-admission changes carry forward.\r\n\r\nVault: opening a locked Vault asks for Touch ID or the Mac password right away. Cmd+C on a Vault search result unlocks the Vault if needed and copies the secret. Opening a Vault result from search selects that item in the list.\r\n\r\nDesktop acceptance and live account testing remain pending for the new previews.\r\n",
+  "pub_date": "2026-11-25T04:19:34.028Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.11/Tezbar_0.3.0-beta.11_aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEZsN1pNZDAwY1NReTdOU1N5Z1Fua29NdWw3UzFzSTQ0VzN4VkhWdDdMUGM3cXZUOFRrMWFBcVN6S2s1WmdhZWNmQUpBMWxvOVhZSEtEcVVjc3Q0NXdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MTIzOTMzCWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTFfYWFyY2g2NC5hcHAudGFyLmd6Ck9ueFdpQW9DTXhuYkgvSEphN1N3M2I0bVIvOTNSS2hVeWRCV3hZQ0grd2NQMDFETThYWkt0enlRVXFDVHBuY004KzJId0pCbFBkcHVXV1RxazQ3QkN3PT0K"
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.12/Tezbar_0.3.0-beta.12_aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERtcXZ1NjkzR2ZNN1RGK0NBK2FuUDEzQ0toVFJsQnNxTzk2Y1ZCd0NodVZEMkhSZlV0MnNOWW44QmJzTzJUcHp2T0YyVUw2aHFDTWdzazZlVWFRelFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTIzODY3CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTJfYWFyY2g2NC5hcHAudGFyLmd6Cm00akZ3Umk1a2NuYTIxQVcwdStRSjBvaVVYajJIaUJUK09FOGJwNWQ0YnhXS2U2ZEJWcEUxTlV2UjdlQlhFWFpmOWYvYVhMWEs1NVJyUThsQnRycEF3PT0K"
     },
     "windows-x86_64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.11/Tezbar_0.3.0-beta.11_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEMwREpnUnM2RDFKM0hwQ2lwdUMxckh6OTNtaTNscHdkcGhoQzVCWDRrejBTM0kzSE9YVlZyWFNja1l0cnhlRTFOSlcvdlRHQnJsRmk1Z1hJd3JhY0FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MTI0MTI0CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTFfeDY0LXNldHVwLmV4ZQozYnZkUTBZVUtnRnEwWXl2OU9lWGNkOGFZV0tmN0hxOUdxK3lDOEt2dTJqbDlBRUViS09pdkFYeWZoUUlzQk5vUjJCOVg4Rng4eEJLY3piTjBNVEdCUT09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.12/Tezbar_0.3.0-beta.12_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEcwWTkzVWlTOTFMblhqQ3V3ZkNhOVEyaXFqL0tuMnN2NGR1aENHbmphektpdU55RnNiNjF0NWlaa3JPNHBPa3NWVG5RR0ZHMDFKS3Z0S3c4TEFaaVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTI1ODMwCWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTJfeDY0LXNldHVwLmV4ZQp6TGRIaGJ2Y1dONENhWllnMzVXYkN1ZjM2TEptYkc0SUZFajVYSWRkS1JSZnkyOWxVaXg2Q2xUdk9kUWQrV3pVdHY0cWNTdHNPNU9hcW9SNEFPWVpDZz09Cg=="
     },
     "windows-x86_64-nsis": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.11/Tezbar_0.3.0-beta.11_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEMwREpnUnM2RDFKM0hwQ2lwdUMxckh6OTNtaTNscHdkcGhoQzVCWDRrejBTM0kzSE9YVlZyWFNja1l0cnhlRTFOSlcvdlRHQnJsRmk1Z1hJd3JhY0FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1MTI0MTI0CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTFfeDY0LXNldHVwLmV4ZQozYnZkUTBZVUtnRnEwWXl2OU9lWGNkOGFZV0tmN0hxOUdxK3lDOEt2dTJqbDlBRUViS09pdkFYeWZoUUlzQk5vUjJCOVg4Rng4eEJLY3piTjBNVEdCUT09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.12/Tezbar_0.3.0-beta.12_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEcwWTkzVWlTOTFMblhqQ3V3ZkNhOVEyaXFqL0tuMnN2NGR1aENHbmphektpdU55RnNiNjF0NWlaa3JPNHBPa3NWVG5RR0ZHMDFKS3Z0S3c4TEFaaVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTI1ODMwCWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTJfeDY0LXNldHVwLmV4ZQp6TGRIaGJ2Y1dONENhWllnMzVXYkN1ZjM2TEptYkc0SUZFajVYSWRkS1JSZnkyOWxVaXg2Q2xUdk9kUWQrV3pVdHY0cWNTdHNPNU9hcW9SNEFPWVpDZz09Cg=="
     }
   }
 }
