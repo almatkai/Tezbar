@@ -470,6 +470,19 @@ impl RuntimeSession {
                 self.callbacks.insert(id.to_owned());
             }
         }
+        // The native colour wheel also lives in root props: its change, save and
+        // format-copy callbacks belong to this session just like node actions.
+        if let Some(wheel) = self.root.props.get("nativeColorWheel") {
+            let formats = wheel["formats"].as_array().into_iter().flatten();
+            for id in ["changeActionId", "saveActionId"]
+                .into_iter()
+                .filter_map(|key| wheel[key].as_str())
+                .chain(formats.filter_map(|row| row["actionId"].as_str()))
+                .filter(|s| !s.is_empty() && s.len() <= 1024)
+            {
+                self.callbacks.insert(id.to_owned());
+            }
+        }
         let mut nodes = vec![];
         self.root.visit(&mut nodes);
         for (index, n) in nodes.iter().enumerate() {

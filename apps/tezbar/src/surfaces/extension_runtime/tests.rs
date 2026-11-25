@@ -489,6 +489,81 @@ fn queued_native_controls_keep_emit_source_and_reject_prior_visibility(cx: &mut 
     assert_eq!(*seen.lock().unwrap(), vec![expected]);
 }
 #[gpui::test]
+fn native_wheel_callbacks_from_root_props_are_admitted_and_render_compactly(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    // The real colour picker: callbacks live only in `nativeColorWheel`, never in `actions`
+    // except the save action that the footer shows as "Use Color".
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let mut wire = reply(json!({"type":"Form","props":{"nativeColorWheel":{
+                "hue":26,"saturation":31,"value":100,"alpha":100,"preview":"#FFCDB0",
+                "changeActionId":"color-picker:wheel-change","saveActionId":"color-picker:wheel-submit",
+                "formats":[{"key":"hex","title":"HEX","value":"#FFCDB0","actionId":"color-picker:wheel-copy:hex"}]}},
+                "children":[{"type":"Form.TextField","props":{"id":"hue","title":"Hue (degrees)","value":"26"}}]}));
+            wire["actions"] = json!([{"id":"color-picker:wheel-submit","title":"Use Color"}]);
+            v.activate(wire, 1, w, cx).unwrap();
+            v.wheel_update([120., 30., 100., 100.], w, cx);
+            assert_eq!(v.error, None, "wheel change must not report an unavailable action");
+        })
+    });
+    settle(&rt, cx);
+    assert!(fake.calls.lock().unwrap().iter().any(|(c, a)| *c == "extension:invoke-action"
+        && a[0]["actionId"] == "color-picker:wheel-change"
+        && a[0]["formValues"]["hue"] == 120.));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            assert_eq!(v.session.as_ref().unwrap().form.values()["hue"], json!("120"));
+            v.event(UiEvent::Action("color-picker:wheel-copy:hex".into()), w, cx);
+            assert_eq!(v.error, None, "format copy callback must be admitted");
+        })
+    });
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("extension-wheel-panel").is_some());
+    assert!(cx.debug_bounds("extension-wheel-swatch").is_some());
+}
+#[test]
+fn wheel_texture_is_a_continuous_borderless_disc_in_bgra() {
+    use super::color_wheel::wheel_pixels;
+    let d = 200;
+    let img = wheel_pixels(d, 1.);
+    let px = |x: u32, y: u32| img.get_pixel(x, y).0; // [b, g, r, a]
+    // Corners are fully transparent: no square backdrop or border.
+    assert_eq!(px(0, 0)[3], 0);
+    assert_eq!(px(d - 1, d - 1)[3], 0);
+    // Centre is white; just inside the top rim is pure red (hue 0°, 100 % saturation).
+    let c = px(d / 2, d / 2);
+    assert!(c[0] > 240 && c[1] > 240 && c[2] > 240 && c[3] == 255, "{c:?}");
+    let top = px(d / 2, 2);
+    assert!(top[2] == 255 && top[0] < 20 && top[1] < 20, "BGRA red at the top: {top:?}");
+    // Right edge is hue 90° (yellow-green): green full, red half, blue none.
+    let right = px(d - 3, d / 2);
+    assert!(right[1] == 255 && right[0] < 10 && (110..150).contains(&right[2]), "{right:?}");
+    // The rim fades over about a pixel (anti-aliased) instead of a hard stair-step.
+    let soft = img.pixels().filter(|p| (1..255).contains(&p.0[3])).count();
+    assert!(soft > 300, "the rim should be anti-aliased all round, got {soft} soft pixels");
+    // Neighbouring pixels change smoothly: no wedge seams.
+    let row: Vec<_> = (60..140).map(|x| px(x, 40)).collect();
+    assert!(row.windows(2).all(|p| (0..3).all(|i| p[0][i].abs_diff(p[1][i]) <= 12)));
+}
+#[test]
+fn wheel_coordinates_round_and_pin_to_the_rim_only_while_dragging() {
+    use super::color_wheel::wheel_coordinates;
+    assert_eq!(wheel_coordinates(0., -50., 100., false), Some((0., 50.)));
+    assert_eq!(wheel_coordinates(100., 0., 100., false), Some((90., 100.)));
+    // Outside the disc: a press is ignored, a drag pins to the rim at the same angle.
+    assert_eq!(wheel_coordinates(0., 150., 100., false), None);
+    assert_eq!(wheel_coordinates(0., 150., 100., true), Some((180., 100.)));
+    assert_eq!(wheel_coordinates(-300., 0., 100., true), Some((270., 100.)));
+    // Whole numbers only, so fields never show long fractions.
+    let (h, s) = wheel_coordinates(13.7, -41.2, 100., false).unwrap();
+    assert_eq!((h.fract(), s.fract()), (0., 0.));
+}
+#[gpui::test]
 fn native_wheel_and_file_results_use_actual_form_callback_and_visibility_tickets(
     cx: &mut TestAppContext,
 ) {

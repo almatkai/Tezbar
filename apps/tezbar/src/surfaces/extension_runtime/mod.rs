@@ -61,6 +61,8 @@ struct FieldEntry {
 pub struct RuntimeView {
     host_generation: u64,
     wheel_bounds: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
+    /// Smooth per-pixel wheel texture, keyed by device size and brightness.
+    wheel_image: color_wheel::WheelImage,
     wheel_drag: bool,
     transport: Arc<dyn ExtensionTransport>,
     assets: Arc<dyn ExtensionAssets>,
@@ -197,6 +199,7 @@ impl RuntimeView {
         Self {
             host_generation: 0,
             wheel_bounds: color_wheel::new_bounds(),
+            wheel_image: color_wheel::new_image(),
             wheel_drag: false,
             transport,
             assets,

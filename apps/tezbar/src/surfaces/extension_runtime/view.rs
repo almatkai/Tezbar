@@ -616,7 +616,7 @@ impl RuntimeView {
                         .items_center()
                         .justify_center()
                         .p(px(24.))
-                        .child(self.wheel(cx)),
+                        .child(self.wheel(240., cx)),
                 )
                 .child(formats)
                 .into_any_element();
@@ -918,6 +918,10 @@ impl RuntimeView {
             .py(px(20. * t.zoom))
             .flex()
             .flex_col();
+        let wheel = n.props.get("nativeColorWheel");
+        if let Some(wheel) = wheel {
+            d = d.child(self.wheel_panel(wheel, t, cx));
+        }
         let mut field_index = 0;
         for n in nodes {
             let id = field_id(n, field_index);
@@ -928,43 +932,10 @@ impl RuntimeView {
                 d = d.child(self.field(n, id, t, cx));
             }
         }
-        if let Some(wheel) = n.props.get("nativeColorWheel") {
-            d = d.child(self.wheel(cx));
-            if let Some(formats) = wheel["formats"].as_array() {
-                for (i, row) in formats.iter().take(16).enumerate() {
-                    if let (Some(title), Some(value), Some(action)) = (
-                        row["title"].as_str(),
-                        row["value"].as_str(),
-                        row["actionId"].as_str(),
-                    ) {
-                        d = d.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.))
-                                .child(self.button(
-                                    format!("wheel-format-{i}"),
-                                    title.into(),
-                                    UiEvent::Action(action.into()),
-                                    t,
-                                    cx,
-                                ))
-                                .child(div().font_family(tezbar_ui::tokens::mono_family()).child(value.to_owned())),
-                        );
-                    }
-                }
-            }
-            if let Some(action) = wheel["saveActionId"].as_str() {
-                return d
-                    .child(self.button(
-                        "save-wheel-color".into(),
-                        "Save Color".into(),
-                        UiEvent::Action(action.into()),
-                        t,
-                        cx,
-                    ))
-                    .into_any_element();
-            }
+        // The wheel's save callback is the footer's primary action ("Use Color"); a
+        // second copy in the body only pushes the form further down.
+        if wheel.is_some_and(|w| w["saveActionId"].is_string()) {
+            return d.into_any_element();
         }
         d.child(
             self.button(
@@ -979,6 +950,154 @@ impl RuntimeView {
             ),
         )
         .into_any_element()
+    }
+    /// Form `nativeColorWheel`: the wheel on the left, a live swatch and copyable formats on
+    /// the right. Compact enough to sit above the numeric fields at launcher heights.
+    fn wheel_panel(&self, wheel: &Value, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+        let values = self.wheel_values();
+        // Local rows follow the pointer at once; the worker's rows supply titles and callbacks.
+        let local = self.color_formats();
+        let hex = local
+            .iter()
+            .find(|r| r.key == "hex")
+            .map(|r| r.value.clone())
+            .unwrap_or_default();
+        let mut list = div()
+            .id("wheel-formats")
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .p(px(4. * t.zoom));
+        let rows = wheel["formats"].as_array().into_iter().flatten().take(16);
+        for (i, row) in rows.enumerate() {
+            let (Some(title), Some(action)) = (row["title"].as_str(), row["actionId"].as_str())
+            else {
+                continue;
+            };
+            let value = row["key"]
+                .as_str()
+                .and_then(|key| local.iter().find(|r| r.key == key))
+                .map(|r| r.value.clone())
+                .or_else(|| row["value"].as_str().map(str::to_owned))
+                .unwrap_or_default();
+            let owner = cx.entity().downgrade();
+            let action = action.to_owned();
+            list = list.child(
+                controls::action_button(
+                    format!("wheel-format-{i}"),
+                    "",
+                    ButtonTone::Ghost,
+                    false,
+                    t,
+                    move |w, cx| {
+                        let _ = owner
+                            .update(cx, |v, cx| v.event(UiEvent::Action(action.clone()), w, cx));
+                    },
+                )
+                .aria_label(format!("Copy {title}"))
+                .w_full()
+                .px(px(10. * t.zoom))
+                .py(px(6. * t.zoom))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_start()
+                        .min_w_0()
+                        .gap(px(2. * t.zoom))
+                        .child(
+                            div()
+                                .text_size(px(10.5 * t.zoom))
+                                .text_color(t.text4)
+                                .child(title.to_owned()),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12. * t.zoom))
+                                .text_color(t.text1)
+                                .font_family(tezbar_ui::tokens::mono_family())
+                                .text_ellipsis()
+                                .child(value),
+                        ),
+                ),
+            );
+        }
+        let size = 168. * t.zoom;
+        let panel = || {
+            div()
+                .min_w_0()
+                .rounded(px(tokens::ROW_RADIUS))
+                .border_1()
+                .border_color(t.hairline)
+                .bg(t.bar)
+        };
+        div()
+            .debug_selector(|| "extension-wheel-panel".into())
+            .flex()
+            .w_full()
+            .gap(px(12. * t.zoom))
+            .h(px(size + 24. * t.zoom))
+            .mb(px(16. * t.zoom))
+            .child(
+                panel()
+                    .flex_1()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(self.wheel(size, cx)),
+            )
+            .child(
+                panel()
+                    .w(relative(0.45))
+                    .max_w(px(280. * t.zoom))
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(10. * t.zoom))
+                            .px(px(12. * t.zoom))
+                            .py(px(8. * t.zoom))
+                            .border_b_1()
+                            .border_color(t.hairline)
+                            .child(
+                                div()
+                                    .debug_selector(|| "extension-wheel-swatch".into())
+                                    .size(px(28. * t.zoom))
+                                    .flex_shrink_0()
+                                    .rounded(px(6. * t.zoom))
+                                    .border_1()
+                                    .border_color(t.hairline)
+                                    .bg(color_wheel::swatch(values)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .text_size(px(12.5 * t.zoom))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(t.text1)
+                                            .child("Color Formats"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(11. * t.zoom))
+                                            .font_family(tezbar_ui::tokens::mono_family())
+                                            .text_color(t.text3)
+                                            .child(hex),
+                                    ),
+                            ),
+                    )
+                    .child(list),
+            )
+            .into_any_element()
     }
     fn setup(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
         let title = self
