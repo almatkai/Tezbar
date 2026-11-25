@@ -383,6 +383,60 @@ fn deferred_page_is_invalidated_by_query_and_hide_and_keyboard_still_pages(
 }
 
 #[gpui::test]
+fn installed_extension_with_an_update_shows_it_and_updates_in_place(cx: &mut TestAppContext) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    cx.update(|cx| gpui_tokio::init_from_handle(cx, rt.handle().clone()));
+    let fake = Arc::new(Fake::default());
+    let (view, cx) = cx.add_window_view(|w, cx| StoreView::new(fake.clone(), w, cx));
+    view.update(cx, |v, cx| {
+        let store: Entry = serde_json::from_value(
+            json!({"id":"raycast.base64","name":"Base64","source":"tezbar","runtime":"javascript"}),
+        )
+        .unwrap();
+        let installed = decode_installed(json!([
+            {"id":"raycast.base64","name":"Base64","source":"tezbar",
+             "update":{"kind":"bundle","latestAt":1_762_100_000_000u64}},
+            {"id":"raycast.current","name":"Current","source":"tezbar"}
+        ]))
+        .unwrap();
+        v.catalog.search("".into(), false);
+        v.catalog
+            .loaded(1, Ok((vec![store], installed, 2, false)), false);
+        v.visible = true;
+        v.catalog.selected = Some("raycast.base64".into());
+        v.rebuild(cx);
+        assert_eq!(v.update_count(), 1);
+        assert!(v.update_for("raycast.current").is_none());
+        cx.notify();
+    });
+    cx.update(|w, cx| {
+        w.draw(cx).clear(cx);
+        w.simulate_next_frame(cx);
+    });
+    assert!(cx.debug_bounds("store-update-banner").is_some());
+    assert!(cx.debug_bounds("store-row-update-0").is_some());
+    assert!(StoreView::update_text(&json!({"latestVersion":"1.2.0"})).contains("1.2.0"));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(view::Action::Install("raycast.base64".into()), w, cx);
+            v.action(view::Action::Refresh, w, cx);
+        })
+    });
+    rt.block_on(async {
+        for _ in 0..64 {
+            cx.run_until_parked();
+            tokio::task::yield_now().await;
+        }
+    });
+    let sent = fake.0.lock().unwrap().clone();
+    assert!(sent.contains(&"extension:install"), "{sent:?}");
+    assert!(sent.contains(&"extensions:check-updates"), "{sent:?}");
+}
+
+#[gpui::test]
 fn source_switch_clears_rows_and_rejects_old_page(cx: &mut TestAppContext) {
     let fake = Arc::new(Fake::default());
     let (view, cx) = cx.add_window_view(|w, cx| StoreView::new(fake, w, cx));

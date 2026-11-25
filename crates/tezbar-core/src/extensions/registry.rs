@@ -622,7 +622,7 @@ fn command_values(extension: &Installed) -> Vec<Value> {
     }).collect()
 }
 
-fn list(ctx: &CoreContext) -> Value {
+pub(super) fn list(ctx: &CoreContext) -> Value {
     let mut values:Vec<_>=collect(ctx).iter().map(|extension| {
         let pkg=&extension.manifest;
         let author=person(pkg.get("author").unwrap_or(&pkg["owner"]));
@@ -643,6 +643,7 @@ fn list(ctx: &CoreContext) -> Value {
     for value in &mut values {
         value["source"] = json!(super::catalog::source_for_id(value["id"].as_str().unwrap_or("")));
     }
+    super::updates::annotate(ctx, &mut values);
     values.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     json!(values)
 }

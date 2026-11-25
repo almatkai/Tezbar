@@ -27,7 +27,10 @@ impl StoreView {
             Action::Source(source) => self.switch_source(source, cx),
             Action::Settings => self.emit_effect(StoreEffect::Settings, cx),
             Action::Back => self.emit_effect(StoreEffect::Back, cx),
-            Action::Refresh => self.reload(cx),
+            Action::Refresh => {
+                self.reload(cx);
+                self.check_updates(cx);
+            }
             Action::More => self.more(cx),
             Action::Select(id) => self.select(id, cx),
             Action::Install(id) => self.install(id, cx),
@@ -71,7 +74,10 @@ impl StoreView {
         let e = &self.rows[index];
         let selected = self.catalog.selected.as_ref() == Some(&e.id);
         let installed = self.catalog.installed.iter().any(|v| v.id == e.id);
-        let subtitle = if installed {
+        let update = self.update_for(&e.id).is_some();
+        let subtitle = if update {
+            "Update available".to_owned()
+        } else if installed {
             "Installed".to_owned()
         } else {
             e.runtime_description(platform())
@@ -130,13 +136,40 @@ impl StoreView {
                 )
                 .child(
                     div()
+                        .id(format!("store-row-status-{}", e.id))
                         .truncate()
                         .text_size(px(10.5 * t.zoom))
-                        .text_color(t.text4)
+                        .text_color(if update { t.accent } else { t.text4 })
                         .child(subtitle),
                 ),
         )
+        .when(update, |row| {
+            row.child(
+                div()
+                    .debug_selector(move || format!("store-row-update-{index}"))
+                    .flex_shrink_0()
+                    .size(px(7. * t.zoom))
+                    .rounded_full()
+                    .bg(t.accent),
+            )
+        })
         .into_any_element()
+    }
+    /// "Version 1.2.0 is available" or "Updated 3 Nov 2026".
+    pub(super) fn update_text(update: &Value) -> String {
+        if let Some(version) = update["latestVersion"].as_str() {
+            return format!("Version {version} is available.");
+        }
+        update["latestAt"]
+            .as_u64()
+            .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms as i64))
+            .map(|at| {
+                format!(
+                    "A newer build was published on {}.",
+                    at.with_timezone(&chrono::Local).format("%-d %b %Y")
+                )
+            })
+            .unwrap_or_else(|| "A newer build is available.".into())
     }
     fn detail(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
         if github_url(&self.catalog.query) {
@@ -224,6 +257,65 @@ impl StoreView {
                             ),
                     ),
             )
+            .when_some(self.update_for(&e.id).cloned(), |d, update| {
+                let busy = self.catalog.installing.contains_key(&e.id);
+                d.child(
+                    div()
+                        .id("store-update-banner")
+                        .debug_selector(|| "store-update-banner".into())
+                        .role(Role::Status)
+                        .flex()
+                        .items_center()
+                        .gap(px(12. * t.zoom))
+                        .rounded(px(10.))
+                        .border_1()
+                        .border_color(t.accent.opacity(0.45))
+                        .bg(t.accent.opacity(0.10))
+                        .px(px(14. * t.zoom))
+                        .py(px(10. * t.zoom))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .gap(px(2.))
+                                .child(
+                                    div()
+                                        .text_size(px(12.5 * t.zoom))
+                                        .text_color(t.accent)
+                                        .child("Update available"),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11. * t.zoom))
+                                        .text_color(t.text3)
+                                        .child(Self::update_text(&update)),
+                                ),
+                        )
+                        .when(!busy, |d| {
+                            d.child(
+                                controls::action_button(
+                                    "store-update-now",
+                                    "Update",
+                                    ButtonTone::Primary,
+                                    false,
+                                    t,
+                                    {
+                                        let owner = cx.entity().downgrade();
+                                        let id = e.id.clone();
+                                        move |w, cx| {
+                                            let _ = owner.update(cx, |v, cx| {
+                                                v.action(Action::Install(id.clone()), w, cx)
+                                            });
+                                        }
+                                    },
+                                )
+                                .flex_shrink_0(),
+                            )
+                        }),
+                )
+            })
             .child(self.detail.clone());
         if let Some((label, description)) = e.runtime_description(platform()) {
             d = d.child(
@@ -441,9 +533,22 @@ impl StoreView {
                 div()
                     .id("store-install-progress")
                     .role(Role::ProgressIndicator)
-                    .child(format!("Installing… {progress}%")),
+                    .child(if installed {
+                        format!("Updating… {progress}%")
+                    } else {
+                        format!("Installing… {progress}%")
+                    }),
             );
         } else if installed {
+            if self.update_for(&e.id).is_some() {
+                d = d.child(self.button(
+                    "store-update".into(),
+                    "Update extension".into(),
+                    Action::Install(e.id.clone()),
+                    t,
+                    cx,
+                ));
+            }
             d = d.child(self.button(
                 "store-uninstall".into(),
                 "Remove extension".into(),
@@ -679,8 +784,13 @@ impl Render for StoreView {
             .clone()
             .or_else(|| self.catalog.message.clone())
             .unwrap_or_else(|| {
+                let updates = match self.update_count() {
+                    0 => String::new(),
+                    1 => " · 1 update available".into(),
+                    n => format!(" · {n} updates available"),
+                };
                 format!(
-                    "{} extensions · {}",
+                    "{} extensions · {}{updates}",
                     self.catalog.total,
                     self.source.label()
                 )

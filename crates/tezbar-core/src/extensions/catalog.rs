@@ -111,6 +111,29 @@ impl Catalog {
         Ok(prepared)
     }
 
+    /// When each catalog extension's pre-built bundle last changed (ms), from a fresh
+    /// catalog when the network allows and the cached one otherwise.
+    pub(super) async fn bundle_times(
+        &self,
+    ) -> Result<std::collections::HashMap<String, u64>, String> {
+        let entries = match self.refresh().await {
+            Ok(entries) => entries,
+            Err(error) => match self.cache.lock().await.as_ref() {
+                Some((_, entries)) if !entries.is_empty() => entries.clone(),
+                _ => return Err(error),
+            },
+        };
+        Ok(entries
+            .iter()
+            .filter_map(|entry| {
+                let name = entry.value["name"].as_str()?;
+                let at = entry.value["bundleUpdatedAt"].as_str()?;
+                let at = chrono::DateTime::parse_from_rfc3339(at).ok()?;
+                Some((name.to_owned(), u64::try_from(at.timestamp_millis()).ok()?))
+            })
+            .collect())
+    }
+
     async fn fetch_catalog(base: &str) -> Result<Value, String> {
         static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
         let client = CLIENT.get_or_init(|| {
@@ -416,6 +439,10 @@ fn normalize(value: &Value) -> Vec<Value> {
             }
             if let Some(s) = screenshots {
                 obj.insert("screenshotUrls".into(), json!(s));
+            }
+            // Drives extension update checks: installs use this pre-built bundle.
+            if let Some(at) = v["bundleUpdatedAt"].as_str() {
+                obj.insert("bundleUpdatedAt".into(), json!(at));
             }
             Value::Object(obj)
         })

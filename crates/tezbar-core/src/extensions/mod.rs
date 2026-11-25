@@ -11,6 +11,7 @@ mod process_install;
 
 mod registry;
 pub(crate) use registry::hotkey_edit_owner;
+mod updates;
 mod v2_catalog;
 mod v2_runtime;
 // Domain implementations/assets live in standalone extension repositories.
@@ -90,6 +91,8 @@ pub const CHANNELS: &[&str] = &[
     "preferences:set",
     "get-installed-extensions-settings-schema",
     "core:extensions:commands",
+    "extensions:updates",
+    "extensions:check-updates",
 ];
 
 #[derive(Clone)]
@@ -102,6 +105,7 @@ pub struct ExtensionsCore {
     native: native::NativeSessions,
     installs: Arc<tokio::sync::Mutex<()>>,
     commands: Arc<command_list::CommandList>,
+    update_checks: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     #[cfg(test)]
     worker_override: Option<super::common::CoreRouter>,
     #[cfg(test)]
@@ -119,7 +123,14 @@ impl ExtensionsCore {
         registry::asset_scope_for_root(&self.ctx, root)
     }
     pub fn start(&self) -> Result<(), String> {
-        self.native.start(&self.ctx)
+        self.native.start(&self.ctx)?;
+        // Installed extensions are checked for updates every 12 hours.
+        if let Ok(mut task) = self.update_checks.lock() {
+            if task.as_ref().is_none_or(|t| t.is_finished()) {
+                *task = updates::spawn(self.ctx.clone(), self.catalog.clone());
+            }
+        }
+        Ok(())
     }
 
     pub fn new(ctx: CoreContext) -> Self {
@@ -131,6 +142,7 @@ impl ExtensionsCore {
             native: native::NativeSessions::default(),
             installs: Arc::new(tokio::sync::Mutex::new(())),
             commands: Arc::default(),
+            update_checks: Arc::default(),
             #[cfg(test)]
             worker_override: None,
             #[cfg(test)]
@@ -235,6 +247,18 @@ impl ExtensionsCore {
         if channel == "extension:search-store" || channel == "extensions:searchStore" {
             return Some(self.catalog.search(channel, args).await);
         }
+        if channel == "extensions:check-updates" {
+            return Some(updates::check(&self.ctx, &self.catalog).await);
+        }
+        if channel == "extensions:updates" {
+            let ctx = self.ctx.clone();
+            return Some(
+                tokio::task::spawn_blocking(move || updates::current(&ctx))
+                    .await
+                    .map_err(|e| e.to_string())
+                    .and_then(|v| v),
+            );
+        }
         let this = self.clone();
         let channel = channel.to_string();
         let args = args.to_vec();
@@ -302,6 +326,9 @@ impl ExtensionsCore {
         }
     }
     pub async fn shutdown(&self) {
+        if let Some(task) = self.update_checks.lock().ok().and_then(|mut t| t.take()) {
+            task.abort();
+        }
         self.commands.clear();
         self.native.clear().await;
         self.worker.shutdown().await;

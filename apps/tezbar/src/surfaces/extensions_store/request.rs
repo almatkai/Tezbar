@@ -41,6 +41,8 @@ pub enum ExtensionRequest {
     },
     Install(String),
     Uninstall(String),
+    /// Check installed extensions for updates now instead of waiting for the 12-hour check.
+    CheckUpdates,
     Run {
         extension: String,
         command: String,
@@ -104,6 +106,7 @@ impl ExtensionRequest {
             ),
             Self::Install(id) => ("extension:install", vec![json!(id)]),
             Self::Uninstall(id) => ("extension:uninstall", vec![json!(id)]),
+            Self::CheckUpdates => ("extensions:check-updates", vec![]),
             Self::Run {
                 extension,
                 command,

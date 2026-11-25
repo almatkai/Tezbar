@@ -153,6 +153,7 @@ impl StoreView {
                 [
                     "extensions-changed",
                     "extensions-catalog-updated",
+                    "extension-updates-changed",
                     "extension:install-progress",
                     "extension-worker-status",
                 ]
@@ -216,7 +217,9 @@ impl StoreView {
     pub fn core_event(&mut self, e: &CoreEvent, cx: &mut Context<Self>) {
         if let CoreEvent::Other { channel, payload } = e {
             match channel.as_str() {
-                "extensions-changed" | "extensions-catalog-updated" => {
+                "extensions-changed"
+                | "extensions-catalog-updated"
+                | "extension-updates-changed" => {
                     self.refresh.changed(self.now())
                 }
                 "extension:install-progress" => {
@@ -452,6 +455,39 @@ impl StoreView {
             .iter()
             .find(|e| Some(&e.id) == self.catalog.selected.as_ref())
     }
+    /// The update the core found for an installed extension, if any.
+    fn update_for(&self, id: &str) -> Option<&Value> {
+        self.catalog
+            .installed
+            .iter()
+            .find(|v| v.id == id)
+            .and_then(|v| v.metadata.get("update"))
+            .filter(|u| u.is_object())
+    }
+    fn update_count(&self) -> usize {
+        self.catalog
+            .installed
+            .iter()
+            .filter(|v| v.metadata.get("update").is_some_and(Value::is_object))
+            .count()
+    }
+    /// Manual refresh also checks for updates now; the result arrives as an event.
+    fn check_updates(&mut self, cx: &mut Context<Self>) {
+        if self.jobs.len() >= 16 {
+            return;
+        }
+        let t = self.transport.clone();
+        self.next += 1;
+        let ticket = self.next;
+        let job = cx.spawn(async move |this, cx| {
+            let _ = gpui_tokio::Tokio::spawn(cx, t.send(ExtensionRequest::CheckUpdates)).await;
+            let _ = this.update(cx, |v, _| {
+                v.jobs.remove(&ticket);
+            });
+        });
+        job.detach();
+        self.jobs.insert(ticket);
+    }
     fn install(&mut self, id: String, cx: &mut Context<Self>) {
         if self.busy.contains(&id) {
             return;
@@ -478,6 +514,7 @@ impl StoreView {
         let ticket = self.next;
         let t = self.transport.clone();
         let epoch = self.epoch;
+        let updating = !remove && self.update_for(&id).is_some();
         let future = t.send(if remove {
             ExtensionRequest::Uninstall(id.clone())
         } else {
@@ -498,6 +535,8 @@ impl StoreView {
                     if matches!(result, Ok(Ok(()))) {
                         if remove {
                             "Extension removed.".into()
+                        } else if updating {
+                            "Extension updated.".into()
                         } else {
                             "Extension installed.".into()
                         }
@@ -505,7 +544,13 @@ impl StoreView {
                         match &result {
                             Ok(Err(e)) => format!(
                                 "Could not {} extension: {}",
-                                if remove { "remove" } else { "install" },
+                                if remove {
+                                    "remove"
+                                } else if updating {
+                                    "update"
+                                } else {
+                                    "install"
+                                },
                                 e.chars().take(300).collect::<String>()
                             ),
                             _ => "Extension operation interrupted. Try again.".into(),

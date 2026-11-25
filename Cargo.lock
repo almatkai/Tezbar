@@ -6443,6 +6443,7 @@ dependencies = [
  "alacritty_terminal",
  "anyhow",
  "base64",
+ "chrono",
  "global-hotkey",
  "gpui",
  "gpui_platform",
