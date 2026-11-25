@@ -1,21 +1,21 @@
 {
-  "version": "0.3.0-beta.12",
+  "version": "0.3.0-beta.13",
   "channel": "beta",
   "appIdentifier": "com.tezbar.app",
-  "notes": "# Tezbar 0.3.0-beta.12\r\n\r\nThe native extension catalog contains 116 records. Thirty-one have publicly downloadable artifacts. The testing previews include GitHub, Obsidian, Coffee and Google Translate 0.1.1 on macOS and Windows, plus Apple Notes and Apple Reminders on macOS. They join Arc 0.1.0, Google Chrome and Brew on macOS, Linear, Slack, Notion 0.1.0 and Visual Studio Code 0.1.1 on macOS and Windows, and Lorem Ipsum 0.1.1 with HTML and Markdown commands. Unavailable public download references for Port Manager have been removed; its local-import-only policy and the other local-import restrictions still apply.\r\n\r\nThe Rust host adds quicklink creation, clipboard content and capture services, audio playback and navigation. The GPUI extension views improve form focus, selected-row actions, optional launcher arguments and tray routing. Native command migration preserves cleared and rebound shortcuts, keeps supported JavaScript fallbacks active, and defers uncertain history without blocking unrelated commands. The beta.11 chat, startup activation, idle processing and installation-admission changes carry forward.\r\n\r\nVault: opening a locked Vault asks for Touch ID or the Mac password right away. Cmd+C on a Vault search result unlocks the Vault if needed and copies the secret. Opening a Vault result from search selects that item in the list.\r\n\r\nDesktop acceptance and live account testing remain pending for the new previews.\r\n",
-  "pub_date": "2026-11-25T04:19:34.028Z",
+  "notes": "# Tezbar 0.3.0-beta.13\n\nVault: Cmd+C on a Vault search result now shows its progress and outcome on that row instead of in the footer. The row badge changes to \"Copying…\" and, when the Vault is locked, \"Unlocking…\" while Touch ID or the Mac password is requested. A green \"Copied · clears in 30 s\" confirmation follows; a cancelled unlock or failed copy shows a red message on the same row. The badge returns after a few seconds, and closing the launcher or changing the search clears it.\n\nThe beta.12 extension catalog, Rust host services, native command migration and Vault changes carry forward unchanged.\n",
+  "pub_date": "2026-11-25T05:47:46.865Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.12/Tezbar_0.3.0-beta.12_aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERtcXZ1NjkzR2ZNN1RGK0NBK2FuUDEzQ0toVFJsQnNxTzk2Y1ZCd0NodVZEMkhSZlV0MnNOWW44QmJzTzJUcHp2T0YyVUw2aHFDTWdzazZlVWFRelFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTIzODY3CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTJfYWFyY2g2NC5hcHAudGFyLmd6Cm00akZ3Umk1a2NuYTIxQVcwdStRSjBvaVVYajJIaUJUK09FOGJwNWQ0YnhXS2U2ZEJWcEUxTlV2UjdlQlhFWFpmOWYvYVhMWEs1NVJyUThsQnRycEF3PT0K"
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.13/Tezbar_0.3.0-beta.13_aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEI0dTBDa1JabkZXRThBTHgyTmh1cVYzaE1UNFU4OVJsb0tlWTB1REdrSHNGUytkM0lRcEp0OCt1STBJakxYSEtnUjJMQ0Vnd1c0MDZZY2dGZ3RHNFFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTg1MzkyCWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTNfYWFyY2g2NC5hcHAudGFyLmd6CkRHYVMwN0JOZDJnZ3FFbVBMZ2oyWTlrQk90amJUZ2RYUWNUR0JleWF4V0F2TDVzYXY4TFVNYW9oREI5SUk2b2NNRHQ4N1ZCOElSUlBWVlcva3AzOEFnPT0K"
     },
     "windows-x86_64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.12/Tezbar_0.3.0-beta.12_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEcwWTkzVWlTOTFMblhqQ3V3ZkNhOVEyaXFqL0tuMnN2NGR1aENHbmphektpdU55RnNiNjF0NWlaa3JPNHBPa3NWVG5RR0ZHMDFKS3Z0S3c4TEFaaVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTI1ODMwCWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTJfeDY0LXNldHVwLmV4ZQp6TGRIaGJ2Y1dONENhWllnMzVXYkN1ZjM2TEptYkc0SUZFajVYSWRkS1JSZnkyOWxVaXg2Q2xUdk9kUWQrV3pVdHY0cWNTdHNPNU9hcW9SNEFPWVpDZz09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.13/Tezbar_0.3.0-beta.13_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE83K1pzSS9tc0Yxb1J6MWdMdno4ZDlqeC9CNDgxWkxPNWIrUVpwTXl3N3hjUWMxUUNRY0N0RWpxNlZ0TExydU94K3lDbmpZbG1aSHdTMUFRei9QMmdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTg0OTg5CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTNfeDY0LXNldHVwLmV4ZQpaczZISUNMSjYyNFBNeGgxVFlzVnJOWFpyU2Z2dkF6MEM3bzg5L0txaDRFZ0g0K0hpMGFmbzQybEZSQVNJNDFsN3hhOXpXSzJCd2RSN0E1aCtZQXpDdz09Cg=="
     },
     "windows-x86_64-nsis": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.12/Tezbar_0.3.0-beta.12_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEcwWTkzVWlTOTFMblhqQ3V3ZkNhOVEyaXFqL0tuMnN2NGR1aENHbmphektpdU55RnNiNjF0NWlaa3JPNHBPa3NWVG5RR0ZHMDFKS3Z0S3c4TEFaaVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTI1ODMwCWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTJfeDY0LXNldHVwLmV4ZQp6TGRIaGJ2Y1dONENhWllnMzVXYkN1ZjM2TEptYkc0SUZFajVYSWRkS1JSZnkyOWxVaXg2Q2xUdk9kUWQrV3pVdHY0cWNTdHNPNU9hcW9SNEFPWVpDZz09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.13/Tezbar_0.3.0-beta.13_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE83K1pzSS9tc0Yxb1J6MWdMdno4ZDlqeC9CNDgxWkxPNWIrUVpwTXl3N3hjUWMxUUNRY0N0RWpxNlZ0TExydU94K3lDbmpZbG1aSHdTMUFRei9QMmdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTg0OTg5CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTNfeDY0LXNldHVwLmV4ZQpaczZISUNMSjYyNFBNeGgxVFlzVnJOWFpyU2Z2dkF6MEM3bzg5L0txaDRFZ0g0K0hpMGFmbzQybEZSQVNJNDFsN3hhOXpXSzJCd2RSN0E1aCtZQXpDdz09Cg=="
     }
   }
 }
