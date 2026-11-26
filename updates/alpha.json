@@ -1,21 +1,21 @@
 {
-  "version": "0.3.0-beta.13",
+  "version": "0.3.0-beta.14",
   "channel": "beta",
   "appIdentifier": "com.tezbar.app",
-  "notes": "# Tezbar 0.3.0-beta.13\n\nVault: Cmd+C on a Vault search result now shows its progress and outcome on that row instead of in the footer. The row badge changes to \"Copying…\" and, when the Vault is locked, \"Unlocking…\" while Touch ID or the Mac password is requested. A green \"Copied · clears in 30 s\" confirmation follows; a cancelled unlock or failed copy shows a red message on the same row. The badge returns after a few seconds, and closing the launcher or changing the search clears it.\n\nThe beta.12 extension catalog, Rust host services, native command migration and Vault changes carry forward unchanged.\n",
-  "pub_date": "2026-11-25T05:47:46.865Z",
+  "notes": "# Tezbar 0.3.0-beta.14\n\nNotes: a selected note now shows rendered Markdown — headings, bold and italic text, inline code, tables, lists and links — instead of its raw symbols. Press Enter, double-click, or Cmd+E to edit; Esc or Cmd+E returns to the rendered note, and a second Esc goes back. New notes open in the editor.\n\nClipboard History: Cmd+N saves the selected text entry as a new note, keeping its Markdown. Concealed items, images and files are not saved.\n\nExtensions: Tezbar checks installed extensions for updates shortly after launch and then every 12 hours. An extension with an update shows \"Update available\" in the Store list, an update banner with an Update button on its page, and \"Update extension\" in its footer; the status bar counts available updates, and Refresh checks immediately.\n\nColor Picker: the colour wheel is now smooth and borderless, keeps tracking while dragging outside the wheel, sits in a compact panel, and no longer reports \"Colour action is unavailable\".\n\nThe beta.13 Vault, extension catalog and Rust host changes carry forward unchanged.\n",
+  "pub_date": "2026-11-26T06:29:50.507Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.13/Tezbar_0.3.0-beta.13_aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEI0dTBDa1JabkZXRThBTHgyTmh1cVYzaE1UNFU4OVJsb0tlWTB1REdrSHNGUytkM0lRcEp0OCt1STBJakxYSEtnUjJMQ0Vnd1c0MDZZY2dGZ3RHNFFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTg1MzkyCWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTNfYWFyY2g2NC5hcHAudGFyLmd6CkRHYVMwN0JOZDJnZ3FFbVBMZ2oyWTlrQk90amJUZ2RYUWNUR0JleWF4V0F2TDVzYXY4TFVNYW9oREI5SUk2b2NNRHQ4N1ZCOElSUlBWVlcva3AzOEFnPT0K"
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.14/Tezbar_0.3.0-beta.14_aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEh1WWlGaldqTWlOa0RQWk9pWWQvaEQrTUk4VGJ5dmFUWGNNcWhNR0E2TjdqSTBVT2lCbnhRY0psQ3VXSVZZUTFFbXdDalZRRDEwdGtyeDk3Y3JFbmdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1Njc0Mjg3CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTRfYWFyY2g2NC5hcHAudGFyLmd6Ci8rSEZHd0NYSHlpZjM4Y3VHYkpvYmw3ODBtYnkyd3luZlJTUHNVL04xbC91a0x6ZmlEUHN3SXd1d0g2eXEzSnBrZHNVb3ZxcWVrNlI2ZW5TaE1XVUF3PT0K"
     },
     "windows-x86_64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.13/Tezbar_0.3.0-beta.13_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE83K1pzSS9tc0Yxb1J6MWdMdno4ZDlqeC9CNDgxWkxPNWIrUVpwTXl3N3hjUWMxUUNRY0N0RWpxNlZ0TExydU94K3lDbmpZbG1aSHdTMUFRei9QMmdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTg0OTg5CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTNfeDY0LXNldHVwLmV4ZQpaczZISUNMSjYyNFBNeGgxVFlzVnJOWFpyU2Z2dkF6MEM3bzg5L0txaDRFZ0g0K0hpMGFmbzQybEZSQVNJNDFsN3hhOXpXSzJCd2RSN0E1aCtZQXpDdz09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.14/Tezbar_0.3.0-beta.14_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEJXYW1vQXNXOVVBZXpYWWlTcTlaQW9zajB5WWlrRzI1ajNmOXdITHlINDl3bHV1RkRBU2JZWFM2cUZ2d0YvYlJaS2YvdzZiL3hCVkl3R25SbUlhVmc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1Njc0MjA0CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTRfeDY0LXNldHVwLmV4ZQp4YjZka0RhSkhTSENZd2J1OUtXSExKNWN4UjN0RjB2ZHNwTy9YWmJ3c2NwOHNsY0oyUzhUWXNKSndBVG5FY2dlT0F3K2Ixeis4aWdQQ3R1aHRSZWhDZz09Cg=="
     },
     "windows-x86_64-nsis": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.13/Tezbar_0.3.0-beta.13_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNE83K1pzSS9tc0Yxb1J6MWdMdno4ZDlqeC9CNDgxWkxPNWIrUVpwTXl3N3hjUWMxUUNRY0N0RWpxNlZ0TExydU94K3lDbmpZbG1aSHdTMUFRei9QMmdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NTg0OTg5CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTNfeDY0LXNldHVwLmV4ZQpaczZISUNMSjYyNFBNeGgxVFlzVnJOWFpyU2Z2dkF6MEM3bzg5L0txaDRFZ0g0K0hpMGFmbzQybEZSQVNJNDFsN3hhOXpXSzJCd2RSN0E1aCtZQXpDdz09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.14/Tezbar_0.3.0-beta.14_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEJXYW1vQXNXOVVBZXpYWWlTcTlaQW9zajB5WWlrRzI1ajNmOXdITHlINDl3bHV1RkRBU2JZWFM2cUZ2d0YvYlJaS2YvdzZiL3hCVkl3R25SbUlhVmc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1Njc0MjA0CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTRfeDY0LXNldHVwLmV4ZQp4YjZka0RhSkhTSENZd2J1OUtXSExKNWN4UjN0RjB2ZHNwTy9YWmJ3c2NwOHNsY0oyUzhUWXNKSndBVG5FY2dlT0F3K2Ixeis4aWdQQ3R1aHRSZWhDZz09Cg=="
     }
   }
 }
