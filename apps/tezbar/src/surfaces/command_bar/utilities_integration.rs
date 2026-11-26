@@ -99,7 +99,12 @@ impl Launcher {
         utility.update(cx, |view, cx| {
             if !view.visible {
                 view.set_visible(true, window, cx);
-                if view.surface == Surface::Notes && view.notes.selected.is_some() {
+                // Resume the mode the note was left in: only an open editor takes focus back;
+                // a rendered note is not an input, so the search field keeps the keyboard.
+                if view.surface == Surface::Notes
+                    && view.notes.selected.is_some()
+                    && view.note_editing
+                {
                     view.editor.focus_handle(cx).focus(window, cx);
                 } else {
                     view.search.focus_handle(cx).focus(window, cx);

@@ -138,6 +138,24 @@ fn parent_utility_hide_and_show_resume_the_same_native_note_editor(cx: &mut Test
     });
     settle(&rt, cx);
     let utility = view.read_with(cx, |view, _| view.utilities.clone().unwrap());
+    // A note opens rendered; hiding and showing resumes that view with search focused.
+    cx.update(|w, cx| view.update(cx, |view, cx| view.hide(w, cx)));
+    cx.update(|w, cx| view.update(cx, |view, cx| view.show(w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        utility.read_with(cx, |utility, cx| {
+            assert!(utility.visible && !utility.note_editing);
+            assert!(utility.search.focus_handle(cx).is_focused(w));
+        })
+    });
+    assert!(cx.debug_bounds("note-markdown").is_some());
+    // An open editor is resumed with the keyboard still in it.
+    cx.update(|w, cx| {
+        utility.update(cx, |utility, cx| {
+            utility.act(crate::surfaces::utilities::Action::EditNote(true), w, cx)
+        })
+    });
+    settle(&rt, cx);
     cx.update(|w, cx| view.update(cx, |view, cx| view.hide(w, cx)));
     assert!(!utility.read_with(cx, |utility, _| utility.visible));
     let reads = adapter
