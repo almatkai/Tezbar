@@ -1,21 +1,21 @@
 {
-  "version": "0.3.0-beta.14",
+  "version": "0.3.0-beta.15",
   "channel": "beta",
   "appIdentifier": "com.tezbar.app",
-  "notes": "# Tezbar 0.3.0-beta.14\n\nNotes: a selected note now shows rendered Markdown — headings, bold and italic text, inline code, tables, lists and links — instead of its raw symbols. Press Enter, double-click, or Cmd+E to edit; Esc or Cmd+E returns to the rendered note, and a second Esc goes back. New notes open in the editor.\n\nClipboard History: Cmd+N saves the selected text entry as a new note, keeping its Markdown. Concealed items, images and files are not saved.\n\nExtensions: Tezbar checks installed extensions for updates shortly after launch and then every 12 hours. An extension with an update shows \"Update available\" in the Store list, an update banner with an Update button on its page, and \"Update extension\" in its footer; the status bar counts available updates, and Refresh checks immediately.\n\nColor Picker: the colour wheel is now smooth and borderless, keeps tracking while dragging outside the wheel, sits in a compact panel, and no longer reports \"Colour action is unavailable\".\n\nThe beta.13 Vault, extension catalog and Rust host changes carry forward unchanged.\n",
-  "pub_date": "2026-11-26T06:29:50.507Z",
+  "notes": "# Tezbar 0.3.0-beta.15\n\nColor Picker 1.0.1: the Color Wheel no longer traps you. Esc and Back close the Color Wheel command, and a wheel opened from a result goes back to that result. The Store and your installed extensions list offer the update to Color Picker 1.0.0: it appears shortly after launch, or right away when you press Refresh in the Store.\n\nExtensions: Esc and Back now leave any extension whose own Back answers with the same screen, with no screen, or with an error, instead of keeping you there.\n\nNotes: when the launcher is shown again, a note returns in the mode you left it. A rendered note keeps the search field active; a note you were editing keeps the editor active.\n\nThe beta.14 Notes Markdown, Clipboard History \"Save to Notes\", extension update checks and Color Picker wheel changes carry forward unchanged.\n",
+  "pub_date": "2026-11-26T08:18:33.707Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.14/Tezbar_0.3.0-beta.14_aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEh1WWlGaldqTWlOa0RQWk9pWWQvaEQrTUk4VGJ5dmFUWGNNcWhNR0E2TjdqSTBVT2lCbnhRY0psQ3VXSVZZUTFFbXdDalZRRDEwdGtyeDk3Y3JFbmdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1Njc0Mjg3CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTRfYWFyY2g2NC5hcHAudGFyLmd6Ci8rSEZHd0NYSHlpZjM4Y3VHYkpvYmw3ODBtYnkyd3luZlJTUHNVL04xbC91a0x6ZmlEUHN3SXd1d0g2eXEzSnBrZHNVb3ZxcWVrNlI2ZW5TaE1XVUF3PT0K"
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.15/Tezbar_0.3.0-beta.15_aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEM2MzFGWTIzdGdKL3VobTdsVnUrZUtVTng5YmN0a0xCMEprbkhJdWdZM2lvNzd6Y2VOVG1HM25UOVBqVE9iTC9ObG9wbk9MWlQwVlJBYTd0K2NWVXd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NjgwMzI1CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTVfYWFyY2g2NC5hcHAudGFyLmd6CnF6QmU0a0RKc0RvVnpIVCtHN2hzRjd0TWc0MWdGM0lhM0g5cXR5eTBrQXFsY2JhRTVMbDZ6YUlBOWxQc3ZYV1ZsejRxRitOdjlMNlFEQkZFdHpaYkNRPT0K"
     },
     "windows-x86_64": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.14/Tezbar_0.3.0-beta.14_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEJXYW1vQXNXOVVBZXpYWWlTcTlaQW9zajB5WWlrRzI1ajNmOXdITHlINDl3bHV1RkRBU2JZWFM2cUZ2d0YvYlJaS2YvdzZiL3hCVkl3R25SbUlhVmc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1Njc0MjA0CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTRfeDY0LXNldHVwLmV4ZQp4YjZka0RhSkhTSENZd2J1OUtXSExKNWN4UjN0RjB2ZHNwTy9YWmJ3c2NwOHNsY0oyUzhUWXNKSndBVG5FY2dlT0F3K2Ixeis4aWdQQ3R1aHRSZWhDZz09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.15/Tezbar_0.3.0-beta.15_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEloU042RkFKSnIrL2xFUml5b1lVRXZHUE1ncVhFdFg1WVk4VEtsNGowZkFiaEUwYlh3SW1mN3dwbE9VdFRNRWVKVTYwbXM2R2krNHJDbFdrVW9ma0FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NjgwODE5CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTVfeDY0LXNldHVwLmV4ZQpha2srZUYzTXZuSnZ6UkVYMXlsWmN2WUlCTUpRQ0U2bUJxdTZvOElmZXZ5N0Z3V2hZdHJZY05FLzM1a3pseTNDdjJCdjMybS9BZHdTMVJYZFlCY1NCdz09Cg=="
     },
     "windows-x86_64-nsis": {
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.14/Tezbar_0.3.0-beta.14_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEJXYW1vQXNXOVVBZXpYWWlTcTlaQW9zajB5WWlrRzI1ajNmOXdITHlINDl3bHV1RkRBU2JZWFM2cUZ2d0YvYlJaS2YvdzZiL3hCVkl3R25SbUlhVmc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1Njc0MjA0CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTRfeDY0LXNldHVwLmV4ZQp4YjZka0RhSkhTSENZd2J1OUtXSExKNWN4UjN0RjB2ZHNwTy9YWmJ3c2NwOHNsY0oyUzhUWXNKSndBVG5FY2dlT0F3K2Ixeis4aWdQQ3R1aHRSZWhDZz09Cg=="
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.15/Tezbar_0.3.0-beta.15_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEloU042RkFKSnIrL2xFUml5b1lVRXZHUE1ncVhFdFg1WVk4VEtsNGowZkFiaEUwYlh3SW1mN3dwbE9VdFRNRWVKVTYwbXM2R2krNHJDbFdrVW9ma0FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NjgwODE5CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTVfeDY0LXNldHVwLmV4ZQpha2srZUYzTXZuSnZ6UkVYMXlsWmN2WUlCTUpRQ0U2bUJxdTZvOElmZXZ5N0Z3V2hZdHJZY05FLzM1a3pseTNDdjJCdjMybS9BZHdTMVJYZFlCY1NCdz09Cg=="
     }
   }
 }
