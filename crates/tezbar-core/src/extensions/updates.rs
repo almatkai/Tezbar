@@ -195,6 +195,22 @@ mod tests {
     }
 
     #[test]
+    fn bundled_catalog_offers_color_picker_1_0_1_to_a_1_0_0_install() {
+        // The real pinned release, not a fixture: what the Store offers after an app update.
+        let installed = vec![json!({"id":"com.tezbar.native.color-picker","slug":"color-picker",
+            "version":"1.0.0","installedAt":1})];
+        let found = detect(&installed, &HashMap::new(), &v2_catalog::source());
+        assert_eq!(
+            found["com.tezbar.native.color-picker"],
+            json!({"kind":"version","latestVersion":"1.0.1"}),
+            "{found:?}"
+        );
+        let current = vec![json!({"id":"com.tezbar.native.color-picker","slug":"color-picker",
+            "version":"1.0.1","installedAt":1})];
+        assert!(detect(&current, &HashMap::new(), &v2_catalog::source()).is_empty());
+    }
+
+    #[test]
     fn recorded_updates_stop_applying_after_reinstall() {
         let dir = tempfile::tempdir().unwrap();
         let ctx = CoreContext::headless(crate::common::CorePaths {

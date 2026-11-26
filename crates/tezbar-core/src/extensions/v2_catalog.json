@@ -1102,7 +1102,7 @@
     "id": "com.tezbar.native.color-picker",
     "slug": "color-picker",
     "name": "Color Picker",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Pick and organize colors, everywhere on your Mac",
     "author": "thomas",
     "icon": "resources/icon.png",
@@ -1394,16 +1394,16 @@
     "repository": "https://github.com/almatkai/tezbar-color-picker-extension",
     "artifacts": {
       "aarch64-apple-darwin": {
-        "url": "https://github.com/almatkai/tezbar-color-picker-extension/releases/download/v1.0.0/color-picker-aarch64-apple-darwin.zip",
-        "sha256": "2fb25d543740d174c02a2c203001cc225ffd460115c26a63e26bf8fae7ff381b",
+        "url": "https://github.com/almatkai/tezbar-color-picker-extension/releases/download/v1.0.1/color-picker-aarch64-apple-darwin.zip",
+        "sha256": "76cd427607e929de909a01494dd47a1d3c517bc45dba7483c9df1d39da3837e5",
         "executable": "bin/tezbar-color-picker",
-        "executableSha256": "658f3a95cd06d92bb6371385d2a23db8f2bfaa6a86d9274eeb2f25f839917ea3"
+        "executableSha256": "23726ec6eec6c4a9f859cf76eb8aeb9ae258e151b653f72e425b16171b108ce6"
       },
       "x86_64-pc-windows-msvc": {
-        "url": "https://github.com/almatkai/tezbar-color-picker-extension/releases/download/v1.0.0/color-picker-x86_64-pc-windows-msvc.zip",
-        "sha256": "2e1c5ac8f6589600d5068ba82069cb5f36e1b933fa18bccf8ba30eae4c682e94",
+        "url": "https://github.com/almatkai/tezbar-color-picker-extension/releases/download/v1.0.1/color-picker-x86_64-pc-windows-msvc.zip",
+        "sha256": "a0f651442d4d2ebf35398c40919f81050f6bb60366eb2b224bb5cc765ce2ff56",
         "executable": "bin/tezbar-color-picker.exe",
-        "executableSha256": "630de387f354705796102c6856fa9d16188d4ae20e7f4c15794a55bd36eae2a0"
+        "executableSha256": "d558487798c52f8ca6eae0e17a270a5a5e2f2a010604ca4b76a7ccc767973e78"
       }
     },
     "capabilities": [

@@ -88,10 +88,10 @@ mod tests {
         }
         let source = super::super::v2_catalog::source();
         let color = source.iter().find(|m| m["slug"] == "color-picker").unwrap();
-        assert_eq!(color["version"], "1.0.0");
+        assert_eq!(color["version"], "1.0.1");
         assert_eq!(
             color["artifacts"]["x86_64-pc-windows-msvc"]["sha256"],
-            "2e1c5ac8f6589600d5068ba82069cb5f36e1b933fa18bccf8ba30eae4c682e94"
+            "a0f651442d4d2ebf35398c40919f81050f6bb60366eb2b224bb5cc765ce2ff56"
         );
         assert!(!color["replaces"]
             .as_array()
