@@ -20,6 +20,7 @@ fn review_note(
                 text: html,
             });
             v.notes.select(77).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });

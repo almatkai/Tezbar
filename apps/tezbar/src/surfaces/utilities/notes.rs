@@ -46,7 +46,14 @@ impl Utilities {
                             && epoch == self.epoch
                             && owner == selection
                     });
-                self.notes.created(request, r.and_then(request::note));
+                let created = r.and_then(request::note);
+                if self.clipboard_notes.remove(&request) {
+                    match &created {
+                        Ok(_) => self.message = Some("Saved to Notes".into()),
+                        Err(e) => self.error = Some(format!("Could not save to Notes: {e}")),
+                    }
+                }
+                self.notes.created(request, created);
                 if !current {
                     self.notes.selected = selection;
                 }
@@ -101,6 +108,58 @@ impl Utilities {
                 e.set_document(None, note_model::Document { nodes: vec![] }, cx)
             });
         }
+        self.sync_note_view(cx);
+    }
+    /// Renders the selected note as Markdown; skipped while it is being edited.
+    pub(super) fn sync_note_view(&mut self, cx: &mut Context<Self>) {
+        if self.note_editing {
+            return;
+        }
+        let source = self
+            .notes
+            .document()
+            .map(|doc| doc.markdown())
+            .unwrap_or_default();
+        self.note_view_revision += 1;
+        let revision = self.note_view_revision;
+        self.note_view
+            .update(cx, |view, cx| view.set_content(revision, &source, true, cx));
+    }
+    /// Switches the selected note between its rendered view and the editor.
+    pub(super) fn set_note_editing(
+        &mut self,
+        editing: bool,
+        w: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let editing = editing && self.notes.selected.is_some();
+        self.note_editing = editing;
+        if editing {
+            self.editor.focus_handle(cx).focus(w, cx);
+        } else {
+            self.sync_note_view(cx);
+            w.focus(&self.search.focus_handle(cx), cx);
+        }
+        cx.notify();
+    }
+    /// Clipboard History: the selected text entry becomes a new note.
+    pub(super) fn save_clipboard_to_notes(&mut self, cx: &mut Context<Self>) {
+        let Some(entry) = self.clipboard.selected_entry() else {
+            return;
+        };
+        let text = match entry.text() {
+            Some(text) if !entry.is_secret && !text.trim().is_empty() => text.to_string(),
+            _ => {
+                self.message = Some("Only text can be saved to Notes".into());
+                cx.notify();
+                return;
+            }
+        };
+        let e = self.notes.create_from_text(&text);
+        if let E::Create { request, .. } = &e {
+            self.clipboard_notes.insert(*request);
+        }
+        self.note_effect(e, cx);
     }
     pub(super) fn edit_note(&mut self, e: tezbar_ui::rich_text::Edit, cx: &mut Context<Self>) {
         use tezbar_ui::rich_text::Edit;
@@ -167,14 +226,20 @@ impl Utilities {
         self.schedule(cx);
         cx.notify();
     }
-    pub(super) fn note_action(&mut self, a: Action, cx: &mut Context<Self>) {
+    pub(super) fn note_action(&mut self, a: Action, w: &mut Window, cx: &mut Context<Self>) {
         match a {
             Action::New => {
+                // A fresh note opens in the editor, ready to type.
+                self.note_editing = true;
                 let e = self.notes.create();
                 self.note_effect(e, cx);
             }
+            Action::EditNote(editing) => self.set_note_editing(editing, w, cx),
             Action::Select(i) => {
                 if let Some(id) = self.notes.visible().get(i).map(|n| n.created_at) {
+                    if self.notes.selected != Some(id) {
+                        self.note_editing = false;
+                    }
                     if let Err(e) = self.notes.select(id) {
                         self.error = Some(e);
                     }

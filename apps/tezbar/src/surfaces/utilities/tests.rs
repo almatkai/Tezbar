@@ -9,6 +9,8 @@ struct Fixture {
     fail_save: std::sync::atomic::AtomicBool,
     image: std::sync::Mutex<Option<String>>,
     notes_html: std::sync::Mutex<Option<String>>,
+    /// When set, notes:append answers with a created note holding the sent HTML.
+    append_notes: std::sync::atomic::AtomicBool,
     releases: std::sync::Mutex<Vec<String>>,
     release_reply: std::sync::Mutex<Option<Result<String, String>>>,
     vault_unlocked: std::sync::atomic::AtomicBool,
@@ -29,6 +31,9 @@ impl UtilityTransport for Fixture {
         let value = match channel {
             "notes:list" => Ok(
                 json!([{"createdAt":11,"updatedAt":12,"text":self.notes_html.lock().unwrap().clone().unwrap_or_else(||"<div>Hello <strong>世界</strong></div>".into())},{"createdAt":21,"updatedAt":22,"text":"Other note"}]),
+            ),
+            "notes:append" if self.append_notes.load(std::sync::atomic::Ordering::SeqCst) => Ok(
+                json!({"createdAt":31,"updatedAt":31,"text":args.first().cloned().unwrap_or_default()}),
             ),
             "notes:update" if self.fail_save.load(std::sync::atomic::Ordering::SeqCst) => {
                 Err("Synthetic disk full".into())
@@ -497,6 +502,7 @@ fn native_note_list_continuation_and_bounded_model_undo_roundtrip(cx: &mut TestA
                 text: original.into(),
             });
             v.notes.select(31).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });
@@ -982,7 +988,8 @@ fn native_paste_is_plain_safe_and_note_owned(cx: &mut TestAppContext) {
     settle(&rt, cx);
     let input = view.read_with(cx, |v, cx| v.editor.read(cx).input.clone());
     cx.update(|w, cx| {
-        input.focus_handle(cx).focus(w, cx);
+        view.update(cx, |v, cx| v.act(Action::EditNote(true), w, cx));
+        assert!(input.focus_handle(cx).is_focused(w));
         cx.write_to_clipboard(ClipboardItem::new_string("<script>synthetic</script> & safe".into()));
     });
     cx.simulate_keystrokes(if cfg!(target_os = "macos") {
@@ -1086,6 +1093,7 @@ fn native_rich_backspace_delete_join_preserves_run_styles_and_undo_html(cx: &mut
                 text: original.into(),
             });
             v.notes.select(41).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });
@@ -1167,6 +1175,7 @@ fn native_rich_range_replace_and_empty_list_enter_keep_canonical_html(cx: &mut T
                 text: "<div><strong>Қазақ</strong></div><p><em>日本</em></p>".into(),
             });
             v.notes.select(51).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });
@@ -1190,6 +1199,7 @@ fn native_rich_range_replace_and_empty_list_enter_keep_canonical_html(cx: &mut T
                 text: original.into(),
             });
             v.notes.select(61).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });
@@ -1311,7 +1321,8 @@ fn native_collapsed_bold_types_formatted_run_and_undo_restores_caret(cx: &mut Te
     });
     settle(&rt, cx);
     let input = view.read_with(cx, |v, cx| v.editor.read(cx).input.clone());
-    cx.update(|w, cx| input.focus_handle(cx).focus(w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::EditNote(true), w, cx)));
+    assert!(cx.update(|w, cx| input.focus_handle(cx).is_focused(w)));
     cx.simulate_keystrokes(if cfg!(target_os = "macos") {
         "cmd-b"
     } else {
@@ -1486,6 +1497,7 @@ fn retired_note_native_ime_handler_cannot_commit_into_new_note(cx: &mut TestAppC
     cx.update(|_, cx| {
         view.update(cx, |v, cx| {
             v.notes.select(21).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });
@@ -1564,6 +1576,7 @@ fn delayed_note_create_and_save_update_store_owner_without_stealing_selection(
         view.update(cx, |v, cx| {
             v.act(Action::New, w, cx);
             v.notes.select(21).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });
@@ -1587,6 +1600,7 @@ fn delayed_note_create_and_save_update_store_owner_without_stealing_selection(
                 v.note_effect(e, cx);
             }
             v.notes.select(21).unwrap();
+            v.note_editing = true;
             v.sync_note(cx);
         })
     });
@@ -2230,4 +2244,114 @@ fn audit_search_chrome_remains_plain_after_navigation(cx: &mut TestAppContext) {
             "Navigation must not replace header input with a bordered form field"
         );
     }
+}
+
+#[gpui::test]
+fn notes_render_markdown_until_edited_and_clipboard_saves_text_to_notes(cx: &mut TestAppContext) {
+    use tezbar_ui::markdown::Kind;
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    *fixture.notes_html.lock().unwrap() = Some(
+        "<div>**Password:** `Drone`</div><div><br></div><div>| Role | Login |</div>\
+         <div>| --- | --- |</div><div>| Admin | `admin@x.local` |</div>"
+            .into(),
+    );
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.navigate(
+                Navigation {
+                    payload: Payload::Note { created_at: 11 },
+                    ..nav(Surface::Notes, 1)
+                },
+                w,
+                cx,
+            )
+        })
+    });
+    settle(&rt, cx);
+    assert!(!view.read_with(cx, |v, _| v.note_editing));
+    assert!(cx.debug_bounds("note-markdown").is_some());
+    view.read_with(cx, |v, cx| {
+        let blocks = &v.note_view.read(cx).document.blocks;
+        assert!(blocks.iter().any(|b| b.kind == Kind::Table));
+        assert!(blocks
+            .iter()
+            .flat_map(|b| &b.spans)
+            .any(|s| s.strong && s.text == "Password:"));
+        assert!(blocks
+            .iter()
+            .flat_map(|b| &b.spans)
+            .any(|s| s.code && s.text == "admin@x.local"));
+    });
+    cx.update(|w, cx| view.update(cx, |v, cx| v.act(Action::EditNote(true), w, cx)));
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.note_editing));
+    assert!(cx.debug_bounds("note-markdown").is_none());
+    assert!(cx.update(|w, cx| view.read(cx).editor.focus_handle(cx).is_focused(w)));
+    cx.simulate_keystrokes("escape");
+    settle(&rt, cx);
+    assert!(
+        !view.read_with(cx, |v, _| v.note_editing),
+        "Esc leaves the editor for the rendered note before going back"
+    );
+    assert!(cx.debug_bounds("note-markdown").is_some());
+
+    fixture
+        .append_notes
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Clipboard, 2), w, cx)));
+    settle(&rt, cx);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let plain = v
+                .clipboard
+                .visible()
+                .iter()
+                .position(|e| !e.is_secret)
+                .unwrap();
+            v.act(Action::Select(plain), w, cx);
+        })
+    });
+    cx.simulate_keystrokes(if cfg!(target_os = "macos") {
+        "cmd-n"
+    } else {
+        "ctrl-n"
+    });
+    settle(&rt, cx);
+    let appended = || {
+        fixture
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(c, _)| c == "notes:append")
+            .map(|(_, args)| args.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(appended(), vec![vec![json!("<div>Hello 世界</div>")]]);
+    assert_eq!(
+        view.read_with(cx, |v, _| v.message.clone()).as_deref(),
+        Some("Saved to Notes")
+    );
+    assert!(view.read_with(cx, |v, _| v.surface == Surface::Clipboard));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let secret = v
+                .clipboard
+                .visible()
+                .iter()
+                .position(|e| e.is_secret)
+                .unwrap();
+            v.act(Action::Select(secret), w, cx);
+            v.act(Action::SaveToNotes, w, cx);
+        })
+    });
+    settle(&rt, cx);
+    assert_eq!(appended().len(), 1, "Concealed items never become notes");
+    assert_eq!(
+        view.read_with(cx, |v, _| v.message.clone()).as_deref(),
+        Some("Only text can be saved to Notes")
+    );
 }

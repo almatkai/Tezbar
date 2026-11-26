@@ -187,6 +187,10 @@ impl Utilities {
             Action::Convert(a) => self.clipboard.convert(a),
             Action::CopyResult => self.clipboard.copy_conversion(),
             Action::VaultDraft => self.clipboard.vault_draft(),
+            Action::SaveToNotes => {
+                self.save_clipboard_to_notes(cx);
+                None
+            }
             Action::Reveal => self
                 .clipboard
                 .selected_entry()

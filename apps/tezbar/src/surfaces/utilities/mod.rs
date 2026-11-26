@@ -77,6 +77,10 @@ pub enum Action {
     CopyQr,
     SaveQr,
     VaultDraft,
+    /// The selected clipboard text becomes a new note.
+    SaveToNotes,
+    /// Notes: `true` edits the selected note, `false` shows it rendered.
+    EditNote(bool),
     Reveal,
     Edit,
     Save,
@@ -146,6 +150,12 @@ pub struct Utilities {
     pub editor: Entity<RichText>,
     preview: Entity<tezbar_ui::markdown::MarkdownView>,
     preview_revision: u64,
+    /// The selected note rendered as Markdown while it is not being edited.
+    note_view: Entity<tezbar_ui::markdown::MarkdownView>,
+    note_view_revision: u64,
+    pub note_editing: bool,
+    /// Note creations started from Clipboard History, reported there when done.
+    clipboard_notes: std::collections::BTreeSet<u64>,
     fields: Vec<Entity<TextInput>>,
     icon_filter: Option<Entity<TextInput>>,
     icon_subscriptions: Vec<Subscription>,
@@ -199,6 +209,8 @@ impl Utilities {
         let editor = cx.new(|cx| RichText::new(window, cx));
         let preview = cx.new(|_| tezbar_ui::markdown::MarkdownView::default());
         let preview_sub = Self::markdown_subscription(&preview, cx);
+        let note_view = cx.new(|_| tezbar_ui::markdown::MarkdownView::default());
+        let note_view_sub = Self::markdown_subscription(&note_view, cx);
         let release_owner = cx.on_release(|this, cx| {
             this.images.release_all_windows(cx);
             this.jobs.clear();
@@ -264,6 +276,10 @@ impl Utilities {
             editor,
             preview,
             preview_revision: 0,
+            note_view,
+            note_view_revision: 0,
+            note_editing: false,
+            clipboard_notes: Default::default(),
             fields: vec![],
             icon_filter: None,
             icon_subscriptions: vec![],
@@ -279,6 +295,7 @@ impl Utilities {
                 rich_clip,
                 search_clip,
                 preview_sub,
+                note_view_sub,
                 release_owner,
             ],
             field_subscriptions: vec![],
@@ -372,6 +389,8 @@ impl Utilities {
             Payload::Note { created_at } => Some(*created_at),
             _ => None,
         };
+        // Notes open rendered; ⌘N (Payload::New) switches straight to the editor.
+        self.note_editing = false;
         if let Payload::Vault { item_id } = &navigation.payload {
             self.vault.requested = Some(item_id.clone());
         }

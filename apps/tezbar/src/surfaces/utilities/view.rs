@@ -350,7 +350,7 @@ impl Utilities {
         match self.surface {
             Surface::Clipboard => self.clipboard_action(a, cx),
             Surface::Snippets => self.snippet_action(a, w, cx),
-            Surface::Notes => self.note_action(a, cx),
+            Surface::Notes => self.note_action(a, w, cx),
             Surface::Vault => self.vault_action(a, w, cx),
             Surface::Emoji => self.emoji_action(a, cx),
             Surface::SystemMonitor => self.monitor_action(a, cx),
@@ -489,6 +489,9 @@ impl Utilities {
                 self.search
                     .update(cx, |input, cx| input.clear_silently(w, cx));
                 self.search_changed(String::new(), cx);
+            } else if self.surface == Surface::Notes && self.note_editing {
+                // Esc leaves the editor for the rendered note first; a second Esc goes back.
+                self.act(Action::EditNote(false), w, cx);
             } else {
                 cx.emit(UtilityEffect::Back);
             }
@@ -507,6 +510,10 @@ impl Utilities {
         if command {
             let special = match (&self.surface, key) {
                 (Surface::Clipboard, "s") => Some(Action::VaultDraft),
+                (Surface::Clipboard, "n") => Some(Action::SaveToNotes),
+                (Surface::Notes, "e") if self.notes.selected.is_some() => {
+                    Some(Action::EditNote(!self.note_editing))
+                }
                 (Surface::Clipboard, "r") => Some(Action::Reveal),
                 (Surface::Clipboard, "c") if e.keystroke.modifiers.shift => Some(Action::Clear),
                 (Surface::Snippets | Surface::Vault, "e") => Some(Action::Edit),
@@ -582,7 +589,9 @@ impl Utilities {
             return;
         }
         if key == "enter" && !command && self.surface == Surface::Notes && !in_note_editor {
-            self.editor.focus_handle(cx).focus(w, cx);
+            if self.notes.selected.is_some() {
+                self.act(Action::EditNote(true), w, cx);
+            }
             cx.stop_propagation();
             return;
         }
@@ -896,6 +905,7 @@ impl Utilities {
             Surface::Clipboard => &[
                 ("↵", "Copy"),
                 ("P", "Pin"),
+                ("⌘ N", "Save to Notes"),
                 ("⌘ S", "Save to Vault"),
                 ("⌘ D", "Delete"),
                 ("Esc", "Back"),
@@ -908,11 +918,18 @@ impl Utilities {
                 ("⌘ ⌫", "Delete"),
                 ("Esc", "Back"),
             ],
-            Surface::Notes => &[
+            Surface::Notes if self.note_editing => &[
                 ("⌘ N", "Create"),
                 ("⌘ ↵", "Copy note"),
                 ("⌘ B", "Bold"),
                 ("⌘ I", "Italic"),
+                ("⌘ E", "Preview"),
+                ("Esc", "Done"),
+            ],
+            Surface::Notes => &[
+                ("⌘ N", "Create"),
+                ("↵", "Edit"),
+                ("⌘ ↵", "Copy note"),
                 ("⌘ D", "Delete"),
                 ("Esc", "Back"),
             ],
@@ -981,6 +998,7 @@ impl Utilities {
                 ("Delete", Action::Delete, empty),
                 ("Clear history", Action::Clear, empty),
                 ("Reveal file", Action::Reveal, empty),
+                ("Save to Notes", Action::SaveToNotes, empty),
                 ("Save to Vault", Action::VaultDraft, empty),
             ],
             Surface::Snippets => {
@@ -1259,7 +1277,38 @@ impl Utilities {
                         .child("Select a note to edit.")
                         .into_any_element();
                 }
-                return pane.child(self.editor.clone()).into_any_element();
+                if self.note_editing {
+                    return pane.child(self.editor.clone()).into_any_element();
+                }
+                let empty = self
+                    .notes
+                    .document()
+                    .is_none_or(|doc| doc.markdown().trim().is_empty());
+                let rendered = div()
+                    .id("note-markdown")
+                    .debug_selector(|| "note-markdown".into())
+                    .size_full()
+                    .min_h_0()
+                    .cursor_text()
+                    // Double-click (or any click on an empty note) starts editing.
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, e: &MouseDownEvent, w, cx| {
+                            if empty || e.click_count >= 2 {
+                                this.act(Action::EditNote(true), w, cx);
+                            }
+                        }),
+                    );
+                return pane
+                    .child(if empty {
+                        rendered
+                            .text_size(px(13. * t.zoom))
+                            .text_color(t.text4)
+                            .child("Empty note. Press ↵ to write.")
+                    } else {
+                        rendered.child(self.note_view.clone())
+                    })
+                    .into_any_element();
             }
             Surface::Clipboard => {
                 if self.clipboard.selected_entry().is_none() {

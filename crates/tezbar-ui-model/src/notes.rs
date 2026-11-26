@@ -202,6 +202,23 @@ pub fn plain_text(s: &str) -> String {
         .trim()
         .into()
 }
+/// Plain text (Markdown included) kept verbatim as one paragraph per line.
+pub fn html_from_text(text: &str) -> String {
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    let text = text.trim_matches('\n');
+    if text.trim().is_empty() {
+        return EMPTY.into();
+    }
+    text.split('\n')
+        .map(|line| {
+            if line.trim().is_empty() {
+                EMPTY.into()
+            } else {
+                format!("<div>{}</div>", escape(line))
+            }
+        })
+        .collect()
+}
 #[derive(Clone, Debug, PartialEq)]
 pub enum Node {
     Text(String),
@@ -292,6 +309,77 @@ impl Document {
         } else {
             out
         }
+    }
+    /// Markdown source for the rendered note: Markdown typed into the note stays
+    /// verbatim, and the editor's bold, italic, underline and lists become theirs.
+    pub fn markdown(&self) -> String {
+        fn line_start(out: &mut String) {
+            if !out.is_empty() && !out.ends_with('\n') {
+                out.push('\n');
+            }
+        }
+        fn wrap(children: &[Node], open: &str, close: &str, out: &mut String) {
+            let mut s = String::new();
+            inline(children, &mut s);
+            let core = s.trim();
+            if core.is_empty() {
+                out.push_str(&s);
+                return;
+            }
+            // Emphasis markers must touch the text they wrap.
+            let start = s.len() - s.trim_start().len();
+            let end = s.trim_end().len();
+            out.push_str(&s[..start]);
+            out.push_str(open);
+            out.push_str(core);
+            out.push_str(close);
+            out.push_str(&s[end..]);
+        }
+        fn list(ordered: bool, items: &[Node], out: &mut String) {
+            for (index, item) in items.iter().enumerate() {
+                line_start(out);
+                let marker = if ordered {
+                    format!("{}. ", index + 1)
+                } else {
+                    "- ".into()
+                };
+                let mut body = String::new();
+                match item {
+                    Node::Element { tag, children } if tag == "li" => inline(children, &mut body),
+                    n => inline(std::slice::from_ref(n), &mut body),
+                }
+                let indent = format!("\n{}", " ".repeat(marker.len()));
+                out.push_str(&marker);
+                out.push_str(&body.trim_end_matches('\n').replace('\n', &indent));
+                out.push('\n');
+            }
+        }
+        fn inline(nodes: &[Node], out: &mut String) {
+            for n in nodes {
+                match n {
+                    Node::Text(t) => out.push_str(t),
+                    Node::Element { tag, children } => match tag.as_str() {
+                        "br" => out.push('\n'),
+                        "strong" | "b" => wrap(children, "**", "**", out),
+                        "em" | "i" => wrap(children, "*", "*", out),
+                        "u" => wrap(children, "<u>", "</u>", out),
+                        "ul" | "ol" => {
+                            line_start(out);
+                            list(tag == "ol", children, out);
+                        }
+                        "div" | "p" | "li" => {
+                            line_start(out);
+                            inline(children, out);
+                            line_start(out);
+                        }
+                        _ => inline(children, out),
+                    },
+                }
+            }
+        }
+        let mut out = String::new();
+        inline(&self.nodes, &mut out);
+        out.trim_end().to_string()
     }
     fn html_len(&self) -> usize {
         fn len(n: &Node) -> usize {
@@ -860,6 +948,14 @@ impl Notes {
             html: "<div>Untitled note</div>".into(),
         })
     }
+    /// A new note holding `text` verbatim, so Markdown keeps its syntax.
+    pub fn create_from_text(&mut self, text: &str) -> Effect {
+        let html = html_from_text(text);
+        if html.len() > 1_048_576 {
+            return Effect::Message("Text is too large for a note".into());
+        }
+        self.request(|request| Effect::Create { request, html })
+    }
     pub fn created(&mut self, request: u64, result: Result<Note, String>) -> bool {
         if !matches!(self.pending.remove(&request), Some(Effect::Create { .. })) {
             return false;
@@ -915,6 +1011,39 @@ impl Notes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn notes_render_typed_markdown_verbatim_and_editor_formatting_as_markdown() {
+        let source = "**Password: `x`**\r\n\r\n| A | B |\n| --- | --- |\n| 1 | <2> |\n";
+        let html = html_from_text(source);
+        assert_eq!(
+            html,
+            "<div>**Password: `x`**</div><div><br></div><div>| A | B |</div>\
+             <div>| --- | --- |</div><div>| 1 | &lt;2&gt; |</div>"
+        );
+        let doc = Document::load(&html).unwrap();
+        assert_eq!(
+            doc.markdown(),
+            "**Password: `x`**\n\n| A | B |\n| --- | --- |\n| 1 | <2> |"
+        );
+        let doc = Document::load(
+            "<div>a <strong>bold </strong>and <em>it</em> <u>u</u></div>\
+             <ul><li>one</li><li>two</li></ul><ol><li>x<br>y</li></ol><div><br></div><div>end</div>",
+        )
+        .unwrap();
+        assert_eq!(
+            doc.markdown(),
+            "a **bold** and *it* <u>u</u>\n- one\n- two\n1. x\n   y\n\nend"
+        );
+        let mut notes = Notes::default();
+        assert!(matches!(
+            notes.create_from_text("# Title\n- item"),
+            Effect::Create { html, .. } if html == "<div># Title</div><div>- item</div>"
+        ));
+        assert!(matches!(
+            notes.create_from_text(&"x".repeat(1_048_577)),
+            Effect::Message(_)
+        ));
+    }
     #[test]
     fn html_subset_preserves_formatting_and_strips_active_content() {
         let d = Document::load(

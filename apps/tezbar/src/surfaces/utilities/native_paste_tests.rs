@@ -134,7 +134,8 @@ fn note_editor_paste_captures_plain_clipboard_before_it_changes(cx: &mut TestApp
     settle(&rt, cx);
     let input = view.read_with(cx, |v, cx| v.editor.read(cx).input.clone());
     cx.update(|w, cx| {
-        input.focus_handle(cx).focus(w, cx);
+        view.update(cx, |v, cx| v.act(Action::EditNote(true), w, cx));
+        assert!(input.focus_handle(cx).is_focused(w));
         cx.write_to_clipboard(ClipboardItem::new_string("<b>gesture text</b>".into()));
     });
     cx.simulate_keystrokes(if cfg!(target_os = "macos") {
