@@ -526,6 +526,64 @@ fn native_wheel_callbacks_from_root_props_are_admitted_and_render_compactly(
     assert!(cx.debug_bounds("extension-wheel-panel").is_some());
     assert!(cx.debug_bounds("extension-wheel-swatch").is_some());
 }
+/// Answers every action with the same screen, as Color Picker's Color Wheel does for Back.
+struct RedrawsOnBack {
+    calls: Mutex<Vec<(&'static str, Vec<Value>)>>,
+    screen: Value,
+}
+impl ExtensionTransport for RedrawsOnBack {
+    fn send(&self, r: ExtensionRequest) -> ExtensionFuture {
+        let (channel, args) = r.wire();
+        self.calls.lock().unwrap().push((channel, args));
+        let reply = if channel == "extension:invoke-action" {
+            self.screen.clone()
+        } else {
+            json!({"ok":true,"mode":"unchanged"})
+        };
+        Box::pin(async move { Ok(reply) })
+    }
+    fn drain(&self) -> ExtensionFuture {
+        Box::pin(async { Ok(json!(true)) })
+    }
+}
+#[gpui::test]
+fn escape_leaves_a_wheel_whose_back_action_redraws_the_same_screen(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let screen = reply(json!({"type":"Form","props":{
+        "backActionId":"color-picker:back",
+        "nativeColorWheel":{"hue":26,"saturation":31,"value":100,"alpha":100,"preview":"#FFCDB0",
+            "changeActionId":"color-picker:wheel-change","saveActionId":"color-picker:wheel-submit","formats":[]}},
+        "children":[]}));
+    let fake = Arc::new(RedrawsOnBack {
+        calls: Mutex::default(),
+        screen: screen.clone(),
+    });
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    let backs = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = backs.clone();
+    let _subscription = cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, e: &ExtensionEffectEmission, _| {
+            if matches!(e.effect, ExtensionEffect::Back) {
+                seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        })
+    });
+    cx.update(|w, cx| view.update(cx, |v, cx| v.activate(screen, 1, w, cx).unwrap()));
+    settle(&rt, cx);
+    cx.update(|w, cx| view.update(cx, |v, cx| v.event(UiEvent::Back, w, cx)));
+    settle(&rt, cx);
+    assert!(
+        fake.calls.lock().unwrap().iter().any(|(c, a)| *c == "extension:invoke-action"
+            && a[0]["actionId"] == "color-picker:back"),
+        "the extension's own Back runs first"
+    );
+    assert_eq!(
+        backs.load(std::sync::atomic::Ordering::SeqCst),
+        1,
+        "Back must leave when the extension answers with the same screen"
+    );
+}
 #[test]
 fn wheel_texture_is_a_continuous_borderless_disc_in_bgra() {
     use super::color_wheel::wheel_pixels;

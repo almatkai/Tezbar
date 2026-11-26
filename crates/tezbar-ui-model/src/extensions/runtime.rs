@@ -400,6 +400,9 @@ pub struct RuntimeSession {
     effects: VecDeque<Effect>,
     pending_submit: Option<u64>,
     records: WorkerRecords,
+    /// An extension-owned Back in flight: (request sequence, backActionId, screen kind).
+    /// If its reply leaves the same screen, Back leaves the command instead.
+    back_probe: Option<(u64, String, NodeKind)>,
 }
 impl RuntimeSession {
     pub fn new(reply: TreeReply, now: u64) -> Result<Self, &'static str> {
@@ -434,6 +437,7 @@ impl RuntimeSession {
             effects: VecDeque::new(),
             pending_submit: None,
             records: WorkerRecords::default(),
+            back_probe: None,
         };
         s.records(reply.effects, reply.effect_sequence);
         s.rebuild();
@@ -615,6 +619,7 @@ impl RuntimeSession {
         {
             self.pending_submit = None;
         }
+        let probe = self.take_back_probe(token);
         if !self.accepts(token) {
             if token.key == self.key
                 && token.generation == self.generation
@@ -646,11 +651,28 @@ impl RuntimeSession {
         self.refreshing = false;
         self.refresh_sequence = None;
         self.page_pending = false;
+        // The extension answered Back by showing the same screen again (or nothing new):
+        // it has nowhere to go back to, so Back leaves the command.
+        if probe.is_some_and(|(_, id, kind)| {
+            self.root.kind == kind && self.root.string("backActionId") == Some(id.as_str())
+        }) {
+            return Ok(Some(Effect::Leave));
+        }
         if self.dirty && self.visible {
             Ok(self.refresh())
         } else {
             self.schedule(now);
             Ok(None)
+        }
+    }
+    fn take_back_probe(&mut self, token: &RequestToken) -> Option<(u64, String, NodeKind)> {
+        if self.back_probe.as_ref().is_some_and(|p| p.0 == token.sequence)
+            && token.key == self.key
+            && token.generation == self.generation
+        {
+            self.back_probe.take()
+        } else {
+            None
         }
     }
     pub fn failed(&mut self, token: &RequestToken, now: u64) -> Option<Effect> {
@@ -660,8 +682,18 @@ impl RuntimeSession {
         {
             self.pending_submit = None;
         }
+        let probe = self.take_back_probe(token);
         if !self.accepts(token) {
             return None;
+        }
+        if probe.is_some() {
+            // A broken Back callback must not trap the user on this screen.
+            self.pending_submit = None;
+            self.refreshing = false;
+            self.refresh_sequence = None;
+            self.page_pending = false;
+            self.notice = None;
+            return Some(Effect::Leave);
         }
         self.notice = Some(Notice::Error);
         self.pending_submit = None;
@@ -809,7 +841,11 @@ impl RuntimeSession {
     }
     pub fn back(&mut self) -> Result<Option<Effect>, &'static str> {
         if let Some(id) = self.root.string("backActionId").map(str::to_owned) {
-            return self.invoke(&id, None).map(Some);
+            let effect = self.invoke(&id, None)?;
+            if let Effect::Invoke { token, .. } = &effect {
+                self.back_probe = Some((token.sequence, id, self.root.kind));
+            }
+            return Ok(Some(effect));
         }
         if let Some(root) = self.stack.pop() {
             self.root = root;
@@ -840,15 +876,16 @@ impl RuntimeSession {
         effects: Vec<WireEffect>,
         effect_sequence: Option<u64>,
         now: u64,
-    ) {
+    ) -> Option<Effect> {
         if self.pending_submit == Some(token.sequence)
             && token.key == self.key
             && token.generation == self.generation
         {
             self.pending_submit = None;
         }
+        let probe = self.take_back_probe(token);
         if !self.accepts(token) {
-            return;
+            return None;
         }
         self.refreshing = false;
         self.refresh_sequence = None;
@@ -860,6 +897,8 @@ impl RuntimeSession {
         self.notice = self.notice_message.as_ref().map(|_| Notice::Success);
         self.records(effects, effect_sequence);
         self.schedule(now);
+        // Back produced no screen: the current one stays, so leave the command.
+        probe.map(|_| Effect::Leave)
     }
     fn scoped_actions(&self) -> Vec<&Action> {
         let root_ids = self.root.props.get("actionIds").and_then(Value::as_array);

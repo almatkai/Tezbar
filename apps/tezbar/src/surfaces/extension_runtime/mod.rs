@@ -787,7 +787,7 @@ impl RuntimeView {
             }
             Ok(v) if v["ok"] == true && v["mode"] == "no-view" => {
                 let effects = serde_json::from_value(v["effects"].clone()).unwrap_or_default();
-                s.no_view(
+                let next = s.no_view(
                     &token,
                     v["message"].as_str().unwrap_or("").to_owned(),
                     effects,
@@ -798,7 +798,7 @@ impl RuntimeView {
                     s.notice = None;
                     s.notice_message = None;
                 }
-                None
+                next
             }
             _ => {
                 self.error = Some("Extension request failed. Try again.");

@@ -169,6 +169,54 @@ fn navigation_push_pop_and_back_callback() {
     assert!(matches!(s.back().unwrap(),Some(Effect::Invoke{action_id,..})if action_id=="back"));
 }
 #[test]
+fn back_answered_with_the_same_screen_leaves_instead_of_trapping() {
+    // Color Picker's Color Wheel answers its own Back by drawing the wheel again.
+    let wheel = || node("Form", json!({"backActionId":"color-picker:back"}), vec![]);
+    let start = || {
+        let mut s = RuntimeSession::new(reply(wheel()), 0).unwrap();
+        let Some(Effect::Invoke { token, action_id, .. }) = s.back().unwrap() else {
+            panic!("Back invokes the extension's own back action first")
+        };
+        assert_eq!(action_id, "color-picker:back");
+        (s, token)
+    };
+    let (mut s, token) = start();
+    assert!(matches!(
+        s.refresh_finished(&token, Some(reply(wheel())), 1).unwrap(),
+        Some(Effect::Leave)
+    ));
+    let (mut s, token) = start();
+    assert!(matches!(
+        s.refresh_finished(&token, None, 1).unwrap(),
+        Some(Effect::Leave)
+    ));
+    let (mut s, token) = start();
+    assert!(matches!(
+        s.no_view(&token, String::new(), vec![], None, 1),
+        Some(Effect::Leave)
+    ));
+    let (mut s, token) = start();
+    assert!(matches!(s.failed(&token, 1), Some(Effect::Leave)));
+    // A real navigation to another screen stays in the extension.
+    let (mut s, token) = start();
+    assert!(
+        s.refresh_finished(&token, Some(reply(root(&["a"]))), 1)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(s.root.kind, NodeKind::List);
+    // The same screen from any other callback is an ordinary update.
+    let mut s = RuntimeSession::new(reply(wheel()), 0).unwrap();
+    let Effect::Invoke { token, .. } = s.invoke("color-picker:back", None).unwrap() else {
+        panic!()
+    };
+    assert!(
+        s.refresh_finished(&token, Some(reply(wheel())), 1)
+            .unwrap()
+            .is_none()
+    );
+}
+#[test]
 fn action_shortcut_panel_filter_and_submit() {
     let mut s = session();
     s.actions[0].shortcut = Some(Shortcut {
