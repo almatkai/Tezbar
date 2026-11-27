@@ -652,6 +652,64 @@ fn native_delete_confirmation_cannot_transfer_to_new_selection(cx: &mut TestAppC
     );
 }
 #[gpui::test]
+fn delete_confirmation_is_a_centred_dialog_that_owns_enter_and_escape(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fixture = Arc::new(Fixture::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| Utilities::new(fixture.clone(), &UiState::default(), w, cx));
+    cx.update(|w, cx| view.update(cx, |v, cx| v.navigate(nav(Surface::Clipboard, 1), w, cx)));
+    settle(&rt, cx);
+    let open = |cx: &mut VisualTestContext| {
+        cx.update(|w, cx| {
+            view.update(cx, |v, cx| {
+                v.search.focus_handle(cx).focus(w, cx);
+                v.act(Action::Delete, w, cx);
+            })
+        });
+        cx.run_until_parked();
+    };
+    open(cx);
+    let dialog = cx.debug_bounds("utility-confirmation").expect("dialog drawn");
+    let footer = cx.debug_bounds("utility-footer").expect("footer drawn");
+    let window = cx.update(|w, _| w.viewport_size());
+    assert!(
+        dialog.bottom() < footer.top(),
+        "the dialog sits above the footer, not over it: {dialog:?} {footer:?}"
+    );
+    let centre = dialog.center();
+    assert!((f32::from(centre.x) - f32::from(window.width) / 2.).abs() < 2.);
+    assert!((f32::from(centre.y) - f32::from(window.height) / 2.).abs() < 2.);
+    // Esc cancels without deleting.
+    cx.simulate_keystrokes("escape");
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.confirmation.is_none()));
+    assert!(cx.debug_bounds("utility-confirmation").is_none());
+    let deletes = |f: &Fixture| {
+        f.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(c, _)| c == "clipboard:delete")
+            .count()
+    };
+    assert_eq!(deletes(&fixture), 0);
+    // Enter confirms the delete, and only the delete (it must not paste the row behind).
+    open(cx);
+    let before = fixture.calls.lock().unwrap().len();
+    cx.simulate_keystrokes("enter");
+    settle(&rt, cx);
+    assert!(view.read_with(cx, |v, _| v.confirmation.is_none()));
+    assert_eq!(deletes(&fixture), 1);
+    let calls = fixture.calls.lock().unwrap();
+    assert!(
+        calls[before..]
+            .iter()
+            .all(|(c, _)| c == "clipboard:delete" || c.ends_with(":list") || c.contains("history")),
+        "Enter reached the list behind the dialog: {:?}",
+        &calls[before..]
+    );
+}
+#[gpui::test]
 fn permissions_native_action_lock_refresh_and_accessible_status(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let fixture = Arc::new(Fixture::default());

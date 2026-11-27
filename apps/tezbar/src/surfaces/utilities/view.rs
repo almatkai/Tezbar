@@ -459,6 +459,20 @@ impl Utilities {
             }
         }
     }
+    /// While the delete confirmation is open it owns the keyboard: Enter confirms, Esc
+    /// cancels, and nothing reaches the list or search field behind it (Enter there
+    /// would paste or open the selected item).
+    fn confirmation_key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
+        if self.confirmation.is_none() {
+            return;
+        }
+        match e.keystroke.key.as_str() {
+            "enter" => self.act(Action::Confirm(true), w, cx),
+            "escape" => self.act(Action::Confirm(false), w, cx),
+            _ => {}
+        }
+        cx.stop_propagation();
+    }
     pub(super) fn key(&mut self, e: &KeyDownEvent, w: &mut Window, cx: &mut Context<Self>) {
         if self.vault.icon_open {
             self.icon_key(e, w, cx);
@@ -2650,6 +2664,7 @@ impl Render for Utilities {
             .aria_label(title)
             .track_focus(&self.focus)
             .key_context("Utilities")
+            .capture_key_down(cx.listener(Self::confirmation_key))
             .on_key_down(cx.listener(Self::key))
             .when(self.surface == Surface::Vault, |d| {
                 d.text_size(px(12.5 * t.zoom))
@@ -2826,36 +2841,117 @@ impl Render for Utilities {
                     .children(self.footer_hints(t)),
             );
         if self.confirmation.is_some() {
-            root = root.child(
-                controls::popover("utility-confirmation", "Confirm deletion", t)
-                    .child(if matches!(self.confirmation, Some((Action::Clear, _))) {
-                        "Clear all clipboard history? This cannot be undone."
-                    } else {
-                        "Delete the selected items? This cannot be undone."
-                    })
-                    .child(self.action_button_with_id(
-                        "utility-confirm-accept",
-                        if matches!(self.confirmation, Some((Action::Clear, _))) {
-                            "Clear history"
-                        } else {
-                            "Delete"
-                        },
-                        Action::Confirm(true),
-                        false,
-                        cx,
-                        t,
-                    ))
-                    .child(self.action_button_with_id(
-                        "utility-confirm-cancel",
-                        "Cancel",
-                        Action::Confirm(false),
-                        false,
-                        cx,
-                        t,
-                    )),
-            );
+            root = root.child(self.confirmation_dialog(cx, t));
         }
         root
+    }
+}
+impl Utilities {
+    /// Delete / Clear confirmation: a modal card over a dimmed sheet (the AI Chat
+    /// delete dialog's look). Enter confirms and Esc cancels, see `confirmation_key`.
+    fn confirmation_dialog(&self, cx: &mut Context<Self>, t: tokens::Tokens) -> AnyElement {
+        let clear = matches!(self.confirmation, Some((Action::Clear, _)));
+        let title = if clear {
+            "Clear all clipboard history?"
+        } else {
+            match self.surface {
+                Surface::Clipboard => "Delete this clipboard item?",
+                Surface::Snippets => "Delete this snippet?",
+                Surface::Notes => "Delete this note?",
+                Surface::Vault => "Delete this secret?",
+                _ => "Delete this item?",
+            }
+        };
+        let hinted = |label: &'static str, key: &'static str, button: Stateful<Div>| {
+            button
+                .gap(px(8. * t.zoom))
+                .child(controls::keycap(key, t).opacity(0.8))
+                .aria_label(label)
+        };
+        div()
+            .id("utility-confirmation-scrim")
+            .occlude()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p(px(24. * t.zoom))
+            .bg(hsla(0., 0., 0., if t.light { 0.18 } else { 0.45 }))
+            .child(
+                div()
+                    .id("utility-confirmation")
+                    .debug_selector(|| "utility-confirmation".into())
+                    .role(Role::AlertDialog)
+                    .aria_label(title)
+                    .w(px(340. * t.zoom))
+                    .max_w_full()
+                    .p(px(16. * t.zoom))
+                    .rounded(px(14. * t.zoom))
+                    .border_1()
+                    .border_color(t.rim)
+                    .bg(t.popover_solid)
+                    .shadow_lg()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6. * t.zoom))
+                    .child(
+                        div()
+                            .text_size(px(14. * t.zoom))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12. * t.zoom))
+                            .text_color(t.text3)
+                            .child(if clear {
+                                "Every saved clipboard item will be deleted. This can't be undone."
+                            } else {
+                                "This can't be undone."
+                            }),
+                    )
+                    .child(
+                        div()
+                            .mt(px(10. * t.zoom))
+                            .flex()
+                            .justify_end()
+                            .gap(px(8. * t.zoom))
+                            .child(hinted(
+                                "Cancel",
+                                "esc",
+                                self.action_button_with_id(
+                                    "utility-confirm-cancel",
+                                    "Cancel",
+                                    Action::Confirm(false),
+                                    false,
+                                    cx,
+                                    t,
+                                )
+                                .bg(t.pill)
+                                .text_color(t.text1)
+                                .cursor_pointer()
+                                .hover(move |d| d.bg(t.hover)),
+                            ))
+                            .child(hinted(
+                                if clear { "Clear History" } else { "Delete" },
+                                "↵",
+                                self.action_button_with_id(
+                                    "utility-confirm-accept",
+                                    if clear { "Clear History" } else { "Delete" },
+                                    Action::Confirm(true),
+                                    false,
+                                    cx,
+                                    t,
+                                )
+                                .bg(t.danger)
+                                .text_color(rgb(0xffffff))
+                                .cursor_pointer()
+                                .hover(|d| d.opacity(0.88)),
+                            )),
+                    ),
+            )
+            .into_any_element()
     }
 }
 
