@@ -497,7 +497,9 @@ fn parse_at(source: &str, offset: usize) -> Vec<Block> {
                     text: "\t".into(),
                     ..Default::default()
                 }),
-                TagEnd::TableRow => current.spans.push(Span {
+                // The header row ends with TableHead, not TableRow: without this break
+                // the header and the first body row were drawn as one line.
+                TagEnd::TableRow | TagEnd::TableHead => current.spans.push(Span {
                     text: "\n".into(),
                     ..Default::default()
                 }),
@@ -817,6 +819,146 @@ fn render_block_groups(
     }
     rendered
 }
+impl MarkdownView {
+    /// Styled, selectable text. `base` is the text's offset in the whole document,
+    /// so selection and copy work across blocks; `links` are relative to `text`.
+    fn selectable(
+        text: String,
+        highlights: Vec<(Range<usize>, HighlightStyle)>,
+        links: Vec<(Range<usize>, String, String)>,
+        base: usize,
+        cx: &mut Context<Self>,
+    ) -> (Div, TextLayout) {
+        let styled = StyledText::new(text).with_highlights(highlights);
+        let layout = styled.layout().clone();
+        let down = layout.clone();
+        let drag = layout.clone();
+        let click = layout.clone();
+        let body = div()
+            .cursor(CursorStyle::IBeam)
+            .child(styled)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, e: &MouseDownEvent, w, cx| {
+                    let index = down.index_for_position(e.position).unwrap_or_else(|i| i);
+                    let anchor = base + index;
+                    this.anchor = Some(anchor);
+                    this.selection = Some(anchor..anchor);
+                    if let Some(focus) = &this.focus {
+                        w.focus(focus, cx);
+                    }
+                    cx.notify();
+                }),
+            )
+            .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
+                if let Some(anchor) = this.anchor {
+                    let index = base + drag.index_for_position(e.position).unwrap_or_else(|i| i);
+                    this.selection = Some(anchor.min(index)..anchor.max(index));
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(move |this, e: &MouseUpEvent, _, cx| {
+                    this.anchor = None;
+                    if this.selection.as_ref().is_none_or(|r| r.is_empty()) {
+                        let index = click.index_for_position(e.position).unwrap_or_else(|i| i);
+                        if let Some((_, _, url)) =
+                            links.iter().find(|(range, _, _)| range.contains(&index))
+                        {
+                            this.open_link(url.clone(), cx);
+                        }
+                    }
+                }),
+            );
+        (body, layout)
+    }
+    /// A Markdown table as a bordered grid: a shaded header row and equal-width
+    /// columns whose cells wrap. Cells are `\t`-separated and rows `\n`-separated
+    /// in the block text; each cell keeps its styling, links and selection offsets.
+    fn table_grid(
+        text: &str,
+        highlights: &[(Range<usize>, HighlightStyle)],
+        links: &[(Range<usize>, String, String)],
+        base: usize,
+        t: crate::tokens::Tokens,
+        cx: &mut Context<Self>,
+    ) -> (AnyElement, TextLayout) {
+        let mut rows: Vec<Vec<Range<usize>>> = vec![];
+        let mut line_start = 0;
+        for line in text.split('\n') {
+            let start = line_start;
+            line_start += line.len() + 1;
+            if line.is_empty() {
+                continue;
+            }
+            let mut cells = vec![];
+            let mut at = start;
+            for cell in line.strip_suffix('\t').unwrap_or(line).split('\t') {
+                cells.push(at..at + cell.len());
+                at += cell.len() + 1;
+            }
+            rows.push(cells);
+        }
+        let columns = rows.iter().map(Vec::len).max().unwrap_or(0);
+        let last = rows.len().saturating_sub(1);
+        let mut first_layout = None;
+        let mut grid = div()
+            .debug_selector(|| "markdown-table".into())
+            .my(px(4. * t.zoom))
+            .flex()
+            .flex_col()
+            .rounded(px(8. * t.zoom))
+            .border_1()
+            .border_color(t.hairline)
+            .overflow_hidden();
+        for (r, cells) in rows.iter().enumerate() {
+            let mut row = div()
+                .flex()
+                .when(r < last, |d| d.border_b_1().border_color(t.hairline))
+                .when(r == 0, |d| d.bg(t.field).font_weight(FontWeight::SEMIBOLD));
+            for c in 0..columns {
+                let mut cell = div()
+                    .debug_selector(move || format!("markdown-table-cell-{r}-{c}"))
+                    .flex_1()
+                    .min_w_0()
+                    .px(px(10. * t.zoom))
+                    .py(px(5. * t.zoom))
+                    .when(c + 1 < columns, |d| d.border_r_1().border_color(t.hairline));
+                if let Some(range) = cells.get(c) {
+                    let overlaps = |r: &Range<usize>| r.start < range.end && r.end > range.start;
+                    let local = |r: &Range<usize>| {
+                        r.start.max(range.start) - range.start..r.end.min(range.end) - range.start
+                    };
+                    let cell_highlights = highlights
+                        .iter()
+                        .filter(|(r, _)| overlaps(r))
+                        .map(|(r, style)| (local(r), *style))
+                        .collect();
+                    let cell_links = links
+                        .iter()
+                        .filter(|(r, _, _)| overlaps(r))
+                        .map(|(r, label, url)| (local(r), label.clone(), url.clone()))
+                        .collect();
+                    let (body, layout) = Self::selectable(
+                        text[range.clone()].to_owned(),
+                        cell_highlights,
+                        cell_links,
+                        base + range.start,
+                        cx,
+                    );
+                    first_layout.get_or_insert(layout);
+                    cell = cell.child(body);
+                }
+                row = row.child(cell);
+            }
+            grid = grid.child(row);
+        }
+        let layout =
+            first_layout.unwrap_or_else(|| StyledText::new(String::new()).layout().clone());
+        (grid.into_any_element(), layout)
+    }
+}
 impl Render for MarkdownView {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = crate::tokens::tokens(w);
@@ -952,11 +1094,6 @@ impl Render for MarkdownView {
                 .map(|(_, s)| s.as_slice())
                 .unwrap_or(&[]);
             let highlights = highlights(block, selected.clone(), syntax, t);
-            let styled = StyledText::new(text.clone()).with_highlights(highlights);
-            let layout = styled.layout().clone();
-            let down = layout.clone();
-            let drag = layout.clone();
-            let click = layout.clone();
             let mut at = 0;
             let links = block
                 .spans
@@ -969,48 +1106,15 @@ impl Render for MarkdownView {
                         .map(|link| (range, span.text.clone(), link))
                 })
                 .collect::<Vec<_>>();
-            let click_links = links.clone();
-            let body = div()
-                .cursor(CursorStyle::IBeam)
-                .child(styled)
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |this, e: &MouseDownEvent, w, cx| {
-                        let index = down.index_for_position(e.position).unwrap_or_else(|i| i);
-                        let anchor = base + index;
-                        this.anchor = Some(anchor);
-                        this.selection = Some(anchor..anchor);
-                        if let Some(focus) = &this.focus {
-                            w.focus(focus, cx);
-                        }
-                        cx.notify();
-                    }),
-                )
-                .on_mouse_move(cx.listener(move |this, e: &MouseMoveEvent, _, cx| {
-                    if let Some(anchor) = this.anchor {
-                        let index =
-                            base + drag.index_for_position(e.position).unwrap_or_else(|i| i);
-                        this.selection = Some(anchor.min(index)..anchor.max(index));
-                        cx.notify();
-                    }
-                }))
-                .on_mouse_up(
-                    MouseButton::Left,
-                    cx.listener(move |this, e: &MouseUpEvent, _, cx| {
-                        this.anchor = None;
-                        if this.selection.as_ref().is_none_or(|r| r.is_empty()) {
-                            let index = click.index_for_position(e.position).unwrap_or_else(|i| i);
-                            if let Some((_, _, url)) = click_links
-                                .iter()
-                                .find(|(range, _, _)| range.contains(&index))
-                            {
-                                this.open_link(url.clone(), cx);
-                            }
-                        }
-                    }),
-                );
+            let (inner, layout) = if matches!(block.kind, Kind::Table) {
+                Self::table_grid(&text, &highlights, &links, base, t, cx)
+            } else {
+                let (body, layout) =
+                    Self::selectable(text.clone(), highlights, links.clone(), base, cx);
+                (body.into_any_element(), layout)
+            };
             row = row.child(RichBlock {
-                inner: body.into_any_element(),
+                inner,
                 layout,
                 text,
                 role,
@@ -1761,5 +1865,45 @@ mod image_data_tests {
         );
         doc.update(2, "Removed", true);
         assert!(doc.blocks.iter().all(|b| b.images.is_empty()));
+    }
+}
+
+#[cfg(test)]
+mod table_tests {
+    use super::*;
+    use ::core::prelude::v1::test;
+    const NOTE: &str = "Пароль: `Drone-alt-2026`\n\n| Роль | Логин | Что есть |\n|---|---|---|\n| Админ | `admin@dfl.local` | super_admin |\n| Тренер | `coach@dfl.local` | команда **Sky Hawks** |\n";
+    #[::core::prelude::v1::test]
+    fn the_header_is_its_own_row() {
+        let blocks = parse(NOTE);
+        let table = blocks.iter().find(|b| b.kind == Kind::Table).unwrap();
+        assert_eq!(
+            table.text().lines().collect::<Vec<_>>(),
+            [
+                "Роль\tЛогин\tЧто есть\t",
+                "Админ\tadmin@dfl.local\tsuper_admin\t",
+                "Тренер\tcoach@dfl.local\tкоманда Sky Hawks\t",
+            ]
+        );
+    }
+    #[gpui::test]
+    fn tables_render_as_an_aligned_grid(cx: &mut TestAppContext) {
+        let (view, cx) = cx.add_window_view(|_, _| MarkdownView::default());
+        view.update(cx, |v, cx| v.set_content(1, NOTE, true, cx));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("markdown-table").is_some());
+        let cell = |cx: &mut VisualTestContext, name: &'static str| {
+            cx.debug_bounds(name)
+                .unwrap_or_else(|| panic!("{name} is drawn"))
+        };
+        let head = cell(cx, "markdown-table-cell-0-1");
+        let first = cell(cx, "markdown-table-cell-1-1");
+        let second = cell(cx, "markdown-table-cell-2-1");
+        // Rows stack (the header no longer shares a line with the first row)…
+        assert!(head.bottom() <= first.top() && first.bottom() <= second.top());
+        // …and each column lines up from row to row.
+        assert_eq!(head.left(), first.left());
+        assert_eq!(first.left(), second.left());
+        assert!(cell(cx, "markdown-table-cell-1-0").right() <= first.left());
     }
 }
