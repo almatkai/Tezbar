@@ -526,6 +526,41 @@ fn native_wheel_callbacks_from_root_props_are_admitted_and_render_compactly(
     assert!(cx.debug_bounds("extension-wheel-panel").is_some());
     assert!(cx.debug_bounds("extension-wheel-swatch").is_some());
 }
+#[gpui::test]
+fn dragging_the_wheel_sends_every_step_without_an_unavailable_banner(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    // Exactly what Color Picker 1.0.x sends: both wheel callbacks declared as form submits.
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let mut wire = reply(json!({"type":"Form","props":{"nativeColorWheel":{
+                "hue":0,"saturation":100,"value":100,"alpha":100,"preview":"#FF0000",
+                "changeActionId":"color-picker:wheel-change","saveActionId":"color-picker:wheel-submit",
+                "formats":[]}},
+                "children":[{"type":"Form.TextField","props":{"id":"hue","title":"Hue (degrees)","value":"0"}}]}));
+            wire["actions"] = json!([
+                {"id":"color-picker:wheel-submit","title":"Use Color","kind":"submit-form"},
+                {"id":"color-picker:wheel-change","title":"Update Color Wheel","kind":"submit-form"}]);
+            v.activate(wire, 1, w, cx).unwrap();
+            // Pointer moves arrive faster than the extension answers.
+            for hue in [10., 20., 30., 40.] {
+                v.wheel_update([hue, 50., 100., 100.], w, cx);
+                assert_eq!(v.error, None, "drag step {hue} was refused");
+                assert_eq!(v.wheel_values()[0], hue, "the marker follows the pointer");
+            }
+        })
+    });
+    settle(&rt, cx);
+    let calls = fake.calls.lock().unwrap();
+    let last = calls
+        .iter()
+        .filter(|(c, a)| *c == "extension:invoke-action" && a[0]["actionId"] == "color-picker:wheel-change")
+        .last()
+        .expect("drag steps reach the extension");
+    assert_eq!(last.1[0]["formValues"]["hue"], 40., "the final position is never dropped");
+}
 /// Answers every action with the same screen, as Color Picker's Color Wheel does for Back.
 struct RedrawsOnBack {
     calls: Mutex<Vec<(&'static str, Vec<Value>)>>,

@@ -76,6 +76,19 @@ fn retained_store_runtime_ack_source_fence_and_settings_route(cx: &mut TestAppCo
             })
         });
     }
+    cx.run_until_parked();
+    for edge in [
+        "window-resize-0",
+        "window-resize-1",
+        "window-resize-2",
+        "window-resize-3",
+        "window-resize-4",
+        "window-resize-5",
+        "window-resize-6",
+        "window-resize-7",
+    ] {
+        assert!(cx.debug_bounds(edge).is_some(), "the Store keeps {edge}");
+    }
     let store = launcher.read_with(cx, |v, _| v.extensions.store.clone().unwrap());
     let old = store.read_with(cx, |v, _| v.host_generation());
     cx.update(|w, cx| {
@@ -106,6 +119,11 @@ fn retained_store_runtime_ack_source_fence_and_settings_route(cx: &mut TestAppCo
         launcher.update(cx, |v, cx| v.receive_navigation(n, cx));
     });
     chat_integration_tests::settle(&rt, cx);
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("window-resize-7").is_some(),
+        "an extension page keeps the launcher's resize edges"
+    );
     let runtime = launcher.read_with(cx, |v, _| v.extensions.runtime.clone().unwrap());
     let id = runtime.entity_id();
     let mount = runtime.read_with(cx, |v, _| v.host_generation());

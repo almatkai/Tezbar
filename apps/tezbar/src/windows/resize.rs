@@ -79,6 +79,7 @@ pub fn handles<V: 'static>(
         let corner = matches!(edge, NorthWest | NorthEast | SouthWest | SouthEast);
         div()
             .id(("resize", i))
+            .debug_selector(move || format!("window-resize-{i}"))
             .absolute()
             .cursor(cursor)
             .when(corner, |d| d.size(px(8.)))

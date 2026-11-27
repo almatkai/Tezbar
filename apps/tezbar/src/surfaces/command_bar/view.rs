@@ -1297,6 +1297,55 @@ fn row_status_pill(status: RowStatus, index: usize, selected: bool, t: tokens::T
         )
         .child(div().min_w_0().text_ellipsis().child(status.text))
 }
+impl Launcher {
+    /// Full-screen mounted surfaces (an extension, the Store, Terminal, AI Chat) keep the
+    /// launcher's resize edges. The gesture follows the OS cursor from the capture phase,
+    /// so the mounted view's own pointer handling cannot swallow it.
+    fn resizable(&self, child: impl IntoElement, cx: &mut Context<Self>) -> AnyElement {
+        let entity = cx.entity();
+        let tracker = canvas(
+            |_, _, _| (),
+            move |_, _, w, _| {
+                let view = entity.clone();
+                w.on_mouse_event(move |e: &MouseMoveEvent, phase, w, cx| {
+                    if phase != DispatchPhase::Capture {
+                        return;
+                    }
+                    view.update(cx, |this, cx| {
+                        if this.resize.is_some() {
+                            if e.pressed_button == Some(MouseButton::Left) {
+                                let _ = this.update_pointer_gesture(w, cx);
+                            } else {
+                                this.end_pointer_gesture(cx);
+                            }
+                        }
+                    });
+                });
+                let view = entity.clone();
+                w.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
+                    if phase == DispatchPhase::Capture {
+                        view.update(cx, |this, cx| {
+                            if this.resize.is_some() {
+                                this.end_pointer_gesture(cx);
+                            }
+                        });
+                    }
+                });
+            },
+        )
+        .absolute()
+        .size_full();
+        div()
+            .relative()
+            .size_full()
+            .child(child)
+            .child(tracker)
+            .children(resize::handles(cx, |view, edge, w, _| {
+                view.resize = resize::Gesture::begin(edge, w)
+            }))
+            .into_any_element()
+    }
+}
 impl Render for Launcher {
     fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.migration_pending() {
@@ -1363,24 +1412,20 @@ impl Render for Launcher {
                 .as_ref()
                 .is_some_and(|n| n.surface == Surface::Extensions)
             {
-                if let Some(v) = &self.extensions.store {
-                    return div().size_full().child(v.clone()).into_any_element();
+                if let Some(v) = self.extensions.store.clone() {
+                    return self.resizable(v, cx);
                 }
-            } else if let Some(v) = &self.extensions.runtime {
-                return div().size_full().child(v.clone()).into_any_element();
+            } else if let Some(v) = self.extensions.runtime.clone() {
+                return self.resizable(v, cx);
             }
         }
         if self.terminal_mounted() {
-            return div()
-                .size_full()
-                .child(self.terminal.view.clone().unwrap())
-                .into_any_element();
+            let v = self.terminal.view.clone().unwrap();
+            return self.resizable(v, cx);
         }
         if self.chat_mounted() {
-            return div()
-                .size_full()
-                .child(self.chat.view.clone().unwrap())
-                .into_any_element();
+            let v = self.chat.view.clone().unwrap();
+            return self.resizable(v, cx);
         }
         w.set_rem_size(px(16. * self.zoom));
         let t = tokens::tokens(w);

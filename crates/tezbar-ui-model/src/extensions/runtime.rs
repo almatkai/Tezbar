@@ -666,7 +666,10 @@ impl RuntimeSession {
         }
     }
     fn take_back_probe(&mut self, token: &RequestToken) -> Option<(u64, String, NodeKind)> {
-        if self.back_probe.as_ref().is_some_and(|p| p.0 == token.sequence)
+        if self
+            .back_probe
+            .as_ref()
+            .is_some_and(|p| p.0 == token.sequence)
             && token.key == self.key
             && token.generation == self.generation
         {
@@ -741,12 +744,13 @@ impl RuntimeSession {
         None
     }
     pub fn can_load_more(&self) -> bool {
-        !self.page_pending && (self
-            .root
-            .props
-            .get("pagination")
-            .is_some_and(|p| p["hasMore"] == true)
-            || self.root.props.get("__hasMore") == Some(&Value::Bool(true)))
+        !self.page_pending
+            && (self
+                .root
+                .props
+                .get("pagination")
+                .is_some_and(|p| p["hasMore"] == true)
+                || self.root.props.get("__hasMore") == Some(&Value::Bool(true)))
     }
     fn load_more(&mut self) -> Option<Effect> {
         if self.can_load_more() {
@@ -764,10 +768,21 @@ impl RuntimeSession {
         if self.disposed || !self.callbacks.contains(id) {
             return Err("Callback does not belong to this session");
         }
-        let submit = self
-            .actions
-            .iter()
-            .any(|a| a.id == id && a.kind.as_deref() == Some("submit-form"));
+        // A colour wheel reports every drag step through its change callback. Even when
+        // the extension declares it as a form submit, it is a live update, not a
+        // submission: gating it behind the one-submit-in-flight rule rejected most
+        // drag steps (an error banner that shifted the layout under the pointer).
+        let live_wheel = self
+            .root
+            .props
+            .get("nativeColorWheel")
+            .and_then(|w| w["changeActionId"].as_str())
+            == Some(id);
+        let submit = !live_wheel
+            && self
+                .actions
+                .iter()
+                .any(|a| a.id == id && a.kind.as_deref() == Some("submit-form"));
         if submit && self.pending_submit.is_some() {
             return Err("Form submission is in progress");
         }

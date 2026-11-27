@@ -174,7 +174,10 @@ fn back_answered_with_the_same_screen_leaves_instead_of_trapping() {
     let wheel = || node("Form", json!({"backActionId":"color-picker:back"}), vec![]);
     let start = || {
         let mut s = RuntimeSession::new(reply(wheel()), 0).unwrap();
-        let Some(Effect::Invoke { token, action_id, .. }) = s.back().unwrap() else {
+        let Some(Effect::Invoke {
+            token, action_id, ..
+        }) = s.back().unwrap()
+        else {
             panic!("Back invokes the extension's own back action first")
         };
         assert_eq!(action_id, "color-picker:back");
@@ -199,22 +202,20 @@ fn back_answered_with_the_same_screen_leaves_instead_of_trapping() {
     assert!(matches!(s.failed(&token, 1), Some(Effect::Leave)));
     // A real navigation to another screen stays in the extension.
     let (mut s, token) = start();
-    assert!(
-        s.refresh_finished(&token, Some(reply(root(&["a"]))), 1)
-            .unwrap()
-            .is_none()
-    );
+    assert!(s
+        .refresh_finished(&token, Some(reply(root(&["a"]))), 1)
+        .unwrap()
+        .is_none());
     assert_eq!(s.root.kind, NodeKind::List);
     // The same screen from any other callback is an ordinary update.
     let mut s = RuntimeSession::new(reply(wheel()), 0).unwrap();
     let Effect::Invoke { token, .. } = s.invoke("color-picker:back", None).unwrap() else {
         panic!()
     };
-    assert!(
-        s.refresh_finished(&token, Some(reply(wheel())), 1)
-            .unwrap()
-            .is_none()
-    );
+    assert!(s
+        .refresh_finished(&token, Some(reply(wheel())), 1)
+        .unwrap()
+        .is_none());
 }
 #[test]
 fn action_shortcut_panel_filter_and_submit() {
@@ -398,6 +399,48 @@ fn submit_guard_releases_on_view_no_view_failure_and_ignores_replaced_session() 
     s.dispose();
     s.no_view(&token, "stale".into(), vec![], None, 4);
     assert_ne!(s.notice_message.as_deref(), Some("stale"));
+}
+
+#[test]
+fn wheel_drag_steps_are_live_updates_not_gated_submissions() {
+    // Color Picker declares its wheel change callback as a form submit. Every drag step
+    // must still go out while the previous one is in flight; only the newest reply wins.
+    let form = node(
+        "Form",
+        json!({"nativeColorWheel":{"hue":0,"saturation":100,"value":100,"alpha":100,
+            "changeActionId":"wheel-change","saveActionId":"wheel-submit","formats":[]}}),
+        vec![node(
+            "Form.TextField",
+            json!({"id":"hue","value":"0"}),
+            vec![],
+        )],
+    );
+    let mut r = reply(form);
+    r.actions = ["wheel-change", "wheel-submit"]
+        .map(|id| Action {
+            section: None,
+            id: id.into(),
+            title: id.into(),
+            kind: Some("submit-form".into()),
+            style: None,
+            shortcut: None,
+        })
+        .to_vec();
+    let mut s = RuntimeSession::new(r, 0).unwrap();
+    let mut tokens = vec![];
+    for _ in 0..5 {
+        let Ok(Effect::Invoke { token, .. }) = s.invoke("wheel-change", None) else {
+            panic!("a drag step was refused while another was in flight")
+        };
+        tokens.push(token);
+    }
+    assert!(tokens[..4].iter().all(|t| !s.accepts(t)));
+    assert!(s.accepts(&tokens[4]));
+    // Use Color is a real submission: in flight once, refused a second time.
+    assert!(s.invoke("wheel-submit", None).is_ok());
+    assert!(s.invoke("wheel-submit", None).is_err());
+    // A drag step during the submission still goes out.
+    assert!(s.invoke("wheel-change", None).is_ok());
 }
 
 #[test]
