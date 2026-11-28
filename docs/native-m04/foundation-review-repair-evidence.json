@@ -1,0 +1,410 @@
+{
+  "scope": "M4 foundation repair plus M5 integration seams; not M5\u2013M11 parity or migration completion",
+  "starting_head": "6c328c16fad59b144404d7484e81a873218f800e",
+  "evidence_head": "07c10a5abc30bf868752b82a7a2a43975ece9194",
+  "dirty": true,
+  "original_review_sha256": "546c2a20e9f9d37cc7bcddd910a470835d6f637c00db187e78dd2f741d6b1273",
+  "evidence_root": "/tmp/tezbar-native-m04-repair-evidence",
+  "fresh_opus_review": "pending parent",
+  "findings": [
+    {
+      "id": "M4-01",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "GPUI on_click remains the sole keyboard activation owner; parent Down/repeat/Up regression retained.",
+      "source": "crates/tezbar-ui/src/controls.rs",
+      "regression_filters": [
+        "controls::tests::keyboard_activation_uses_one_guarded_callback"
+      ],
+      "limits": "Real physical keyboard/AX matrix remains manual."
+    },
+    {
+      "id": "M4-02",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Only explicit per-owner subscriptions admit output; unknown channels drop. Independent 256-event/512 KiB budgets, max 32 channels, one pre-existing oversized payload per channel. Hidden live subscriptions continue consuming. Sync emit uses block_in_place on multi-thread Tokio; product caps blocking/replacement threads at 16. No per-emit task, retained hub backlog or global dequeue pause is introduced. GUI drains independently of Tokio and disposal releases producers before core shutdown await.",
+      "source": "apps/tezbar/src/events.rs",
+      "regression_filters": [
+        "events::repair_tests::two_worker_two_producer_flood_control_and_quit_remain_live",
+        "events::repair_tests::hidden_owned_channel_is_independent_and_drop_releases_producer",
+        "events::repair_tests::hidden_live_subscriber_receives_and_unknown_output_is_not_retained",
+        "events::shutdown_queue_repair_tests::closing_owned_queues_releases_two_flooding_workers_before_shutdown_drain"
+      ],
+      "limits": "Future stream consumers must subscribe before producer start and retain subscription while hidden; stop producer before dropping owner."
+    },
+    {
+      "id": "M4-03",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Durable launcher/Settings/layout writes finish first or cancel quit with visible recoverable error. Core start+stop then share one eight-second bound; timeout/JoinError logs and proceeds to native YES/exit. Completed JoinHandle is consumed. Stop ownership survives cancelled await, retries and native reentry. Control server is explicitly released before AppKit exits.",
+      "source": "apps/tezbar/src/app.rs",
+      "regression_filters": [
+        "core_client::shutdown_repair_tests::shutdown_consumes_join_error_and_timeout_keeps_same_owner",
+        "windows::termination::tests::two_native_quits_queue_once_and_reentry_is_immediate_after_drain",
+        "windows::termination::tests::save_failure_replies_no_and_can_retry"
+      ],
+      "limits": "Real isolated native terminate/save-failure/8s-hold fixtures recorded; does not prove running production child cleanup on Windows."
+    },
+    {
+      "id": "M4-04",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Confirmation selects visible Settings, otherwise explicitly shows/activates launcher; title/message/detail and info/warning/error levels are mapped. Dialog lease restores blur suppression and focus on completion/cancel/error.",
+      "source": "apps/tezbar/src/app.rs",
+      "regression_filters": [],
+      "limits": "Visible AppKit sheet and physical focus are manual gates; no hidden-sheet visual claim."
+    },
+    {
+      "id": "M4-05",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Parent left-minus-266 geometry retained. Sessions window has transparent background and native no-shadow setup.",
+      "source": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "regression_filters": [
+        "windows::terminal_sessions::tests::panel_tracks_parent_and_minimum"
+      ],
+      "limits": "Physical composition/focus remains manual."
+    },
+    {
+      "id": "M4-06",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Snapshot resolves current Window display identity and target scale each time, then records physical position plus logical dimensions/zoom under that identity.",
+      "source": "apps/tezbar/src/app.rs",
+      "regression_filters": [
+        "windows::persistence::monitor_repair_tests::cross_monitor_snapshot_owns_current_identity_scale_size_and_zoom"
+      ],
+      "limits": "Cross-monitor fixture covers negative origin, scales 2/1.25 and separate profiles. Physical mixed-DPI monitor movement remains manual."
+    },
+    {
+      "id": "M4-07",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Settings lifecycle is marked before launcher hide, preventing NSApp hide/Windows foreground handoff; failure restores launcher.",
+      "source": "apps/tezbar/src/app.rs",
+      "regression_filters": [],
+      "limits": "Actual first-open focus/flicker is manual. Isolated fixture exercises Settings open and second-instance path as state evidence."
+    },
+    {
+      "id": "M4-08",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Owned 16ms drag task ends using physical button state. Blur is suppressed during drag. macOS snap placement waits for native move-loop release; Windows uses manual cursor delta. Overlay uses work area, no activation, layered alpha and hidden AX root; end/cancel destroys overlay and task.",
+      "source": "apps/tezbar/src/app.rs",
+      "regression_filters": [
+        "windows::snap::tests::ended_drag_discards_dwell",
+        "windows::snap::tests::stationary_center_acquires_after_host_dwell"
+      ],
+      "limits": "Physical snap/pass-through and Windows GUI remain manual; no Windows execution claimed."
+    },
+    {
+      "id": "M4-09",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "M5 sibling applies global paint-time capture move/up hooks and ends resize on any mouse-up or missing pressed-left state. Native TextInput selection registers capture listeners in paint, tracks beyond hitbox and ends on any release.",
+      "source": "crates/tezbar-ui/src/text_input.rs",
+      "regression_filters": [
+        "text_input::repair_tests::selection_drag_tracks_outside_field_and_any_button_release_ends"
+      ],
+      "limits": "Sibling surfaces hook inspected; actual OS edge resize remains manual."
+    },
+    {
+      "id": "M4-10",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Streaming retains incremental prefix/tail work; transition to settled reparses full source once, including unchanged last revision/source.",
+      "source": "crates/tezbar-ui/src/markdown.rs",
+      "regression_filters": [
+        "markdown::repair_tests::settled_stream_matches_full_parse_for_global_markdown_constructs",
+        "markdown::tests::streaming_reparses_only_unclosed_tail"
+      ],
+      "limits": "Red fixture restores original Document.update and reproduces semantic reference-link divergence."
+    },
+    {
+      "id": "M4-11",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Visible painted code admits background syntect work only when settled. Global maximum two jobs, one job per view, <=12KB block, 32 cached blocks per document. Light/dark palettes and appearance/revision fencing invalidate stale jobs; initialization occurs off GUI thread.",
+      "source": "crates/tezbar-ui/src/markdown.rs",
+      "regression_filters": [
+        "markdown::repair_tests::syntax_palette_depends_on_appearance",
+        "markdown::tests::highlight_stays_lazy_while_streaming"
+      ],
+      "limits": "No GPU/long-transcript performance measurement or visual palette acceptance claimed."
+    },
+    {
+      "id": "M4-12",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Adds macOS Cmd arrows/Shift selections, Cmd Backspace, Alt forward-delete and Windows Ctrl forward-delete. Visual unwrapped line boundaries are distinct from document movement; grapheme/IME handling and password confidentiality retained.",
+      "source": "crates/tezbar-ui/src/text_input.rs",
+      "regression_filters": [
+        "text_input::repair_tests::native_line_document_and_word_delete_keypresses",
+        "text_input::tests::composition_emits_only_when_committed",
+        "text_input::tests::grapheme_deletion_and_undo_redo_restore_selection"
+      ],
+      "limits": "Actual platform IME matrix remains manual; test uses actual GPUI key dispatch."
+    },
+    {
+      "id": "M4-13",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Parent removal of global Alt+F4 retained; native launcher close routes Hide and Settings close routes its handshake.",
+      "source": "apps/tezbar/src/app.rs",
+      "regression_filters": [
+        "windows::settings_close::tests::acknowledged_drain_does_not_expire"
+      ],
+      "limits": "Windows physical Alt+F4 not executed."
+    },
+    {
+      "id": "M4-14",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Parsed production-hotkey identity guard retained; preview defaults tray and shortcuts off and requires --allow-desktop-integration. Registry rejects registration when opt-in absent. Tray creation is retained independently of shortcut-registration failure.",
+      "source": "apps/tezbar/src/host_adapter.rs",
+      "regression_filters": [
+        "host_adapter::tests::preview_cannot_register_production_launcher_accelerators",
+        "cli::tests::desktop_integration_requires_explicit_opt_in"
+      ],
+      "limits": "Opted-in tray/hotkey OS delivery remains manual; all smoke profiles use default opt-out."
+    },
+    {
+      "id": "M4-15",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Windows window show uses SW_SHOWNA, followed by explicit activation only for owned focusable launcher/Settings flows.",
+      "source": "apps/tezbar/src/windows/native.rs",
+      "regression_filters": [],
+      "limits": "Windows build and GUI validation belong to separate parent task."
+    },
+    {
+      "id": "M4-16",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Core startup owns independent Tokio JoinHandle and guards Retry. Core shutdown awaits same startup under bound. App command shortcuts detach core work from GPUI waiters. Coordinated sibling CoreClient requests use 16 admission permits with independent work tasks and completion outcome logs.",
+      "source": "apps/tezbar/src/core_client.rs",
+      "regression_filters": [
+        "core_client::request_owner_tests::cancelling_waiter_keeps_admitted_core_work_owned_and_bounded",
+        "core_client::shutdown_repair_tests::shutdown_consumes_join_error_and_timeout_keeps_same_owner"
+      ],
+      "limits": "One existing Tokio runtime. No live providers/processes were started."
+    },
+    {
+      "id": "M4-17",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Settings-close fallback timer has its own Owner field and survives attempted/cancelled quit; acknowledged save still has no arbitrary deadline.",
+      "source": "apps/tezbar/src/app.rs",
+      "regression_filters": [
+        "windows::settings_close::tests::unacknowledged_bootstrap_falls_back_after_three_seconds",
+        "windows::settings_close::tests::acknowledged_drain_does_not_expire"
+      ],
+      "limits": "Independent timer ownership inspected; later M7 installs full Settings write owners."
+    },
+    {
+      "id": "M4-18",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Interaction admission is capped at 128 leases. Releases bypass full ordinary controls, with release counts bounded by outstanding admitted owners. Capture/dialog Drop still owns exactly one release.",
+      "source": "apps/tezbar/src/events.rs",
+      "regression_filters": [
+        "events::repair_tests::lease_release_bypasses_full_control_queue_with_bounded_ownership",
+        "events::lease_admission_repair_tests::live_lease_admission_and_reserved_releases_are_both_bounded",
+        "events::capture_lease_tests::cancellation_after_capture_reply_send_still_restores"
+      ],
+      "limits": "Actual capture/privacy flows intentionally not exercised."
+    },
+    {
+      "id": "M4-19",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Latest-snapshot watch bounds pending layout writes to one value. Transient failure retries without killing writer; final drain retries latest and returns layout-specific error. Cancelled quit retains Owner maps and retries them.",
+      "source": "apps/tezbar/src/windows/persistence.rs",
+      "regression_filters": [
+        "windows::persistence::repair_tests::transient_failure_keeps_writer_alive_and_drain_retries_latest",
+        "windows::persistence::tests::serial_snapshots_keep_latest_position_without_overwriting_other_settings"
+      ],
+      "limits": "Actual isolated layout-path write failure, native quit cancellation and recovery exercised."
+    },
+    {
+      "id": "M4-20",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Focused field wrapper uses editable role; password value is masked bullets only, no clear value/text-selection children. TextRun lengths and positions use graphemes. Buttons set AccessKit disabled state, tasks use content labels, list containers and table row/cell nodes are present.",
+      "source": "crates/tezbar-ui/src/text_input.rs",
+      "regression_filters": [
+        "text_input::tests::password_render_and_accessibility_never_expose_secret",
+        "text_input::tests::offset_tables_cover_cyrillic_combining_surrogate_and_emoji"
+      ],
+      "limits": "VoiceOver/Narrator remain unproven manual platform gates; no actual AccessKit tree snapshot claim."
+    },
+    {
+      "id": "M4-21",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Markdown body/headings/details/code spacing and padding use zoom; line height is relative to scaled text.",
+      "source": "crates/tezbar-ui/src/markdown.rs",
+      "regression_filters": [],
+      "limits": "Visual zoom comparison remains manual; pixel hairlines remain pixel hairlines."
+    },
+    {
+      "id": "M4-22",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "Separates launcher bar and bar_float, adds Settings panel/accent-strong tokens, contrast tests, native OS reduce-motion read on launch/restore and Metrics consumption, macOS Blurred launcher background.",
+      "source": "crates/tezbar-ui/src/tokens.rs",
+      "regression_filters": [
+        "tokens::repair_tests::tokens_contrast_test",
+        "tokens::repair_tests::launcher_bar_and_float_are_distinct_and_os_motion_is_consumed"
+      ],
+      "limits": "OS reduce-motion/live appearance, blur and theme screenshot comparison remain manual."
+    },
+    {
+      "id": "M4-23",
+      "disposition": "source repaired; fresh review pending",
+      "implementation": "All paragraphs within details remain in one collapsed native block, including nested HTML paragraphs. Footnote references have labels and internal links to native definition anchors; stream settle uses same full parse.",
+      "source": "crates/tezbar-ui/src/markdown.rs",
+      "regression_filters": [
+        "markdown::repair_tests::all_details_paragraphs_collapse_and_footnotes_have_internal_anchors",
+        "markdown::repair_tests::settled_stream_matches_full_parse_for_global_markdown_constructs"
+      ],
+      "limits": "Physical accessibility/link activation remains manual."
+    }
+  ],
+  "source_sha256": {
+    "apps/tezbar/src/app.rs": "bac1fc5944f68ebe2cea3b2268e236485e20957da3786ca57ba1e0838a8fa42c",
+    "apps/tezbar/src/bench_control.rs": "df2b7ae1cdc1bb20c509b418c8465f7d041da72e4c11f94ed99754db92d7a9cb",
+    "apps/tezbar/src/cli.rs": "9dda4515bcc4cba1c966a07db1167bd7d22c504bfb208efc4969542209141fe2",
+    "apps/tezbar/src/core_client.rs": "f1c7a4246d583d5557a26a582ade05aee2961e09640fffd8542f9002121b7bed",
+    "apps/tezbar/src/events.rs": "79bb0f16318d2234c1d3efc6f824facba9dd88ce0f2c26e625c699052a2b4e19",
+    "apps/tezbar/src/host_adapter.rs": "5bb7d118bcb5d30a3cb3841149087041ab5c4f58fa339d7475cdd03b4fc222c3",
+    "apps/tezbar/src/main.rs": "283a065e658d4cb734e36965edb613ce7cadf0bc6d74a58243107807286bf673",
+    "apps/tezbar/src/windows/mod.rs": "2f814333d87d7fb51254b6d3bb6a99868d8e6fc53e20fbb9c9bfa6a617d312f4",
+    "apps/tezbar/src/windows/native.rs": "744a2206882447189fb3d293798afb43c7e518fd8f7aca01f77ec1f3f643a37a",
+    "apps/tezbar/src/windows/persistence.rs": "95eaff3a57a4cd22aa6a1c091fe87c9250e86868f788d5f5679009f557330486",
+    "apps/tezbar/src/windows/resize.rs": "4870586c4e92b1208d58528355b235b355aee6ce184bd1895d4c4882e0c5b9af",
+    "apps/tezbar/src/windows/settings.rs": "2ebf42241c8e2b976d6dbfe4a567b47ea75ab6c48feb60650423612033b9ceb3",
+    "apps/tezbar/src/windows/settings_close.rs": "2ff7506ce1c5ab16060bf26bfc0e48c72ddfa74349ff97caa7c644400450f1ca",
+    "apps/tezbar/src/windows/snap.rs": "986c01e2ad3992c450ef71de02be11c99cfd614a8bb746e16f36d150f47559da",
+    "apps/tezbar/src/windows/snap_overlay.rs": "9e9d513230464208f6d1844dd976ae2239161a4cbf6887fd16f868687eb2d9e5",
+    "apps/tezbar/src/windows/terminal_sessions.rs": "084f51f2c73c38921d5be013283bf2c5f88a7c39a9c838dc10c218c4605389bb",
+    "apps/tezbar/src/windows/termination.rs": "8b2e958b14ea0490f7b444086334f4d5fa296e5eea049ad093b3be94689d9251",
+    "crates/tezbar-ui/src/controls.rs": "4c0987221018df813d4a8d94fc855fbfd53a6f12790f1892edc64697ff0c3f10",
+    "crates/tezbar-ui/src/image_cache.rs": "cfd84a6ff26e6ea683cdbced01ad711f7fcff63cac6057f9684105456cfeb2f6",
+    "crates/tezbar-ui/src/lib.rs": "5a6ec2c7dbc2fb2d693c5b88aa699dc742410a337cdb5d2a29072d96e17e02b9",
+    "crates/tezbar-ui/src/markdown.rs": "3e146df54e2679f55f2c842a8e4cd90ea6ddf4f1201c3781ea792c90419b6a16",
+    "crates/tezbar-ui/src/markdown_html.rs": "bbe628da2ad21da88140b422ed6d61ab69254e5b771727c7c619315a0ada34ba",
+    "crates/tezbar-ui/src/text_input.rs": "26153498360912b4965fa7a2aa5a3b245c85d55d28a114da5d58072fed42b378",
+    "crates/tezbar-ui/src/tokens.rs": "2af69d61dfb7b90a29fe273faf5763fde4be9a70e608a789158f20d78e90ed69",
+    "crates/tezbar-ui/src/virtual_list.rs": "7854c5f9cebdab6af3a397d37990a8f9c7d03a60e66a07882a2be0981cf58d2f"
+  },
+  "test_counts_from_final_logs": {
+    "final-tests.log": [
+      [
+        "56",
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0",
+        "0"
+      ],
+      [
+        "37",
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0",
+        "0"
+      ]
+    ],
+    "final-bench-tests.log": [
+      [
+        "57",
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0",
+        "0"
+      ]
+    ]
+  },
+  "proof_artifacts": {
+    "final-tests.log": "6d3cc400cc0722c37b7cfa498577386762fa9796732a2c9f08d0e563b9eaf0df",
+    "final-bench-tests.log": "845bfb9eec394334aae9520e14fab6dd46c4ba855d20bdff1846bf2f77ef2452",
+    "red-ui.py": "766b5d2d3b4047c2eab1e68d865308e0e456f0504849baa7c06e62c48a5fff0b",
+    "red-ui.log": "2809ad3f16451d8638be6d29db06673ff1b233c1b779e141a85ab2fc7d397c11",
+    "red-event-bridge.py": "f643841f8a64817490bac414861b5099cce3fbb885b80bf0281addf23f859707",
+    "red-event-bridge.log": "d33c45653d337f3a33957ebd6c877bbcb27e653ed2c7e5d5c134bf532944f6da",
+    "control-fixture.py": "5e92aa36fdf46e561a1c44a76783485f8a98000aec61205be209a61e8cb1f068",
+    "control-fixture-receipt.json": "328f4971d2eaa8129a8177dd834333c14f6d6d15b9aff1f3dac4144221e420a1",
+    "final-gates.json": "7f9e5035b6c87d688fcc13bc2035c4a9efb098667984f567733c5424489ffd04",
+    "final-normal-receipt.json": "e627531ac7adaaaedcdade5a31a0e6adcccc6d1e76bb7751212f6956799bb920",
+    "owned-cleanup.json": "d6a0aef16a86cc1720ee96b2e834caeab085eb0c50d34b9f6376c0fb8157871a",
+    "format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "owned-source.patch": "51dfe869e1090278444214c6ad5afa1b19081184f6c9c64c8a7485ae85830994"
+  },
+  "validation": {
+    "toolchain": "1.98.1",
+    "cargo_build_jobs": 2,
+    "runtime_shaders": true,
+    "gates": [
+      {
+        "log": "final-tests.log",
+        "command": [
+          "cargo",
+          "+1.98.1",
+          "test",
+          "--locked",
+          "-p",
+          "tezbar-ui",
+          "-p",
+          "tezbar-native",
+          "--features",
+          "runtime-shaders"
+        ],
+        "exit": 0
+      },
+      {
+        "log": "final-bench-tests.log",
+        "command": [
+          "cargo",
+          "+1.98.1",
+          "test",
+          "--locked",
+          "-p",
+          "tezbar-native",
+          "--features",
+          "runtime-shaders,bench-control"
+        ],
+        "exit": 0
+      },
+      {
+        "log": "final-check.log",
+        "command": [
+          "cargo",
+          "+1.98.1",
+          "check",
+          "--locked",
+          "-p",
+          "tezbar-ui",
+          "-p",
+          "tezbar-native",
+          "--features",
+          "runtime-shaders"
+        ],
+        "exit": 0
+      },
+      {
+        "log": "final-normal-build.log",
+        "command": [
+          "cargo",
+          "+1.98.1",
+          "build",
+          "--locked",
+          "-p",
+          "tezbar-native",
+          "--features",
+          "runtime-shaders"
+        ],
+        "exit": 0
+      }
+    ],
+    "normal_receipt": "/tmp/tezbar-native-m04-repair-evidence/final-normal-receipt.json",
+    "control_receipt": "/tmp/tezbar-native-m04-repair-evidence/control-fixture-receipt.json"
+  }
+}

@@ -1,0 +1,209 @@
+# Beta.17 performance work
+
+Target branch: `fix/beta17-runtime-search-memory`, based on
+`9ff3663342b48ab01be2e56ab30f6d7123b0ced8`. The user approved this beta base and
+the separate `Tezbar-performance` worktree. The original checkout belongs to
+another task and must not be changed.
+
+The target is five times faster runtime/search and one fifth of app RAM, with
+simple search, deep search, background activity, and functionality preserved.
+Opening the app is already satisfactory and is a regression constraint.
+
+## Current evidence
+
+The [exact native broad-ranking improvement (R14)](beta17-broad-search-results.md)
+removes BM25's nested per-hit document-size statement using an authoritative
+same-snapshot size join and bit-exact, bundled-engine-gated ranking. Broad native
+reader p50/CPU improves 26.326/26.244→13.103/13.005 ms; all 112 complete native
+replies match. Actual lean packaged-app pairs show smaller mixed UI effects,
+material RSS/idle-CPU regressions and no whole-family memory success. The
+[receipts](beta17-broad-search-results.json) retain both native cohorts, all desktop
+attempts, strict arithmetic/mutation parity, builds, opening/IME/90-second checks
+and hashes. An additional mutation trace preserves inherited equal-score/timestamp
+map-order randomness and checks adversarial full ordering with coupled seeds;
+literal independent tie-repeatability is a documented baseline limitation.
+Uniform 5× runtime/search and one-fifth RAM remain unmet.
+
+The [native tokenizer allocation audit (R13)](beta17-tokenizer-results.md) identifies
+the BPE rule table as the largest measured vocabulary container: 51.08 MiB in
+514,907 allocator blocks. Two exact storage candidates reduce allocations/RSS but
+increase retained physical footprint in separate P/C/C/P cohorts; both are rejected.
+Production source and runtime package remain unchanged. The
+[receipts](beta17-tokenizer-results.json) include a new exhaustive C/C++ parity
+probe, allocation checkpoints and verified restoration. Whole-app targets remain unmet.
+
+The [same-cycle geometry boundary (R12)](beta17-geometry-results.md) implements a
+narrowed correction for R11: immediate target transitions plus stable-target
+microtask coalescing. Component and actual WKWebView late-rAF checks pass, but
+full P/C/C/P family CPU improves only 2.1% with overlapping runs, source-index
+input CPU rises, and retained RAM does not jointly qualify. The candidate is
+reverted; a same-index replacement regression and
+[hashed receipts](beta17-geometry-results.json) remain. No new production fix or
+overall target completion is claimed.
+
+The [row-layout experiments (R11)](beta17-row-layout-results.md) validate actual
+WKWebView row skipping and test selected-geometry batching. Row skipping increases
+CPU; batching reduces full-cohort simple-search CPU but delays a late-rAF selection
+highlight until the next frame and does not establish safe retained RAM. Both
+prototypes are rejected. Production is restored; a same-frame CommandBar regression
+test and [hashed evidence](beta17-row-layout-results.json) remain. The uniform
+fivefold/one-fifth targets remain unmet.
+
+The [synchronous-layout experiments (R10)](beta17-layout-results.md) acquire actual
+WebContent native CPU stacks and time lazy style/geometry reads. `offsetTop`
+forces dirty flex/text layout; input font measurement is comparatively small.
+Geometry equality and layout containment do not qualify. Removing the width-only
+CommandBar commit saves CPU, but a three-process/build full cohort does not clear
+RAM qualification; all prototypes are reverted. The [compact JSON](beta17-layout-results.json)
+links hashed manifests/raw per-process evidence. No new production fix or goal
+completion is claimed; restored production retains the R7/R8/R9 gaps below.
+
+The [UI allocation experiments (R9)](beta17-ui-allocation-results.md) test scoped
+canvas, icon and row-presentation prototypes. No production candidate is accepted:
+row memoization saves CPU but increases full-workload retained memory; icon-only
+memoization removes 88.7% of icon render invocations without a credible CPU gain.
+All production prototypes are reverted. Two behavior tests, diagnostic tooling and
+[receipts](beta17-ui-allocation-results.json) remain. The fivefold/one-fifth goals
+and the renderer CPU/RAM regression remain open. R8/R7 below are historical evidence.
+
+The focused [renderer regression follow-up](beta17-renderer-results.md) adds a
+fresh-process simple-only loop and a full lean-protocol AB/BA cohort, using the
+unchanged frozen original/current apps. The [new JSON](beta17-renderer-results.json)
+retains per-step/per-role accounting, diagnostics and receipts. The regression is
+**not fixed**: simple-burst CPU is +27.6% and post-repeat WebContent footprint is
+2.70× original even without retained full-reply measurement payloads. Extra prefix
+work is established; its avoidable allocation/retainer owner is not. No speculative
+production optimization or whole-family RAM win is claimed. R7 evidence below is
+preserved under its original protocol, not rewritten by this follow-up.
+
+The [final cumulative comparison](beta17-final-results.md) rebuilds original
+beta.17 production source with measurement-only instrumentation and compares it
+directly with the final candidate in AB/BA order. It records per-workload latency,
+CPU, full observed process-family footprint/RSS, exact parity, rebuilt app/source
+identities and acceptance. The [JSON](beta17-final-results.json) and
+[chart](beta17-final-results.html) retain the distinct outcomes: some searches/UI
+responses exceed 5×, but uniform 5× runtime and one-fifth RAM remain unachieved.
+The earlier immediate-baseline rounds below are historical context.
+
+`beta17-baseline.json` contains the unchanged initial measurements and complete
+ordered result IDs/scores. The probes are test-only and excluded from the installed
+application. Production search changes and repeated interleaved A/B results are
+now recorded in [beta17-search-results.md](beta17-search-results.md), with full
+measurement JSON in `beta17-search-candidate.json` and a reproducible
+`compare-search.py` runner. Improvements vary by case; these do not establish a
+fivefold whole-app speedup or a total RAM reduction. The subsequent runtime round
+is recorded in [beta17-runtime-results.md](beta17-runtime-results.md), with full
+desktop process accounting, real Q4 inference, repeated before/after workloads,
+and a separate renderer image-retention fixture. The subsequent
+[visible-search round](beta17-responsiveness-results.md) replaces fixed input
+waits with bounded latest-input scheduling: the preserved two-frame proxy improves
+118.5→48 ms, with more intermediate work and no demonstrated RAM reduction.
+Its [new JSON](beta17-responsiveness-results.json) preserves final release A/B,
+exact UI/native parity, opening checks and failed desktop attempts separately.
+
+The subsequent [runtime-package round](beta17-runtime-package-results.md) turns
+the unused-logits prototype into a reproducible pinned app resource with atomic
+installation, offline old-model compatibility and ordinary-app validation. Final
+complete-family retained footprint is 525→275 MiB for ordinary indexing and
+1174→286 MiB for the CJK-rich pair; these are workload-specific, not a uniform
+one-fifth result. The final thin-resource app preserves the opening/90-second
+visible-response checks. Fresh-profile package materialization adds CPU cost;
+no further general runtime/CPU speedup is claimed. Build/trust and parent-owned
+distribution steps are in [the runtime contract](../EMBEDDING_RUNTIME.md).
+The [independent package review](beta17-runtime-package-review.md) records
+parent-run integrity/lifecycle checks, ordinary-app activation, and a follow-up
+fix for unbundled development resource lookup.
+
+The baseline/search probes are native subsystem measurements, **not** end-to-end
+UI latency or total desktop app RAM. They exclude model inference and WebView
+processes and cannot establish a fivefold improvement for the whole app. The
+desktop results linked above measure that broader scope separately.
+
+The launcher fixture has 100,000 file records and 400 application records and
+uses the production database search function. It measures home, exact, prefix,
+typo, keyboard-layout, broad file-term, and no-hit queries. This is a deliberately
+simple synthetic corpus; real profile distributions may differ substantially.
+
+The deep-search fixture contains 10,000 indexed sources/chunks, their FTS rows,
+and deterministic 256-dimensional learned vectors. It measures the production
+source search with cache clearing before every cold query, a populated cache for
+warm queries, and a lexical query matching every source. Cold and warm semantic
+results must match. The vector values are fixtures, not timed model inference.
+The cache memory value is its conservative internal allocation estimate, not RSS.
+
+Each timed case records a first call, three warmups, and 40 samples with nearest-
+rank percentiles. Result equality is checked after timing every sample. Result
+signatures are generated outside the timer. One run is exploratory: repeat and
+interleave baseline/candidate processes before making improvement claims. The
+first-call measurement does not flush OS caches or represent cold application
+startup. High percentiles from 40 samples are particularly noise-sensitive.
+
+The idle probe starts the actual native core with an empty isolated profile and
+no app handle. It awaits Knowledge initialization, settles for two seconds, and
+measures process CPU over 30 seconds and RSS before/after. Native core background
+loops run, but WebView, model inference, application enumeration and filesystem
+watchers are absent. `ready_ms` measures native core readiness, not app opening.
+
+## Reproduce
+
+Use release builds, from this worktree. Dependency/resource setup is:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm build:backend
+```
+
+Run the matrix, saving the output containing `TEZBAR_PERF` JSON records:
+
+```sh
+cargo test --release --manifest-path src-tauri/Cargo.toml --lib --locked \
+  search_matrix -- --ignored --test-threads=1 --nocapture
+
+cargo test --release --manifest-path src-tauri/Cargo.toml --lib --locked \
+  native_core::performance::core_idle -- --ignored --exact --nocapture
+```
+
+`TEZBAR_BENCH_SAMPLES` can increase the timed sample count (10–10,000). The idle
+probe currently uses Unix process accounting and `ps`; it is not a Windows RAM
+measurement. No real profile, clipboard, installed app or model is modified.
+
+Before accepting changes, compare the ordered result signatures as well as
+timings, run functional tests for ranking, cancellation, source/model updates,
+and check the app process family separately. Do not improve measurements by
+disabling features or shrinking result/candidate limits.
+
+## Baseline checks
+
+- `pnpm typecheck`: passed in the initial delegated setup.
+- `pnpm test`: independently passed, 734 tests; 9 skipped.
+- Release Rust library suite: independently passed, 429 tests; 3 opt-in tests
+  skipped, before adding these three benchmark probes.
+- `pnpm build:frontend` and `pnpm tauri build --no-bundle --ci`: passed.
+- Both search matrix tests and the headless idle probe: passed.
+
+Original logs and baseline executables were initially stored at
+`/tmp/tezbar-beta17-perf.e1qzXU`; that directory later became absent for an
+unestablished reason. The runtime-package report identifies recovered artifacts,
+regenerated evidence and excluded missing results. Generated extension-worker bundles were restored
+after setup; they are not part of the source change.
+
+## Follow-up experiments
+
+R14's post-search idle/RSS regression was re-examined with a matched control and
+a physical-input receipt; see [beta17-opus-pass1-results.md](beta17-opus-pass1-results.md).
+An independent second pass ([beta17-opus-pass2-results.md](beta17-opus-pass2-results.md))
+bounds pass 1's causal/RAM conclusions, fixes the receipt's timing/guard coverage
+and replicates the matched post-search cohort (6+6): no production regression, the
+R14 historical transient cause remains unknown.
+
+Query preparation, candidate hydration, exact semantic scoring and source
+selection experiments have now produced the measured changes described in the
+search report. Broad-match BM25, cold authoritative row traversal and warm winner
+hydration still limit search; further index/storage changes need their own real-
+profile measurements and exact parity checks.
+
+Idle maintenance and retained state were investigated in the desktop round
+linked above. Its event/deadline observers, indexing allocation reductions and
+renderer Blob-URL ownership fix have their own regression tests and measurements.
+The empty-profile headless baseline is already low CPU and must not substitute
+for those desktop results.

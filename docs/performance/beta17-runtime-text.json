@@ -1,0 +1,157 @@
+{
+  "scope": "Test-only allocation request counts/volume, not live RAM or app RSS",
+  "executables": {
+    "baseline": {
+      "path": "/private/tmp/tezbar-beta17-perf.e1qzXU/runtime-baseline-tests",
+      "sha256": "898681a6e1e33947b171a77ae3b9b95b329cc5c5298775edc288cb61fc6dc2f7"
+    },
+    "candidate": {
+      "path": "/private/tmp/tezbar-beta17-perf.e1qzXU/runtime-final-tests",
+      "sha256": "cd8157c6a73c4ee9e5d8fe355d9774562031f102c3acbd815a2c136d922767c1"
+    }
+  },
+  "runs": [
+    {
+      "round": 1,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "allocations": 4299,
+          "name": "embedding",
+          "p50_ms": 0.085542,
+          "p95_ms": 0.097083,
+          "requested_bytes": 66844
+        },
+        {
+          "allocations": 23110,
+          "name": "pages",
+          "p50_ms": 1.194542,
+          "p95_ms": 1.238,
+          "requested_bytes": 3445376
+        }
+      ]
+    },
+    {
+      "round": 1,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "allocations": 12,
+          "name": "embedding",
+          "p50_ms": 0.035959,
+          "p95_ms": 0.040625,
+          "requested_bytes": 8604
+        },
+        {
+          "allocations": 2438,
+          "name": "pages",
+          "p50_ms": 0.6162080000000001,
+          "p95_ms": 0.7909160000000001,
+          "requested_bytes": 1413952
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "allocations": 12,
+          "name": "embedding",
+          "p50_ms": 0.023583,
+          "p95_ms": 0.032041,
+          "requested_bytes": 8604
+        },
+        {
+          "allocations": 2438,
+          "name": "pages",
+          "p50_ms": 0.499791,
+          "p95_ms": 0.5417500000000001,
+          "requested_bytes": 1413952
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "allocations": 4299,
+          "name": "embedding",
+          "p50_ms": 0.09816599999999999,
+          "p95_ms": 0.108375,
+          "requested_bytes": 66844
+        },
+        {
+          "allocations": 23110,
+          "name": "pages",
+          "p50_ms": 1.165458,
+          "p95_ms": 1.284917,
+          "requested_bytes": 3445376
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "baseline",
+      "measurements": [
+        {
+          "allocations": 4299,
+          "name": "embedding",
+          "p50_ms": 0.086291,
+          "p95_ms": 0.0975,
+          "requested_bytes": 66844
+        },
+        {
+          "allocations": 23110,
+          "name": "pages",
+          "p50_ms": 1.147208,
+          "p95_ms": 1.242167,
+          "requested_bytes": 3445376
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "variant": "candidate",
+      "measurements": [
+        {
+          "allocations": 12,
+          "name": "embedding",
+          "p50_ms": 0.017458,
+          "p95_ms": 0.02325,
+          "requested_bytes": 8604
+        },
+        {
+          "allocations": 2438,
+          "name": "pages",
+          "p50_ms": 0.406208,
+          "p95_ms": 0.446125,
+          "requested_bytes": 1413952
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "name": "embedding",
+      "baseline_p50_ms": 0.086291,
+      "candidate_p50_ms": 0.023583,
+      "speedup": 3.659034049951236,
+      "baseline_allocations": 4299,
+      "candidate_allocations": 12,
+      "baseline_requested_bytes": 66844,
+      "candidate_requested_bytes": 8604
+    },
+    {
+      "name": "pages",
+      "baseline_p50_ms": 1.165458,
+      "candidate_p50_ms": 0.499791,
+      "speedup": 2.3318907303252763,
+      "baseline_allocations": 23110,
+      "candidate_allocations": 2438,
+      "baseline_requested_bytes": 3445376,
+      "candidate_requested_bytes": 1413952
+    }
+  ]
+}

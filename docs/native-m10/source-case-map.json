@@ -1,0 +1,281 @@
+{
+  "status": "linked; mapped assertions executed locally, platform/manual acceptance pending",
+  "base": "409dbf3c5950b0065aff900b2906b548660bc264",
+  "references": [
+    {
+      "file": "src/renderer/terminalSessionHistory.test.ts",
+      "sha256": "0962ecd6e2ecd38ef948fb2430a8a23f2910e501fb615ab73985bb7c515af4ba",
+      "head_sha256": "0962ecd6e2ecd38ef948fb2430a8a23f2910e501fb615ab73985bb7c515af4ba",
+      "unchanged": true,
+      "cases": [
+        {
+          "title": "does not duplicate startup output already included in the durable snapshot",
+          "native": "replay_startup_deduplicates",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "keeps output that arrived after the native snapshot was read",
+          "native": "replay_preserves_after_snapshot",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "keeps unrelated buffered output intact",
+          "native": "replay_preserves_unrelated",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        }
+      ],
+      "current_sha256": "0962ecd6e2ecd38ef948fb2430a8a23f2910e501fb615ab73985bb7c515af4ba",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/terminalSessionLabel.test.ts",
+      "sha256": "412cf969c8754cd8ca6398f53d70546e8551b029f6d1feb7276c90a975732912",
+      "head_sha256": "412cf969c8754cd8ca6398f53d70546e8551b029f6d1feb7276c90a975732912",
+      "unchanged": true,
+      "cases": [
+        {
+          "title": "formats the directory and last command with a clear separator",
+          "native": "labels_directory_and_separator",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "uses only the current directory name",
+          "native": "labels_use_directory_tail",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "reads the shell-rendered command after autocomplete expanded it",
+          "native": "labels_use_shell_autocomplete_not_typed_prefix",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        }
+      ],
+      "current_sha256": "412cf969c8754cd8ca6398f53d70546e8551b029f6d1feb7276c90a975732912",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/terminalSessionSelection.test.ts",
+      "sha256": "4b27752de4e896b20de89dc7402b6a0685519ba6fa5f63467e76080bb706a336",
+      "head_sha256": "4b27752de4e896b20de89dc7402b6a0685519ba6fa5f63467e76080bb706a336",
+      "unchanged": true,
+      "cases": [
+        {
+          "title": "does not implicitly select the first matching session",
+          "native": "explicit_selection_no_implicit_first",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "activates the first row only after ArrowDown",
+          "native": "arrow_down_is_explicit_and_clamps",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "recovers safely when a previously selected row disappeared",
+          "native": "disappearance_clears_selection",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "switches sessions with Command or Control plus a number",
+          "native": "command_control_numbers_select_through_controller",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "does not treat Option-number symbols or bare numbers as session shortcuts",
+          "native": "option_symbols_and_bare_numbers_are_text",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "reopens a saved session under the same id so native history is preserved",
+          "native": "restore_same_identity_no_legacy_command_execution",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        }
+      ],
+      "current_sha256": "4b27752de4e896b20de89dc7402b6a0685519ba6fa5f63467e76080bb706a336",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/terminalNativeTransport.test.ts",
+      "sha256": "65742228cfc9b101b19de2945c6f3b6ae36eed4144ef4d0903f41fdcd4fd8cb9",
+      "head_sha256": "65742228cfc9b101b19de2945c6f3b6ae36eed4144ef4d0903f41fdcd4fd8cb9",
+      "unchanged": true,
+      "cases": [
+        {
+          "title": "waits for both event listeners and forwards all lifecycle metadata in one create",
+          "native": "both_listeners_before_create_with_metadata_once",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "uses native attach without a follow-up summary write",
+          "native": "null_attach_has_no_summary_write",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "registers launcher shortcut changes only through the Rust config transaction",
+          "native": null,
+          "native_file": null,
+          "status": "parent-owned/unverified; non-terminal hotkey/extension behavior"
+        },
+        {
+          "title": "delivers extension hotkey payload unchanged and unsubscribes",
+          "native": null,
+          "native_file": null,
+          "status": "parent-owned/unverified; non-terminal hotkey/extension behavior"
+        }
+      ],
+      "current_sha256": "65742228cfc9b101b19de2945c6f3b6ae36eed4144ef4d0903f41fdcd4fd8cb9",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/shared/terminal.test.ts",
+      "sha256": "4df2c7ac4c52550ead42bf3f06823ca81176da3495a0a27a53fc2efc0fcee54e",
+      "head_sha256": "4df2c7ac4c52550ead42bf3f06823ca81176da3495a0a27a53fc2efc0fcee54e",
+      "unchanged": true,
+      "cases": [
+        {
+          "title": "compacts a macOS user home while preserving the useful path tail",
+          "native": "compact_macos_home_preserves_path_tail",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "leaves non-user paths unchanged",
+          "native": "compact_non_user_paths_unchanged",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "compacts Windows user paths using the same display format",
+          "native": "compact_windows_home_matches_display_format",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "labels Windows profile directories relative to the user home",
+          "native": "windows_directory_label_relative_to_home",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "recognizes POSIX, Windows drive, and UNC paths",
+          "native": "explicit_cwd_accepts_posix_drive_and_unc",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        },
+        {
+          "title": "rejects relative paths",
+          "native": "explicit_cwd_rejects_relative_paths",
+          "native_file": "apps/tezbar/src/surfaces/terminal/tests.rs",
+          "status": "passed: native full suite; assertion subset only"
+        }
+      ],
+      "current_sha256": "4df2c7ac4c52550ead42bf3f06823ca81176da3495a0a27a53fc2efc0fcee54e",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/TerminalView.tsx",
+      "sha256": "89ddfa2e9e5f5e157db8b7e4abcb29f292346b266885c3be7bc1d09fab9d757d",
+      "head_sha256": "89ddfa2e9e5f5e157db8b7e4abcb29f292346b266885c3be7bc1d09fab9d757d",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "89ddfa2e9e5f5e157db8b7e4abcb29f292346b266885c3be7bc1d09fab9d757d",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/TerminalSessionsWindow.tsx",
+      "sha256": "a11326400ebd2735403cd3151c2eaad4ce50298e5754e99733812b9183488051",
+      "head_sha256": "a11326400ebd2735403cd3151c2eaad4ce50298e5754e99733812b9183488051",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "a11326400ebd2735403cd3151c2eaad4ce50298e5754e99733812b9183488051",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/terminalPreferences.ts",
+      "sha256": "46b1753385797d9ed5dff0bcec18f89512a8da9d81d486c60b7652c4ded66b4d",
+      "head_sha256": "46b1753385797d9ed5dff0bcec18f89512a8da9d81d486c60b7652c4ded66b4d",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "46b1753385797d9ed5dff0bcec18f89512a8da9d81d486c60b7652c4ded66b4d",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/terminalSessionHistory.ts",
+      "sha256": "10b5e8a778dee7238e907ddd2e9a71103498311030c4ff20f9a8993c7ac37ba6",
+      "head_sha256": "10b5e8a778dee7238e907ddd2e9a71103498311030c4ff20f9a8993c7ac37ba6",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "10b5e8a778dee7238e907ddd2e9a71103498311030c4ff20f9a8993c7ac37ba6",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/terminalSessionLabel.ts",
+      "sha256": "395a7a5dbe9eaeba7359b8645008bb15a352dd79a6ace435e1b9109e7f7d60ef",
+      "head_sha256": "395a7a5dbe9eaeba7359b8645008bb15a352dd79a6ace435e1b9109e7f7d60ef",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "395a7a5dbe9eaeba7359b8645008bb15a352dd79a6ace435e1b9109e7f7d60ef",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "src/renderer/terminalSessionSelection.ts",
+      "sha256": "0cf349e5cb7e3e3b27640984f0288b0ccc797a8d253f7fae8c102b9ff9bd9796",
+      "head_sha256": "0cf349e5cb7e3e3b27640984f0288b0ccc797a8d253f7fae8c102b9ff9bd9796",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "0cf349e5cb7e3e3b27640984f0288b0ccc797a8d253f7fae8c102b9ff9bd9796",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "crates/tezbar-core/src/terminal/pty.rs",
+      "sha256": "da2ebe87464448ea4d247c8b3fdf711379d3ab7869db215c8fa1de23564be8da",
+      "head_sha256": "da2ebe87464448ea4d247c8b3fdf711379d3ab7869db215c8fa1de23564be8da",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "27018b732a7ea08b93dee2ab3622e57f9721a98dabc32a95497952f80ffb30c1",
+      "current_equals_original_reference": false
+    },
+    {
+      "file": "crates/tezbar-core/src/terminal_bridge.rs",
+      "sha256": "6921d7af355fb0e3105dcf70d538ac35f769e541c8a42e94ae75d1b52a7147f0",
+      "head_sha256": "6921d7af355fb0e3105dcf70d538ac35f769e541c8a42e94ae75d1b52a7147f0",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "e02063f583716604e88d047e3e54fcf692a62b881f9a90b76100d154c3f9734b",
+      "current_equals_original_reference": false
+    },
+    {
+      "file": "crates/tezbar-ui-model/src/terminal.rs",
+      "sha256": "671ad7c28dcd8defb465eb8695da0f9e0c5bdab7342732b9a31c407c302bdd26",
+      "head_sha256": "671ad7c28dcd8defb465eb8695da0f9e0c5bdab7342732b9a31c407c302bdd26",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "671ad7c28dcd8defb465eb8695da0f9e0c5bdab7342732b9a31c407c302bdd26",
+      "current_equals_original_reference": true
+    },
+    {
+      "file": "apps/tezbar/src/windows/terminal_sessions.rs",
+      "sha256": "084f51f2c73c38921d5be013283bf2c5f88a7c39a9c838dc10c218c4605389bb",
+      "head_sha256": "084f51f2c73c38921d5be013283bf2c5f88a7c39a9c838dc10c218c4605389bb",
+      "unchanged": true,
+      "status": "read only reference, not executed",
+      "current_sha256": "579d383e4c879e6e28ebd29f3beba9e44a8dcc156964db614044faf3f6e5b35d",
+      "current_equals_original_reference": false
+    }
+  ],
+  "historical_status": "source-only/unrun",
+  "current_base": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+  "execution_log": "../native-m08/repair-logs/native-frozen-final.log"
+}

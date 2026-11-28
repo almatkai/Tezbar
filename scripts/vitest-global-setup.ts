@@ -9,7 +9,6 @@ export default function setup(): () => void {
   const overrides = {
     APPDATA_DIR: join(directory, 'app-data'),
     TEZBAR_CONFIG_DIR: join(directory, 'config'),
-    PI_CODING_AGENT_DIR: join(directory, 'pi-agent'),
   }
   const previous = new Map<string, string | undefined>()
   for (const [key, value] of Object.entries(overrides)) {

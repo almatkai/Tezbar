@@ -1,0 +1,2005 @@
+{
+  "state": "NOT_APPLIED_NOT_RELEASE_READY",
+  "gates": [
+    "implement and independently review the actual native signed release builder (macOS + Windows), receipts and updater archives, with no Tauri CLI or src-tauri dependency",
+    "implement and independently review the native signing/feed pipeline: pinned certificate and helpers, resource seal, Tauri updater signatures, dual-platform feed and receipt policy",
+    "post-apply pnpm typecheck and pnpm test against all relocated import and oracle authorities",
+    "post-apply native release-builder dry run from a clean private source snapshot proving complete resources, manifest schema 2, installer/archive/receipt/feed contracts without signing or publishing",
+    "resolve dev, tauri, tauri:dev and icons:generate scripts after src-tauri relocation",
+    "fresh Opus full integration review",
+    "independent Windows compile/tests and disposable installer/storage rehearsal",
+    "macOS disposable OS-profile/signing/updater acceptance",
+    "manual GUI/IME/AX/GPU and matched RAM",
+    "explicit final source cutover authorization"
+  ],
+  "relocations": [
+    {
+      "path": "prototypes/native-launcher/Cargo.lock",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/Cargo.lock",
+      "sha256": "9b36d413e4a442474b0d3144d90454f128fccf818226958cbfce9d763acabe60"
+    },
+    {
+      "path": "prototypes/native-launcher/Cargo.toml",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/Cargo.toml",
+      "sha256": "4778b63f7e31407e7b208113047e27bbc732bfafcdebff376bfe96e24c98839a"
+    },
+    {
+      "path": "prototypes/native-launcher/LICENSE-GPUI",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/LICENSE-GPUI",
+      "sha256": "752daf2fb234ca4a1fa372c073fe127f44b7b90fd2529ae44273a64f9d53da7a"
+    },
+    {
+      "path": "prototypes/native-launcher/README.md",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/README.md",
+      "sha256": "8d2a59b6b0cf0b18b6067987f28e040ea1bfdd781ec6466f8097ce26a43e7173"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/app.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/app.svg",
+      "sha256": "5097e2bc1e32bf836c3b6d788a51a6a84ca17de29eaf1ae54e6d8709a4045988"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/command.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/command.svg",
+      "sha256": "76db3b2deb129a748e5042c92b18e5737df3cb122e6de86b707c8200e28697c7"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/file.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/file.svg",
+      "sha256": "221cbb59c89164ca35652a97e2b3310ec89de4549c862eca410fa3f4d93470b7"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/key.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/key.svg",
+      "sha256": "c24115798c17f26f9b7deb44add90134fb443710e6b6db6ebc4442b69f16d061"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/link.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/link.svg",
+      "sha256": "001f510ecd7c33c95531da31cadda30d1391355ae6ff9e0ff26a0cfb81ed31ed"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/note.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/note.svg",
+      "sha256": "2962ee0ec15038aa01635a0449f8f640eee1124cd89b80d0d6d2547fe4bd663a"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/puzzle.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/puzzle.svg",
+      "sha256": "445eab058b60591bf024075f3c10f8a51c3b822defdaac138dfda0ebdba02a49"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/search.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/search.svg",
+      "sha256": "c24260e763692ce045cce404819c1a99e9527d4a71d2a04603a6e78317772168"
+    },
+    {
+      "path": "prototypes/native-launcher/assets/snippet.svg",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/assets/snippet.svg",
+      "sha256": "e02387ea080b47002d98bd4e45bbfb1e09d0a2d24cf4c3c69f53d0db70fcce2b"
+    },
+    {
+      "path": "prototypes/native-launcher/build.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/build.rs",
+      "sha256": "5f74da4e6a88ba3b8dcf1d9af4dfd8f14ac4f55ba0d4bbd9bff54e30077243b1"
+    },
+    {
+      "path": "prototypes/native-launcher/macos/Info.plist",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/macos/Info.plist",
+      "sha256": "98d5d5c62d50c7603510f13444e6ec2f13f0b0b1b908431297eb2af628711039"
+    },
+    {
+      "path": "prototypes/native-launcher/rust-toolchain.toml",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/rust-toolchain.toml",
+      "sha256": "72da9f9e503464ba7393560f6f51a69fb06be72633d52ae7725fa0ba59dfda22"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/build-a.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/build-a.py",
+      "sha256": "a204251b698072e76cf8658fc9c0d5a42371e65db6b85369baec13dd4bc12699"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/build_identity.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/build_identity.py",
+      "sha256": "bb5ea4aaebede1cc15b32c86aa2badce252ec7d6364315fde1fc24e39d481a16"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/bundle-macos.sh",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/bundle-macos.sh",
+      "sha256": "d4fc39bfa328f0edc1c4a9b28e17d8b6517497ff72677ca828ab3c3a83b94ffe"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/control.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/control.py",
+      "sha256": "28dacac5532b95eae46a73a04deb3739f69789b242317e2654174f429d1f24a2"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/fixture.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/fixture.py",
+      "sha256": "8fa6883e14e783b93eb63ed752ab811d5a3308ff01951edcd63db70bca9dfe16"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/lock-drift.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/lock-drift.py",
+      "sha256": "cd15fd8c7757604b3a4ebcbdd6c2f3f1e05792023e144d7f231535f92a3e6679"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/matched.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/matched.py",
+      "sha256": "fe61dabbddc5040d19bebdc5bf4816b236d3dd6ed57e37218eabd5cfcec63b43"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/measure.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/measure.py",
+      "sha256": "b947aed9d78ad111130c0b99996f61a023fd08d8b91a356de6b17c44eed4aee2"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/stage-a.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/stage-a.py",
+      "sha256": "ce47912e23438ca552cc2b48cfa7beb8c4ba478d03ed925f769012e9193723f1"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/stage-resources.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/stage-resources.py",
+      "sha256": "6cb25aed107c592ac8329059a3c913d80c111a7358e10435373b9634285b4975"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/test_build_identity.py",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/test_build_identity.py",
+      "sha256": "9d1754a904846456012e0746ddcc323beef603bd3d6f3aa9e5ec77af3cebd85e"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/windows-metrics.ps1",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/windows-metrics.ps1",
+      "sha256": "5bedb27fcafd78443e9dc86cf2f5849f52048d2342dcbab824fd7d01f3b29102"
+    },
+    {
+      "path": "prototypes/native-launcher/scripts/windows-prepare.ps1",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/scripts/windows-prepare.ps1",
+      "sha256": "a4909ad8f050bba3f3747d5890c97e679e00ea99c81329262b26716933ae2f5b"
+    },
+    {
+      "path": "prototypes/native-launcher/src/bench_control.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/src/bench_control.rs",
+      "sha256": "1f6fa312ceb19c54e925b2ff41017e093049fd0f378c75a0e67ebaa923b7c7c9"
+    },
+    {
+      "path": "prototypes/native-launcher/src/launcher_view.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/src/launcher_view.rs",
+      "sha256": "789ece036a4ed535c57cd2bd76500800a1806e8626a5ab19815cb84a75b59745"
+    },
+    {
+      "path": "prototypes/native-launcher/src/main.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/src/main.rs",
+      "sha256": "f6840692f1341bf9d10fa8686972dd2111fbe91d097d3fed96bed4b481c90be6"
+    },
+    {
+      "path": "prototypes/native-launcher/src/search_session.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/src/search_session.rs",
+      "sha256": "840d4ccadfb61d6d0c6520982a41f639edbcb96e49799347bd030a411bcf0cee"
+    },
+    {
+      "path": "prototypes/native-launcher/src/text_input.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/src/text_input.rs",
+      "sha256": "393a6296e80b41f59325541cd2ee2b0e98780b2e6f36ada7f08f5e0af03c95fd"
+    },
+    {
+      "path": "prototypes/native-launcher/src/theme.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-prototype-archive/src/theme.rs",
+      "sha256": "8b059621f95c643746f0b1f6c1ddd514e47643fa4b3dadf6a4048f85ad2a13fd"
+    },
+    {
+      "path": "src-tauri/.gitignore",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/.gitignore",
+      "sha256": "646a917f23a3d76736252fac394b218e99c3f2d7f5c4dad9e334563452574cde"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/Cargo.lock",
+      "sha256": "ac240b768f3a04b49e4f0feb1380688fe004fa64fe4d55cc343285b9d0d2b53e"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/Cargo.toml",
+      "sha256": "d8555f81c5ad938212a2ee2dcb157f5ca08146198605351f5a1e4498db3db210"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/build.rs",
+      "sha256": "7bdf886980c09b5b6f56697e7e6d6c7c03c510810f37e4908d37cf4c735ec584"
+    },
+    {
+      "path": "src-tauri/capabilities/default.json",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/capabilities/default.json",
+      "sha256": "cbc73943de3172d669995183abeb4a95372258772d9699be5e984c39ad982d56"
+    },
+    {
+      "path": "src-tauri/icons/128x128.png",
+      "action": "relocate",
+      "destination": "packaging/icons/128x128.png",
+      "sha256": "495cc85cd55e1d90ebc98fe7d2f26ba306d08850273785c41383a28c560e5dc2"
+    },
+    {
+      "path": "src-tauri/icons/128x128@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/128x128@2x.png",
+      "sha256": "ce87918cfb7cbbac7fcbcbf7fc7087224740850e859d985352acc2c2c184d724"
+    },
+    {
+      "path": "src-tauri/icons/32x32.png",
+      "action": "relocate",
+      "destination": "packaging/icons/32x32.png",
+      "sha256": "f459b7d89d59257eefd2e48217722aaf04cc5cd4d2f43a6d5144f9fa0b67a8be"
+    },
+    {
+      "path": "src-tauri/icons/64x64.png",
+      "action": "relocate",
+      "destination": "packaging/icons/64x64.png",
+      "sha256": "70520ea7ea83c03367b6467c72b3714ee8234b9068a1031bf7b05b7669e340b8"
+    },
+    {
+      "path": "src-tauri/icons/Square107x107Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square107x107Logo.png",
+      "sha256": "f73d6b370f47b99758374ffe9b1a6272ecf8ba11bc9e74cb5f40bf19a6a8a5ef"
+    },
+    {
+      "path": "src-tauri/icons/Square142x142Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square142x142Logo.png",
+      "sha256": "618884f826192cfe8ca829186bfdf3b4c2afb7898fcb6f2ab03471a59d4da41b"
+    },
+    {
+      "path": "src-tauri/icons/Square150x150Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square150x150Logo.png",
+      "sha256": "5bc1f3d3570213f54448a5a7bf18dd5af5be19f8688caf9ee1ac7daf6c4d6346"
+    },
+    {
+      "path": "src-tauri/icons/Square284x284Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square284x284Logo.png",
+      "sha256": "7e473efdcb77c08dbc53a148e29bd1b96353b53a63910f08a1006fb061a4e653"
+    },
+    {
+      "path": "src-tauri/icons/Square30x30Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square30x30Logo.png",
+      "sha256": "70affcb27eac33be7ca2bcc215deaf7d552e5963934a726a4783acf4e26908d6"
+    },
+    {
+      "path": "src-tauri/icons/Square310x310Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square310x310Logo.png",
+      "sha256": "a913b4ea9324e1a52514dfee2d7c818c8c502aec70948fa944065b9a84ffebe1"
+    },
+    {
+      "path": "src-tauri/icons/Square44x44Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square44x44Logo.png",
+      "sha256": "c325a11a4d50e9afd335d66048e4bcc48131e487be432f051fe500eaa5074c35"
+    },
+    {
+      "path": "src-tauri/icons/Square71x71Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square71x71Logo.png",
+      "sha256": "0445f3c1b0459f097ad9ea3f055ec54e0f6029d531517b76cad76ea485ecc3a3"
+    },
+    {
+      "path": "src-tauri/icons/Square89x89Logo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/Square89x89Logo.png",
+      "sha256": "03e908b1c0ae497f299742387a409a1b2edcd9e9bf0a920ee247a2ef4a2d749d"
+    },
+    {
+      "path": "src-tauri/icons/StoreLogo.png",
+      "action": "relocate",
+      "destination": "packaging/icons/StoreLogo.png",
+      "sha256": "33dd217e3eea05a793e55bcf29d61308ac322830442124dc73832ce55ac4f9df"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-anydpi-v26/ic_launcher.xml",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-anydpi-v26/ic_launcher.xml",
+      "sha256": "760d4b8a06bf7163dd010c33ad2cac9e4a75fa0177afaba042f83e311eef0c3e"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-hdpi/ic_launcher.png",
+      "sha256": "38b8551ae1127b606897e46d74137b31db5ad3d7d2092ab9e6a5a1be2bc881ba"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
+      "sha256": "1d635d4db539bb9256a72d0d0efefeae3085e666e64c374ae1a97a6f7ec32770"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-hdpi/ic_launcher_round.png",
+      "sha256": "ac98df6a892d99e45884c363fab77025ab3a90810e054ee843277a63faa0414e"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-mdpi/ic_launcher.png",
+      "sha256": "58f7b1ccd9a865c20e1fceab300de41e582799e6859ba8538bb95d2361596143"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
+      "sha256": "7f45bb88796d025ec39ccb84ec5859f9af2686c5c2034a667d4c1cd26ecf651c"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-mdpi/ic_launcher_round.png",
+      "sha256": "378d416c0208f92ceb7ed5b6e11f8bc91cb1817089515b2336061c17a673655f"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xhdpi/ic_launcher.png",
+      "sha256": "36bd9dafdfa8e6ceafd82daa5b64afea68deaf9e73911554957726f34e3ca80b"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
+      "sha256": "dd15bb837a5751ec41e9a712c32aee3fb05ad63dff783ca10c8b93cd986b007d"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xhdpi/ic_launcher_round.png",
+      "sha256": "1d672dad80d5675ff0625e2a864a10904d01be0143984ea4496efd98de5695da"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xxhdpi/ic_launcher.png",
+      "sha256": "0edda3436825fa66137a122d467f331870d6a9e77d669d0388c61e115ed7b0d0"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+      "sha256": "49438679468cabea68ec4b174e918603b4b624824d04e5287b20bb5990dee162"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
+      "sha256": "ac3b89d4231ab86ae362046f91111f99d64a0906a812e37f1710fcca7ddaf123"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xxxhdpi/ic_launcher.png",
+      "sha256": "491097186ae0b8d0b05a30d41da2f993ceb0da5f916d97915323757eb4fcf722"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+      "sha256": "84f6c6b36076c0ec9f543301a405bce4ffdd95399b970440ede6a7bbb282964e"
+    },
+    {
+      "path": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
+      "action": "relocate",
+      "destination": "packaging/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
+      "sha256": "a998ac00770de49cdf3d671c6ad81fd2127f171cd205d138b9c161037e516441"
+    },
+    {
+      "path": "src-tauri/icons/android/values/ic_launcher_background.xml",
+      "action": "relocate",
+      "destination": "packaging/icons/android/values/ic_launcher_background.xml",
+      "sha256": "5e626b2894481d010a06b0a25429043f549ac75d45f1db7fa048839f09cc3a7e"
+    },
+    {
+      "path": "src-tauri/icons/icon.icns",
+      "action": "relocate",
+      "destination": "packaging/icons/icon.icns",
+      "sha256": "b4378b818fa51baa9cef58c64a1ae2afba80f9e60bd5d1ac1f8d0f135428b147"
+    },
+    {
+      "path": "src-tauri/icons/icon.ico",
+      "action": "relocate",
+      "destination": "packaging/icons/icon.ico",
+      "sha256": "332ed5f5ba155ce17c876c87991ca02bf87217ddf9d13be98e7fee4fac50ec0e"
+    },
+    {
+      "path": "src-tauri/icons/icon.png",
+      "action": "relocate",
+      "destination": "packaging/icons/icon.png",
+      "sha256": "308ad89e23eb9d3985bf31ffad637224481d02e3e00dc9cfe8a635ccd8e5fac2"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@1x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-20x20@1x.png",
+      "sha256": "bd80a27c0a6382bc099f3e573d246add32e940a6187581e4a8afcb0b5f7276f7"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@2x-1.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-20x20@2x-1.png",
+      "sha256": "0c4ec5fbc5f8a45c1c11dc35be6e61e11d914365e2d79a0f38f0358298b99b52"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-20x20@2x.png",
+      "sha256": "0c4ec5fbc5f8a45c1c11dc35be6e61e11d914365e2d79a0f38f0358298b99b52"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-20x20@3x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-20x20@3x.png",
+      "sha256": "dde2dd56302102944329e9d7908f9293dbffb199f0e988eac463cce864695fe0"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@1x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-29x29@1x.png",
+      "sha256": "21575da2cd9b3f4ce088a5aa201b298bee691c845acc67701da77bceb17b1800"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@2x-1.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-29x29@2x-1.png",
+      "sha256": "3218c9f7d1c9910992a75756f5aac15f14e6ba84e4d4f89814e704665ad7b2bb"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-29x29@2x.png",
+      "sha256": "3218c9f7d1c9910992a75756f5aac15f14e6ba84e4d4f89814e704665ad7b2bb"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-29x29@3x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-29x29@3x.png",
+      "sha256": "4a2d8b6d2070f410af6f8b66babe434b7c3db4b0a5a35d486f5c6532028bc5ff"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@1x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-40x40@1x.png",
+      "sha256": "0c4ec5fbc5f8a45c1c11dc35be6e61e11d914365e2d79a0f38f0358298b99b52"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@2x-1.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-40x40@2x-1.png",
+      "sha256": "31ddfd9e1005880ffadbb025a18964ef0ddddbf113430e7e86ae692f46e20787"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-40x40@2x.png",
+      "sha256": "31ddfd9e1005880ffadbb025a18964ef0ddddbf113430e7e86ae692f46e20787"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-40x40@3x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-40x40@3x.png",
+      "sha256": "7ad7aa3ef47799cc2ea9e164ecdb515b6ab736af1d71e4983203391f520fff90"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-512@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-512@2x.png",
+      "sha256": "ebf2e0a252f28e42a76a4b0a5fd219609857b6d193cd9e953e22db6156ba4fab"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-60x60@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-60x60@2x.png",
+      "sha256": "7ad7aa3ef47799cc2ea9e164ecdb515b6ab736af1d71e4983203391f520fff90"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-60x60@3x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-60x60@3x.png",
+      "sha256": "b24d92e40603e826f693bb48a38a88fb77b2d5b8ad484cb03f9b905968c6e298"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-76x76@1x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-76x76@1x.png",
+      "sha256": "4278fa97de47305e7bbdaf95f6c7bc76b8f9f88b5fb9c7882f845429c9ed5e34"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-76x76@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-76x76@2x.png",
+      "sha256": "bf16749c29566c9081e5a853b0f269281b857fe4db1a1768e4184b71437097ce"
+    },
+    {
+      "path": "src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png",
+      "action": "relocate",
+      "destination": "packaging/icons/ios/AppIcon-83.5x83.5@2x.png",
+      "sha256": "ff355f9fceffc968b6f2aa3c560972c83fc79a310ac61f6fb3f1e34e3790141b"
+    },
+    {
+      "path": "src-tauri/macos-signing.json",
+      "action": "relocate",
+      "destination": "packaging/macos-signing.json",
+      "sha256": "f3a6eddc5c16979588b37856fc9294d4778e5ab4579d797ca36d36a684e69aeb"
+    },
+    {
+      "path": "src-tauri/runtime/embedding-macos-arm64.json",
+      "action": "relocate",
+      "destination": "packaging/runtime/embedding-macos-arm64.json",
+      "sha256": "df3561b331d78f0818ad77da022905a66a0d4269318e47c4642ba32364cf6d1c"
+    },
+    {
+      "path": "src-tauri/src/backend_health.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/backend_health.rs",
+      "sha256": "14e2af3ffc3ef599b52b1dc4cfde8d5e059c9687b6cf9aa4aa24c96e939d7b9a"
+    },
+    {
+      "path": "src-tauri/src/desktop_bench.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/desktop_bench.rs",
+      "sha256": "441da0bc5a8e635b325b77e88051e20274b30cb7fdac5277817eec39d79eab4a"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/lib.rs",
+      "sha256": "9038ff5360308db2f98421d521696bf5dfd1b6762c40644c891dd91479a4d574"
+    },
+    {
+      "path": "src-tauri/src/main.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/main.rs",
+      "sha256": "e72a0c51ebc07b7b0d7478c78265dfd29713f544168cbc7699504784503f3e04"
+    },
+    {
+      "path": "src-tauri/src/manual_releases.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/manual_releases.rs",
+      "sha256": "5b3aadddfe16879bb519e99990a1c28aebcbfb576c0883717d25563cb8e51f09"
+    },
+    {
+      "path": "src-tauri/src/native_input.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/native_input.rs",
+      "sha256": "213e3ac006c984dc61a62a9c00807e6c4bf64b1935239e2334a5a7ce5bc9de42"
+    },
+    {
+      "path": "src-tauri/src/native_terminal.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/native_terminal.rs",
+      "sha256": "f5043ca210f0a70086f1547a5fe59f5d701a7ca64fa0125a2ee4d29be1f694f9"
+    },
+    {
+      "path": "src-tauri/src/process_notifications.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/process_notifications.rs",
+      "sha256": "99ebf7eef8c5b0e9a83a1078fde770ae7aa583080d44d6f80ee20f40c112ecb7"
+    },
+    {
+      "path": "src-tauri/src/qr_download.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/qr_download.rs",
+      "sha256": "1fc33596a9168548b40d9eee92747997824dd7ae60792a95cc91561f6dcf6f72"
+    },
+    {
+      "path": "src-tauri/src/release_channels.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/release_channels.rs",
+      "sha256": "e82c933ad2147f0fd4faf6a0d65f6fc793803d9b8631c10f49ab97f7b275772f"
+    },
+    {
+      "path": "src-tauri/src/tauri_host.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/tauri_host.rs",
+      "sha256": "d953a3b53cf8347ddbbd85eff3c9f9e79d2c4601556f9740f40874572d40a757"
+    },
+    {
+      "path": "src-tauri/src/timer_notifications.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/timer_notifications.rs",
+      "sha256": "91e476d306126a8ffd77c9407547965010946e97938c8f09c1e84a75ef60b94f"
+    },
+    {
+      "path": "src-tauri/src/updater.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/updater.rs",
+      "sha256": "180817b14922a6d97f3cfe8b25ee24e2ce84ece2b8947362918d437c90a50976"
+    },
+    {
+      "path": "src-tauri/src/updater_temp.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/updater_temp.rs",
+      "sha256": "88277063601d7b734b27de34d9c92a50a9eb1c2460b8b611b3f1695f06125ebc"
+    },
+    {
+      "path": "src-tauri/src/window_layout.rs",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/src/window_layout.rs",
+      "sha256": "bb37b3c522ce438341af8700bdbd61499697d912a823052ca1193d33fb0e666c"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "action": "relocate",
+      "destination": "packaging/legacy-app-policy.json",
+      "sha256": "b1c55c62710fc28847ee016005e07bd6a12d7afdd24b46c81100f4859a2e24ed"
+    },
+    {
+      "path": "src-tauri/tauri.macos.conf.json",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/tauri.macos.conf.json",
+      "sha256": "2c8d0c8a784492b31d7f984011df831f92444c4944718ed608a8b4c0b832b05a"
+    },
+    {
+      "path": "src-tauri/tauri.windows.conf.json",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-tauri-archive/tauri.windows.conf.json",
+      "sha256": "2f9bb7a30fcc70087d0bec7639737d30dba33092bfad2f22c192ad463cea7da3"
+    },
+    {
+      "path": "src/renderer/AgentChatView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/AgentChatView.tsx",
+      "sha256": "eba399bb0f67906c09adf3ee1a13464fd48501f5a52e066ee47a87482f23cb93"
+    },
+    {
+      "path": "src/renderer/App.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/App.tsx",
+      "sha256": "46f8d0bf7741a3ea4a955016d96b68781f8d03fb82708452b2cd7f33f08fb45a"
+    },
+    {
+      "path": "src/renderer/AppUpdateSettings.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/AppUpdateSettings.tsx",
+      "sha256": "5894a683b3cbc5a72357f57c2f7c6f9f9e01b82ca904b15b1bcfd0dbe72844ec"
+    },
+    {
+      "path": "src/renderer/BackendConnection.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/BackendConnection.tsx",
+      "sha256": "028cba17f73997df001c1e1a349c3a10d5489dd22d38dee609d176bf1d469b53"
+    },
+    {
+      "path": "src/renderer/BackgroundTaskStatus.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/BackgroundTaskStatus.tsx",
+      "sha256": "028b4b91d5d3cd8fa1781117acce7bb6e160fcde93f92865e31e330974c948b7"
+    },
+    {
+      "path": "src/renderer/ClipboardView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ClipboardView.tsx",
+      "sha256": "ca0fed88492af1dd171a687b94de449f95d5201f43739f46b74c62b05d82654b"
+    },
+    {
+      "path": "src/renderer/CommandBar.lifecycle.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/CommandBar.lifecycle.test.ts",
+      "sha256": "8df684459df38edd2775d9e7979ca264a41cd766eb123243b6e78b095d638f51"
+    },
+    {
+      "path": "src/renderer/CommandBar.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/CommandBar.tsx",
+      "sha256": "796722e4ec9d45e6d4d0a1ccf41d64cc7007eb8972e034c8476fd9cf2a3f86df"
+    },
+    {
+      "path": "src/renderer/CurrencySettings.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/CurrencySettings.tsx",
+      "sha256": "c27e0162e4d0a74721dabcc463456090e85a22f3c38244e194d8d2fa2d97a3e6"
+    },
+    {
+      "path": "src/renderer/EmojiPickerView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/EmojiPickerView.tsx",
+      "sha256": "45254d0d01d386e60756afac976b44750f85c8b29166faabf5a5dafb109721b4"
+    },
+    {
+      "path": "src/renderer/ExtensionPreferencesEditor.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ExtensionPreferencesEditor.test.ts",
+      "sha256": "60603c53b74fd5a536f431d28ed3c2a6f8abfc25716947f72ae83b8e4b062eb6"
+    },
+    {
+      "path": "src/renderer/ExtensionPreferencesEditor.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ExtensionPreferencesEditor.tsx",
+      "sha256": "c33028362ecf32bb712e277221809ce87ed0b3b9926b7534da4b59301e8f4c86"
+    },
+    {
+      "path": "src/renderer/ExtensionRuntimeView.form.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ExtensionRuntimeView.form.test.ts",
+      "sha256": "4f65ad0339bf43a1907579b2ecfeb2c8101963296b3ba69f7884ee1ae8c998b1"
+    },
+    {
+      "path": "src/renderer/ExtensionRuntimeView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ExtensionRuntimeView.tsx",
+      "sha256": "93b8508d9757d20134cd7f7e34b7701cc7d272431b302a73f5def95101317a7e"
+    },
+    {
+      "path": "src/renderer/ExtensionsSettingsTab.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ExtensionsSettingsTab.tsx",
+      "sha256": "8ec48266f67b957332be0dc08c0a7e37f9884b148e3199b91185efdd47f9dd39"
+    },
+    {
+      "path": "src/renderer/ExtensionsView.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ExtensionsView.test.ts",
+      "sha256": "c03ad363f425b007df1a6c1e72123645b57b838e68779bae06b3e001f5a83d3e"
+    },
+    {
+      "path": "src/renderer/ExtensionsView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ExtensionsView.tsx",
+      "sha256": "0fa7d0e0d2e99a748bb75e901c13cec990de699cbfa580fdb50a33b805088d00"
+    },
+    {
+      "path": "src/renderer/HotkeyRecorder.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/HotkeyRecorder.tsx",
+      "sha256": "ec2eb0e83f1e77776114adf948102c7d71a52af0296ed01f378a6bec84feabc3"
+    },
+    {
+      "path": "src/renderer/IndexingView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/IndexingView.tsx",
+      "sha256": "4d161b9d8b5c07f92376f73f6c447edb3140894ae9648f4dc47d4c0052da52d7"
+    },
+    {
+      "path": "src/renderer/KnowledgeEmbeddingSettings.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/KnowledgeEmbeddingSettings.tsx",
+      "sha256": "0380ba538bec6544895455a779ad7f0ecc28a5ea5e42997e625ff35e7811b7a0"
+    },
+    {
+      "path": "src/renderer/LauncherAppearance.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/LauncherAppearance.test.ts",
+      "sha256": "6561587cb1da1b8bcb025bdd2351d303b61d36d29e20d2652969d12fe53aaca6"
+    },
+    {
+      "path": "src/renderer/LauncherAppearance.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/LauncherAppearance.tsx",
+      "sha256": "5f42ada527b71726dba033f821cc25bfd1fe2f561f1369ce8fb443d42b1b7c10"
+    },
+    {
+      "path": "src/renderer/LauncherFrame.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/LauncherFrame.tsx",
+      "sha256": "bf4fbb8b637d8caf644462c58f312550f554ede4d0fcb5ae592e8f7cc701eb80"
+    },
+    {
+      "path": "src/renderer/ModelPicker.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ModelPicker.tsx",
+      "sha256": "b0e2542716cffffbb445c3f9f4b89cd8d943f63b3e363af9953207762a19a611"
+    },
+    {
+      "path": "src/renderer/NotesView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/NotesView.tsx",
+      "sha256": "0811aac2058fc43ab87dd68f3b56cbdee955455e224383df69bbd015bd585409"
+    },
+    {
+      "path": "src/renderer/OnboardingView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/OnboardingView.tsx",
+      "sha256": "a09ac05398a6d4c380fcaf8c07d4f4444e88daa001eeb808697c84c2cdb2cb86"
+    },
+    {
+      "path": "src/renderer/PermissionsView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/PermissionsView.tsx",
+      "sha256": "1a08ff8e4c1020a71fb1ad8f0294ad0e4ebcbbeba8e86c44dc6dc36160d9f119"
+    },
+    {
+      "path": "src/renderer/ProvidersView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ProvidersView.tsx",
+      "sha256": "65d9366d751a4c5d04c5bacf770b5488220aedc9aa35377f578869712f938fa9"
+    },
+    {
+      "path": "src/renderer/ReleaseNotesView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ReleaseNotesView.tsx",
+      "sha256": "25687367fe8595f47caeae2f1ed5ba25930f22fc3890706fdad2e337f1782afc"
+    },
+    {
+      "path": "src/renderer/SettingsView.knowledge.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/SettingsView.knowledge.test.ts",
+      "sha256": "37cb9cd8220fa7555cf927e51fa013f7ab3c06ca0b71bcd2b84e8532fddaf617"
+    },
+    {
+      "path": "src/renderer/SettingsView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/SettingsView.tsx",
+      "sha256": "8e6ecce3a815f462116f1fcdfb65aa818bb8dae5e0a8d92fdc5d611314efa9f9"
+    },
+    {
+      "path": "src/renderer/Sidebar.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/Sidebar.tsx",
+      "sha256": "d88bf0810825965786db7e9f86364b65651d693f24e6d1d59fc72f94b3f1277e"
+    },
+    {
+      "path": "src/renderer/SnippetsView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/SnippetsView.tsx",
+      "sha256": "3e737e42c66b0c67736e476eb3028a94331159ad11cd9f27d7ed386ea2d33b5b"
+    },
+    {
+      "path": "src/renderer/SystemMonitorView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/SystemMonitorView.tsx",
+      "sha256": "3eb90264f9f36a6af1b1286a85a64142d50cc48e12f9ad322fd27f913ec8fd5b"
+    },
+    {
+      "path": "src/renderer/TerminalSessionsWindow.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/TerminalSessionsWindow.tsx",
+      "sha256": "a11326400ebd2735403cd3151c2eaad4ce50298e5754e99733812b9183488051"
+    },
+    {
+      "path": "src/renderer/TerminalView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/TerminalView.tsx",
+      "sha256": "89ddfa2e9e5f5e157db8b7e4abcb29f292346b266885c3be7bc1d09fab9d757d"
+    },
+    {
+      "path": "src/renderer/UpdateChannelSettings.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/UpdateChannelSettings.tsx",
+      "sha256": "d767c9a5f5384051fe37b1d88dc2db940fd4fda269375876650784e472dab42a"
+    },
+    {
+      "path": "src/renderer/VaultIconPicker.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/VaultIconPicker.test.ts",
+      "sha256": "101877c2afcffbe3f411d86cf2b36a02aa836794503d4aad2560986fcfc51154"
+    },
+    {
+      "path": "src/renderer/VaultIconPicker.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/VaultIconPicker.tsx",
+      "sha256": "48012cbd73af05b8056eaac1556d604fc725856bc3c8dec9edd3b92d66444267"
+    },
+    {
+      "path": "src/renderer/VaultView.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/VaultView.tsx",
+      "sha256": "4790a0ac8d321418dc699a777266c68fd71258326eb596273c89bfbc027a8861"
+    },
+    {
+      "path": "src/renderer/__fixtures__/launcher-live-resize.html",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/__fixtures__/launcher-live-resize.html",
+      "sha256": "cab0aeb88532ce3f82de997c4540fdf51e7d63b64bc271a2672b44a97a7fb97a"
+    },
+    {
+      "path": "src/renderer/agentChat/ApprovalModePicker.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/ApprovalModePicker.tsx",
+      "sha256": "aff73ec6db5ce673bfd8461b4156635d34370edd3f0262a4fc5fc67a5c813f59"
+    },
+    {
+      "path": "src/renderer/agentChat/__fixtures__/agent-ui.html",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/__fixtures__/agent-ui.html",
+      "sha256": "2bb6d1b89c3c013a8ff866cd939f65bf8c2a8cc2fe947240d44c04df057236b4"
+    },
+    {
+      "path": "src/renderer/agentChat/__fixtures__/agent-ui.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/__fixtures__/agent-ui.tsx",
+      "sha256": "f20f96fd08faffe11f2a2491be3a4805509f2f7a751b013b87ce93f580cbf208"
+    },
+    {
+      "path": "src/renderer/agentChat/chrome.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/chrome.test.ts",
+      "sha256": "ab6eea40233d0b0efdf420767bab1f7fe6a41438c1226600d15b5095ad0240ff"
+    },
+    {
+      "path": "src/renderer/agentChat/historyCache.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/historyCache.test.ts",
+      "sha256": "0f5d3c0eea2854a6f9b67ef943c897f5b811f8d341cf0f798531458ed2d500e7"
+    },
+    {
+      "path": "src/renderer/agentChat/historyCache.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/historyCache.ts",
+      "sha256": "7891c234571a73966e4b1de9032282bfdd0b68217a16476df201cfa4efdc846b"
+    },
+    {
+      "path": "src/renderer/agentChat/messages.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/messages.tsx",
+      "sha256": "ede7b2c88fca92ac938eb6c762b2867ace23c9c83f63cb495b33d10b8d872e9e"
+    },
+    {
+      "path": "src/renderer/agentChat/model.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/model.test.ts",
+      "sha256": "5924e86936ec95914529cf013109d6b3b68b21bff13b2922ad655bf090bfaa54"
+    },
+    {
+      "path": "src/renderer/agentChat/model.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/model.ts",
+      "sha256": "42c6ccdecef0534d747c3110a326ab86c90d4e506a2c08cf0444723b105d8256"
+    },
+    {
+      "path": "src/renderer/agentChat/ownership.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/ownership.test.ts",
+      "sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39"
+    },
+    {
+      "path": "src/renderer/agentChat/shared.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/shared.tsx",
+      "sha256": "8be6997f2219bad6323ef881de2dc6915643e27fa4c45d51822c6312fada625f"
+    },
+    {
+      "path": "src/renderer/agentChat/streaming.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/streaming.test.ts",
+      "sha256": "8fa9800020218c5017c011746e2ed699f303ccd1832c667d2c4c1c7b5f3c5d4e"
+    },
+    {
+      "path": "src/renderer/agentChat/streaming.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/streaming.ts",
+      "sha256": "2e659e1d374d04b2ba61472fbb529f31c01faf8399f016c0842e4535fd4250ef"
+    },
+    {
+      "path": "src/renderer/agentChat/timeline.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/timeline.test.ts",
+      "sha256": "e6c0ed308cc967531632a73d44bf05c9b1ba745ac5d243b6fa56eca44d40848b"
+    },
+    {
+      "path": "src/renderer/agentChat/timeline.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/timeline.ts",
+      "sha256": "cc81e7304d52c8b5025af11e85acba9eb728dbd98b1177d344d3f66df6fb189f"
+    },
+    {
+      "path": "src/renderer/agentChat/transport.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/transport.test.ts",
+      "sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448"
+    },
+    {
+      "path": "src/renderer/agentChat/transport.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/agentChat/transport.ts",
+      "sha256": "ca53e304f8e5b31d72cc783cbe1fca1d581a25a23c9d658f9329f6f7d06a15a2"
+    },
+    {
+      "path": "src/renderer/ai/AiAccountsPanel.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/AiAccountsPanel.tsx",
+      "sha256": "971889c626ef51d7da282d2cee81f4647cf75704c3c616450b34a289f18d77cf"
+    },
+    {
+      "path": "src/renderer/ai/AiContributionsEditor.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/AiContributionsEditor.tsx",
+      "sha256": "eba4425b43108a90c1e07952d20d656b65615d9cbee1378a889bbd872cf7d6b6"
+    },
+    {
+      "path": "src/renderer/ai/AiExtensionsSection.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/AiExtensionsSection.test.ts",
+      "sha256": "aec243c7ad1420c2f468cf5e9790d43edc46c8e07b9cad8725d8cf23b9cf3317"
+    },
+    {
+      "path": "src/renderer/ai/AiExtensionsSection.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/AiExtensionsSection.tsx",
+      "sha256": "4d201ee7105e2d6dcf411cec6aead88e15b6e263e67d67c2e2ed42a616d75930"
+    },
+    {
+      "path": "src/renderer/ai/ComposerExtensions.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/ComposerExtensions.test.ts",
+      "sha256": "961645e996b1a6c42688048efcbd49df92e3ccd64c49787d1078d9add10b0502"
+    },
+    {
+      "path": "src/renderer/ai/ComposerExtensions.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/ComposerExtensions.tsx",
+      "sha256": "adc05a031f6de09fed709903ee3594e2a1c08829c2b5ad7829214dcff578d08e"
+    },
+    {
+      "path": "src/renderer/ai/ProjectExtensionNotice.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/ProjectExtensionNotice.tsx",
+      "sha256": "b7e92c242823afc4286c866218ded6d10093b7ce240c6e1ffecba85a88fd67b1"
+    },
+    {
+      "path": "src/renderer/ai/api.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ai/api.ts",
+      "sha256": "dac8b879225c64285d753fb94931d6481193eddc461dc5f44a7a2bad63f77627"
+    },
+    {
+      "path": "src/renderer/assets/app-icon.png",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/assets/app-icon.png",
+      "sha256": "ce87918cfb7cbbac7fcbcbf7fc7087224740850e859d985352acc2c2c184d724"
+    },
+    {
+      "path": "src/renderer/assets/raycast-icon.png",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/assets/raycast-icon.png",
+      "sha256": "a980d254bdcfab131e01392ffe82c4e75ef976c7e79edd7a070cde1a8d5ea2d0"
+    },
+    {
+      "path": "src/renderer/backendGeneration.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/backendGeneration.ts",
+      "sha256": "175a22f07699564b79d6b77c21c39d01776ebfb0e161a2c3d3d502a5298ea803"
+    },
+    {
+      "path": "src/renderer/calculator.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/calculator.test.ts",
+      "sha256": "0e37c49c34fa972781be76329b1be298dbc2a8caee86db7348657563c5774e98"
+    },
+    {
+      "path": "src/renderer/calculator.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/calculator.ts",
+      "sha256": "ff739b52a3379bd4bcbd39c78efb2c372f7a2abd571eefe21dbdb95de8153bef"
+    },
+    {
+      "path": "src/renderer/clipboardActions.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/clipboardActions.tsx",
+      "sha256": "07067cbaf7cfaa6bd4637d8e368e15267135fedeecc719773ca6c835a0ee12e8"
+    },
+    {
+      "path": "src/renderer/codeBlockTheme.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/codeBlockTheme.test.ts",
+      "sha256": "f9a876aeb1d5dd43841b04d3f92d6c82bedfee3dbe488e70be49d3435a0ce724"
+    },
+    {
+      "path": "src/renderer/colorConverter.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/colorConverter.ts",
+      "sha256": "3ed3ae957716fe53918b20ed7c723088d7b95b4533beb1fd18fd9d7ad421202e"
+    },
+    {
+      "path": "src/renderer/commandBarInputMode.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/commandBarInputMode.test.ts",
+      "sha256": "99c070918322a3ecea17587f6a8e735fd1018fd9b46dd900b0499d22d67f6832"
+    },
+    {
+      "path": "src/renderer/commandBarInputMode.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/commandBarInputMode.ts",
+      "sha256": "74574b0efc7a9200a995313821eb9a2a99b1eb64bc99af9b0409dbadbb4a60c1"
+    },
+    {
+      "path": "src/renderer/currency/currencyConversion.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/currencyConversion.ts",
+      "sha256": "768623772df2112b5ecaff75ecb60576ad51fcc3782cd67c7e977b5ce51cd8c1"
+    },
+    {
+      "path": "src/renderer/currency/currencyPreferences.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/currencyPreferences.test.ts",
+      "sha256": "af7887d05f1ecac230fdbddf14cddf315b2ff785b1af7560ab3b194373d5e9be"
+    },
+    {
+      "path": "src/renderer/currency/currencyPreferences.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/currencyPreferences.ts",
+      "sha256": "db66d6baac03bfcb8a39b09a2af5398fcee3464f7c9876b65703580da3e31c2a"
+    },
+    {
+      "path": "src/renderer/currency/currencySynonyms.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/currencySynonyms.ts",
+      "sha256": "c6845c49bce6cd65ae1f4b009d508a5ca77dcc8b10305593e41407805b216fc3"
+    },
+    {
+      "path": "src/renderer/currency/frankfurter.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/frankfurter.ts",
+      "sha256": "a05cdb1330fb68c785497026ff2a5e48cdc7716c68f4458dc5b922d7a56a2349"
+    },
+    {
+      "path": "src/renderer/currency/parseCurrencyQuery.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/parseCurrencyQuery.test.ts",
+      "sha256": "58b183e58ad710f54b8df4ea3559ac3f089a860cd87247d98b8dd652839c64c2"
+    },
+    {
+      "path": "src/renderer/currency/parseCurrencyQuery.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/parseCurrencyQuery.ts",
+      "sha256": "1a9543441eda60b2c7eacd91fd25af24f3be83074f211021ddd0b597f7435177"
+    },
+    {
+      "path": "src/renderer/currency/regionToCurrency.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/currency/regionToCurrency.ts",
+      "sha256": "02f7e36236101c665cf46dfb2f9f321f372d5e6debb90206b44ddd8d4afbd530"
+    },
+    {
+      "path": "src/renderer/emoji/emojiData.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/emoji/emojiData.ts",
+      "sha256": "560b8d0fcb3feb75c309e2ae49ece6779372e40a8321ac7ac99dd43a10912df8"
+    },
+    {
+      "path": "src/renderer/emoji/emojiSearch.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/emoji/emojiSearch.ts",
+      "sha256": "8ade53ff1b4eb29cbc8ddd577d6640b827cbeba934fa9efe4e1827a176ffec58"
+    },
+    {
+      "path": "src/renderer/escapeGate.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/escapeGate.ts",
+      "sha256": "a6f4c0aec58a1c08aaded224469fd3955a655b0bae1a7601a3aecc0dcdeb190f"
+    },
+    {
+      "path": "src/renderer/extensionCatalogState.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionCatalogState.test.ts",
+      "sha256": "212402277bb8a6053db03f7d3142897ecf1d6ab8de92acd3d281fd8599a30563"
+    },
+    {
+      "path": "src/renderer/extensionCatalogState.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionCatalogState.ts",
+      "sha256": "c96d4e00814f18e4f382979a28e004ace92b97785b598dd01e329ccc9ad62999"
+    },
+    {
+      "path": "src/renderer/extensionImages.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionImages.test.ts",
+      "sha256": "7d22e916a85cbd9b72297b819336a74a6bb2774b00360f738333e700b959e866"
+    },
+    {
+      "path": "src/renderer/extensionImages.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionImages.ts",
+      "sha256": "138bc6ae1e4ab7fe2a661f07dd6579ae09b939666cbc98451d0d3d7cf51e6f46"
+    },
+    {
+      "path": "src/renderer/extensionPreferences.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionPreferences.ts",
+      "sha256": "73d8534e8e296d7d1bf3ccd7022e9977a3377d73441e34fe489af7efbfe22a77"
+    },
+    {
+      "path": "src/renderer/extensionRuntimeStatus.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionRuntimeStatus.test.ts",
+      "sha256": "ceec979338374bfc03d5530f601b33aab2c52eb2d87270095a7effa321484afc"
+    },
+    {
+      "path": "src/renderer/extensionRuntimeStatus.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionRuntimeStatus.ts",
+      "sha256": "a38941db2aca2d2259cc9377603ee3248e80f42e1f33f8499b87b127107f62ad"
+    },
+    {
+      "path": "src/renderer/extensionSessionRefresh.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionSessionRefresh.test.ts",
+      "sha256": "f70296acca69e72a1b9cfa0f654f086b55d7fbb1cbf37b5aa6fc0813af9e908b"
+    },
+    {
+      "path": "src/renderer/extensionSessionRefresh.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/extensionSessionRefresh.ts",
+      "sha256": "e45b3a3d09ac52456ac48f6ecbd8e6e97512ce8306b3f876112223af2ba2ec63"
+    },
+    {
+      "path": "src/renderer/hooks/useCurrencyConversion.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/hooks/useCurrencyConversion.ts",
+      "sha256": "170cd9733737566c5c0665d0630e694882300ee3e588f711ac150a6fdfcbd6f9"
+    },
+    {
+      "path": "src/renderer/hooks/useHoldToSpeak.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/hooks/useHoldToSpeak.ts",
+      "sha256": "b7aa7540bec94b1fc9cb52eb7b831d8f26c6c33e43dc05d0ecc05c4664096a9c"
+    },
+    {
+      "path": "src/renderer/index.html",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/index.html",
+      "sha256": "d114efb3886170cb93b5820cb44e1d3756a71b2a201ebe51e7b8635653a4343d"
+    },
+    {
+      "path": "src/renderer/latestSearch.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/latestSearch.ts",
+      "sha256": "fe8b3426196867b017484ef66a226704b7cfea69e60f614a3db42f553e3e4eea"
+    },
+    {
+      "path": "src/renderer/launcherArgument.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/launcherArgument.test.ts",
+      "sha256": "4f27fc723e20a53db3a3414ba825b4f8c2a9438c8c1e99580c51e4787690b754"
+    },
+    {
+      "path": "src/renderer/launcherArgument.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/launcherArgument.ts",
+      "sha256": "0fd88b5f31862011f920cdc895707b6213d39a151b217f460f68fe5ff7e872c2"
+    },
+    {
+      "path": "src/renderer/launcherIcons.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/launcherIcons.tsx",
+      "sha256": "b0b8fdcb6c2f891e92454e904da03881bb89f6760e7b4d469f1fd17a347930ab"
+    },
+    {
+      "path": "src/renderer/launcherQueryHistory.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/launcherQueryHistory.test.ts",
+      "sha256": "83c4b247d68f97f37dc1297134e5648f9cb2906a9cb62e72043dabf610bc3ffe"
+    },
+    {
+      "path": "src/renderer/launcherQueryHistory.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/launcherQueryHistory.ts",
+      "sha256": "4d51fa46e0c3fa59fed33701572d494e3a23eeb4c7ad4fc88b7a1d3deae5c82b"
+    },
+    {
+      "path": "src/renderer/launcherViewport.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/launcherViewport.test.ts",
+      "sha256": "0e45328f27b54f4970f0556ec1f2a7621e6fd644cdb35b827f63276adea49254"
+    },
+    {
+      "path": "src/renderer/launcherViewport.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/launcherViewport.ts",
+      "sha256": "a1de9994f1f902a874311f79a3b07588f1ac70a86df5148f43fa1dc9a0c52fef"
+    },
+    {
+      "path": "src/renderer/main.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/main.tsx",
+      "sha256": "d6d59566d8ff740fa7e9b8b2cb4040e22a311b26c3c94078da0a95af440288e7"
+    },
+    {
+      "path": "src/renderer/nestedViewChrome.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/nestedViewChrome.test.ts",
+      "sha256": "9f14712f5441c35c096ab5ddf832800318d16760707255fc39834bbc5a05e705"
+    },
+    {
+      "path": "src/renderer/newItemShortcut.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/newItemShortcut.test.ts",
+      "sha256": "bbbd526890a4acba968b9d92ef110f0f908e5ec3dba946b187dcf0b522425e77"
+    },
+    {
+      "path": "src/renderer/newItemShortcut.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/newItemShortcut.ts",
+      "sha256": "4b5f9a7015c892bba58dd3ba5fbe230301ee66aa406a9d6c26a81052e3628dbc"
+    },
+    {
+      "path": "src/renderer/optimisticSearch.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/optimisticSearch.test.ts",
+      "sha256": "befbc67781e1f5c02cf91de7b7abfbed90ff5022f90bb24a3cafe2f31666e5bf"
+    },
+    {
+      "path": "src/renderer/optimisticSearch.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/optimisticSearch.ts",
+      "sha256": "61c09770d3c4d1ea764f1d12af0958439416532ea53382e093327405e45138c9"
+    },
+    {
+      "path": "src/renderer/pinnedCommands.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/pinnedCommands.test.ts",
+      "sha256": "8f92aa9054a84de2ae4604fbf656a7cfa9ffed3479ba0945ea0b14b4ae121fbe"
+    },
+    {
+      "path": "src/renderer/pinnedCommands.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/pinnedCommands.ts",
+      "sha256": "41f68568a5b570598a78ca3fe365d70b5165cf77c4a580c227deb21709f94a72"
+    },
+    {
+      "path": "src/renderer/qrImage.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/qrImage.test.ts",
+      "sha256": "42bc47de32e5afb66beeee2d7513cd2769c47e0cb76b99f406a681ffe1a653f5"
+    },
+    {
+      "path": "src/renderer/qrImage.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/qrImage.ts",
+      "sha256": "225c4b031fcc03dcf356831e8a9f9cc6364e455f473e08ac3405a2a1c96feca3"
+    },
+    {
+      "path": "src/renderer/releaseNotes.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/releaseNotes.test.ts",
+      "sha256": "d134d6b1bcbaea5991af84b25be95043931f86f8263ffbc78a765b0df62df436"
+    },
+    {
+      "path": "src/renderer/releaseNotes.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/releaseNotes.ts",
+      "sha256": "4f676f6f1fbb68fa270137e54759602a5643df5ab9e0a26754f7e6fa013149c8"
+    },
+    {
+      "path": "src/renderer/searchResultPreview.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/searchResultPreview.test.ts",
+      "sha256": "d6b0e5970695d2188811fb5b9d03efef3c843c4cd65faa413dcac0840bc8a6de"
+    },
+    {
+      "path": "src/renderer/searchResultPreview.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/searchResultPreview.ts",
+      "sha256": "00b728cfeb268d3569877439731252992ad6c425719b89c9202e1060634b3907"
+    },
+    {
+      "path": "src/renderer/settingsLifecycle.bridge.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/settingsLifecycle.bridge.test.ts",
+      "sha256": "978da34099ed0026dcb96d3ef380e0cd8fcb527112cb072a3827d468e9ba5459"
+    },
+    {
+      "path": "src/renderer/settingsLifecycle.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/settingsLifecycle.ts",
+      "sha256": "a287bc7f4b8adc607e5f84df1c1a99d56aecbfd0c0cb1279e08db2e8845daee5"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/action-runtime-overlay.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/action-runtime-overlay.tsx",
+      "sha256": "3eb4a59db0de59460ea8a2c7f4a1f6ec5b514a512f49352bf373db64ed58d604"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/action-runtime-registry.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/action-runtime-registry.tsx",
+      "sha256": "ffbad6f70410c6d2dcf4af217abe4ab297d69c0cae2c993263c008a423175e16"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/action-runtime.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/action-runtime.tsx",
+      "sha256": "6e7a41e3d1a7ee2028103683f08fb8ed20e4b2e5751e182afe9f8e189522a28b"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/detail-runtime.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/detail-runtime.test.ts",
+      "sha256": "94acca3393a3636f7188a2ceac4a5e0429c2a0bc3433b02163602bdbe38beef4"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/detail-runtime.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/detail-runtime.tsx",
+      "sha256": "2eaf1fdeb58ad765296a5ff2ff2f8beee1ebf60dace1f3b17024e2a66c61b0c3"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/form-runtime.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/form-runtime.test.ts",
+      "sha256": "2df22544d543e121f8e98db01aa1044806c23b0e08d88dc06e0f42e663489a5f"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/form-runtime.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/form-runtime.tsx",
+      "sha256": "a0b92b73c6004a5e0970906d59908711a5000d5a5299d99756d13a28979639a3"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/grid-content.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/grid-content.ts",
+      "sha256": "71cf7151e1986389b550cf5a069383af79b88de2726176859496ac40fd8d9d41"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/grid-runtime.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/grid-runtime.test.ts",
+      "sha256": "633fcbbd5048f46d69388016481dfd54f800a8ff404810a556eb7ccfa3b626a0"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/grid-runtime.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/grid-runtime.tsx",
+      "sha256": "8e43847f0bac799021ffa62fcf630cd3ca41abeb61b29970047c07a8278269de"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/hooks.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/hooks.ts",
+      "sha256": "50bb0c3ad3721f600abe3091f3adba1c6515c2d639356b20c94c7f5cc96a492b"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/index.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/index.tsx",
+      "sha256": "e8ba278bd5603a734b8a2551b35b0eb910cf2caae0e8ff589d63f345825dce02"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/ipc-bridge.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/ipc-bridge.ts",
+      "sha256": "17784548760d476efebeae36d5b03e9c50a69c2da2b92ce0163cabbfe9566d97"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/list-runtime.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/list-runtime.tsx",
+      "sha256": "cefbb1f26a45b103b4518b617ff08df66b3e0b3200112e9909c3166d2c129114"
+    },
+    {
+      "path": "src/renderer/src/raycast-api/native-v2-visuals.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/src/raycast-api/native-v2-visuals.test.ts",
+      "sha256": "afa00333ff5293015fc1d6c87dc429ef9fdb6322a89887c6ad7b6b5b49fcb182"
+    },
+    {
+      "path": "src/renderer/styles.css",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/styles.css",
+      "sha256": "900fdaaec48d509ab6b60e00dc79d8c0d17063ad581ba92f8aa2e9117e516f86"
+    },
+    {
+      "path": "src/renderer/systemTextSelection.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/systemTextSelection.test.ts",
+      "sha256": "dad7d9dd53f9b3491ef903fd788057496e490439c486fcf36615c2835c598d5f"
+    },
+    {
+      "path": "src/renderer/tauri-bridge.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/tauri-bridge.ts",
+      "sha256": "8cd44b966596ef466e1c36ed2085c637ea1d9be0811c6eaabe512c41def5ca7b"
+    },
+    {
+      "path": "src/renderer/terminalNativeTransport.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalNativeTransport.test.ts",
+      "sha256": "65742228cfc9b101b19de2945c6f3b6ae36eed4144ef4d0903f41fdcd4fd8cb9"
+    },
+    {
+      "path": "src/renderer/terminalPreferences.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalPreferences.ts",
+      "sha256": "46b1753385797d9ed5dff0bcec18f89512a8da9d81d486c60b7652c4ded66b4d"
+    },
+    {
+      "path": "src/renderer/terminalSessionHistory.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalSessionHistory.test.ts",
+      "sha256": "0962ecd6e2ecd38ef948fb2430a8a23f2910e501fb615ab73985bb7c515af4ba"
+    },
+    {
+      "path": "src/renderer/terminalSessionHistory.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalSessionHistory.ts",
+      "sha256": "10b5e8a778dee7238e907ddd2e9a71103498311030c4ff20f9a8993c7ac37ba6"
+    },
+    {
+      "path": "src/renderer/terminalSessionLabel.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalSessionLabel.test.ts",
+      "sha256": "412cf969c8754cd8ca6398f53d70546e8551b029f6d1feb7276c90a975732912"
+    },
+    {
+      "path": "src/renderer/terminalSessionLabel.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalSessionLabel.ts",
+      "sha256": "395a7a5dbe9eaeba7359b8645008bb15a352dd79a6ace435e1b9109e7f7d60ef"
+    },
+    {
+      "path": "src/renderer/terminalSessionSelection.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalSessionSelection.test.ts",
+      "sha256": "4b27752de4e896b20de89dc7402b6a0685519ba6fa5f63467e76080bb706a336"
+    },
+    {
+      "path": "src/renderer/terminalSessionSelection.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/terminalSessionSelection.ts",
+      "sha256": "0cf349e5cb7e3e3b27640984f0288b0ccc797a8d253f7fae8c102b9ff9bd9796"
+    },
+    {
+      "path": "src/renderer/theme.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/theme.test.ts",
+      "sha256": "a3caf271492c5b7ec210047215417bcd8456ab3814b8a5e5b659b456583dd101"
+    },
+    {
+      "path": "src/renderer/theme.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/theme.ts",
+      "sha256": "f55fa6d03bbb9dff7bbb3c932005cf65a7dd4bec312a846b384266b1563ae3a7"
+    },
+    {
+      "path": "src/renderer/ui/CommandSurface.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ui/CommandSurface.tsx",
+      "sha256": "25aa97c31fc29002e76dad8df05dbfe835cdc8ebd30dd106d4bb8c3ca82450bf"
+    },
+    {
+      "path": "src/renderer/ui/GlideList.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ui/GlideList.tsx",
+      "sha256": "b00a332713b3d50eeeeee7e199c3caeba1969cc1a15cdbee0b4672ea1bfcb202"
+    },
+    {
+      "path": "src/renderer/ui/Markdown.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ui/Markdown.tsx",
+      "sha256": "d205312b35293a433d5398e4edf1dcc96662cacd34036e8ee3ec503f65eee2de"
+    },
+    {
+      "path": "src/renderer/ui/RollingText.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ui/RollingText.tsx",
+      "sha256": "057f78a05bd68ea738270a21e77a5fa74da534f64643d4f4624ecf26d2551010"
+    },
+    {
+      "path": "src/renderer/ui/primitives.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/ui/primitives.tsx",
+      "sha256": "0bcedb2a1158a00ae7d4237f6ee875a58d9496e8576fb72ac78b79af82365044"
+    },
+    {
+      "path": "src/renderer/useKnowledgeSettings.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/useKnowledgeSettings.ts",
+      "sha256": "ea97c700dcaa5b59a0628ba75ae9186491c0eac9618bd935078b59a1d696d96e"
+    },
+    {
+      "path": "src/renderer/useLauncherScaleShortcuts.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/useLauncherScaleShortcuts.ts",
+      "sha256": "bda16eb88dc2d36d5f0ce54c09f1b8f7681b423ceed11128404e539c8315062d"
+    },
+    {
+      "path": "src/renderer/vaultCopy.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/vaultCopy.test.ts",
+      "sha256": "467e926f844b28af3eabafcf468f616c8f1fc68f05d4c0424f7e32d03577d523"
+    },
+    {
+      "path": "src/renderer/vaultCopy.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/vaultCopy.ts",
+      "sha256": "caa129a3b67926cb19628121579c1be789a9fd2441c80f8b1bd0491b165b27cd"
+    },
+    {
+      "path": "src/renderer/vaultDetect.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/vaultDetect.test.ts",
+      "sha256": "4b6266042da8791a2ad2dddd1bd9b0c419a50761dcfb5fdf5b603d520d737bad"
+    },
+    {
+      "path": "src/renderer/vaultDetect.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/vaultDetect.ts",
+      "sha256": "aef199180a2e4aad4f3f70cdbaa19d817e3a5795e1419cb4b1808acfe9a4ef12"
+    },
+    {
+      "path": "src/renderer/vaultIcons.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/vaultIcons.test.ts",
+      "sha256": "d038b45b1295b617988855490781254ba04439b3d5d76128b025771093e98b86"
+    },
+    {
+      "path": "src/renderer/vaultIcons.tsx",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/vaultIcons.tsx",
+      "sha256": "4ac578b9038c7692760a09c6780a9a027ae8178f4476c795d0e784120b6dbc7a"
+    },
+    {
+      "path": "src/renderer/visibleEventRefresh.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/visibleEventRefresh.test.ts",
+      "sha256": "c54b2412836c8ccc34327b5e7f6d44a9db79d4091a81e132ad4276f9daf51aaf"
+    },
+    {
+      "path": "src/renderer/visibleEventRefresh.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/visibleEventRefresh.ts",
+      "sha256": "91ce966e36b036a8972cc2474aadb103c25a2dba7c59372fc2b73c63a87a019b"
+    },
+    {
+      "path": "src/renderer/vite-env.d.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/vite-env.d.ts",
+      "sha256": "c1bf39f9538c551fe2ab9e8e81507b8b62a061b1204f90015799e2c0293869e8"
+    },
+    {
+      "path": "src/renderer/windowDrag.test.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/windowDrag.test.ts",
+      "sha256": "59dad500fee603f4d62ff0399c1ac3db64fe5e939d0e9e101628c50c0fa165bf"
+    },
+    {
+      "path": "src/renderer/windowDrag.ts",
+      "action": "relocate",
+      "destination": "tests/oracles/legacy-renderer/windowDrag.ts",
+      "sha256": "898e4942d07fd21720fed130300d3b4413678ce8dc6a0621aa9f6193168d7f72"
+    },
+    {
+      "path": "vite.config.ts",
+      "action": "relocate",
+      "destination": "docs/native-m11/legacy-frontend-archive/vite.config.ts",
+      "sha256": "4763e1e2086bab2844fe37c794ecd333bde9dd1457740aa9d090b7cec1f8fdb3"
+    }
+  ],
+  "binary_copies": [
+    {
+      "source": "src-tauri/icons/128x128.png",
+      "destination": "packaging/icons/128x128.png",
+      "sha256": "495cc85cd55e1d90ebc98fe7d2f26ba306d08850273785c41383a28c560e5dc2"
+    },
+    {
+      "source": "src-tauri/icons/128x128@2x.png",
+      "destination": "packaging/icons/128x128@2x.png",
+      "sha256": "ce87918cfb7cbbac7fcbcbf7fc7087224740850e859d985352acc2c2c184d724"
+    },
+    {
+      "source": "src-tauri/icons/32x32.png",
+      "destination": "packaging/icons/32x32.png",
+      "sha256": "f459b7d89d59257eefd2e48217722aaf04cc5cd4d2f43a6d5144f9fa0b67a8be"
+    },
+    {
+      "source": "src-tauri/icons/64x64.png",
+      "destination": "packaging/icons/64x64.png",
+      "sha256": "70520ea7ea83c03367b6467c72b3714ee8234b9068a1031bf7b05b7669e340b8"
+    },
+    {
+      "source": "src-tauri/icons/Square107x107Logo.png",
+      "destination": "packaging/icons/Square107x107Logo.png",
+      "sha256": "f73d6b370f47b99758374ffe9b1a6272ecf8ba11bc9e74cb5f40bf19a6a8a5ef"
+    },
+    {
+      "source": "src-tauri/icons/Square142x142Logo.png",
+      "destination": "packaging/icons/Square142x142Logo.png",
+      "sha256": "618884f826192cfe8ca829186bfdf3b4c2afb7898fcb6f2ab03471a59d4da41b"
+    },
+    {
+      "source": "src-tauri/icons/Square150x150Logo.png",
+      "destination": "packaging/icons/Square150x150Logo.png",
+      "sha256": "5bc1f3d3570213f54448a5a7bf18dd5af5be19f8688caf9ee1ac7daf6c4d6346"
+    },
+    {
+      "source": "src-tauri/icons/Square284x284Logo.png",
+      "destination": "packaging/icons/Square284x284Logo.png",
+      "sha256": "7e473efdcb77c08dbc53a148e29bd1b96353b53a63910f08a1006fb061a4e653"
+    },
+    {
+      "source": "src-tauri/icons/Square30x30Logo.png",
+      "destination": "packaging/icons/Square30x30Logo.png",
+      "sha256": "70affcb27eac33be7ca2bcc215deaf7d552e5963934a726a4783acf4e26908d6"
+    },
+    {
+      "source": "src-tauri/icons/Square310x310Logo.png",
+      "destination": "packaging/icons/Square310x310Logo.png",
+      "sha256": "a913b4ea9324e1a52514dfee2d7c818c8c502aec70948fa944065b9a84ffebe1"
+    },
+    {
+      "source": "src-tauri/icons/Square44x44Logo.png",
+      "destination": "packaging/icons/Square44x44Logo.png",
+      "sha256": "c325a11a4d50e9afd335d66048e4bcc48131e487be432f051fe500eaa5074c35"
+    },
+    {
+      "source": "src-tauri/icons/Square71x71Logo.png",
+      "destination": "packaging/icons/Square71x71Logo.png",
+      "sha256": "0445f3c1b0459f097ad9ea3f055ec54e0f6029d531517b76cad76ea485ecc3a3"
+    },
+    {
+      "source": "src-tauri/icons/Square89x89Logo.png",
+      "destination": "packaging/icons/Square89x89Logo.png",
+      "sha256": "03e908b1c0ae497f299742387a409a1b2edcd9e9bf0a920ee247a2ef4a2d749d"
+    },
+    {
+      "source": "src-tauri/icons/StoreLogo.png",
+      "destination": "packaging/icons/StoreLogo.png",
+      "sha256": "33dd217e3eea05a793e55bcf29d61308ac322830442124dc73832ce55ac4f9df"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-hdpi/ic_launcher.png",
+      "destination": "packaging/icons/android/mipmap-hdpi/ic_launcher.png",
+      "sha256": "38b8551ae1127b606897e46d74137b31db5ad3d7d2092ab9e6a5a1be2bc881ba"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
+      "destination": "packaging/icons/android/mipmap-hdpi/ic_launcher_foreground.png",
+      "sha256": "1d635d4db539bb9256a72d0d0efefeae3085e666e64c374ae1a97a6f7ec32770"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png",
+      "destination": "packaging/icons/android/mipmap-hdpi/ic_launcher_round.png",
+      "sha256": "ac98df6a892d99e45884c363fab77025ab3a90810e054ee843277a63faa0414e"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-mdpi/ic_launcher.png",
+      "destination": "packaging/icons/android/mipmap-mdpi/ic_launcher.png",
+      "sha256": "58f7b1ccd9a865c20e1fceab300de41e582799e6859ba8538bb95d2361596143"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
+      "destination": "packaging/icons/android/mipmap-mdpi/ic_launcher_foreground.png",
+      "sha256": "7f45bb88796d025ec39ccb84ec5859f9af2686c5c2034a667d4c1cd26ecf651c"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png",
+      "destination": "packaging/icons/android/mipmap-mdpi/ic_launcher_round.png",
+      "sha256": "378d416c0208f92ceb7ed5b6e11f8bc91cb1817089515b2336061c17a673655f"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png",
+      "destination": "packaging/icons/android/mipmap-xhdpi/ic_launcher.png",
+      "sha256": "36bd9dafdfa8e6ceafd82daa5b64afea68deaf9e73911554957726f34e3ca80b"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
+      "destination": "packaging/icons/android/mipmap-xhdpi/ic_launcher_foreground.png",
+      "sha256": "dd15bb837a5751ec41e9a712c32aee3fb05ad63dff783ca10c8b93cd986b007d"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png",
+      "destination": "packaging/icons/android/mipmap-xhdpi/ic_launcher_round.png",
+      "sha256": "1d672dad80d5675ff0625e2a864a10904d01be0143984ea4496efd98de5695da"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png",
+      "destination": "packaging/icons/android/mipmap-xxhdpi/ic_launcher.png",
+      "sha256": "0edda3436825fa66137a122d467f331870d6a9e77d669d0388c61e115ed7b0d0"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+      "destination": "packaging/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png",
+      "sha256": "49438679468cabea68ec4b174e918603b4b624824d04e5287b20bb5990dee162"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
+      "destination": "packaging/icons/android/mipmap-xxhdpi/ic_launcher_round.png",
+      "sha256": "ac3b89d4231ab86ae362046f91111f99d64a0906a812e37f1710fcca7ddaf123"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png",
+      "destination": "packaging/icons/android/mipmap-xxxhdpi/ic_launcher.png",
+      "sha256": "491097186ae0b8d0b05a30d41da2f993ceb0da5f916d97915323757eb4fcf722"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+      "destination": "packaging/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png",
+      "sha256": "84f6c6b36076c0ec9f543301a405bce4ffdd95399b970440ede6a7bbb282964e"
+    },
+    {
+      "source": "src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
+      "destination": "packaging/icons/android/mipmap-xxxhdpi/ic_launcher_round.png",
+      "sha256": "a998ac00770de49cdf3d671c6ad81fd2127f171cd205d138b9c161037e516441"
+    },
+    {
+      "source": "src-tauri/icons/icon.icns",
+      "destination": "packaging/icons/icon.icns",
+      "sha256": "b4378b818fa51baa9cef58c64a1ae2afba80f9e60bd5d1ac1f8d0f135428b147"
+    },
+    {
+      "source": "src-tauri/icons/icon.ico",
+      "destination": "packaging/icons/icon.ico",
+      "sha256": "332ed5f5ba155ce17c876c87991ca02bf87217ddf9d13be98e7fee4fac50ec0e"
+    },
+    {
+      "source": "src-tauri/icons/icon.png",
+      "destination": "packaging/icons/icon.png",
+      "sha256": "308ad89e23eb9d3985bf31ffad637224481d02e3e00dc9cfe8a635ccd8e5fac2"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-20x20@1x.png",
+      "destination": "packaging/icons/ios/AppIcon-20x20@1x.png",
+      "sha256": "bd80a27c0a6382bc099f3e573d246add32e940a6187581e4a8afcb0b5f7276f7"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-20x20@2x-1.png",
+      "destination": "packaging/icons/ios/AppIcon-20x20@2x-1.png",
+      "sha256": "0c4ec5fbc5f8a45c1c11dc35be6e61e11d914365e2d79a0f38f0358298b99b52"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-20x20@2x.png",
+      "destination": "packaging/icons/ios/AppIcon-20x20@2x.png",
+      "sha256": "0c4ec5fbc5f8a45c1c11dc35be6e61e11d914365e2d79a0f38f0358298b99b52"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-20x20@3x.png",
+      "destination": "packaging/icons/ios/AppIcon-20x20@3x.png",
+      "sha256": "dde2dd56302102944329e9d7908f9293dbffb199f0e988eac463cce864695fe0"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-29x29@1x.png",
+      "destination": "packaging/icons/ios/AppIcon-29x29@1x.png",
+      "sha256": "21575da2cd9b3f4ce088a5aa201b298bee691c845acc67701da77bceb17b1800"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-29x29@2x-1.png",
+      "destination": "packaging/icons/ios/AppIcon-29x29@2x-1.png",
+      "sha256": "3218c9f7d1c9910992a75756f5aac15f14e6ba84e4d4f89814e704665ad7b2bb"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-29x29@2x.png",
+      "destination": "packaging/icons/ios/AppIcon-29x29@2x.png",
+      "sha256": "3218c9f7d1c9910992a75756f5aac15f14e6ba84e4d4f89814e704665ad7b2bb"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-29x29@3x.png",
+      "destination": "packaging/icons/ios/AppIcon-29x29@3x.png",
+      "sha256": "4a2d8b6d2070f410af6f8b66babe434b7c3db4b0a5a35d486f5c6532028bc5ff"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-40x40@1x.png",
+      "destination": "packaging/icons/ios/AppIcon-40x40@1x.png",
+      "sha256": "0c4ec5fbc5f8a45c1c11dc35be6e61e11d914365e2d79a0f38f0358298b99b52"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-40x40@2x-1.png",
+      "destination": "packaging/icons/ios/AppIcon-40x40@2x-1.png",
+      "sha256": "31ddfd9e1005880ffadbb025a18964ef0ddddbf113430e7e86ae692f46e20787"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-40x40@2x.png",
+      "destination": "packaging/icons/ios/AppIcon-40x40@2x.png",
+      "sha256": "31ddfd9e1005880ffadbb025a18964ef0ddddbf113430e7e86ae692f46e20787"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-40x40@3x.png",
+      "destination": "packaging/icons/ios/AppIcon-40x40@3x.png",
+      "sha256": "7ad7aa3ef47799cc2ea9e164ecdb515b6ab736af1d71e4983203391f520fff90"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-512@2x.png",
+      "destination": "packaging/icons/ios/AppIcon-512@2x.png",
+      "sha256": "ebf2e0a252f28e42a76a4b0a5fd219609857b6d193cd9e953e22db6156ba4fab"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-60x60@2x.png",
+      "destination": "packaging/icons/ios/AppIcon-60x60@2x.png",
+      "sha256": "7ad7aa3ef47799cc2ea9e164ecdb515b6ab736af1d71e4983203391f520fff90"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-60x60@3x.png",
+      "destination": "packaging/icons/ios/AppIcon-60x60@3x.png",
+      "sha256": "b24d92e40603e826f693bb48a38a88fb77b2d5b8ad484cb03f9b905968c6e298"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-76x76@1x.png",
+      "destination": "packaging/icons/ios/AppIcon-76x76@1x.png",
+      "sha256": "4278fa97de47305e7bbdaf95f6c7bc76b8f9f88b5fb9c7882f845429c9ed5e34"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-76x76@2x.png",
+      "destination": "packaging/icons/ios/AppIcon-76x76@2x.png",
+      "sha256": "bf16749c29566c9081e5a853b0f269281b857fe4db1a1768e4184b71437097ce"
+    },
+    {
+      "source": "src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png",
+      "destination": "packaging/icons/ios/AppIcon-83.5x83.5@2x.png",
+      "sha256": "ff355f9fceffc968b6f2aa3c560972c83fc79a310ac61f6fb3f1e34e3790141b"
+    },
+    {
+      "source": "src/renderer/assets/app-icon.png",
+      "destination": "tests/oracles/legacy-renderer/assets/app-icon.png",
+      "sha256": "ce87918cfb7cbbac7fcbcbf7fc7087224740850e859d985352acc2c2c184d724"
+    },
+    {
+      "source": "src/renderer/assets/raycast-icon.png",
+      "destination": "tests/oracles/legacy-renderer/assets/raycast-icon.png",
+      "sha256": "a980d254bdcfab131e01392ffe82c4e75ef976c7e79edd7a070cde1a8d5ea2d0"
+    }
+  ],
+  "consumer_edits": [
+    "apps/tezbar/src/app/m11.rs",
+    "crates/tezbar-update/src/native.rs",
+    "crates/tezbar-core/src/knowledge/runtime_bundle.rs",
+    "crates/tezbar-core/src/ai/tests.rs",
+    "scripts/verify-updater-signature.mjs",
+    "scripts/sign-macos-resources.mjs",
+    "scripts/release-policy.test.mjs",
+    "scripts/prepare-embedding-runtime.py",
+    "scripts/stage-embedding-runtime.py",
+    "scripts/build-release.mjs",
+    "scripts/macos-signing.test.mjs",
+    "scripts/test-embedding-runtime.py",
+    "scripts/publish-release.mjs",
+    "scripts/native/package-macos.mjs",
+    "scripts/native/build.mjs",
+    "scripts/native/package-macos.test.mjs",
+    "crates/tezbar-ui-model/src/launcher/ts_cases.json",
+    "eslint.config.mjs",
+    "tailwind.config.ts",
+    "tsconfig.json",
+    "vite.config.ts",
+    "docs/native-m11/legacy-frontend-archive/vite.config.ts",
+    "package.json"
+  ],
+  "oracle_note": "Preserves all old renderer tests/source and prototype evidence outside first-party runtime. Exact remaining dynamic and root test-config references require the recorded acceptance gates. This patch is reviewable but deliberately not represented as release-ready.",
+  "release_builder": "NOT_IMPLEMENTED: scripts/build-release.mjs invokes Tauri; the native local-preview assembler does not replace the public release pipeline",
+  "roundtrip": {
+    "state": "PASSED_PRIVATE_BYTE_ROUNDTRIP",
+    "files": 481,
+    "patch_sha256": "63376fbb847ab6a39b7c91d05602ff529cd08da23c5ffeff34d3d7eb50b3625b"
+  },
+  "build_usage": "PRIVATE PREVIEW ONLY; NOT A RELEASE COMMAND: pnpm build --resources <reviewed staged resources> --output <fresh OS-temp child>; requires explicit inputs and builds release + private assembly, never signs a public release",
+  "patch_sha256": "63376fbb847ab6a39b7c91d05602ff529cd08da23c5ffeff34d3d7eb50b3625b"
+}

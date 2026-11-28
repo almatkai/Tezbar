@@ -12,9 +12,23 @@ export type KnowledgeDepth = 'off' | 'basic' | 'smart' | 'deep'
 export type KnowledgeRootDepth = 'inherit' | KnowledgeDepth
 export type KnowledgeIndexingSpeed = 'slow' | 'medium' | 'fast'
 
+export type EmbeddingVariantId = 'q8_0' | 'q4_k_m'
+
+export type SemanticVariantStatus = {
+  id: EmbeddingVariantId
+  weightBytes: number
+  state: 'not-downloaded' | 'downloading' | 'verifying' | 'ready' | 'error'
+  downloadProgress: number
+  downloadBytes: number
+  downloadTotalBytes: number
+  failure?: { stage: 'download' | 'integrity' | 'startup'; message: string }
+}
+
 export type KnowledgeSettings = {
   depth: KnowledgeDepth
   embeddingModel: 'built-in' | 'embeddinggemma-2'
+  /** Missing in legacy snapshots means Standard (Q8_0). */
+  embeddingVariant?: EmbeddingVariantId
   indexingSpeed: KnowledgeIndexingSpeed
   runOnBattery: boolean
   onlyRunHeavyJobsWhenIdle: boolean
@@ -202,6 +216,15 @@ export type KnowledgeSnapshot = {
 }
 
 export type SemanticSearchStatus = {
+  variants?: SemanticVariantStatus[]
+  /** Legacy runtime failure attribution; variants carry their own failure. */
+  errorSource?: 'download' | 'integrity' | 'runtime' | null
+  /** Legacy installed-file check; independent of modelState during startup. */
+  integrityState?: 'unchecked' | 'verifying' | 'verified' | 'invalid' | 'missing'
+  /** Model weights only, excluding the runtime download. */
+  weightBytes?: number
+  /** Counts below belong only to this variant; legacy snapshots imply Q8_0. */
+  indexVariant?: EmbeddingVariantId
   supported: boolean
   modelState: 'not-downloaded' | 'downloading' | 'ready' | 'error'
   downloadProgress: number

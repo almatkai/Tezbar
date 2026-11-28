@@ -1,0 +1,93 @@
+{
+  "added": [
+    {
+      "name": "snap",
+      "version": "1.1.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "1b6b67fb9a61334225b5b790716f609cd58395f895b3fe8b328786812a40bc3b"
+    }
+  ],
+  "removed": [],
+  "changed": [
+    {
+      "package": [
+        "tezbar-native",
+        "0.3.0-beta.7",
+        "path"
+      ],
+      "old": {
+        "name": "tezbar-native",
+        "version": "0.3.0-beta.7",
+        "dependencies": [
+          "alacritty_terminal",
+          "anyhow",
+          "base64",
+          "global-hotkey",
+          "gpui",
+          "gpui_platform",
+          "gpui_tokio",
+          "image",
+          "log",
+          "muda",
+          "objc2 0.6.4",
+          "objc2-app-kit 0.3.2",
+          "objc2-foundation 0.3.2",
+          "proc-macro-crate 2.0.0",
+          "raw-window-handle",
+          "resvg",
+          "serde",
+          "serde_json",
+          "sha2",
+          "tempfile",
+          "tezbar-core",
+          "tezbar-host",
+          "tezbar-ui",
+          "tezbar-ui-model",
+          "tezbar-update",
+          "tokio",
+          "tray-icon",
+          "windows-sys 0.59.0"
+        ]
+      },
+      "new": {
+        "name": "tezbar-native",
+        "version": "0.3.0-beta.7",
+        "dependencies": [
+          "alacritty_terminal",
+          "anyhow",
+          "base64",
+          "global-hotkey",
+          "gpui",
+          "gpui_platform",
+          "gpui_tokio",
+          "image",
+          "log",
+          "muda",
+          "objc2 0.6.4",
+          "objc2-app-kit 0.3.2",
+          "objc2-foundation 0.3.2",
+          "proc-macro-crate 2.0.0",
+          "raw-window-handle",
+          "resvg",
+          "rusqlite",
+          "serde",
+          "serde_json",
+          "sha2",
+          "snap",
+          "tempfile",
+          "tezbar-core",
+          "tezbar-host",
+          "tezbar-ui",
+          "tezbar-ui-model",
+          "tezbar-update",
+          "tokio",
+          "tray-icon",
+          "windows-sys 0.59.0"
+        ]
+      }
+    }
+  ],
+  "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+  "toolchains": "native 1.98.1; core/host/update/models 1.85 unchanged",
+  "license": "snap 1.1.1 BSD-3-Clause; rusqlite 0.32.1 MIT (existing bundled engine); sha2 already used in app dev dependencies moved to normal; no other registry drift"
+}

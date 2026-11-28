@@ -1,0 +1,9 @@
+{
+  "freeze": "composition-source-freeze-01.json",
+  "binary": "target/debug/tezbar",
+  "sha256": "57ced446ab0f95286efd31d27de5eb99a99407a81843d339195f26267c44fb65",
+  "bytes": 202436904,
+  "metadata_head": "409dbf3c5950b0065aff900b2906b548660bc264",
+  "source_dirty": true,
+  "note": "Normal debug artifact from first complete gate batch, before root-ancestor repair. Never launched."
+}

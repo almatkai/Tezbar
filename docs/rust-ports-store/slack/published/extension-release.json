@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 3,
+  "id": "com.tezbar.native.slack",
+  "slug": "slack",
+  "name": "Slack",
+  "version": "0.1.0",
+  "description": "Search Slack channels and messages, open chats, send messages, see unread messages, snooze notifications and set your Slack status.",
+  "author": "mommertf",
+  "icon": "resources/assets/slack-icon-rounded.png",
+  "runtime": "rust",
+  "execution": "process",
+  "protocolVersion": 1,
+  "replaces": [
+    "raycast.slack"
+  ],
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "preferences": [
+    {
+      "name": "openLinksIn",
+      "title": "Open Links In",
+      "description": "Choose Slack App if automatic detection opens channels in your browser despite Slack being installed.",
+      "type": "dropdown",
+      "required": false,
+      "default": "auto",
+      "data": [
+        {
+          "title": "Automatic",
+          "value": "auto"
+        },
+        {
+          "title": "Slack App",
+          "value": "slack"
+        },
+        {
+          "title": "Browser",
+          "value": "browser"
+        }
+      ]
+    },
+    {
+      "description": "View extension's README for instructions.",
+      "name": "accessToken",
+      "placeholder": "xoxp-...",
+      "required": false,
+      "title": "Slack Access Token",
+      "type": "password"
+    },
+    {
+      "description": "HTTP/HTTPS proxy URL for corporate networks (e.g. http://proxy.example.com:8080). Falls back to HTTPS_PROXY / HTTP_PROXY environment variables if not set.",
+      "name": "proxyUrl",
+      "placeholder": "http://proxy.example.com:8080",
+      "required": false,
+      "title": "Proxy URL",
+      "type": "textfield"
+    },
+    {
+      "title": "AI Message Signature",
+      "label": "Add a Raycast signature to messages written with AI",
+      "description": "Show a subtle Raycast signature below messages written by AI tools.",
+      "name": "showAiMessageSignature",
+      "type": "checkbox",
+      "required": false,
+      "default": true
+    },
+    {
+      "title": "Navigation",
+      "label": "Close Slack right sidebar",
+      "description": "Automatically close Slack right sidebar after navigating to a user chat",
+      "name": "closeRightSidebar",
+      "type": "checkbox",
+      "required": false,
+      "default": true
+    }
+  ],
+  "commands": [
+    {
+      "name": "search",
+      "title": "Open Channel",
+      "subtitle": "Slack",
+      "keywords": [
+        "search"
+      ],
+      "description": "Search for all workspace members, group chats, and channels and open them directly in your Slack app.",
+      "mode": "view",
+      "preferences": [
+        {
+          "title": "Channel Metadata",
+          "label": "Display extra metadata in results",
+          "description": "Show team member's titles, time zone, and current time in Open Channel results",
+          "name": "displayExtraMetadata",
+          "type": "checkbox",
+          "required": false,
+          "default": false
+        }
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "search-messages",
+      "title": "Search Messages",
+      "subtitle": "Slack",
+      "description": "Search for Slack messages.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "send-message",
+      "title": "Send Message",
+      "subtitle": "Slack",
+      "description": "Send a message to a channel or user in Slack.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "open-unread-messages",
+      "title": "Open Unread Messages",
+      "subtitle": "Slack",
+      "description": "Open an overview of unread messages directly in your native Slack app.",
+      "mode": "no-view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "unread-messages",
+      "title": "Unread Messages",
+      "subtitle": "Slack",
+      "description": "Browse through unread messages within direct messages, channels and groups.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "set-snooze",
+      "title": "Set Snooze",
+      "subtitle": "Slack",
+      "description": "Set settings for how long you want to snooze notifications.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "set-presence",
+      "title": "Set Presence",
+      "subtitle": "Slack",
+      "description": "Let Slack decide automatically how to show your presence status or force it to be shown as offline.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "search-emojis",
+      "title": "Search Emojis",
+      "subtitle": "Slack",
+      "description": "Search custom emojis in your Slack team.",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "emojiSortOrder",
+          "title": "Emoji Sort Order",
+          "description": "Choose how to sort Search Emojis results. Most Used ranks emojis copied or pasted through Raycast in this workspace.",
+          "type": "dropdown",
+          "required": false,
+          "default": "most-used",
+          "data": [
+            {
+              "title": "Most Used",
+              "value": "most-used"
+            },
+            {
+              "title": "Alphabetical",
+              "value": "alphabetical"
+            },
+            {
+              "title": "Slack's Original Order",
+              "value": "original"
+            }
+          ]
+        }
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    },
+    {
+      "name": "set-status",
+      "title": "Set Status",
+      "subtitle": "Slack",
+      "description": "Set your status.",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "statusText",
+          "placeholder": "Status text",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "emoji",
+          "placeholder": ":rocket:",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "expiration",
+          "placeholder": "Minutes, today, or week",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 120000
+    }
+  ],
+  "capabilities": [
+    "clipboard.write",
+    "clipboard.pasteText",
+    "shell.open",
+    "window.visibility",
+    "settings.open",
+    "apps.list",
+    "dialog.confirm",
+    "quicklinks.create",
+    "ai.ask"
+  ],
+  "files": {},
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/slack/releases/download/v0.1.0/slack-aarch64-apple-darwin-development.zip",
+      "sha256": "07080eea0fb38df3717864fd1e48828b24ca2cb6b36afca346d1118644e33266",
+      "executable": "bin/tezbar-slack",
+      "executableSha256": "825818a34e312ed542fc99590053774be7ada76d01e1f36471ae6accff3c22ec"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/slack/releases/download/v0.1.0/slack-x86_64-pc-windows-msvc-development.zip",
+      "sha256": "8e2961ee5dbec21686385ea71833204fc8973b2af5ad06e408df048cf863e58d",
+      "executable": "bin/tezbar-slack.exe",
+      "executableSha256": "b6c192141f4e74f69282b4fa47f0755a56a3c12a9445d7061b834276caa89588"
+    }
+  },
+  "repository": "https://github.com/almatkai/slack",
+  "verification": [
+    {
+      "platform": "macOS",
+      "state": "not-run",
+      "note": "Native macOS and Windows synthetic tests/package checks passed; live desktop and real service/account acceptance remain pending. Requires the beta.12 host contracts."
+    },
+    {
+      "platform": "Windows",
+      "state": "not-run",
+      "note": "Native macOS and Windows synthetic tests/package checks passed; live desktop and real service/account acceptance remain pending. Requires the beta.12 host contracts."
+    }
+  ],
+  "minHostVersion": "0.3.0-beta.12"
+}

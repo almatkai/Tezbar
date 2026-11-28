@@ -1,0 +1,376 @@
+import {
+  CommandSurfaceHeader,
+  CommandSurfaceBackButton,
+  CommandSurfaceInput,
+  CommandSurfaceChip,
+  CommandSurfaceFooter,
+  CommandSurfaceStatus,
+} from './ui/CommandSurface'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { EMOJI_CATEGORIES, EMOJI_DATA, type EmojiCategory } from './emoji/emojiData'
+import { searchEmojis } from './emoji/emojiSearch'
+import { Hint, Kbd, cx } from './ui/primitives'
+
+const RECENT_EMOJI_KEY = 'tezbar:recent-emojis'
+const RECENT_LIMIT = 24
+const GRID_COLS = 8
+
+type CategoryFilter = 'All' | EmojiCategory
+
+function readRecentEmojis(): string[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_EMOJI_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+      .slice(0, RECENT_LIMIT)
+  } catch {
+    return []
+  }
+}
+
+function writeRecentEmojis(values: string[]): void {
+  window.localStorage.setItem(RECENT_EMOJI_KEY, JSON.stringify(values.slice(0, RECENT_LIMIT)))
+}
+
+function upsertRecentEmoji(nextEmoji: string): string[] {
+  const next = [nextEmoji, ...readRecentEmojis().filter((value) => value !== nextEmoji)].slice(0, RECENT_LIMIT)
+  writeRecentEmojis(next)
+  return next
+}
+
+export default function EmojiPickerView({ onBack }: { onBack: () => void }): JSX.Element {
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<CategoryFilter>('All')
+  const [selected, setSelected] = useState(0)
+  const [recent, setRecent] = useState<string[]>([])
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const selectedButtonRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    setRecent(readRecentEmojis())
+    rootRef.current?.focus()
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [])
+
+  useEffect(() => {
+    const onEsc = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      if (query.trim().length > 0) {
+        setQuery('')
+        return
+      }
+      onBack()
+    }
+    window.addEventListener('keydown', onEsc, true)
+    return () => window.removeEventListener('keydown', onEsc, true)
+  }, [onBack, query])
+
+  const searchResults = useMemo(() => searchEmojis(query, category), [query, category])
+
+  const grouped = useMemo(() => {
+    const byCategory = new Map<EmojiCategory, string[]>()
+    for (const cat of EMOJI_CATEGORIES) byCategory.set(cat, [])
+    for (const item of EMOJI_DATA) {
+      const bucket = byCategory.get(item.category)
+      if (!bucket) continue
+      bucket.push(item.char)
+    }
+    return byCategory
+  }, [])
+
+  const recentRows = useMemo(() => {
+    const known = new Set(EMOJI_DATA.map((entry) => entry.char))
+    return recent.filter((emoji) => known.has(emoji))
+  }, [recent])
+
+  /**
+   * A flat list of emojis that exactly mirrors what is rendered on screen.
+   * Arrow-key navigation indexes into this list so selection always matches
+   * the visible grid regardless of which view mode is active.
+   */
+  const visibleEmojis = useMemo((): string[] => {
+    const q = query.trim()
+    if (q.length > 0) {
+      // Search mode — flat result list
+      return searchResults.map((e) => e.char)
+    }
+    if (category !== 'All') {
+      // Single category browse
+      return grouped.get(category) ?? []
+    }
+    // "All" browse: recent rows first, then every category in order
+    const out: string[] = [...recentRows]
+    for (const cat of EMOJI_CATEGORIES) {
+      out.push(...(grouped.get(cat) ?? []))
+    }
+    return out
+  }, [query, category, searchResults, grouped, recentRows])
+
+  useEffect(() => {
+    if (visibleEmojis.length === 0) {
+      setSelected(0)
+      return
+    }
+    setSelected((index) => Math.min(index, visibleEmojis.length - 1))
+  }, [visibleEmojis.length])
+
+  const canUseRecentShortcuts = query.trim().length === 0 && recentRows.length > 0
+
+  const copyEmoji = async (emoji: string): Promise<void> => {
+    setRecent(upsertRecentEmoji(emoji))
+    // Hide the window first so the previous app regains focus before
+    // the main process fires the ⌘V paste keystroke via AppleScript.
+    await window.tezbar.hide()
+    await window.tezbar.executeSearchAction({ type: 'copy-and-paste-text', text: emoji })
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLElement>): void => {
+    if ((event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key) && canUseRecentShortcuts) {
+      const index = Number(event.key) - 1
+      const target = recentRows[index]
+      if (target) {
+        event.preventDefault()
+        void copyEmoji(target)
+      }
+      return
+    }
+
+    if (visibleEmojis.length === 0) return
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setSelected((index) => Math.min(index + 1, visibleEmojis.length - 1))
+      return
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setSelected((index) => Math.max(index - 1, 0))
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setSelected((index) => Math.min(index + GRID_COLS, visibleEmojis.length - 1))
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setSelected((index) => Math.max(index - GRID_COLS, 0))
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      const emoji = visibleEmojis[selected]
+      if (emoji) void copyEmoji(emoji)
+    }
+  }
+
+  useEffect(() => {
+    selectedButtonRef.current?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    })
+  }, [selected])
+
+  return (
+    <div
+      ref={rootRef}
+      tabIndex={-1}
+      role="application"
+      aria-label="Emoji Picker"
+      onKeyDown={onKeyDown}
+      className="view-sheet flex h-full min-h-0 w-full flex-col gap-2 outline-none animate-tezbar-scale-in"
+    >
+      <CommandSurfaceHeader>
+        <CommandSurfaceBackButton onClick={onBack} />
+        <CommandSurfaceInput
+          ref={inputRef}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setSelected(0)
+          }}
+          placeholder="Search emojis by name, mood, or slang..."
+        />
+        <div className="command-surface-chips">
+          {(['All', ...EMOJI_CATEGORIES] as CategoryFilter[]).map((chip) => {
+            const active = category === chip
+            return (
+              <CommandSurfaceChip
+                key={chip}
+                type="button"
+                onClick={() => {
+                  setCategory(chip)
+                  setSelected(0)
+                }}
+                active={active}
+              >
+                {chip}
+              </CommandSurfaceChip>
+            )
+          })}
+        </div>
+      </CommandSurfaceHeader>
+
+      <div
+        className="command-surface-body no-drag min-h-0 flex-1 scroll-pt-3 overflow-y-auto px-3 pt-3"
+      >
+        {query.trim().length > 0 ? (
+          searchResults.length > 0 ? (
+            <div className="grid grid-cols-8 gap-1">
+              {searchResults.map((entry, index) => (
+                <button
+                  key={`${entry.char}-${entry.name}`}
+                  type="button"
+                  ref={index === selected ? selectedButtonRef : null}
+                  title={entry.name}
+                  onMouseEnter={() => setSelected(index)}
+                  onClick={() => {
+                    void copyEmoji(entry.char)
+                  }}
+                  className={cx(
+                    'grid h-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
+                    index === selected
+                      ? 'border-accent/60 bg-accent/15'
+                      : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
+                  )}
+                >
+                  {entry.char}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="grid h-full place-items-center text-center">
+              <p className="text-[12px] text-ink-4">No emojis found for that query.</p>
+            </div>
+          )
+        ) : category === 'All' ? (
+          <div className="space-y-3">
+            {recentRows.length > 0 ? (
+              <section>
+                <p className="mb-1 text-[11px] font-medium text-ink-3">Recently Used</p>
+                <div className="flex flex-wrap gap-1">
+                  {recentRows.map((emoji, index) => (
+                    <button
+                      key={`recent:${emoji}`}
+                      type="button"
+                      ref={index === selected ? selectedButtonRef : null}
+                      onMouseEnter={() => setSelected(index)}
+                      onClick={() => {
+                        void copyEmoji(emoji)
+                      }}
+                      className={cx(
+                        'grid h-9 w-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
+                        index === selected
+                          ? 'border-accent/60 bg-accent/15'
+                          : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
+                      )}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {EMOJI_CATEGORIES.map((cat) => {
+              const values = grouped.get(cat) ?? []
+              if (values.length === 0) return null
+              // Offset index to account for recent rows and preceding categories
+              const catOffset = recentRows.length + EMOJI_CATEGORIES.slice(0, EMOJI_CATEGORIES.indexOf(cat)).reduce(
+                (acc, c) => acc + (grouped.get(c)?.length ?? 0),
+                0,
+              )
+              return (
+                <section key={cat}>
+                  <p className="mb-1 text-[11px] font-medium text-ink-3">{cat}</p>
+                  <div className="grid grid-cols-8 gap-1">
+                    {values.map((emoji, i) => {
+                      const index = catOffset + i
+                      return (
+                        <button
+                          key={`${cat}:${emoji}`}
+                          type="button"
+                          ref={index === selected ? selectedButtonRef : null}
+                          onMouseEnter={() => setSelected(index)}
+                          onClick={() => {
+                            void copyEmoji(emoji)
+                          }}
+                          className={cx(
+                            'grid h-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
+                            index === selected
+                              ? 'border-accent/60 bg-accent/15'
+                              : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
+                          )}
+                        >
+                          {emoji}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
+        ) : (
+          <div>
+            <section>
+              <p className="mb-1 text-[11px] font-medium text-ink-3">{category}</p>
+              <div className="grid grid-cols-8 gap-1">
+                {(grouped.get(category) ?? []).map((emoji, index) => (
+                  <button
+                    key={`${category}:${emoji}`}
+                    type="button"
+                    ref={index === selected ? selectedButtonRef : null}
+                    onMouseEnter={() => setSelected(index)}
+                    onClick={() => {
+                      void copyEmoji(emoji)
+                    }}
+                    className={cx(
+                      'grid h-9 place-items-center rounded-tezbar-chip border text-[20px] transition',
+                      index === selected
+                        ? 'border-accent/60 bg-accent/15'
+                        : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.07]',
+                    )}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+
+      <CommandSurfaceFooter status={<CommandSurfaceStatus title="Emoji Picker" />}>
+        <Hint
+          label="Navigate"
+          keys={
+            <>
+              <Kbd>↑</Kbd>
+              <Kbd>↓</Kbd>
+              <Kbd>←</Kbd>
+              <Kbd>→</Kbd>
+            </>
+          }
+        />
+        <Hint label="Copy" keys={<Kbd>↵</Kbd>} />
+        <Hint
+          label="Recent"
+          keys={
+            <>
+              <Kbd>⌘</Kbd>
+              <Kbd>1-9</Kbd>
+            </>
+          }
+        />
+        <Hint label="Back" keys={<Kbd>Esc</Kbd>} />
+      </CommandSurfaceFooter>
+    </div>
+  )
+}

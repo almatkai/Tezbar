@@ -1,0 +1,24 @@
+   Compiling tezbar-update v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-update)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.17s
+     Running unittests src/lib.rs (/tmp/tezbar-m9-c01-validation-Rffw07/target-msrv/debug/deps/tezbar_update-4623b1c58d077652)
+
+running 1 test
+test native::lifecycle_tests::review_m11_recheck_unwritable_bundle_is_refused_before_quit ... FAILED
+
+failures:
+
+---- native::lifecycle_tests::review_m11_recheck_unwritable_bundle_is_refused_before_quit stdout ----
+
+thread 'native::lifecycle_tests::review_m11_recheck_unwritable_bundle_is_refused_before_quit' panicked at crates/tezbar-update/src/native.rs:1129:9:
+assertion `left == right` failed
+  left: true
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    native::lifecycle_tests::review_m11_recheck_unwritable_bundle_is_refused_before_quit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p tezbar-update --lib`

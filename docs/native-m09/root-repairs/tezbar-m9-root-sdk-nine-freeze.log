@@ -1,0 +1,14 @@
+
+running 9 tests
+test surfaces::extension_runtime::real_sdk::sdk_detail ... ok
+test surfaces::extension_runtime::real_sdk::sdk_feedback ... ok
+test surfaces::extension_runtime::real_sdk::sdk_form ... ok
+test surfaces::extension_runtime::real_sdk::sdk_grid ... ok
+test surfaces::extension_runtime::real_sdk::sdk_invalidation ... ok
+test surfaces::extension_runtime::real_sdk::sdk_actions ... ok
+test surfaces::extension_runtime::real_sdk::sdk_menubar ... ok
+test surfaces::extension_runtime::real_sdk::sdk_prompts ... ok
+test surfaces::extension_runtime::real_sdk::sdk_list ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 396 filtered out; finished in 6.69s
+

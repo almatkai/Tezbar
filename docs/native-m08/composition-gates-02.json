@@ -1,0 +1,406 @@
+{
+  "freeze": "composition-source-freeze-02.json",
+  "aggregate_sha256": "36d27bb8c6798a1850eaea51fe535093bfcb08f70a64b4e70c2dd7bd309282b3",
+  "gates": [
+    {
+      "gate": "normal-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 36.42,
+      "log": "docs/native-m08/composition-logs/gate-02-normal-native.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 23.87s",
+        "test result: ok. 254 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.03s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "bench-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-native",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "--features",
+        "runtime-shaders,bench-control",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 23.88,
+      "log": "docs/native-m08/composition-logs/gate-02-bench-native.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.33s",
+        "test result: ok. 255 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.98s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "shared-ui",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-ui",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 12.11,
+      "log": "docs/native-m08/composition-logs/gate-02-shared-ui.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.98s",
+        "test result: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "normal-check",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "check",
+        "-p",
+        "tezbar-native",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--features",
+        "runtime-shaders"
+      ],
+      "exit_code": 0,
+      "seconds": 4.17,
+      "log": "docs/native-m08/composition-logs/gate-02-normal-check.log",
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.12s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "normal-build",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "-p",
+        "tezbar-native",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--features",
+        "runtime-shaders"
+      ],
+      "exit_code": 0,
+      "seconds": 19.61,
+      "log": "docs/native-m08/composition-logs/gate-02-normal-build.log",
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.52s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "core-assets",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-core",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "assets",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 24.32,
+      "log": "docs/native-m08/composition-logs/gate-02-core-assets.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 22.72s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 584 filtered out; finished in 0.02s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "core-asset_scope",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-core",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "asset_scope",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 0.61,
+      "log": "docs/native-m08/composition-logs/gate-02-core-asset_scope.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.54s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 592 filtered out; finished in 0.00s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "core-run_selection",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-core",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "run_selection",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 0.41,
+      "log": "docs/native-m08/composition-logs/gate-02-core-run_selection.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 591 filtered out; finished in 0.11s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "core-chat",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-core",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "chat",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 0.32,
+      "log": "docs/native-m08/composition-logs/gate-02-core-chat.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 587 filtered out; finished in 0.03s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "models-198",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "-p",
+        "tezbar-ui-model",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--all-features",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 14.1,
+      "log": "docs/native-m08/composition-logs/gate-02-models-198.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.12s",
+        "test result: ok. 379 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "msrv-core-check",
+      "command": [
+        "cargo",
+        "+1.85",
+        "check",
+        "-p",
+        "tezbar-core",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--all-features"
+      ],
+      "exit_code": 0,
+      "seconds": 2.52,
+      "log": "docs/native-m08/composition-logs/gate-02-msrv-core-check.log",
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.45s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "msrv-model-check",
+      "command": [
+        "cargo",
+        "+1.85",
+        "check",
+        "-p",
+        "tezbar-ui-model",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--all-features"
+      ],
+      "exit_code": 0,
+      "seconds": 2.26,
+      "log": "docs/native-m08/composition-logs/gate-02-msrv-model-check.log",
+      "summaries": [
+        "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.20s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "msrv-core-assets",
+      "command": [
+        "cargo",
+        "+1.85",
+        "test",
+        "-p",
+        "tezbar-core",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--lib",
+        "assets",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 22.58,
+      "log": "docs/native-m08/composition-logs/gate-02-msrv-core-assets.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.22s",
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 584 filtered out; finished in 0.03s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "msrv-models",
+      "command": [
+        "cargo",
+        "+1.85",
+        "test",
+        "-p",
+        "tezbar-ui-model",
+        "--locked",
+        "--offline",
+        "-j2",
+        "--all-features",
+        "--",
+        "--test-threads=2"
+      ],
+      "exit_code": 0,
+      "seconds": 14.16,
+      "log": "docs/native-m08/composition-logs/gate-02-msrv-models.log",
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.89s",
+        "test result: ok. 379 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "changed_inputs": []
+    },
+    {
+      "gate": "metadata",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "metadata",
+        "--format-version",
+        "1",
+        "--no-deps",
+        "--locked",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 0.06,
+      "log": "docs/native-m08/composition-logs/gate-02-metadata.log",
+      "summaries": [],
+      "changed_inputs": []
+    },
+    {
+      "gate": "normal-tree",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "tree",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--locked",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 0.66,
+      "log": "docs/native-m08/composition-logs/gate-02-normal-tree.log",
+      "summaries": [],
+      "changed_inputs": []
+    },
+    {
+      "gate": "normal-linkage",
+      "command": [
+        "otool",
+        "-L",
+        "target/debug/tezbar"
+      ],
+      "exit_code": 0,
+      "seconds": 0.02,
+      "log": "docs/native-m08/composition-logs/gate-02-normal-linkage.log",
+      "summaries": [],
+      "changed_inputs": []
+    },
+    {
+      "gate": "diff-check",
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.03,
+      "log": "docs/native-m08/composition-logs/gate-02-diff-check.log",
+      "summaries": [],
+      "changed_inputs": []
+    }
+  ]
+}

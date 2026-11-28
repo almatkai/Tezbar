@@ -1,0 +1,30 @@
+{
+  "base": "151df162a884ec5369f5602fffbc7385566698ef",
+  "variant": "dirty root M810 repair source",
+  "native_normal": 420,
+  "native_bench": 422,
+  "new_m810_regressions": 14,
+  "failures": 0,
+  "ignored": 0,
+  "check": true,
+  "normal_debug_build": true,
+  "no_webkit_or_tauri": true,
+  "shared_UI_57_reused": true,
+  "models_381_both_toolchains_reused": true,
+  "TS_746_pass_7_existing_skips_reused": true,
+  "windows": false,
+  "manual_GUI_IME_AX_GPU_RAM": false,
+  "independent_acceptance": false,
+  "full_migration": false,
+  "original_review_sha256": "a44f9595ab34a1e9357b3461440a3becc4ebaa83c3826252e95b799b2c5490a8",
+  "preserved_binary": {
+    "path": "/tmp/tezbar-m810-root-repair-20261107/tezbar-debug-preview",
+    "sha256": "5ec21f899c2fbd77b4be59c73795b653e1d13d4d993e532aea88646ef9381f79",
+    "bytes": 220390904,
+    "metadata": "{\"version\":\"0.3.0-beta.7\",\"source\":\"151df162a884ec5369f5602fffbc7385566698ef\",\"dirty\":\"true\",\"rustc_commit\":\"48a229ceaefd4985c50990b14116b6d856af0985\",\"preview\":true,\"gpui_rev\":\"c84af5b99cbc366d675064e52b23664a015b6e35\",\"runtime_shaders\":true,\"bench_control\":false}",
+    "source": "151df16 + M810 root repairs; dirty",
+    "GUI_launch": false,
+    "only_execution": "--version",
+    "no_WebKit_JavaScriptCore": true
+  }
+}

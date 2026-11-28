@@ -1,0 +1,12 @@
+{
+  "pin": "c01fa313fb04b5b53a97780c03ce2cb1838bb352",
+  "new_m810_findings": "pending separate root patch; excluded from current gates",
+  "m11_new_opus_review": "rate limited, not performed",
+  "windows": "blocked before these gates; no fallback attempted",
+  "manual_gui_ime_ax_gpu_ram": "not run",
+  "tauri_default": true,
+  "git_mutations": false,
+  "source_mutations": false,
+  "full_acceptance": false,
+  "initial_harness_aggregate_assertion": "A proposed JSON serialization did not reproduce the root aggregate format. This was a harness-only assertion before any Cargo gate; all 608 per-file hashes match. Independent SHA256 sorted-JSON aggregation is recorded under a distinct name."
+}

@@ -1,0 +1,28 @@
+[
+  {
+    "record": "docs/native-m11/recheck-9832852-root/updater-185-final.json",
+    "record_sha256": "5ceb11086a49f4b65e66a7f7b0eba58e4856db7cdfe69668b9b04929c8cbc18c",
+    "all_current_compiled_input_hashes_match": true,
+    "log": "docs/native-m11/recheck-9832852-root/updater-185-final.log",
+    "log_sha256": "792b741ab6814a2bb0b2d9f7a6ac058a126586546c38d29da823036197d4c0c3",
+    "counts": [
+      "test result: ok. 43 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.17s"
+    ],
+    "ignored": [
+      "test manual_releases::tests::live_beta_installer_discovery_from_stable_028 ... ignored, Requires GitHub network access and a published Beta installer"
+    ]
+  },
+  {
+    "record": "docs/native-m11/recheck-9832852-root/updater-198-final.json",
+    "record_sha256": "cf523e4482a5fb05fe3ee87c719648d35a96801c053192c09b46e42cc2ed6371",
+    "all_current_compiled_input_hashes_match": true,
+    "log": "docs/native-m11/recheck-9832852-root/updater-198-final.log",
+    "log_sha256": "af518b6da5533db37042cd99d86fdfb89ee0bad9ecd962870e3dec3978bb8723",
+    "counts": [
+      "test result: ok. 43 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.17s"
+    ],
+    "ignored": [
+      "test manual_releases::tests::live_beta_installer_discovery_from_stable_028 ... ignored, Requires GitHub network access and a published Beta installer"
+    ]
+  }
+]

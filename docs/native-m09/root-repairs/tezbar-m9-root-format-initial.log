@@ -1,0 +1,561 @@
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/app/m8_tests.rs:460:
+     assert_eq!(f.count("agent:run"), 1);
+ }
+ 
+-
+ fn repair_failed_quit_continue(cx: &mut TestAppContext, failure: &str) {
+     let (rt, root, f, view, cx) = mount(cx);
+     let app = owner(cx, &rt, &root, &f);
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/core_client.rs:18:
+ }
+ struct InstallLease(Arc<ExtensionAdmission>);
+ impl Drop for InstallLease {
+-    fn drop(&mut self) { self.0.installs.fetch_sub(1, std::sync::atomic::Ordering::AcqRel); }
++    fn drop(&mut self) {
++        self.0
++            .installs
++            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
++    }
+ }
+ #[derive(Default)]
+ struct ShutdownOwner {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/core_client.rs:253:
+                 tokio::runtime::Handle::try_current().ok(),
+             )),
+             Arc::new(tokio::sync::Semaphore::new(16)),
+-            Arc::new(ExtensionAdmission { normal: Arc::new(tokio::sync::Semaphore::new(16)), installs: std::sync::atomic::AtomicUsize::new(0) }),
++            Arc::new(ExtensionAdmission {
++                normal: Arc::new(tokio::sync::Semaphore::new(16)),
++                installs: std::sync::atomic::AtomicUsize::new(0),
++            }),
+         )
+     }
+     pub async fn request(&self, request: Request) -> Result<Value, String> {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/core_client.rs:515:
+         let Some(handle) = handle else {
+             return Box::pin(async { Err("Core runtime unavailable".into()) });
+         };
+-        let install = if matches!(request, crate::surfaces::extensions_store::request::ExtensionRequest::Install(_)) {
+-            admission.installs.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
++        let install = if matches!(
++            request,
++            crate::surfaces::extensions_store::request::ExtensionRequest::Install(_)
++        ) {
++            admission
++                .installs
++                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+             Some(InstallLease(admission.clone()))
+-        } else { None };
++        } else {
++            None
++        };
+         let (channel, args) = request.wire();
+         let core = self.0.clone();
+         let task = handle.spawn(async move {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/core_client.rs:537:
+         #[cfg(not(feature = "bench-control"))]
+         let (admission, disposal) = (self.6.clone(), self.5.clone());
+         Box::pin(async move {
+-            if admission.installs.load(std::sync::atomic::Ordering::Acquire) != 0 {
+-                return Err("Extension install in progress. Wait for it to finish, then quit.".into());
++            if admission
++                .installs
++                .load(std::sync::atomic::Ordering::Acquire)
++                != 0
++            {
++                return Err(
++                    "Extension install in progress. Wait for it to finish, then quit.".into(),
++                );
+             }
+-            let _all = admission.normal.clone()
++            let _all = admission
++                .normal
++                .clone()
+                 .acquire_many_owned(16)
+                 .await
+                 .map_err(|_| "Core admission closed")?;
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/lib.rs:13:
+ 
+ pub mod surfaces;
+ 
+-mod settings_transport;
+ mod chat_transport;
++mod settings_transport;
+ 
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/command_bar/extension_integration.rs:28:
+     }
+ }
+ impl Launcher {
+-    pub(super) fn dispose_dropped_extension(&self, reply:&Value,cx:&mut Context<Self>) {
+-        if reply["mode"]!="view" || reply["root"]["type"]=="MenuBarExtra" {return;}
+-        if let Some(id)=reply["sessionId"].as_str() {
+-            let future=self.adapter.send(Request::Extension(crate::surfaces::extensions_store::request::ExtensionRequest::Dispose(id.into())));
+-            gpui_tokio::Tokio::spawn(cx,future).detach();
++    pub(super) fn dispose_dropped_extension(&self, reply: &Value, cx: &mut Context<Self>) {
++        if reply["mode"] != "view" || reply["root"]["type"] == "MenuBarExtra" {
++            return;
+         }
++        if let Some(id) = reply["sessionId"].as_str() {
++            let future = self.adapter.send(Request::Extension(
++                crate::surfaces::extensions_store::request::ExtensionRequest::Dispose(id.into()),
++            ));
++            gpui_tokio::Tokio::spawn(cx, future).detach();
++        }
+     }
+     pub(super) fn configure_extensions(&mut self, core: CoreClient) {
+         self.extensions.core = Some(core);
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/command_bar/extension_integration.rs:236:
+     }
+     pub(crate) fn drain_extensions(&mut self, _cx: &mut Context<Self>) -> ExtensionFuture {
+         // Quiescence is non-destructive: a different surface may still refuse quit.
+-        self.extensions.core.as_ref().map(ExtensionTransport::drain)
++        self.extensions
++            .core
++            .as_ref()
++            .map(ExtensionTransport::drain)
+             .unwrap_or_else(|| Box::pin(async { Ok(json!(true)) }))
+     }
+     pub(crate) fn dispose_extensions(&mut self, cx: &mut Context<Self>) {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/command_bar/extension_integration.rs:243:
+-        if let Some(v) = &self.extensions.runtime { v.update(cx, |v,cx| v.dispose(cx)); }
+-        if let Some(v) = &self.extensions.store { v.update(cx, |v,cx| v.dispose(cx)); }
++        if let Some(v) = &self.extensions.runtime {
++            v.update(cx, |v, cx| v.dispose(cx));
++        }
++        if let Some(v) = &self.extensions.store {
++            v.update(cx, |v, cx| v.dispose(cx));
++        }
+     }
+     pub(crate) fn extension_back(&mut self, w: &mut Window, cx: &mut Context<Self>) {
+         if let Some(v) = &self.extensions.runtime {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/command_bar/mod.rs:1402:
+                 .unwrap_or_else(|e| Err(e.to_string()));
+             let _ = this.update(cx, |this, cx| {
+                 if a.generation != this.model.session.generation || !this.visible {
+-                    if let Ok(value)=&result {this.dispose_dropped_extension(value,cx);}
++                    if let Ok(value) = &result {
++                        this.dispose_dropped_extension(value, cx);
++                    }
+                     this.finish_local(&a);
+                     return;
+                 }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/command_bar/mod.rs:1818:
+                             cx,
+                         ),
+                         Ok(result) if result["ok"] == false => {
+-                            this.error = Some(presentation::extension_notice(&result).unwrap_or_else(|| "Extension command failed. Try again.".into()));
++                            this.error =
++                                Some(presentation::extension_notice(&result).unwrap_or_else(
++                                    || "Extension command failed. Try again.".into(),
++                                ));
+                             cx.notify();
+                         }
+                         Ok(result) => {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/command_bar/task_indicator.rs:264:
+         let visible = self.ready
+             && self.visible
+             && !self.onboarding_active
+-            && self.navigation.as_ref().is_none_or(|_| self.chat_mounted() || self.terminal_mounted());
++            && self
++                .navigation
++                .as_ref()
++                .is_none_or(|_| self.chat_mounted() || self.terminal_mounted());
+         self.task_indicator
+             .update(cx, |indicator, cx| indicator.set_visible(visible, cx));
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:440:
+                 ),
+             );
+         }
+-        let heading=rows.first().filter(|row| self.rows.iter().position(|r|r.id==row.id).is_some_and(|i|i==0||self.rows[i-1].section!=row.section)).and_then(|r|r.section.clone());
+-        div().flex().flex_col().when_some(heading,|d,h|d.child(div().text_color(t.text3).text_size(px(11.)).child(h)))
+-            .child(d).into_any_element()
++        let heading = rows
++            .first()
++            .filter(|row| {
++                self.rows
++                    .iter()
++                    .position(|r| r.id == row.id)
++                    .is_some_and(|i| i == 0 || self.rows[i - 1].section != row.section)
++            })
++            .and_then(|r| r.section.clone());
++        div()
++            .flex()
++            .flex_col()
++            .when_some(heading, |d, h| {
++                d.child(div().text_color(t.text3).text_size(px(11.)).child(h))
++            })
++            .child(d)
++            .into_any_element()
+     }
+     fn metadata(&self, n: &Node, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+         let mut d = div().flex().flex_col().gap(px(8.));
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:850:
+                     let owner = cx.entity().downgrade();
+                     let key = key.clone();
+                     let next = option.clone();
+-                    row = row.child(controls::action_button(
+-                        format!("preference-{key}-{option}"),
+-                        schema.and_then(|f|f["data"].as_array()).and_then(|a|a.iter().find(|x|x["value"]==*option)).and_then(|x|x["title"].as_str()).unwrap_or(option).to_owned(),
+-                        ButtonTone::Quiet,
+-                        self.preference.saving,
+-                        t,
+-                        move |_, cx| {
+-                            let _ = owner.update(cx, |v, cx| {
+-                                v.edit_preference(key.clone(), json!(next), cx)
+-                            });
+-                        },
+-                    ).aria_selected(value.as_str()==Some(option.as_str())).when(value.as_str()==Some(option.as_str()),|d|d.bg(t.selected)));
++                    row = row.child(
++                        controls::action_button(
++                            format!("preference-{key}-{option}"),
++                            schema
++                                .and_then(|f| f["data"].as_array())
++                                .and_then(|a| a.iter().find(|x| x["value"] == *option))
++                                .and_then(|x| x["title"].as_str())
++                                .unwrap_or(option)
++                                .to_owned(),
++                            ButtonTone::Quiet,
++                            self.preference.saving,
++                            t,
++                            move |_, cx| {
++                                let _ = owner.update(cx, |v, cx| {
++                                    v.edit_preference(key.clone(), json!(next), cx)
++                                });
++                            },
++                        )
++                        .aria_selected(value.as_str() == Some(option.as_str()))
++                        .when(value.as_str() == Some(option.as_str()), |d| {
++                            d.bg(t.selected)
++                        }),
++                    );
+                 }
+             } else if let Some(field) = self.preference.fields.get(&key) {
+                 row = row.child(field.input.clone());
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:1019:
+         if composing {
+             return;
+         }
+-        if self.dropdown_open && matches!(key,"escape"|"up"|"down"|"enter") {
+-            if !e.is_held || key!="enter" {
+-                if key=="escape" {self.dropdown_open=false;cx.notify();}
+-                else if key=="enter" {self.choose_dropdown(w,cx);}
+-                else if let Some((_,_,items))=self.dropdown_choices() {
+-                    if !items.is_empty() {self.dropdown_index=if key=="down" {(self.dropdown_index+1)%items.len()}else{(self.dropdown_index+items.len()-1)%items.len()};cx.notify();}
++        if self.dropdown_open && matches!(key, "escape" | "up" | "down" | "enter") {
++            if !e.is_held || key != "enter" {
++                if key == "escape" {
++                    self.dropdown_open = false;
++                    cx.notify();
++                } else if key == "enter" {
++                    self.choose_dropdown(w, cx);
++                } else if let Some((_, _, items)) = self.dropdown_choices() {
++                    if !items.is_empty() {
++                        self.dropdown_index = if key == "down" {
++                            (self.dropdown_index + 1) % items.len()
++                        } else {
++                            (self.dropdown_index + items.len() - 1) % items.len()
++                        };
++                        cx.notify();
++                    }
+                 }
+             }
+-            cx.stop_propagation();return;
++            cx.stop_propagation();
++            return;
+         }
+         let textarea = field.is_some_and(|f| f.options.multiline);
+         let panel = self.session.as_ref().is_some_and(|s| s.action_panel);
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:1086:
+                     (self.action_index + actions.len() - 1) % actions.len()
+                 };
+                 let id = &actions[self.action_index];
+-                if let Some(row) = self.action_rows(cx).iter().position(|r| r.as_ref().is_ok_and(|a| &a.id == id)) {
+-                    self.action_scroll.scroll_to_item(row, ScrollStrategy::Nearest);
++                if let Some(row) = self
++                    .action_rows(cx)
++                    .iter()
++                    .position(|r| r.as_ref().is_ok_and(|a| &a.id == id))
++                {
++                    self.action_scroll
++                        .scroll_to_item(row, ScrollStrategy::Nearest);
+                 }
+                 cx.notify();
+             }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:1216:
+             .map(|s| grid_columns(&s.root))
+             .unwrap_or(1)
+     }
+-    fn dropdown_choices(&self) -> Option<(String, String, Vec<(Option<String>,String,String)>)> {
++    fn dropdown_choices(&self) -> Option<(String, String, Vec<(Option<String>, String, String)>)> {
+         let root = &self.session.as_ref()?.root;
+-        let node: Node = serde_json::from_value(root.props.get("searchBarAccessory")?.clone()).ok()?;
++        let node: Node =
++            serde_json::from_value(root.props.get("searchBarAccessory")?.clone()).ok()?;
+         let callback = node.string("actionId")?.to_owned();
+         let mut choices = Vec::new();
+-        fn walk(node:&Node, section:Option<String>, out:&mut Vec<(Option<String>,String,String)>) {
+-            let section = if node.kind == NodeKind::ListDropdownSection { node.string("title").map(str::to_owned) } else { section };
++        fn walk(
++            node: &Node,
++            section: Option<String>,
++            out: &mut Vec<(Option<String>, String, String)>,
++        ) {
++            let section = if node.kind == NodeKind::ListDropdownSection {
++                node.string("title").map(str::to_owned)
++            } else {
++                section
++            };
+             if node.kind == NodeKind::ListDropdownItem {
+-                let value=node.string("value").or_else(||node.string("title")).unwrap_or("").to_owned();
+-                out.push((section.clone(),node.string("title").unwrap_or(&value).to_owned(),value));
++                let value = node
++                    .string("value")
++                    .or_else(|| node.string("title"))
++                    .unwrap_or("")
++                    .to_owned();
++                out.push((
++                    section.clone(),
++                    node.string("title").unwrap_or(&value).to_owned(),
++                    value,
++                ));
+             }
+-            for child in &node.children {walk(child,section.clone(),out);}
++            for child in &node.children {
++                walk(child, section.clone(), out);
++            }
+         }
+-        walk(&node,None,&mut choices);
+-        let selected=node.string("value").or_else(||node.string("defaultValue")).map(str::to_owned)
+-            .or_else(|| choices.first().map(|c|c.2.clone())).unwrap_or_default();
++        walk(&node, None, &mut choices);
++        let selected = node
++            .string("value")
++            .or_else(|| node.string("defaultValue"))
++            .map(str::to_owned)
++            .or_else(|| choices.first().map(|c| c.2.clone()))
++            .unwrap_or_default();
+         Some((callback, selected, choices))
+     }
+-    fn choose_dropdown(&mut self, w:&mut Window,cx:&mut Context<Self>) {
+-        if let Some((callback,_,items))=self.dropdown_choices() {
+-            if let Some((_,_,value))=items.get(self.dropdown_index) {
+-                let value=value.clone();
+-                self.dropdown_open=false;
+-                self.event(UiEvent::Dropdown {callback,value},w,cx);
+-                self.search.focus_handle(cx).focus(w,cx);
++    fn choose_dropdown(&mut self, w: &mut Window, cx: &mut Context<Self>) {
++        if let Some((callback, _, items)) = self.dropdown_choices() {
++            if let Some((_, _, value)) = items.get(self.dropdown_index) {
++                let value = value.clone();
++                self.dropdown_open = false;
++                self.event(UiEvent::Dropdown { callback, value }, w, cx);
++                self.search.focus_handle(cx).focus(w, cx);
+             }
+         }
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:1247:
+     fn dropdown(&self, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+-        let Some((_,selected,choices))=self.dropdown_choices() else {return div().into_any_element()};
+-        let label=choices.iter().find(|c|c.2==selected).map(|c|c.1.clone()).unwrap_or_else(||"Filter".into());
+-        let owner=cx.entity().downgrade();
+-        let mut container=div().relative().child(controls::action_button(
+-            "extension-dropdown",format!("{label} ▾"),ButtonTone::Quiet,false,t, move |_,cx| {
+-                let _=owner.update(cx,|v,cx| {
+-                    v.dropdown_open=!v.dropdown_open;
+-                    v.dropdown_index=v.dropdown_choices().and_then(|(_,selected,items)|items.iter().position(|c|c.2==selected)).unwrap_or(0);
+-                    cx.notify();
+-                });
+-            }).role(Role::ComboBox).aria_expanded(self.dropdown_open));
++        let Some((_, selected, choices)) = self.dropdown_choices() else {
++            return div().into_any_element();
++        };
++        let label = choices
++            .iter()
++            .find(|c| c.2 == selected)
++            .map(|c| c.1.clone())
++            .unwrap_or_else(|| "Filter".into());
++        let owner = cx.entity().downgrade();
++        let mut container = div().relative().child(
++            controls::action_button(
++                "extension-dropdown",
++                format!("{label} ▾"),
++                ButtonTone::Quiet,
++                false,
++                t,
++                move |_, cx| {
++                    let _ = owner.update(cx, |v, cx| {
++                        v.dropdown_open = !v.dropdown_open;
++                        v.dropdown_index = v
++                            .dropdown_choices()
++                            .and_then(|(_, selected, items)| {
++                                items.iter().position(|c| c.2 == selected)
++                            })
++                            .unwrap_or(0);
++                        cx.notify();
++                    });
++                },
++            )
++            .role(Role::ComboBox)
++            .aria_expanded(self.dropdown_open),
++        );
+         if self.dropdown_open {
+-            let mut menu=controls::popover("extension-dropdown-options","Filter extension",t)
+-                .absolute().top(px(tokens::HEADER*t.zoom)).right_0().w(px(260.*t.zoom))
+-                .max_h(px(300.*t.zoom)).overflow_y_scroll();
+-            let mut previous=None;
+-            for (i,(section,label,value)) in choices.into_iter().enumerate() {
+-                if section!=previous {
+-                    if let Some(title)=&section {menu=menu.child(div().text_color(t.text3).px(px(10.)).py(px(6.)).child(title.clone()));}
+-                    previous=section;
++            let mut menu = controls::popover("extension-dropdown-options", "Filter extension", t)
++                .absolute()
++                .top(px(tokens::HEADER * t.zoom))
++                .right_0()
++                .w(px(260. * t.zoom))
++                .max_h(px(300. * t.zoom))
++                .overflow_y_scroll();
++            let mut previous = None;
++            for (i, (section, label, value)) in choices.into_iter().enumerate() {
++                if section != previous {
++                    if let Some(title) = &section {
++                        menu = menu.child(
++                            div()
++                                .text_color(t.text3)
++                                .px(px(10.))
++                                .py(px(6.))
++                                .child(title.clone()),
++                        );
++                    }
++                    previous = section;
+                 }
+-                let owner=cx.entity().downgrade();
+-                menu=menu.child(controls::action_button(format!("extension-dropdown-option-{i}"),label,ButtonTone::Quiet,false,t,move |w,cx| {
+-                    let _=owner.update(cx,|v,cx| {v.dropdown_index=i;v.choose_dropdown(w,cx)});
+-                }).role(Role::ListBoxOption).aria_selected(selected==value)
+-                    .when(i==self.dropdown_index,|d|d.bg(t.selected)));
++                let owner = cx.entity().downgrade();
++                menu = menu.child(
++                    controls::action_button(
++                        format!("extension-dropdown-option-{i}"),
++                        label,
++                        ButtonTone::Quiet,
++                        false,
++                        t,
++                        move |w, cx| {
++                            let _ = owner.update(cx, |v, cx| {
++                                v.dropdown_index = i;
++                                v.choose_dropdown(w, cx)
++                            });
++                        },
++                    )
++                    .role(Role::ListBoxOption)
++                    .aria_selected(selected == value)
++                    .when(i == self.dropdown_index, |d| d.bg(t.selected)),
++                );
+             }
+-            container=container.child(menu);
++            container = container.child(menu);
+         }
+         container.into_any_element()
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:1279:
+     pub(super) fn grid_ranges(&self) -> Vec<std::ops::Range<usize>> {
+-        let columns=self.columns();let mut ranges=Vec::new();let mut start=0;
+-        while start<self.rows.len() {
+-            let section=&self.rows[start].section;
+-            let end=(start+1..self.rows.len()).find(|&i|self.rows[i].section!=*section).unwrap_or(self.rows.len());
+-            for i in (start..end).step_by(columns) {ranges.push(i..(i+columns).min(end));}
+-            start=end;
++        let columns = self.columns();
++        let mut ranges = Vec::new();
++        let mut start = 0;
++        while start < self.rows.len() {
++            let section = &self.rows[start].section;
++            let end = (start + 1..self.rows.len())
++                .find(|&i| self.rows[i].section != *section)
++                .unwrap_or(self.rows.len());
++            for i in (start..end).step_by(columns) {
++                ranges.push(i..(i + columns).min(end));
++            }
++            start = end;
+         }
+         ranges
+     }
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:1289:
+-
+ }
+ fn parse_color(raw: &str) -> Option<Hsla> {
+     let hex = raw.strip_prefix('#')?;
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extension_runtime/view.rs:1346:
+                     .into_any_element(),
+                 _ => {
+                     let columns = self.columns();
+-                    let count = if root.kind==NodeKind::Grid {self.grid_ranges().len()} else {self.rows.len()};
++                    let count = if root.kind == NodeKind::Grid {
++                        self.grid_ranges().len()
++                    } else {
++                        self.rows.len()
++                    };
+                     let mut body = div().flex().flex_1().min_h_0();
+                     if count == 0 {
+                         let mut all = vec![];
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extensions_store/mod.rs:420:
+                 v.catalog.installed(
+                     &id,
+                     if matches!(result, Ok(Ok(()))) {
+-                        if remove {"Extension removed.".into()} else {"Extension installed.".into()}
++                        if remove {
++                            "Extension removed.".into()
++                        } else {
++                            "Extension installed.".into()
++                        }
+                     } else {
+-                        match &result {Ok(Err(e))=>format!("Could not {} extension: {}",if remove {"remove"} else {"install"},e.chars().take(300).collect::<String>()),_=>"Extension operation interrupted. Try again.".into()}
++                        match &result {
++                            Ok(Err(e)) => format!(
++                                "Could not {} extension: {}",
++                                if remove { "remove" } else { "install" },
++                                e.chars().take(300).collect::<String>()
++                            ),
++                            _ => "Extension operation interrupted. Try again.".into(),
++                        }
+                     },
+                 );
+                 if v.epoch == epoch {
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extensions_store/mod.rs:458:
+             let _ = this.update(cx, |v, cx| {
+                 v.jobs.remove(&ticket);
+                 if v.epoch != epoch || !v.visible {
+-                    if let Ok(Ok(reply))=&result {
+-                        if reply["mode"]=="view" && reply["root"]["type"]!="MenuBarExtra" {
+-                            if let Some(id)=reply["sessionId"].as_str() {gpui_tokio::Tokio::spawn(cx,cleanup.send(ExtensionRequest::Dispose(id.into()))).detach();}
++                    if let Ok(Ok(reply)) = &result {
++                        if reply["mode"] == "view" && reply["root"]["type"] != "MenuBarExtra" {
++                            if let Some(id) = reply["sessionId"].as_str() {
++                                gpui_tokio::Tokio::spawn(
++                                    cx,
++                                    cleanup.send(ExtensionRequest::Dispose(id.into())),
++                                )
++                                .detach();
++                            }
+                         }
+                     }
+                     return;
+Diff in /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar/src/surfaces/extensions_store/mod.rs:477:
+                             v.error = Some("Extension returned an invalid view.");
+                         }
+                     }
+-                    Ok(Ok(result)) if result["ok"] == true => {
+-                        v.emit_effect(StoreEffect::Notice(super::command_bar::presentation::extension_notice(&result).unwrap_or_else(|| "Command completed.".into())), cx)
+-                    }
++                    Ok(Ok(result)) if result["ok"] == true => v.emit_effect(
++                        StoreEffect::Notice(
++                            super::command_bar::presentation::extension_notice(&result)
++                                .unwrap_or_else(|| "Command completed.".into()),
++                        ),
++                        cx,
++                    ),
+                     _ => v.error = Some("Command failed. Try again."),
+                 };
+                 cx.notify();

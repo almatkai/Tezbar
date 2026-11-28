@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { LOVED_EXTENSIONS } from '../../src/shared/lovedExtensions'
+import type { ExtensionManifest } from '../../src/shared/extensions'
+import lovedCatalog from '../../crates/tezbar-core/src/extensions/loved_extensions.json'
+const LOVED_EXTENSIONS = lovedCatalog as unknown as ExtensionManifest[]
 const scratch = mkdtempSync(join(tmpdir(), 'tezbar-catalog-api-'))
 vi.mock('@tezbar/desktop-runtime', () => ({
   app: {
@@ -21,7 +23,11 @@ vi.mock('@tezbar/desktop-runtime', () => ({
   nativeImage: { createFromPath: () => ({ isEmpty: () => true }) },
   shell: { openExternal: async () => {}, showItemInFolder() {} },
 }))
-vi.mock('../../src/main/llm/extensionAI', () => ({ askExtensionAI: async () => 'probe' }))
+vi.mock('../../src/main/extensionWorker/windowState', () => ({ setSuppressBlurHide: vi.fn() }))
+vi.mock('../../src/main/extensionWorker/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/main/extensionWorker/services')>()),
+  askExtensionAI: async () => 'probe',
+}))
 import {
   clearAllExtensionSessions,
   runExtensionCommandFromPackageJson,

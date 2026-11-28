@@ -1,0 +1,20 @@
+2026-11-07 pre-compile source continuation; no runtime tests executed
+1. XERJ bounded search
+   xerj search: no XERJ node reachable at http://localhost:9200
+   endpoint unreachable; no index/recovery attempted; proceeded with rg.
+2. Original cancelled thread read
+   OrchestratorMcpFailure code=thread_not_found
+   Thread delegated-task:command%3Amcp%3Acb34ca0b-e88c-4858-85a7-6cd9abc99e91%3Adelegate-task%3Atezbar-gpui-m9-native-extensions-20261106-1 is no longer available.
+   No send/restart or replacement.
+3. First owned rustfmt source parse
+   failed to resolve mod tests: extension_runtime/tests.rs does not exist
+   failed to resolve mod tests: extensions_store/tests.rs does not exist
+   Added the owned tests source files; subsequent source formatting succeeded.
+4. First real fixture harness include parse
+   couldn't read extension_runtime/../../../../../../tests/fixtures/extensions/native_harness.rs
+   one extra parent component; changed include to ../../../../../tests/fixtures/extensions/native_harness.rs
+   Subsequent source formatting succeeded.
+5. Manual pinned-API source review (not compiler output)
+   initial uniform_list API used old entity argument; corrected to cx.processor.
+   non-Stateful Div roles needed .id; corrected before compiler gate.
+   TextInput actions bypass low-level Enter/arrow capture; added focused native action capture.

@@ -16,6 +16,13 @@ export function formatLlmErrorMessage(raw: string, providerLabel = 'AI provider'
   const trimmed = raw.trim()
   const detail = apiErrorDetail(trimmed)
   const message = detail || trimmed
+  if (
+    /failed to write to backend runner|backend runner (?:is still recovering|stopped|restarting)/i.test(
+      message
+    )
+  ) {
+    return 'The background service disconnected. Tezbar is reconnecting. Wait a moment, then try again. Your message has been kept.'
+  }
   const unsupportedModel = message.match(
     /supported API model names are (.+?), but you passed (.+?)(?:\.$|$)/i
   )
@@ -27,10 +34,6 @@ export function formatLlmErrorMessage(raw: string, providerLabel = 'AI provider'
   const missingModel = message.match(/Model\s+["']([^"']+)["']\s+not found/i)
   if (missingModel) {
     return `The selected model "${missingModel[1]}" is unavailable. Choose another model in AI settings and try again.`
-  }
-
-  if (/pi exited before finishing/i.test(message)) {
-    return 'The agent stopped before it could finish. Check the selected model in AI settings and try again.'
   }
 
   if (!detail) return trimmed

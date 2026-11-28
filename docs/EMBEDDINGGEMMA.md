@@ -12,7 +12,10 @@ The text-only Q8 model is 309,855,456 bytes. The platform-specific native runtim
 adds roughly 12–20 MB. Actual runtime memory includes model mappings, context
 buffers, and inference allocations; the download size is not a RAM estimate.
 The runtime loads on demand and shuts down after two idle minutes. A pipe-owned
-supervisor also stops it when the backend exits, including abrupt termination.
+native supervisor also stops it when the Rust host exits, including abrupt
+termination. This private mode of the Tezbar executable does not initialize
+Tauri or start a JS runtime. Unix process groups and Windows Job Objects own
+the inference process tree.
 
 ## Installation and inference
 
@@ -51,8 +54,14 @@ error. “Retry semantic indexing” restarts unfinished work.
 
 ## Validation
 
-Run `pnpm exec vitest run src/main/knowledge` for the ordinary tests.
-The real-model integration tests are explicitly opt-in and download about
+Run `cargo test --manifest-path src-tauri/Cargo.toml --lib native_core::knowledge`
+for the current native extraction, database migration, inference-protocol and
+process-lifetime fixtures. They use temporary profiles and fake loopback model
+responses; they do not download a model.
+
+The retained TypeScript tests (`pnpm exec vitest run src/main/knowledge`) describe
+the pre-port implementation. Their real-model integration tests are explicitly
+opt-in and download about
 330 MB into the specified isolated directory:
 
 ```powershell
@@ -61,10 +70,11 @@ $env:APPDATA_DIR = 'C:/path/to/isolated/gemma-test-data'
 pnpm exec vitest run src/main/knowledge/embeddings/gemmaRuntime.integration.test.ts
 ```
 
-They check English paraphrases, Russian-to-English retrieval, local restart,
-and the application's extraction → background embedding → search path.
-Cross-platform downloads are pinned, but native inference has been exercised
-on Windows x64; other architectures still need native release validation.
+These legacy tests check English paraphrases, Russian-to-English retrieval,
+local restart, and the old extraction → background embedding → search path.
+The pre-port runtime was exercised on Windows x64. That is not validation of
+the new Rust integration: a real-model smoke on each release platform remains
+necessary. Cross-platform downloads remain pinned.
 
 ## Upstream references
 

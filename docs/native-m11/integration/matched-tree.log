@@ -1,0 +1,1207 @@
+tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+├── alacritty_terminal v0.26.0
+│   ├── base64 v0.22.1
+│   ├── bitflags v2.13.0
+│   │   └── serde_core v1.0.228
+│   ├── home v0.5.12
+│   ├── libc v0.2.186
+│   ├── log v0.4.32
+│   │   └── serde_core v1.0.228
+│   ├── parking_lot v0.12.5
+│   │   ├── lock_api v0.4.14
+│   │   │   └── scopeguard v1.2.0
+│   │   └── parking_lot_core v0.9.12
+│   │       ├── cfg-if v1.0.4
+│   │       ├── libc v0.2.186
+│   │       └── smallvec v1.15.2
+│   ├── polling v3.11.0
+│   │   ├── cfg-if v1.0.4
+│   │   └── rustix v1.1.4
+│   │       ├── bitflags v2.13.0 (*)
+│   │       ├── errno v0.3.14
+│   │       │   └── libc v0.2.186
+│   │       └── libc v0.2.186
+│   ├── regex-automata v0.4.14
+│   │   ├── aho-corasick v1.1.4
+│   │   │   └── memchr v2.8.2
+│   │   ├── memchr v2.8.2
+│   │   └── regex-syntax v0.8.11
+│   ├── rustix v1.1.4 (*)
+│   ├── rustix-openpty v0.2.0
+│   │   ├── errno v0.3.14 (*)
+│   │   ├── libc v0.2.186
+│   │   └── rustix v1.1.4 (*)
+│   ├── signal-hook v0.4.6
+│   │   ├── libc v0.2.186
+│   │   └── signal-hook-registry v1.4.8
+│   │       ├── errno v0.3.14 (*)
+│   │       └── libc v0.2.186
+│   ├── unicode-width v0.2.3
+│   └── vte v0.15.0
+│       ├── arrayvec v0.7.6
+│       ├── bitflags v2.13.0 (*)
+│       ├── cursor-icon v1.2.0
+│       ├── log v0.4.32 (*)
+│       └── memchr v2.8.2
+├── anyhow v1.0.102
+├── base64 v0.22.1
+├── global-hotkey v0.8.0
+│   ├── crossbeam-channel v0.5.17
+│   │   └── crossbeam-utils v0.8.21
+│   ├── keyboard-types v0.7.0
+│   │   ├── bitflags v2.13.0 (*)
+│   │   ├── serde v1.0.228
+│   │   │   ├── serde_core v1.0.228
+│   │   │   └── serde_derive v1.0.228 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106
+│   │   │       │   └── unicode-ident v1.0.24
+│   │   │       ├── quote v1.0.45
+│   │   │       │   └── proc-macro2 v1.0.106 (*)
+│   │   │       └── syn v2.0.117
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── unicode-ident v1.0.24
+│   │   └── unicode-segmentation v1.13.3
+│   ├── objc2 v0.6.4
+│   │   └── objc2-encode v4.1.0
+│   ├── objc2-app-kit v0.3.2
+│   │   ├── bitflags v2.13.0 (*)
+│   │   ├── block2 v0.6.2
+│   │   │   └── objc2 v0.6.4 (*)
+│   │   ├── objc2 v0.6.4 (*)
+│   │   ├── objc2-core-foundation v0.3.2
+│   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   └── objc2 v0.6.4 (*)
+│   │   ├── objc2-core-graphics v0.3.2
+│   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   ├── objc2 v0.6.4 (*)
+│   │   │   └── objc2-core-foundation v0.3.2 (*)
+│   │   ├── objc2-foundation v0.3.2
+│   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   ├── block2 v0.6.2 (*)
+│   │   │   ├── libc v0.2.186
+│   │   │   ├── objc2 v0.6.4 (*)
+│   │   │   └── objc2-core-foundation v0.3.2 (*)
+│   │   └── objc2-uniform-type-identifiers v0.3.2
+│   │       ├── objc2 v0.6.4 (*)
+│   │       └── objc2-foundation v0.3.2 (*)
+│   ├── once_cell v1.21.4
+│   └── thiserror v2.0.18
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── gpui v0.2.2 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   ├── accesskit v0.24.1
+│   │   ├── enumn v0.1.14 (proc-macro)
+│   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   ├── quote v1.0.45 (*)
+│   │   │   └── syn v2.0.117 (*)
+│   │   └── uuid v1.23.3
+│   │       ├── getrandom v0.4.2
+│   │       │   ├── cfg-if v1.0.4
+│   │       │   └── libc v0.2.186
+│   │       └── serde_core v1.0.228
+│   ├── anyhow v1.0.102
+│   ├── async-channel v2.5.0
+│   │   ├── concurrent-queue v2.5.0
+│   │   │   └── crossbeam-utils v0.8.21
+│   │   ├── event-listener-strategy v0.5.4
+│   │   │   ├── event-listener v5.4.2
+│   │   │   │   ├── parking v2.2.1
+│   │   │   │   └── pin-project-lite v0.2.17
+│   │   │   └── pin-project-lite v0.2.17
+│   │   ├── futures-core v0.3.34
+│   │   └── pin-project-lite v0.2.17
+│   ├── async-task v4.7.1 (https://github.com/zed-industries/async-task.git?rev=015845a19fc31752c02367567d3b8900a406f9da#015845a1)
+│   ├── backtrace v0.3.77
+│   │   ├── addr2line v0.27.1
+│   │   │   └── gimli v0.34.0
+│   │   ├── cfg-if v1.0.4
+│   │   ├── libc v0.2.186
+│   │   ├── miniz_oxide v0.9.1
+│   │   │   └── adler2 v2.0.1
+│   │   ├── object v0.40.0
+│   │   │   └── memchr v2.8.2
+│   │   └── rustc-demangle v0.1.28
+│   ├── bitflags v2.13.0 (*)
+│   ├── chrono v0.4.45
+│   │   ├── iana-time-zone v0.1.65
+│   │   │   └── core-foundation-sys v0.8.7
+│   │   ├── num-traits v0.2.19
+│   │   │   └── libm v0.2.16
+│   │   └── serde v1.0.228 (*)
+│   ├── collections v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   ├── gpui_util v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   │   ├── anyhow v1.0.102
+│   │   │   └── log v0.4.32 (*)
+│   │   ├── indexmap v2.14.0
+│   │   │   ├── equivalent v1.0.2
+│   │   │   ├── hashbrown v0.17.1
+│   │   │   └── serde_core v1.0.228
+│   │   └── rustc-hash v2.1.2
+│   ├── derive_more v2.1.1
+│   │   └── derive_more-impl v2.1.1 (proc-macro)
+│   │       ├── convert_case v0.10.0
+│   │       │   └── unicode-segmentation v1.13.3
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── etagere v0.2.15
+│   │   ├── euclid v0.22.14
+│   │   │   └── num-traits v0.2.19 (*)
+│   │   └── svg_fmt v0.4.5
+│   ├── futures v0.3.34
+│   │   ├── futures-channel v0.3.34
+│   │   │   ├── futures-core v0.3.34
+│   │   │   └── futures-sink v0.3.34
+│   │   ├── futures-core v0.3.34
+│   │   ├── futures-executor v0.3.34
+│   │   │   ├── futures-core v0.3.34
+│   │   │   ├── futures-task v0.3.34
+│   │   │   └── futures-util v0.3.34
+│   │   │       ├── futures-channel v0.3.34 (*)
+│   │   │       ├── futures-core v0.3.34
+│   │   │       ├── futures-io v0.3.34
+│   │   │       ├── futures-macro v0.3.34 (proc-macro)
+│   │   │       │   ├── proc-macro2 v1.0.106 (*)
+│   │   │       │   ├── quote v1.0.45 (*)
+│   │   │       │   └── syn v3.0.3
+│   │   │       │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       │       ├── quote v1.0.45 (*)
+│   │   │       │       └── unicode-ident v1.0.24
+│   │   │       ├── futures-sink v0.3.34
+│   │   │       ├── futures-task v0.3.34
+│   │   │       ├── memchr v2.8.2
+│   │   │       ├── pin-project-lite v0.2.17
+│   │   │       └── slab v0.4.12
+│   │   ├── futures-io v0.3.34
+│   │   ├── futures-sink v0.3.34
+│   │   ├── futures-task v0.3.34
+│   │   └── futures-util v0.3.34 (*)
+│   ├── gpui_macros v0.1.0 (proc-macro) (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   ├── heck v0.5.0
+│   │   ├── proc-macro2 v1.0.106 (*)
+│   │   ├── quote v1.0.45 (*)
+│   │   └── syn v2.0.117 (*)
+│   ├── gpui_shared_string v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   ├── schemars v1.2.1
+│   │   │   ├── dyn-clone v1.0.20
+│   │   │   ├── indexmap v2.14.0 (*)
+│   │   │   ├── ref-cast v1.0.25
+│   │   │   │   └── ref-cast-impl v1.0.25 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.45 (*)
+│   │   │   │       └── syn v2.0.117 (*)
+│   │   │   ├── schemars_derive v1.2.1 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   ├── serde_derive_internals v0.29.1
+│   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   └── syn v2.0.117 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   └── serde_json v1.0.150
+│   │   │       ├── indexmap v2.14.0 (*)
+│   │   │       ├── itoa v1.0.18
+│   │   │       ├── memchr v2.8.2
+│   │   │       ├── serde_core v1.0.228
+│   │   │       └── zmij v1.0.21
+│   │   ├── serde v1.0.228 (*)
+│   │   └── smol_str v0.3.7
+│   │       └── serde_core v1.0.228
+│   ├── gpui_util v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│   ├── heapless v0.9.3
+│   │   ├── hash32 v0.3.1
+│   │   │   └── byteorder v1.5.0
+│   │   └── stable_deref_trait v1.2.1
+│   ├── http_client v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   ├── anyhow v1.0.102
+│   │   ├── bytes v1.11.1
+│   │   ├── futures v0.3.34 (*)
+│   │   ├── http v1.4.2
+│   │   │   ├── bytes v1.11.1
+│   │   │   └── itoa v1.0.18
+│   │   ├── http-body v1.0.1
+│   │   │   ├── bytes v1.11.1
+│   │   │   └── http v1.4.2 (*)
+│   │   ├── log v0.4.32 (*)
+│   │   ├── parking_lot v0.12.5 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.150 (*)
+│   │   ├── serde_urlencoded v0.7.1
+│   │   │   ├── form_urlencoded v1.2.2
+│   │   │   │   └── percent-encoding v2.3.2
+│   │   │   ├── itoa v1.0.18
+│   │   │   ├── ryu v1.0.23
+│   │   │   └── serde v1.0.228 (*)
+│   │   └── url v2.5.4
+│   │       ├── form_urlencoded v1.2.2 (*)
+│   │       ├── idna v1.0.3
+│   │       │   ├── idna_adapter v1.2.0
+│   │       │   │   ├── icu_normalizer v1.5.0
+│   │       │   │   │   ├── displaydoc v0.2.6 (proc-macro)
+│   │       │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │       │   │   │   │   ├── quote v1.0.45 (*)
+│   │       │   │   │   │   └── syn v2.0.117 (*)
+│   │       │   │   │   ├── icu_collections v1.5.0
+│   │       │   │   │   │   ├── displaydoc v0.2.6 (proc-macro) (*)
+│   │       │   │   │   │   ├── yoke v0.7.5
+│   │       │   │   │   │   │   ├── stable_deref_trait v1.2.1
+│   │       │   │   │   │   │   ├── yoke-derive v0.7.5 (proc-macro)
+│   │       │   │   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │       │   │   │   │   │   │   ├── quote v1.0.45 (*)
+│   │       │   │   │   │   │   │   ├── syn v2.0.117 (*)
+│   │       │   │   │   │   │   │   └── synstructure v0.13.2
+│   │       │   │   │   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │       │   │   │   │   │   │       ├── quote v1.0.45 (*)
+│   │       │   │   │   │   │   │       └── syn v2.0.117 (*)
+│   │       │   │   │   │   │   └── zerofrom v0.1.8
+│   │       │   │   │   │   │       └── zerofrom-derive v0.1.7 (proc-macro)
+│   │       │   │   │   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │       │   │   │   │   │           ├── quote v1.0.45 (*)
+│   │       │   │   │   │   │           ├── syn v2.0.117 (*)
+│   │       │   │   │   │   │           └── synstructure v0.13.2 (*)
+│   │       │   │   │   │   ├── zerofrom v0.1.8 (*)
+│   │       │   │   │   │   └── zerovec v0.10.4
+│   │       │   │   │   │       ├── yoke v0.7.5 (*)
+│   │       │   │   │   │       ├── zerofrom v0.1.8 (*)
+│   │       │   │   │   │       └── zerovec-derive v0.10.3 (proc-macro)
+│   │       │   │   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │       │   │   │   │           ├── quote v1.0.45 (*)
+│   │       │   │   │   │           └── syn v2.0.117 (*)
+│   │       │   │   │   ├── icu_normalizer_data v1.5.1
+│   │       │   │   │   ├── icu_properties v1.5.1
+│   │       │   │   │   │   ├── displaydoc v0.2.6 (proc-macro) (*)
+│   │       │   │   │   │   ├── icu_collections v1.5.0 (*)
+│   │       │   │   │   │   ├── icu_locid_transform v1.5.0
+│   │       │   │   │   │   │   ├── displaydoc v0.2.6 (proc-macro) (*)
+│   │       │   │   │   │   │   ├── icu_locid v1.5.0
+│   │       │   │   │   │   │   │   ├── displaydoc v0.2.6 (proc-macro) (*)
+│   │       │   │   │   │   │   │   ├── litemap v0.7.5
+│   │       │   │   │   │   │   │   ├── tinystr v0.7.6
+│   │       │   │   │   │   │   │   │   ├── displaydoc v0.2.6 (proc-macro) (*)
+│   │       │   │   │   │   │   │   │   └── zerovec v0.10.4 (*)
+│   │       │   │   │   │   │   │   ├── writeable v0.5.5
+│   │       │   │   │   │   │   │   └── zerovec v0.10.4 (*)
+│   │       │   │   │   │   │   ├── icu_locid_transform_data v1.5.1
+│   │       │   │   │   │   │   ├── icu_provider v1.5.0
+│   │       │   │   │   │   │   │   ├── displaydoc v0.2.6 (proc-macro) (*)
+│   │       │   │   │   │   │   │   ├── icu_locid v1.5.0 (*)
+│   │       │   │   │   │   │   │   ├── icu_provider_macros v1.5.0 (proc-macro)
+│   │       │   │   │   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │       │   │   │   │   │   │   │   ├── quote v1.0.45 (*)
+│   │       │   │   │   │   │   │   │   └── syn v2.0.117 (*)
+│   │       │   │   │   │   │   │   ├── stable_deref_trait v1.2.1
+│   │       │   │   │   │   │   │   ├── tinystr v0.7.6 (*)
+│   │       │   │   │   │   │   │   ├── writeable v0.5.5
+│   │       │   │   │   │   │   │   ├── yoke v0.7.5 (*)
+│   │       │   │   │   │   │   │   ├── zerofrom v0.1.8 (*)
+│   │       │   │   │   │   │   │   └── zerovec v0.10.4 (*)
+│   │       │   │   │   │   │   ├── tinystr v0.7.6 (*)
+│   │       │   │   │   │   │   └── zerovec v0.10.4 (*)
+│   │       │   │   │   │   ├── icu_properties_data v1.5.1
+│   │       │   │   │   │   ├── icu_provider v1.5.0 (*)
+│   │       │   │   │   │   ├── tinystr v0.7.6 (*)
+│   │       │   │   │   │   └── zerovec v0.10.4 (*)
+│   │       │   │   │   ├── icu_provider v1.5.0 (*)
+│   │       │   │   │   ├── smallvec v1.15.2
+│   │       │   │   │   ├── utf16_iter v1.0.5
+│   │       │   │   │   ├── utf8_iter v1.0.4
+│   │       │   │   │   ├── write16 v1.0.0
+│   │       │   │   │   └── zerovec v0.10.4 (*)
+│   │       │   │   └── icu_properties v1.5.1 (*)
+│   │       │   ├── smallvec v1.15.2
+│   │       │   └── utf8_iter v1.0.4
+│   │       └── percent-encoding v2.3.2
+│   ├── image v0.25.9
+│   │   ├── bytemuck v1.25.0
+│   │   ├── byteorder-lite v0.1.0
+│   │   ├── color_quant v1.1.0
+│   │   ├── exr v1.74.2
+│   │   │   ├── bit_field v0.10.3
+│   │   │   ├── half v2.7.1
+│   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   └── zerocopy v0.8.52
+│   │   │   │       └── zerocopy-derive v0.8.52 (proc-macro)
+│   │   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │   │           ├── quote v1.0.45 (*)
+│   │   │   │           └── syn v2.0.117 (*)
+│   │   │   ├── lebe v0.5.3
+│   │   │   ├── miniz_oxide v0.8.9
+│   │   │   │   ├── adler2 v2.0.1
+│   │   │   │   └── simd-adler32 v0.3.9
+│   │   │   ├── num-complex v0.4.6
+│   │   │   │   ├── bytemuck v1.25.0
+│   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   ├── pulp v0.22.3
+│   │   │   │   ├── bytemuck v1.25.0
+│   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   ├── libm v0.2.16
+│   │   │   │   ├── num-complex v0.4.6 (*)
+│   │   │   │   ├── paste v1.0.15 (proc-macro)
+│   │   │   │   ├── pulp-wasm-simd-flag v0.1.1
+│   │   │   │   └── reborrow v0.5.5
+│   │   │   ├── rayon-core v1.13.0
+│   │   │   │   ├── crossbeam-deque v0.8.8
+│   │   │   │   │   ├── crossbeam-epoch v0.9.21
+│   │   │   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   ├── smallvec v1.15.2
+│   │   │   └── zune-inflate v0.2.54
+│   │   │       └── simd-adler32 v0.3.9
+│   │   ├── gif v0.14.2
+│   │   │   ├── color_quant v1.1.0
+│   │   │   └── weezl v0.1.12
+│   │   ├── image-webp v0.2.4
+│   │   │   ├── byteorder-lite v0.1.0
+│   │   │   └── quick-error v2.0.1
+│   │   ├── moxcms v0.7.11
+│   │   │   ├── num-traits v0.2.19 (*)
+│   │   │   └── pxfm v0.1.29
+│   │   ├── num-traits v0.2.19 (*)
+│   │   ├── png v0.18.1
+│   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   ├── crc32fast v1.5.0
+│   │   │   │   └── cfg-if v1.0.4
+│   │   │   ├── fdeflate v0.3.7
+│   │   │   │   └── simd-adler32 v0.3.9
+│   │   │   ├── flate2 v1.1.9
+│   │   │   │   ├── crc32fast v1.5.0 (*)
+│   │   │   │   ├── miniz_oxide v0.8.9 (*)
+│   │   │   │   └── zlib-rs v0.6.8
+│   │   │   └── miniz_oxide v0.8.9 (*)
+│   │   ├── qoi v0.4.1
+│   │   │   └── bytemuck v1.25.0
+│   │   ├── rayon v1.12.0
+│   │   │   ├── either v1.19.0
+│   │   │   └── rayon-core v1.13.0 (*)
+│   │   ├── tiff v0.10.3
+│   │   │   ├── fax v0.2.7
+│   │   │   ├── flate2 v1.1.9 (*)
+│   │   │   ├── half v2.7.1 (*)
+│   │   │   ├── quick-error v2.0.1
+│   │   │   ├── weezl v0.1.12
+│   │   │   └── zune-jpeg v0.4.21
+│   │   │       └── zune-core v0.4.12
+│   │   ├── zune-core v0.5.3
+│   │   └── zune-jpeg v0.5.15
+│   │       └── zune-core v0.5.3
+│   ├── inventory v0.3.25
+│   ├── itertools v0.14.0
+│   │   └── either v1.19.0
+│   ├── log v0.4.32 (*)
+│   ├── lyon v1.0.19
+│   │   ├── lyon_algorithms v1.0.22
+│   │   │   ├── lyon_path v1.0.19
+│   │   │   │   ├── lyon_geom v1.0.20
+│   │   │   │   │   ├── arrayvec v0.7.6
+│   │   │   │   │   ├── euclid v0.22.14 (*)
+│   │   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   └── num-traits v0.2.19 (*)
+│   │   └── lyon_tessellation v1.0.23
+│   │       ├── float_next_after v1.0.0
+│   │       ├── lyon_path v1.0.19 (*)
+│   │       └── num-traits v0.2.19 (*)
+│   ├── num_cpus v1.17.0
+│   │   └── libc v0.2.186
+│   ├── objc2-core-foundation v0.3.2 (*)
+│   ├── objc2-core-video v0.3.2
+│   │   ├── bitflags v2.13.0 (*)
+│   │   ├── objc2 v0.6.4 (*)
+│   │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   └── objc2-metal v0.3.2
+│   │       ├── bitflags v2.13.0 (*)
+│   │       ├── block2 v0.6.2 (*)
+│   │       ├── dispatch2 v0.3.1
+│   │       │   ├── bitflags v2.13.0 (*)
+│   │       │   ├── block2 v0.6.2 (*)
+│   │       │   └── objc2 v0.6.4 (*)
+│   │       ├── objc2 v0.6.4 (*)
+│   │       └── objc2-foundation v0.3.2 (*)
+│   ├── parking v2.2.1
+│   ├── parking_lot v0.12.5 (*)
+│   ├── pin-project v1.1.13
+│   │   └── pin-project-internal v1.1.13 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── pollster v0.4.0
+│   ├── profiling v1.0.18
+│   │   └── profiling-procmacros v1.0.18 (proc-macro)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── rand v0.9.5
+│   │   ├── rand_chacha v0.9.0
+│   │   │   ├── ppv-lite86 v0.2.21
+│   │   │   │   └── zerocopy v0.8.52 (*)
+│   │   │   └── rand_core v0.9.5
+│   │   │       └── getrandom v0.3.4
+│   │   │           ├── cfg-if v1.0.4
+│   │   │           └── libc v0.2.186
+│   │   └── rand_core v0.9.5 (*)
+│   ├── raw-window-handle v0.6.2
+│   ├── refineable v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   └── derive_refineable v0.1.0 (proc-macro) (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── regex v1.12.4
+│   │   ├── aho-corasick v1.1.4 (*)
+│   │   ├── memchr v2.8.2
+│   │   ├── regex-automata v0.4.14 (*)
+│   │   └── regex-syntax v0.8.11
+│   ├── resvg v0.46.0
+│   │   ├── gif v0.14.2 (*)
+│   │   ├── image-webp v0.2.4 (*)
+│   │   ├── log v0.4.32 (*)
+│   │   ├── pico-args v0.5.0
+│   │   ├── rgb v0.8.53
+│   │   │   └── bytemuck v1.25.0
+│   │   ├── svgtypes v0.16.2
+│   │   │   ├── kurbo v0.13.1
+│   │   │   │   ├── arrayvec v0.7.6
+│   │   │   │   ├── polycool v0.4.0
+│   │   │   │   │   └── arrayvec v0.7.6
+│   │   │   │   └── smallvec v1.15.2
+│   │   │   └── siphasher v1.0.3
+│   │   ├── tiny-skia v0.11.4
+│   │   │   ├── arrayref v0.3.9
+│   │   │   ├── arrayvec v0.7.6
+│   │   │   ├── bytemuck v1.25.0
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── log v0.4.32 (*)
+│   │   │   ├── png v0.17.16
+│   │   │   │   ├── bitflags v1.3.2
+│   │   │   │   ├── crc32fast v1.5.0 (*)
+│   │   │   │   ├── fdeflate v0.3.7 (*)
+│   │   │   │   ├── flate2 v1.1.9 (*)
+│   │   │   │   └── miniz_oxide v0.8.9 (*)
+│   │   │   └── tiny-skia-path v0.11.4
+│   │   │       ├── arrayref v0.3.9
+│   │   │       ├── bytemuck v1.25.0
+│   │   │       └── strict-num v0.1.1
+│   │   │           └── float-cmp v0.9.0
+│   │   ├── usvg v0.46.0
+│   │   │   ├── base64 v0.22.1
+│   │   │   ├── data-url v0.3.2
+│   │   │   ├── flate2 v1.1.9 (*)
+│   │   │   ├── fontdb v0.23.0
+│   │   │   │   ├── log v0.4.32 (*)
+│   │   │   │   ├── memmap2 v0.9.12
+│   │   │   │   │   └── libc v0.2.186
+│   │   │   │   ├── slotmap v1.1.1
+│   │   │   │   ├── tinyvec v1.11.0
+│   │   │   │   │   └── tinyvec_macros v0.1.1
+│   │   │   │   └── ttf-parser v0.25.1
+│   │   │   │       └── core_maths v0.1.1
+│   │   │   │           └── libm v0.2.16
+│   │   │   ├── imagesize v0.14.0
+│   │   │   ├── kurbo v0.13.1 (*)
+│   │   │   ├── log v0.4.32 (*)
+│   │   │   ├── pico-args v0.5.0
+│   │   │   ├── roxmltree v0.21.2
+│   │   │   │   └── memchr v2.8.2
+│   │   │   ├── rustybuzz v0.20.1
+│   │   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   │   ├── bytemuck v1.25.0
+│   │   │   │   ├── core_maths v0.1.1 (*)
+│   │   │   │   ├── log v0.4.32 (*)
+│   │   │   │   ├── smallvec v1.15.2
+│   │   │   │   ├── ttf-parser v0.25.1 (*)
+│   │   │   │   ├── unicode-bidi-mirroring v0.4.0
+│   │   │   │   ├── unicode-ccc v0.4.0
+│   │   │   │   ├── unicode-properties v0.1.3
+│   │   │   │   └── unicode-script v0.5.9
+│   │   │   ├── simplecss v0.2.2
+│   │   │   │   └── log v0.4.32 (*)
+│   │   │   ├── siphasher v1.0.3
+│   │   │   ├── strict-num v0.1.1 (*)
+│   │   │   ├── svgtypes v0.16.2 (*)
+│   │   │   ├── tiny-skia-path v0.11.4 (*)
+│   │   │   ├── unicode-bidi v0.3.18
+│   │   │   ├── unicode-script v0.5.9
+│   │   │   ├── unicode-vo v0.1.0
+│   │   │   └── xmlwriter v0.1.0
+│   │   └── zune-jpeg v0.5.15 (*)
+│   ├── scheduler v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   ├── async-task v4.7.1 (https://github.com/zed-industries/async-task.git?rev=015845a19fc31752c02367567d3b8900a406f9da#015845a1)
+│   │   ├── backtrace v0.3.77 (*)
+│   │   ├── chrono v0.4.45 (*)
+│   │   ├── flume v0.12.0
+│   │   │   ├── futures-core v0.3.34
+│   │   │   ├── futures-sink v0.3.34
+│   │   │   └── spin v0.9.9
+│   │   │       └── lock_api v0.4.14 (*)
+│   │   ├── futures v0.3.34 (*)
+│   │   ├── parking_lot v0.12.5 (*)
+│   │   ├── rand v0.9.5 (*)
+│   │   └── web-time v1.1.0
+│   ├── schemars v1.2.1 (*)
+│   ├── seahash v4.1.0
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.150 (*)
+│   ├── slotmap v1.1.1
+│   ├── smallvec v1.15.2
+│   ├── spin v0.10.1
+│   │   └── lock_api v0.4.14 (*)
+│   ├── strum v0.28.0
+│   │   └── strum_macros v0.28.0 (proc-macro)
+│   │       ├── heck v0.5.0
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── sum_tree v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │   ├── heapless v0.9.3 (*)
+│   │   ├── rayon v1.12.0 (*)
+│   │   ├── tracing v0.1.44
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── tracing-attributes v0.1.31 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   └── tracing-core v0.1.36
+│   │   │       └── once_cell v1.21.4
+│   │   └── ztracing v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   │       ├── tracing v0.1.44 (*)
+│   │       └── ztracing_macro v0.1.0 (proc-macro) (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   ├── taffy v0.15.0
+│   │   ├── slotmap v1.1.1
+│   │   └── smallvec v1.15.2
+│   ├── thiserror v2.0.18 (*)
+│   ├── ttf-parser v0.25.1 (*)
+│   ├── url v2.5.4 (*)
+│   ├── usvg v0.46.0 (*)
+│   ├── uuid v1.23.3 (*)
+│   └── waker-fn v1.2.0
+├── gpui_platform v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   ├── anyhow v1.0.102
+│   ├── gpui v0.2.2 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│   └── gpui_macos v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│       ├── accesskit v0.24.1 (*)
+│       ├── accesskit_macos v0.26.3
+│       │   ├── accesskit v0.24.1 (*)
+│       │   ├── accesskit_consumer v0.38.0
+│       │   │   ├── accesskit v0.24.1 (*)
+│       │   │   └── hashbrown v0.16.1
+│       │   │       └── foldhash v0.2.0
+│       │   ├── hashbrown v0.16.1 (*)
+│       │   ├── objc2 v0.5.3
+│       │   │   ├── objc-sys v0.3.5
+│       │   │   └── objc2-encode v4.1.0
+│       │   ├── objc2-app-kit v0.2.2
+│       │   │   ├── bitflags v2.13.0 (*)
+│       │   │   ├── objc2 v0.5.3 (*)
+│       │   │   └── objc2-foundation v0.2.2
+│       │   │       ├── bitflags v2.13.0 (*)
+│       │   │       └── objc2 v0.5.3 (*)
+│       │   └── objc2-foundation v0.2.2 (*)
+│       ├── anyhow v1.0.102
+│       ├── block2 v0.6.2 (*)
+│       ├── collections v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│       ├── core-foundation v0.10.1
+│       │   ├── core-foundation-sys v0.8.7
+│       │   └── libc v0.2.186
+│       ├── core-foundation-sys v0.8.7
+│       ├── core-graphics v0.24.0
+│       │   ├── bitflags v2.13.0 (*)
+│       │   ├── core-foundation v0.10.1 (*)
+│       │   ├── core-graphics-types v0.2.0
+│       │   │   ├── bitflags v2.13.0 (*)
+│       │   │   ├── core-foundation v0.10.1 (*)
+│       │   │   └── libc v0.2.186
+│       │   ├── foreign-types v0.5.0
+│       │   │   ├── foreign-types-macros v0.2.3 (proc-macro)
+│       │   │   │   ├── proc-macro2 v1.0.106 (*)
+│       │   │   │   ├── quote v1.0.45 (*)
+│       │   │   │   └── syn v2.0.117 (*)
+│       │   │   └── foreign-types-shared v0.3.1
+│       │   └── libc v0.2.186
+│       ├── ctor v1.0.13
+│       │   ├── link-section v0.19.3
+│       │   └── linktime-proc-macro v0.2.3 (proc-macro)
+│       ├── dispatch2 v0.3.1 (*)
+│       ├── foreign-types v0.5.0 (*)
+│       ├── futures v0.3.34 (*)
+│       ├── gpui v0.2.2 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│       ├── gpui_apple v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│       │   ├── anyhow v1.0.102
+│       │   ├── async-task v4.7.1 (https://github.com/zed-industries/async-task.git?rev=015845a19fc31752c02367567d3b8900a406f9da#015845a1)
+│       │   ├── block2 v0.6.2 (*)
+│       │   ├── collections v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│       │   ├── core-foundation v0.10.1 (*)
+│       │   ├── core-foundation-sys v0.8.7
+│       │   ├── core-graphics v0.24.0 (*)
+│       │   ├── core-text v21.0.0
+│       │   │   ├── core-foundation v0.10.1 (*)
+│       │   │   ├── core-graphics v0.24.0 (*)
+│       │   │   ├── foreign-types v0.5.0 (*)
+│       │   │   └── libc v0.2.186
+│       │   ├── dispatch2 v0.3.1 (*)
+│       │   ├── etagere v0.2.15 (*)
+│       │   ├── futures v0.3.34 (*)
+│       │   ├── gpui v0.2.2 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│       │   ├── gpui_util v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│       │   ├── image v0.25.9 (*)
+│       │   ├── libc v0.2.186
+│       │   ├── log v0.4.32 (*)
+│       │   ├── mach2 v0.6.0
+│       │   ├── objc2 v0.6.4 (*)
+│       │   ├── objc2-core-foundation v0.3.2 (*)
+│       │   ├── objc2-core-graphics v0.3.2 (*)
+│       │   ├── objc2-core-text v0.3.2
+│       │   │   ├── bitflags v2.13.0 (*)
+│       │   │   └── objc2-core-foundation v0.3.2 (*)
+│       │   ├── objc2-core-video v0.3.2 (*)
+│       │   ├── objc2-foundation v0.3.2 (*)
+│       │   ├── objc2-metal v0.3.2 (*)
+│       │   ├── objc2-quartz-core v0.3.2
+│       │   │   ├── bitflags v2.13.0 (*)
+│       │   │   ├── objc2 v0.6.4 (*)
+│       │   │   ├── objc2-core-foundation v0.3.2 (*)
+│       │   │   ├── objc2-core-graphics v0.3.2 (*)
+│       │   │   ├── objc2-foundation v0.3.2 (*)
+│       │   │   └── objc2-metal v0.3.2 (*)
+│       │   ├── objc2-security v0.3.2
+│       │   │   └── objc2-core-foundation v0.3.2 (*)
+│       │   ├── parking_lot v0.12.5 (*)
+│       │   ├── pathfinder_geometry v0.5.1
+│       │   │   ├── log v0.4.32 (*)
+│       │   │   └── pathfinder_simd v0.5.6
+│       │   ├── smallvec v1.15.2
+│       │   ├── thiserror v2.0.18 (*)
+│       │   └── zed-font-kit v0.14.1-zed (https://github.com/zed-industries/font-kit?rev=94b0f28166665e8fd2f53ff6d268a14955c82269#94b0f281)
+│       │       ├── bitflags v2.13.0 (*)
+│       │       ├── byteorder v1.5.0
+│       │       ├── core-foundation v0.10.1 (*)
+│       │       ├── core-graphics v0.24.0 (*)
+│       │       ├── core-text v21.0.0 (*)
+│       │       ├── dirs v6.0.0
+│       │       │   └── dirs-sys v0.5.0
+│       │       │       ├── libc v0.2.186
+│       │       │       └── option-ext v0.2.0
+│       │       ├── float-ord v0.3.2
+│       │       ├── lazy_static v1.5.0
+│       │       ├── libc v0.2.186
+│       │       ├── log v0.4.32 (*)
+│       │       ├── pathfinder_geometry v0.5.1 (*)
+│       │       ├── pathfinder_simd v0.5.6
+│       │       └── walkdir v2.5.0
+│       │           └── same-file v1.0.6
+│       ├── gpui_util v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│       ├── image v0.25.9 (*)
+│       ├── itertools v0.14.0 (*)
+│       ├── log v0.4.32 (*)
+│       ├── objc2 v0.6.4 (*)
+│       ├── objc2-app-kit v0.3.2 (*)
+│       ├── objc2-core-graphics v0.3.2 (*)
+│       ├── objc2-core-video v0.3.2 (*)
+│       ├── objc2-foundation v0.3.2 (*)
+│       ├── objc2-uniform-type-identifiers v0.3.2 (*)
+│       ├── objc2-user-notifications v0.3.2
+│       │   ├── bitflags v2.13.0 (*)
+│       │   ├── block2 v0.6.2 (*)
+│       │   ├── objc2 v0.6.4 (*)
+│       │   ├── objc2-core-location v0.3.2
+│       │   │   ├── objc2 v0.6.4 (*)
+│       │   │   └── objc2-foundation v0.3.2 (*)
+│       │   └── objc2-foundation v0.3.2 (*)
+│       ├── parking_lot v0.12.5 (*)
+│       ├── raw-window-handle v0.6.2
+│       ├── scheduler v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│       ├── semver v1.0.28
+│       │   └── serde_core v1.0.228
+│       ├── smallvec v1.15.2
+│       ├── strum v0.28.0 (*)
+│       └── uuid v1.23.3 (*)
+├── gpui_tokio v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9)
+│   ├── anyhow v1.0.102
+│   ├── gpui v0.2.2 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│   ├── gpui_util v0.1.0 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│   └── tokio v1.52.3
+│       ├── bytes v1.11.1
+│       ├── libc v0.2.186
+│       ├── mio v1.2.1
+│       │   └── libc v0.2.186
+│       ├── parking_lot v0.12.5 (*)
+│       ├── pin-project-lite v0.2.17
+│       ├── signal-hook-registry v1.4.8 (*)
+│       ├── socket2 v0.6.4
+│       │   └── libc v0.2.186
+│       └── tokio-macros v2.7.0 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── image v0.25.9 (*)
+├── log v0.4.32 (*)
+├── muda v0.19.2
+│   ├── crossbeam-channel v0.5.17 (*)
+│   ├── dpi v0.1.2
+│   ├── keyboard-types v0.7.0 (*)
+│   ├── objc2 v0.6.4 (*)
+│   ├── objc2-app-kit v0.3.2 (*)
+│   ├── objc2-core-foundation v0.3.2 (*)
+│   ├── objc2-foundation v0.3.2 (*)
+│   ├── once_cell v1.21.4
+│   ├── png v0.18.1 (*)
+│   └── thiserror v2.0.18 (*)
+├── objc2 v0.6.4 (*)
+├── objc2-app-kit v0.3.2 (*)
+├── objc2-foundation v0.3.2 (*)
+├── raw-window-handle v0.6.2
+├── resvg v0.46.0 (*)
+├── rusqlite v0.32.1
+│   ├── bitflags v2.13.0 (*)
+│   ├── fallible-iterator v0.3.0
+│   ├── fallible-streaming-iterator v0.1.9
+│   ├── hashlink v0.9.1
+│   │   └── hashbrown v0.14.5
+│   │       └── ahash v0.8.12
+│   │           ├── cfg-if v1.0.4
+│   │           ├── getrandom v0.3.4 (*)
+│   │           ├── once_cell v1.21.4
+│   │           ├── serde v1.0.228 (*)
+│   │           └── zerocopy v0.8.52 (*)
+│   ├── libsqlite3-sys v0.30.1
+│   └── smallvec v1.15.2
+├── serde v1.0.228 (*)
+├── serde_json v1.0.150 (*)
+├── sha2 v0.10.9
+│   ├── cfg-if v1.0.4
+│   ├── cpufeatures v0.2.17
+│   │   └── libc v0.2.186
+│   └── digest v0.10.7
+│       ├── block-buffer v0.10.4
+│       │   └── generic-array v0.14.7
+│       │       └── typenum v1.20.1
+│       └── crypto-common v0.1.7
+│           ├── generic-array v0.14.7 (*)
+│           ├── rand_core v0.6.4
+│           │   └── getrandom v0.2.17
+│           │       ├── cfg-if v1.0.4
+│           │       └── libc v0.2.186
+│           └── typenum v1.20.1
+├── snap v1.1.1
+├── tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core)
+│   ├── aes-gcm v0.10.3
+│   │   ├── aead v0.5.2
+│   │   │   ├── crypto-common v0.1.7 (*)
+│   │   │   └── generic-array v0.14.7 (*)
+│   │   ├── aes v0.8.4
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── cipher v0.4.4
+│   │   │   │   ├── crypto-common v0.1.7 (*)
+│   │   │   │   └── inout v0.1.4
+│   │   │   │       └── generic-array v0.14.7 (*)
+│   │   │   └── cpufeatures v0.2.17 (*)
+│   │   ├── cipher v0.4.4 (*)
+│   │   ├── ctr v0.9.2
+│   │   │   └── cipher v0.4.4 (*)
+│   │   ├── ghash v0.5.1
+│   │   │   ├── opaque-debug v0.3.1
+│   │   │   └── polyval v0.6.2
+│   │   │       ├── cfg-if v1.0.4
+│   │   │       ├── cpufeatures v0.2.17 (*)
+│   │   │       ├── opaque-debug v0.3.1
+│   │   │       └── universal-hash v0.5.1
+│   │   │           ├── crypto-common v0.1.7 (*)
+│   │   │           └── subtle v2.6.1
+│   │   └── subtle v2.6.1
+│   ├── alloc-stdlib v0.2.2
+│   │   └── alloc-no-stdlib v2.0.4
+│   ├── arboard v3.6.1
+│   │   ├── image v0.25.9 (*)
+│   │   ├── objc2 v0.6.4 (*)
+│   │   ├── objc2-app-kit v0.3.2 (*)
+│   │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   ├── objc2-core-graphics v0.3.2 (*)
+│   │   └── objc2-foundation v0.3.2 (*)
+│   ├── base64 v0.22.1
+│   ├── block2 v0.6.2 (*)
+│   ├── brotli-decompressor v5.0.0
+│   │   ├── alloc-no-stdlib v2.0.4
+│   │   └── alloc-stdlib v0.2.2 (*)
+│   ├── chrono v0.4.45 (*)
+│   ├── core-foundation v0.9.4
+│   │   ├── core-foundation-sys v0.8.7
+│   │   └── libc v0.2.186
+│   ├── core-graphics v0.23.2
+│   │   ├── bitflags v1.3.2
+│   │   ├── core-foundation v0.9.4 (*)
+│   │   ├── core-graphics-types v0.1.3
+│   │   │   ├── bitflags v1.3.2
+│   │   │   ├── core-foundation v0.9.4 (*)
+│   │   │   └── libc v0.2.186
+│   │   ├── foreign-types v0.5.0 (*)
+│   │   └── libc v0.2.186
+│   ├── futures-util v0.3.34 (*)
+│   ├── image v0.25.9 (*)
+│   ├── jsonschema v0.29.1
+│   │   ├── ahash v0.8.12 (*)
+│   │   ├── base64 v0.22.1
+│   │   ├── bytecount v0.6.9
+│   │   ├── email_address v0.2.9
+│   │   │   └── serde v1.0.228 (*)
+│   │   ├── fancy-regex v0.14.0
+│   │   │   ├── bit-set v0.8.0
+│   │   │   │   └── bit-vec v0.8.0
+│   │   │   ├── regex-automata v0.4.14 (*)
+│   │   │   └── regex-syntax v0.8.11
+│   │   ├── fraction v0.15.4
+│   │   │   ├── lazy_static v1.5.0
+│   │   │   └── num v0.4.3
+│   │   │       ├── num-bigint v0.4.8
+│   │   │       │   ├── num-integer v0.1.47
+│   │   │       │   │   └── num-traits v0.2.19 (*)
+│   │   │       │   └── num-traits v0.2.19 (*)
+│   │   │       ├── num-complex v0.4.6 (*)
+│   │   │       ├── num-integer v0.1.47 (*)
+│   │   │       ├── num-iter v0.1.46
+│   │   │       │   ├── num-integer v0.1.47 (*)
+│   │   │       │   └── num-traits v0.2.19 (*)
+│   │   │       ├── num-rational v0.4.2
+│   │   │       │   ├── num-bigint v0.4.8 (*)
+│   │   │       │   ├── num-integer v0.1.47 (*)
+│   │   │       │   └── num-traits v0.2.19 (*)
+│   │   │       └── num-traits v0.2.19 (*)
+│   │   ├── idna v1.0.3 (*)
+│   │   ├── itoa v1.0.18
+│   │   ├── num-cmp v0.1.0
+│   │   ├── once_cell v1.21.4
+│   │   ├── percent-encoding v2.3.2
+│   │   ├── referencing v0.29.1
+│   │   │   ├── ahash v0.8.12 (*)
+│   │   │   ├── fluent-uri v0.3.2
+│   │   │   │   ├── borrow-or-share v0.2.4
+│   │   │   │   ├── ref-cast v1.0.25 (*)
+│   │   │   │   └── serde v1.0.228 (*)
+│   │   │   ├── once_cell v1.21.4
+│   │   │   ├── parking_lot v0.12.5 (*)
+│   │   │   ├── percent-encoding v2.3.2
+│   │   │   └── serde_json v1.0.150 (*)
+│   │   ├── regex-syntax v0.8.11
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.150 (*)
+│   │   └── uuid-simd v0.8.0
+│   │       ├── outref v0.5.2
+│   │       ├── uuid v1.23.3 (*)
+│   │       └── vsimd v0.8.0
+│   ├── libc v0.2.186
+│   ├── log v0.4.32 (*)
+│   ├── notify v8.2.0
+│   │   ├── bitflags v2.13.0 (*)
+│   │   ├── fsevent-sys v4.1.0
+│   │   │   └── libc v0.2.186
+│   │   ├── libc v0.2.186
+│   │   ├── log v0.4.32 (*)
+│   │   ├── notify-types v2.1.0
+│   │   │   └── bitflags v2.13.0 (*)
+│   │   └── walkdir v2.5.0 (*)
+│   ├── objc2 v0.6.4 (*)
+│   ├── objc2-foundation v0.3.2 (*)
+│   ├── objc2-local-authentication v0.3.2
+│   │   ├── block2 v0.6.2 (*)
+│   │   ├── objc2 v0.6.4 (*)
+│   │   └── objc2-foundation v0.3.2 (*)
+│   ├── objc2-user-notifications v0.3.2 (*)
+│   ├── open v5.3.5
+│   │   ├── libc v0.2.186
+│   │   └── pathdiff v0.2.3
+│   ├── portable-pty v0.9.0
+│   │   ├── anyhow v1.0.102
+│   │   ├── downcast-rs v1.2.1
+│   │   ├── filedescriptor v0.8.3
+│   │   │   ├── libc v0.2.186
+│   │   │   └── thiserror v1.0.69
+│   │   │       └── thiserror-impl v1.0.69 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── syn v2.0.117 (*)
+│   │   ├── libc v0.2.186
+│   │   ├── log v0.4.32 (*)
+│   │   ├── nix v0.28.0
+│   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   └── libc v0.2.186
+│   │   ├── serial2 v0.2.37
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   └── libc v0.2.186
+│   │   └── shell-words v1.1.1
+│   ├── qrcode v0.14.1
+│   ├── regex v1.12.4 (*)
+│   ├── reqwest v0.13.4
+│   │   ├── base64 v0.22.1
+│   │   ├── bytes v1.11.1
+│   │   ├── futures-core v0.3.34
+│   │   ├── futures-util v0.3.34 (*)
+│   │   ├── http v1.4.2 (*)
+│   │   ├── http-body v1.0.1 (*)
+│   │   ├── http-body-util v0.1.3
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-core v0.3.34
+│   │   │   ├── http v1.4.2 (*)
+│   │   │   ├── http-body v1.0.1 (*)
+│   │   │   └── pin-project-lite v0.2.17
+│   │   ├── hyper v1.10.1
+│   │   │   ├── atomic-waker v1.1.2
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-channel v0.3.34 (*)
+│   │   │   ├── futures-core v0.3.34
+│   │   │   ├── http v1.4.2 (*)
+│   │   │   ├── http-body v1.0.1 (*)
+│   │   │   ├── httparse v1.10.1
+│   │   │   ├── itoa v1.0.18
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── smallvec v1.15.2
+│   │   │   ├── tokio v1.52.3 (*)
+│   │   │   └── want v0.3.1
+│   │   │       └── try-lock v0.2.5
+│   │   ├── hyper-tls v0.6.0
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── http-body-util v0.1.3 (*)
+│   │   │   ├── hyper v1.10.1 (*)
+│   │   │   ├── hyper-util v0.1.20
+│   │   │   │   ├── base64 v0.22.1
+│   │   │   │   ├── bytes v1.11.1
+│   │   │   │   ├── futures-channel v0.3.34 (*)
+│   │   │   │   ├── futures-util v0.3.34 (*)
+│   │   │   │   ├── http v1.4.2 (*)
+│   │   │   │   ├── http-body v1.0.1 (*)
+│   │   │   │   ├── hyper v1.10.1 (*)
+│   │   │   │   ├── ipnet v2.12.0
+│   │   │   │   ├── libc v0.2.186
+│   │   │   │   ├── percent-encoding v2.3.2
+│   │   │   │   ├── pin-project-lite v0.2.17
+│   │   │   │   ├── socket2 v0.6.4 (*)
+│   │   │   │   ├── tokio v1.52.3 (*)
+│   │   │   │   ├── tower-service v0.3.3
+│   │   │   │   └── tracing v0.1.44 (*)
+│   │   │   ├── native-tls v0.2.18
+│   │   │   │   ├── libc v0.2.186
+│   │   │   │   ├── security-framework v3.7.0
+│   │   │   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   │   │   ├── core-foundation v0.10.1 (*)
+│   │   │   │   │   ├── core-foundation-sys v0.8.7
+│   │   │   │   │   ├── libc v0.2.186
+│   │   │   │   │   └── security-framework-sys v2.17.0
+│   │   │   │   │       ├── core-foundation-sys v0.8.7
+│   │   │   │   │       └── libc v0.2.186
+│   │   │   │   ├── security-framework-sys v2.17.0 (*)
+│   │   │   │   └── tempfile v3.27.0
+│   │   │   │       ├── fastrand v2.4.1
+│   │   │   │       ├── getrandom v0.4.2 (*)
+│   │   │   │       ├── once_cell v1.21.4
+│   │   │   │       └── rustix v1.1.4 (*)
+│   │   │   ├── tokio v1.52.3 (*)
+│   │   │   ├── tokio-native-tls v0.3.1
+│   │   │   │   ├── native-tls v0.2.18 (*)
+│   │   │   │   └── tokio v1.52.3 (*)
+│   │   │   └── tower-service v0.3.3
+│   │   ├── hyper-util v0.1.20 (*)
+│   │   ├── log v0.4.32 (*)
+│   │   ├── mime_guess v2.0.5
+│   │   │   ├── mime v0.3.17
+│   │   │   └── unicase v2.10.0
+│   │   ├── native-tls v0.2.18 (*)
+│   │   ├── percent-encoding v2.3.2
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── rustls-pki-types v1.15.1
+│   │   │   └── zeroize v1.9.0
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.150 (*)
+│   │   ├── serde_urlencoded v0.7.1 (*)
+│   │   ├── sync_wrapper v1.0.2
+│   │   │   └── futures-core v0.3.34
+│   │   ├── tokio v1.52.3 (*)
+│   │   ├── tokio-native-tls v0.3.1 (*)
+│   │   ├── tokio-util v0.7.18
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-core v0.3.34
+│   │   │   ├── futures-sink v0.3.34
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   └── tokio v1.52.3 (*)
+│   │   ├── tower v0.5.3
+│   │   │   ├── futures-core v0.3.34
+│   │   │   ├── futures-util v0.3.34 (*)
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── sync_wrapper v1.0.2 (*)
+│   │   │   ├── tokio v1.52.3 (*)
+│   │   │   ├── tower-layer v0.3.3
+│   │   │   └── tower-service v0.3.3
+│   │   ├── tower-http v0.6.11
+│   │   │   ├── async-compression v0.4.51
+│   │   │   │   ├── compression-codecs v0.4.46
+│   │   │   │   │   ├── brotli v9.0.0
+│   │   │   │   │   │   ├── alloc-no-stdlib v3.0.0
+│   │   │   │   │   │   ├── alloc-stdlib v0.3.0
+│   │   │   │   │   │   │   └── alloc-no-stdlib v3.0.0
+│   │   │   │   │   │   └── brotli-decompressor v6.0.1
+│   │   │   │   │   │       ├── alloc-no-stdlib v3.0.0
+│   │   │   │   │   │       └── alloc-stdlib v0.3.0 (*)
+│   │   │   │   │   ├── compression-core v0.4.34
+│   │   │   │   │   ├── flate2 v1.1.9 (*)
+│   │   │   │   │   └── memchr v2.8.2
+│   │   │   │   ├── compression-core v0.4.34
+│   │   │   │   ├── pin-project-lite v0.2.17
+│   │   │   │   └── tokio v1.52.3 (*)
+│   │   │   ├── bitflags v2.13.0 (*)
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-core v0.3.34
+│   │   │   ├── futures-util v0.3.34 (*)
+│   │   │   ├── http v1.4.2 (*)
+│   │   │   ├── http-body v1.0.1 (*)
+│   │   │   ├── http-body-util v0.1.3 (*)
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   ├── tokio v1.52.3 (*)
+│   │   │   ├── tokio-util v0.7.18 (*)
+│   │   │   ├── tower v0.5.3 (*)
+│   │   │   ├── tower-layer v0.3.3
+│   │   │   ├── tower-service v0.3.3
+│   │   │   └── url v2.5.4 (*)
+│   │   ├── tower-service v0.3.3
+│   │   └── url v2.5.4 (*)
+│   ├── rusqlite v0.32.1 (*)
+│   ├── security-framework v3.7.0 (*)
+│   ├── semver v1.0.28 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.150 (*)
+│   ├── sha1 v0.10.7
+│   │   ├── cfg-if v1.0.4
+│   │   ├── cpufeatures v0.2.17 (*)
+│   │   └── digest v0.10.7 (*)
+│   ├── sha2 v0.10.9 (*)
+│   ├── tempfile v3.27.0 (*)
+│   ├── tokio v1.52.3 (*)
+│   ├── unicode-normalization v0.1.26
+│   │   └── tinyvec v1.11.0 (*)
+│   ├── uuid v1.23.3 (*)
+│   ├── walkdir v2.5.0 (*)
+│   ├── zeroize v1.9.0
+│   └── zip v4.6.1
+│       ├── crc32fast v1.5.0 (*)
+│       ├── flate2 v1.1.9 (*)
+│       ├── indexmap v2.14.0 (*)
+│       ├── memchr v2.8.2
+│       └── zopfli v0.8.3
+│           ├── bumpalo v3.20.3
+│           ├── crc32fast v1.5.0 (*)
+│           ├── log v0.4.32 (*)
+│           └── simd-adler32 v0.3.9
+├── tezbar-host v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-host)
+│   ├── block2 v0.6.2 (*)
+│   ├── core-foundation v0.9.4 (*)
+│   ├── core-graphics v0.23.2 (*)
+│   ├── global-hotkey v0.8.0 (*)
+│   ├── image v0.25.9 (*)
+│   ├── libc v0.2.186
+│   ├── log v0.4.32 (*)
+│   ├── muda v0.19.2 (*)
+│   ├── objc2 v0.6.4 (*)
+│   ├── objc2-foundation v0.3.2 (*)
+│   ├── objc2-user-notifications v0.3.2 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.150 (*)
+│   ├── sha2 v0.10.9 (*)
+│   ├── tempfile v3.27.0 (*)
+│   ├── tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core) (*)
+│   ├── tokio v1.52.3 (*)
+│   └── tray-icon v0.23.1
+│       ├── crossbeam-channel v0.5.17 (*)
+│       ├── muda v0.19.2 (*)
+│       ├── objc2 v0.6.4 (*)
+│       ├── objc2-app-kit v0.3.2 (*)
+│       ├── objc2-core-foundation v0.3.2 (*)
+│       ├── objc2-core-graphics v0.3.2 (*)
+│       ├── objc2-foundation v0.3.2 (*)
+│       ├── once_cell v1.21.4
+│       ├── png v0.18.1 (*)
+│       └── thiserror v2.0.18 (*)
+├── tezbar-ui v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui)
+│   ├── accesskit v0.24.1 (*)
+│   ├── alacritty_terminal v0.26.0 (*)
+│   ├── gpui v0.2.2 (https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b9) (*)
+│   ├── html5ever v0.29.1
+│   │   ├── log v0.4.32 (*)
+│   │   ├── mac v0.1.1
+│   │   ├── markup5ever v0.14.1
+│   │   │   ├── log v0.4.32 (*)
+│   │   │   ├── phf v0.11.3
+│   │   │   │   └── phf_shared v0.11.3
+│   │   │   │       └── siphasher v1.0.3
+│   │   │   ├── string_cache v0.8.9
+│   │   │   │   ├── new_debug_unreachable v1.0.6
+│   │   │   │   ├── parking_lot v0.12.5 (*)
+│   │   │   │   ├── phf_shared v0.11.3 (*)
+│   │   │   │   ├── precomputed-hash v0.1.1
+│   │   │   │   └── serde v1.0.228 (*)
+│   │   │   └── tendril v0.4.3
+│   │   │       ├── futf v0.1.5
+│   │   │       │   ├── mac v0.1.1
+│   │   │       │   └── new_debug_unreachable v1.0.6
+│   │   │       ├── mac v0.1.1
+│   │   │       └── utf-8 v0.7.6
+│   │   └── match_token v0.1.0 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── image v0.25.9 (*)
+│   ├── pulldown-cmark v0.13.6
+│   │   ├── bitflags v2.13.0 (*)
+│   │   ├── memchr v2.8.2
+│   │   └── unicase v2.10.0
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.150 (*)
+│   ├── syntect v5.3.0
+│   │   ├── bincode v1.3.3
+│   │   │   └── serde v1.0.228 (*)
+│   │   ├── fancy-regex v0.16.2
+│   │   │   ├── bit-set v0.8.0 (*)
+│   │   │   ├── regex-automata v0.4.14 (*)
+│   │   │   └── regex-syntax v0.8.11
+│   │   ├── flate2 v1.1.9 (*)
+│   │   ├── fnv v1.0.7
+│   │   ├── once_cell v1.21.4
+│   │   ├── regex-syntax v0.8.11
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_derive v1.0.228 (proc-macro) (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   └── walkdir v2.5.0 (*)
+│   ├── tezbar-ui-model v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui-model)
+│   │   ├── base64 v0.22.1
+│   │   ├── chrono v0.4.45 (*)
+│   │   ├── html5ever v0.29.1 (*)
+│   │   ├── regex v1.12.4 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.150 (*)
+│   │   ├── tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core) (*)
+│   │   ├── tezbar-update v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-update)
+│   │   │   ├── base64 v0.22.1
+│   │   │   ├── flate2 v1.1.9 (*)
+│   │   │   ├── futures-util v0.3.34 (*)
+│   │   │   ├── libc v0.2.186
+│   │   │   ├── minisign-verify v0.2.5
+│   │   │   ├── reqwest v0.13.4 (*)
+│   │   │   ├── semver v1.0.28 (*)
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   ├── serde_json v1.0.150 (*)
+│   │   │   ├── tar v0.4.46
+│   │   │   │   ├── filetime v0.2.29
+│   │   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   │   └── libc v0.2.186
+│   │   │   │   ├── libc v0.2.186
+│   │   │   │   └── xattr v1.6.1
+│   │   │   │       └── rustix v1.1.4 (*)
+│   │   │   ├── tempfile v3.27.0 (*)
+│   │   │   ├── tokio v1.52.3 (*)
+│   │   │   └── url v2.5.4 (*)
+│   │   ├── unicode-normalization v0.1.26 (*)
+│   │   └── url v2.5.4 (*)
+│   ├── unicode-segmentation v1.13.3
+│   └── url v2.5.4 (*)
+├── tezbar-ui-model v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui-model) (*)
+├── tezbar-update v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-update) (*)
+├── tokio v1.52.3 (*)
+└── tray-icon v0.23.1 (*)

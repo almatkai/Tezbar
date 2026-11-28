@@ -1,0 +1,70 @@
+--- a/apps/tezbar/src/surfaces/command_bar/terminal_integration.rs
++++ b/apps/tezbar/src/surfaces/command_bar/terminal_integration.rs
+@@ -224,7 +224,7 @@
+             });
+         }
+     }
+-    pub(crate) fn terminal_pin(&mut self, id: String, toggle: bool, cx: &mut Context<Self>) {
++    pub(crate) fn apply_terminal_pin_change(&mut self, id: String, toggle: bool, cx: &mut Context<Self>) {
+         let present = self.state.terminal_pinned_sessions.contains(&id);
+         self.state.terminal_pinned_sessions.retain(|p| p != &id);
+         if toggle && !present {
+--- a/apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs
++++ b/apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs
+@@ -197,15 +197,15 @@
+     launcher.update(cx, |v, cx| {
+         v.state.terminal_pinned_sessions = vec!["b".into(), "saved".into()];
+         v.persist(cx);
+-        v.terminal_pin("a".into(), true, cx);
++        v.apply_terminal_pin_change("a".into(), true, cx);
+         assert_eq!(v.state.terminal_pinned_sessions, vec!["a", "b", "saved"]);
+         // A second surface removes b; a later terminal toggle must preserve it.
+         v.state.terminal_pinned_sessions.retain(|p| p != "b");
+         v.persist(cx);
+-        v.terminal_pin("a".into(), true, cx);
++        v.apply_terminal_pin_change("a".into(), true, cx);
+         assert_eq!(v.state.terminal_pinned_sessions, vec!["saved"]);
+-        v.terminal_pin("new".into(), true, cx);
+-        v.terminal_pin("a".into(), false, cx);
++        v.apply_terminal_pin_change("new".into(), true, cx);
++        v.apply_terminal_pin_change("a".into(), false, cx);
+         assert_eq!(v.state.terminal_pinned_sessions, vec!["new", "saved"]);
+     });
+ }
+--- a/apps/tezbar/src/app/m10.rs
++++ b/apps/tezbar/src/app/m10.rs
+@@ -66,12 +66,12 @@
+             TerminalEffect::TogglePin(id) => {
+                 let _ = self
+                     .launcher
+-                    .update(cx, |v, _, cx| v.terminal_pin(id, true, cx));
++                    .update(cx, |v, _, cx| v.apply_terminal_pin_change(id, true, cx));
+             }
+             TerminalEffect::Unpin(id) => {
+                 let _ = self
+                     .launcher
+-                    .update(cx, |v, _, cx| v.terminal_pin(id, false, cx));
++                    .update(cx, |v, _, cx| v.apply_terminal_pin_change(id, false, cx));
+             }
+         }
+     }
+--- a/apps/tezbar/src/surfaces/terminal/tests.rs
++++ b/apps/tezbar/src/surfaces/terminal/tests.rs
+@@ -978,7 +978,7 @@
+ #[test]
+ fn review_m10_f1_control_letters_reach_shell_and_app_modifier_is_explicit() {
+     let mut s = live();
+-    for (key, byte) in [("k", 11), ("x", 24), ("p", 16), ("d", 4)] {
++    for (key, byte) in [("k", 11u8), ("x", 24), ("p", 16), ("d", 4)] {
+         let result = input::key(
+             key,
+             "",
+@@ -1086,7 +1086,7 @@
+         input::scroll(-2, 0, 0, m, alternate | TermMode::APP_CURSOR),
+         input::ScrollResult::Bytes(b"\x1bOB\x1bOB".to_vec())
+     );
+-    let mouse = TermMode::MOUSE_CLICK | TermMode::SGR_MOUSE;
++    let mouse = TermMode::MOUSE_REPORT_CLICK | TermMode::SGR_MOUSE;
+     assert_eq!(input::scroll(0, 0, 0, m, mouse), input::ScrollResult::None);
+     assert_eq!(
+         input::scroll(3, 0, 0, m, mouse),

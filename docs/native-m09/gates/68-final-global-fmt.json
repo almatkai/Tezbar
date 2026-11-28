@@ -1,0 +1,315 @@
+{
+  "command": [
+    "cargo",
+    "+1.98.1",
+    "fmt",
+    "--all",
+    "--check"
+  ],
+  "exit_code": 1,
+  "baseline_unmodified_files": 49,
+  "diff_headers": 126,
+  "owned_overlap": [],
+  "before": {
+    "changed_inputs": []
+  },
+  "after": {
+    "changed_inputs": []
+  },
+  "files": [
+    {
+      "path": "apps/tezbar/src/app/m8_tests.rs",
+      "sha256": "8cf603feb084a28c777e14a677f34b80e15a3e6f040860e1ddc5cf1e2ea9f1bc",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "apps/tezbar/src/lib.rs",
+      "sha256": "09322a78cfd70c67b681c3df775c8a60a8709c5d00343a8b3b97ae2ae6b7382d",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/task_indicator.rs",
+      "sha256": "1224284a57d07914c9576d1f00cd3547899816ce656e65fdd2f17bc2a37381ca",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/build.rs",
+      "sha256": "6d1aa64eb31cb02f890b2cda71748c95f19d2d4c0e56e58da96395d99637f421",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/canonical_tests.rs",
+      "sha256": "1d8c1a86d5e35fa6f01327c087717d758cef89909790419d3cb1af9df15ecb62",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/chat.rs",
+      "sha256": "20486897a0789b1c56572a103196612f0bf582e09393a9edfd7ab90ce9e2a017",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/ext/project.rs",
+      "sha256": "e7e48fdccf9eeb444b38efb33ba68557b9f69e1f3a41ca9f66e4f2497664ca9a",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/ext/secrets.rs",
+      "sha256": "54477ef6a73b24b37090c60398ff5136661d4fc67372b216995ef3991938c014",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/legacy.rs",
+      "sha256": "66eb77928fab9d0c496de6ecac66734a7fe196e99b8b27c2fc3ffc57805d21a7",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/mod.rs",
+      "sha256": "0f346f4bdbfbb4db25d60934377781fb6cf0ed0a336dcdc737055802e74e06bd",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/native_tests.rs",
+      "sha256": "af6f71e7fbc0e56550094b863aa07bb39d8490120f3556959a2e329ee1bb2a0a",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/native_tools.rs",
+      "sha256": "def628ed117abf7da4b3a0e528ec8b6ea5661453343c693a1134cdbd8f7b89c0",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/process.rs",
+      "sha256": "ef0e23acce1a127093bcf15a5cbffcc1b09d6fd16cbbb93bcc7c4605e30b998b",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/providers/antigravity.rs",
+      "sha256": "2e82c281a16fda09975b51422555ca49f0bdc20640bdbc698032b3ca2584c81a",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/providers/copilot.rs",
+      "sha256": "8977ae08da13bf5cf0d98f07c788e5d4bb0469bc60349a0c5402eec20a28eb80",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/runtime/agent.rs",
+      "sha256": "9ef04cf47a35b087ba62d3b50537d5aaf7888faa4b9f4f824e686c7521ff5e04",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/runtime/store.rs",
+      "sha256": "fbdde841939b9edef0ad6130356a3a4f9e529cb5e8af9a2da481033724ea1c61",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/runtime/transcript.rs",
+      "sha256": "35a459807d3c323d5a7be3feadc6f0bb6810efec8cfda21ceacc59ec2242d75e",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/ai/tests.rs",
+      "sha256": "187ba01e49c12c147b29b629f5a6b959ad6ade9e975e4d67474c835f3030405f",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/bun.rs",
+      "sha256": "9ee715e2dfa6f768e850cc343baef361dd8405ff5e93ed7507fa98609a76e87c",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/catalog.rs",
+      "sha256": "25d8545f8c1bbd370a8c6f0eff10b54b32683180558e8215680816c6aa46f105",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/command_inputs.rs",
+      "sha256": "9b0ae864dbda7913934d55c3ff562d6193c2096f2bad9305e4fcabba96900746",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/command_list.rs",
+      "sha256": "6c1b5c7af80eb4b2937de2355dab4565ae40938a07f7ed6a411f82e109887c8b",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/command_list_tests.rs",
+      "sha256": "12708cdd67fe72f0a87f4752b32c63dd02958a9007c3c3be1b43609f82209dcc",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/process.rs",
+      "sha256": "61568998c49d648ad5c7abb0211cb0ae57bac1e369c877be260fe38d67b7eca6",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/process_install.rs",
+      "sha256": "88e24e2ad2b8a58841290a6d00e029da387be4405edbe763fe9b8df9fddef48f",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/extensions/registry.rs",
+      "sha256": "7e4b5c74dc3c4e647b72bbbb7b323407579b8ce1e5cca26a3e54c9ae3abf6d07",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/db.rs",
+      "sha256": "d5e902870bef1064bd79a566197f63679e520fbacf50805a9e83f11c0495ab45",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/mod.rs",
+      "sha256": "9afe083aaf82a180b48e044c16ce843457055ad5881b2d644d2bf4371ebec808",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/performance_tests.rs",
+      "sha256": "27008405c1ee11afaaf9fd86e195a3ed7c4e17419b39611800dba3668ff7eb64",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/runtime_bundle.rs",
+      "sha256": "b2b62447ce139160b895db4c31c869e49e81e2849672c55517930b698c86b8dc",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/search_cache.rs",
+      "sha256": "7f713383df5d78cfb1733d44da5dbc9194cd0c0521d1a08b14128f15bed7addb",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/semantic_work.rs",
+      "sha256": "4d30b7350a0c1a88f7bb981528038a6ebdb99674629111766adaf27fc87f07b8",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/semantic_work_tests.rs",
+      "sha256": "e78a2fee0c0717a4ef9640975e0282c6a879c103164ba1ba223fe02e49799b86",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/tests.rs",
+      "sha256": "572d670afefc4f7dfba86e90c9f64023ddb857dc95ff38645616bbf7f36a8fa8",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/knowledge/text.rs",
+      "sha256": "96383e04cdf7196821786428d9db44b0fcbe51497104ebad3ebae00c1bc26543",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/launcher/clipboard_native.rs",
+      "sha256": "0d245a728d1e96507c7792f1bd9a93c7220388a96b7779fbacb6c01762b7091b",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/launcher/db.rs",
+      "sha256": "a355821237b528a665d1aa5a281bac9f5bec3d9ef0e34ab137dfdf0f16cb0ecc",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/launcher/mod.rs",
+      "sha256": "5bae312d06e2c21123072d1bfe72d407257fc3161ec742ef8f6bba76ed6ed7c0",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/launcher/tests.rs",
+      "sha256": "fecd2e240d1d5016c3806dfaeffe35900ed29c6b876cda8d8639459b4324632e",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/native_v2_cli.rs",
+      "sha256": "7a4928b26aec976abe9d52caff8cd645b48d66cdb87e87fb70ac8063f005ea85",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/performance.rs",
+      "sha256": "d50f0f1babdc9d1e72946d754fb1b7c34133b0bbbaa17277b728adb15769f326",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/terminal_bridge.rs",
+      "sha256": "e02063f583716604e88d047e3e54fcf692a62b881f9a90b76100d154c3f9734b",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/tests.rs",
+      "sha256": "53f58f5f8434928a71fc4e39827ba5f95a8965146052dec10a1d5224c0d40430",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/vault/crypto.rs",
+      "sha256": "f96876174b047f83f7fe3324a78686106a384eb9469cb698e3e5bda5fbafd68d",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/vault/mod.rs",
+      "sha256": "5e7778d41ab972844ff773b7531ba724f58e26ba233918500c67686c75c9c1ed",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-core/src/vault/storage.rs",
+      "sha256": "ff34e15e12c23970336c55a1bc98c1acc6dc99e0d5e92e022dfd23ddbdcc8a9e",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-host/src/lib.rs",
+      "sha256": "d66923b88768056fc4afeaaecbf2859ef4e084143d16279812e9ddccdf91966e",
+      "byte_identical_to_base": true,
+      "owned": false
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/chat/tests.rs",
+      "sha256": "83695ce89c976b61fe517f39051dafb2c6ae61a667bab6b47242a78effc3dc96",
+      "byte_identical_to_base": true,
+      "owned": false
+    }
+  ]
+}

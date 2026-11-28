@@ -1,0 +1,80 @@
+{
+  "date": "2026-11-09",
+  "head": "0228b4fa289d5fce78bc3cf179575c4011c59f7c",
+  "source_state": "dirty; scoped own inputs frozen amid other migration WIP, not a full-tree freeze",
+  "owned_sources": {
+    "apps/tezbar/src/asset_transport.rs": "e3584f04d4b457a96b3b0983d28e7985d5b28a48422dbed8557f5b74cda14399",
+    "apps/tezbar/src/asset_transport_tests.rs": "af704a68de60ff35fc4c87461f3b712fd99956b3681617edc7c656266a4d6916",
+    "apps/tezbar/src/asset_transport/status_icons.rs": "cdbf40b4476d3b276adffc25b65cf1d4eafdb05d9e52231437e9b9cf76bedca3",
+    "apps/tezbar/src/asset_transport/status_icons_tests.rs": "ada5d08e9b878736ed967e8f9c5b7fb97ac67ab91ffbc508a7ff37efa6648cfb",
+    "apps/tezbar/src/app.rs": "6c5721dbb0a669c36feb50e5dad3b2bf924302ed0183d966f35ea17c6a5f0079",
+    "apps/tezbar/src/app/m9_review_tests.rs": "3da796f5fd0c0c269a1b2d7c8488e531c99852f4e845a7ef971c7513b33be3ee",
+    "apps/tezbar/Cargo.toml": "cd6de5e9301ae002d199890fb5ee6fc61f167581c587fb224cedd064c68750aa",
+    "Cargo.lock": "b24f6ab5f73fcd0ff1a5941be930b6207737ced02fd2415dc83a704b2274ecfb",
+    "crates/tezbar-ui-model/src/extensions/images.rs": "3797cf2577958060b190d1adcae2c5ee46d0f15d7f157b81f746dab544c9ff1a",
+    "crates/tezbar-ui-model/src/extensions/images/tests.rs": "c6ce37264bd2600cfd56731a36b58fae2cf312f7d00c40ed7534c33dc86053e0"
+  },
+  "gates": {
+    "svg_baseline": {
+      "passed": 1,
+      "failed": 2,
+      "expected_red": true
+    },
+    "svg_standalone_before_format": {
+      "passed": 11,
+      "failed": 0
+    },
+    "native": {
+      "passed": 57,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 469,
+      "timezone": "America/Los_Angeles",
+      "sdk_cases_included": 9
+    },
+    "image_model_185": {
+      "passed": 16,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 371
+    },
+    "typecheck": {
+      "exit": 0
+    },
+    "typescript": {
+      "passed": 748,
+      "skipped": 7
+    },
+    "scoped_rustfmt": {
+      "exit": 0
+    }
+  },
+  "native_compiler_stream_sha256": "9caec0e564742904e79d8406d69d1ee50d79cda00a9cd1b2585fc30b8c4e3462",
+  "registry_graph_change": "none; only an existing svgtypes package gained a direct native edge",
+  "open_observations": [
+    "status-icon resolution still delays the reply",
+    "expensive-valid-SVG CPU observation",
+    "platform/manual/production/cutover acceptance"
+  ],
+  "evidence": {
+    "README.md": "a1e8f9d54f9916bf4e229e6c2704708e56005472e1a3e9249c25e73ce3ff4664",
+    "candidate-own-inputs.json": "7ee9a781535b32ccac6911ebd34497721e7f389570fc56db00262c1d7e8def44",
+    "model-images-msrv.log": "1c58b7aacb05458cbac9092a2f9f137adfd2e561415e590cc38d1f412a784072",
+    "named-inputs-and-query.json": "33bf1ff324daa4e003a1601407bcefca1a25a2c8a5c6fa7dacf45470e37c0044",
+    "native-compile.log": "d3830010d856e086993b68f8750cbc389dee994a527d222026bbcf22c7d8b338",
+    "native-run.json": "db0ce2cebb5ca778bfb533f1ffdd193609b2cb7a7d3bd6260638176dddffa640",
+    "native-targeted.log": "bd89e3d73c5cfdb7dae46a6d3f95f01fbeb9a28affb72d82bf88c2d86e893848",
+    "prepared-seed.log": "7c74f3cf9441c5ab9a2586bd3e954ca9718739ac3a6e098e800da9e0156d7a53",
+    "review-m9.md": "2bdc6f8bfab46df4f3f39cbacbf3f64ad59c15878969a21685a890f6336ce624",
+    "review-svg.md": "1c09fcd66eaafd37fde2e08fdd8d5432209e8bc78aee3d3bdb86fab15dac1a05",
+    "rustfmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "svg-green-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "svg-green-source.json": "ea1ceb039a96f67ed702fdc9a99dca6b9548938956debd2e372a284a3a3f10de",
+    "svg-green-tests.log": "c03f5a154cbd3dc29ce08417fcdddbb278777a2247624477a9f5e1e53e720079",
+    "svg-red-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "svg-red-source.json": "af2d851de118c17ed6f0aac177c9d3a1b824354acaa831b7e2ef3159c5ac1847",
+    "svg-red-tests.log": "c490f7299eb84d12cf7b48cc605cddbbd8a7534a677bec92b88794a43e8fb48e",
+    "typecheck.log": "dfd6ca4a34a6c6746b4a7c1648bb9e75456fd0b583d9fe59b331a8005a971c9b",
+    "typescript-tests.log": "90cb7a999c01fb6a007765e675552b667c60e9eea0f446ce6db143bbdb376709"
+  }
+}

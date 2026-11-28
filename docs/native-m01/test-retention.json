@@ -1,0 +1,3770 @@
+{
+  "baseline_count": 620,
+  "new_inventory_count": 629,
+  "missing": [],
+  "consolidated_duplicate_executions": {
+    "child_supervisor::tests::abrupt_host_death_closes_extension_protocol_and_kills_tree": [
+      "native_core::extensions::process::supervisor::tests::abrupt_host_death_closes_extension_protocol_and_kills_tree",
+      "native_core::knowledge::runtime::child_supervisor::tests::abrupt_host_death_closes_extension_protocol_and_kills_tree"
+    ],
+    "child_supervisor::tests::server_failure_preserves_status_and_cleans_descendants": [
+      "native_core::extensions::process::supervisor::tests::server_failure_preserves_status_and_cleans_descendants",
+      "native_core::knowledge::runtime::child_supervisor::tests::server_failure_preserves_status_and_cleans_descendants"
+    ],
+    "child_supervisor::tests::abrupt_host_death_closes_lease_and_kills_tree": [
+      "native_core::extensions::process::supervisor::tests::abrupt_host_death_closes_lease_and_kills_tree",
+      "native_core::knowledge::runtime::child_supervisor::tests::abrupt_host_death_closes_lease_and_kills_tree"
+    ],
+    "child_supervisor::tests::pipe_disconnect_kills_owned_tree_and_preserves_unrelated_process": [
+      "native_core::extensions::process::supervisor::tests::pipe_disconnect_kills_owned_tree_and_preserves_unrelated_process",
+      "native_core::knowledge::runtime::child_supervisor::tests::pipe_disconnect_kills_owned_tree_and_preserves_unrelated_process"
+    ],
+    "child_supervisor::tests::idle_supervisor_waits_without_periodic_wakeups": [
+      "native_core::extensions::process::supervisor::tests::idle_supervisor_waits_without_periodic_wakeups",
+      "native_core::knowledge::runtime::child_supervisor::tests::idle_supervisor_waits_without_periodic_wakeups"
+    ],
+    "child_supervisor::tests::missing_child_fails_without_waiting_for_open_lease": [
+      "native_core::extensions::process::supervisor::tests::missing_child_fails_without_waiting_for_open_lease",
+      "native_core::knowledge::runtime::child_supervisor::tests::missing_child_fails_without_waiting_for_open_lease"
+    ]
+  },
+  "new_tests": [
+    "extensions::process_host::status_port_tests::scoped_status_item_limits_update_callbacks_and_cleanup_cross_host_port",
+    "knowledge::tests::host_folder_dialog_preserves_path_cancel_and_error_contracts",
+    "platform::tests::host_capture_keeps_png_reply_contract_and_resizes",
+    "platform::tests::host_confirm_maps_both_replies_and_propagates_closed_dialog",
+    "platform::tests::host_headless_shortcuts_and_capture_never_touch_the_system",
+    "platform::tests::host_paste_hides_before_key_and_does_not_write_existing_clipboard",
+    "platform::tests::host_quit_occurs_only_after_accepted_confirmation",
+    "platform::tests::host_settings_op_precedes_validated_tab_event",
+    "platform::tests::host_shortcut_duplicate_assignment_and_empty_launcher_do_not_release_owner",
+    "platform::tests::host_shortcut_persistence_failure_restores_previous_binding",
+    "platform::tests::host_shortcut_replacement_registers_before_releasing_and_keeps_old_on_conflict",
+    "platform::tests::host_shortcut_unregister_failure_removes_new_binding_without_changing_owner",
+    "platform::tests::host_surface_routes_keep_event_payload_and_order",
+    "platform::tests::host_visibility_suppression_and_cache_remain_distinct_operations",
+    "vault::tests::host_auth_paths_restore_blur_and_show_after_grant_cancel_and_failure"
+  ],
+  "mapping": [
+    {
+      "before": "backend_timeout_tests::extension_installs_outlive_their_bounded_install_stages",
+      "after": "backend_timeout_tests::extension_installs_outlive_their_bounded_install_stages",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "backend_timeout_tests::ordinary_backend_requests_keep_the_short_failure_bound",
+      "after": "backend_timeout_tests::ordinary_backend_requests_keep_the_short_failure_bound",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "backend_timeout_tests::locate_bun_detects_cached_or_fails_cleanly",
+      "after": "backend_timeout_tests::locate_bun_detects_cached_or_fails_cleanly",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "backend_timeout_tests::position_updates_coalesce_into_latest_snapshot",
+      "after": "backend_timeout_tests::position_updates_coalesce_into_latest_snapshot",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "launcher_facade::tests::isolation_rejects_unmarked_and_swapped_paths",
+      "after": "launcher_facade::tests::isolation_rejects_unmarked_and_swapped_paths",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "manual_releases::tests::live_beta_installer_discovery_from_stable_028",
+      "after": "manual_releases::tests::live_beta_installer_discovery_from_stable_028",
+      "package": "tezbar",
+      "baseline": "ignored, Requires GitHub network access and a published Beta installer"
+    },
+    {
+      "before": "manual_releases::tests::does_not_downgrade_or_offer_another_platforms_installer",
+      "after": "manual_releases::tests::does_not_downgrade_or_offer_another_platforms_installer",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "manual_releases::tests::rejects_drafts_wrong_channels_and_noncanonical_downloads",
+      "after": "manual_releases::tests::rejects_drafts_wrong_channels_and_noncanonical_downloads",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "manual_releases::tests::stable_028_on_beta_discovers_the_manual_gemma_beta",
+      "after": "manual_releases::tests::stable_028_on_beta_discovers_the_manual_gemma_beta",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "manual_releases::tests::selects_the_highest_eligible_version_even_when_listing_order_differs",
+      "after": "manual_releases::tests::selects_the_highest_eligible_version_even_when_listing_order_differs",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::canonical_tests::canonical_store_roundtrips_images_tools_and_opaque_without_renderer_exposure",
+      "after": "ai::canonical_tests::canonical_store_roundtrips_images_tools_and_opaque_without_renderer_exposure",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::canonical_tests::a_crashed_saved_call_gets_an_unknown_result_and_is_never_reexecuted",
+      "after": "ai::canonical_tests::a_crashed_saved_call_gets_an_unknown_result_and_is_never_reexecuted",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "launcher_facade::tests::core_order_opaque_actions_and_single_usage_record",
+      "after": "launcher_facade::tests::core_order_opaque_actions_and_single_usage_record",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::canonical_tests::retry_reuses_original_image_and_preserves_completed_effect_history",
+      "after": "ai::canonical_tests::retry_reuses_original_image_and_preserves_completed_effect_history",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::chat::tests::chat_stores_and_updates_session_icon",
+      "after": "ai::chat::tests::chat_stores_and_updates_session_icon",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::chat::tests::migrates_old_history_and_roundtrips_timeline_without_image_bytes",
+      "after": "ai::chat::tests::migrates_old_history_and_roundtrips_timeline_without_image_bytes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::config::tests::credentials_are_not_leaked_to_other_providers",
+      "after": "ai::config::tests::credentials_are_not_leaked_to_other_providers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::mcp::oauth::repair_tests::metadata_cannot_redirect_remote_resources_to_private_services",
+      "after": "ai::ext::mcp::oauth::repair_tests::metadata_cannot_redirect_remote_resources_to_private_services",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::secrets::tests::reopened_store_uses_the_same_keystore_and_unavailable_keystore_never_writes_plaintext",
+      "after": "ai::ext::secrets::tests::reopened_store_uses_the_same_keystore_and_unavailable_keystore_never_writes_plaintext",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::agents_md_cannot_smuggle_a_sensitive_symlink_into_the_system_prompt",
+      "after": "ai::ext::tests::agents_md_cannot_smuggle_a_sensitive_symlink_into_the_system_prompt",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::canonical_tests::durable_signed_history_resumes_by_id_and_switches_models_without_foreign_opaque",
+      "after": "ai::canonical_tests::durable_signed_history_resumes_by_id_and_switches_models_without_foreign_opaque",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::canonical_tests::every_provider_and_protocol_executes_through_agent_dispatch",
+      "after": "ai::canonical_tests::every_provider_and_protocol_executes_through_agent_dispatch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::changed_project_revocation_is_idempotent_and_has_one_event",
+      "after": "ai::ext::tests::changed_project_revocation_is_idempotent_and_has_one_event",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::closure_changed_server_clears_requested_scopes_only",
+      "after": "ai::ext::tests::closure_changed_server_clears_requested_scopes_only",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::cached_era_startup_crash_retains_stderr_and_explicit_test_reprobes",
+      "after": "ai::ext::tests::cached_era_startup_crash_retains_stderr_and_explicit_test_reprobes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::closure_escaped_stderr_pipe_does_not_hold_shutdown_tasks",
+      "after": "ai::ext::tests::closure_escaped_stderr_pipe_does_not_hold_shutdown_tasks",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::catalog_notification_keeps_run_snapshot_immutable_and_requires_changed_tool_review",
+      "after": "ai::ext::tests::catalog_notification_keeps_run_snapshot_immutable_and_requires_changed_tool_review",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::closure_test_does_not_join_normal_cached_era_start",
+      "after": "ai::ext::tests::closure_test_does_not_join_normal_cached_era_start",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::combined_instructions_are_bounded_and_name_the_source_that_was_truncated",
+      "after": "ai::ext::tests::combined_instructions_are_bounded_and_name_the_source_that_was_truncated",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::connection_identity_is_unambiguous_even_when_ids_contain_separators",
+      "after": "ai::ext::tests::connection_identity_is_unambiguous_even_when_ids_contain_separators",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::continuations_preserve_mirrors_and_sse_eof_reports_unknown_outcome",
+      "after": "ai::ext::tests::continuations_preserve_mirrors_and_sse_eof_reports_unknown_outcome",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::contributed_provider_cannot_borrow_legacy_keys_or_erase_a_user_owned_collision",
+      "after": "ai::ext::tests::contributed_provider_cannot_borrow_legacy_keys_or_erase_a_user_owned_collision",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::closure_first_test_after_post_start_crash_reconnects",
+      "after": "ai::ext::tests::closure_first_test_after_post_start_crash_reconnects",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::declarative_provider_is_native_scoped_and_its_header_is_never_returned",
+      "after": "ai::ext::tests::declarative_provider_is_native_scoped_and_its_header_is_never_returned",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::descriptor_review_revokes_allowances_and_concurrent_cancels_are_isolated",
+      "after": "ai::ext::tests::descriptor_review_revokes_allowances_and_concurrent_cancels_are_isolated",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::http_modern_error_negotiates_legacy_and_expired_sessions_restart_only_discovery",
+      "after": "ai::ext::tests::http_modern_error_negotiates_legacy_and_expired_sessions_restart_only_discovery",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::http_oauth_discovery_dcr_pkce_resource_refresh_and_secret_persistence",
+      "after": "ai::ext::tests::http_oauth_discovery_dcr_pkce_resource_refresh_and_secret_persistence",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::instructions_prompts_and_profile_are_data_and_resolve_to_drafts",
+      "after": "ai::ext::tests::instructions_prompts_and_profile_are_data_and_resolve_to_drafts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::insufficient_scope_is_recorded_once_and_successful_discovery_resets_status",
+      "after": "ai::ext::tests::insufficient_scope_is_recorded_once_and_successful_discovery_resets_status",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::invalid_add_has_no_orphan_secrets_and_timeouts_are_positive_bounded",
+      "after": "ai::ext::tests::invalid_add_has_no_orphan_secrets_and_timeouts_are_positive_bounded",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::mirrored_headers_are_statically_reachable_unique_safe_and_encoded",
+      "after": "ai::ext::tests::mirrored_headers_are_statically_reachable_unique_safe_and_encoded",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::missing_secret_key_does_not_block_secretless_test_or_remove",
+      "after": "ai::ext::tests::missing_secret_key_does_not_block_secretless_test_or_remove",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::modern_and_legacy_http_tools_execute_through_real_agent_dispatch",
+      "after": "ai::ext::tests::modern_and_legacy_http_tools_execute_through_real_agent_dispatch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::pending_catalog_survives_refresh_edit_and_rejects_stale_review",
+      "after": "ai::ext::tests::pending_catalog_survives_refresh_edit_and_rejects_stale_review",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::failed_start_preserves_reason_and_log_without_call_replay",
+      "after": "ai::ext::tests::failed_start_preserves_reason_and_log_without_call_replay",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::project_review_handoff_survives_an_independent_settings_request",
+      "after": "ai::ext::tests::project_review_handoff_survives_an_independent_settings_request",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::provider_secret_references_can_be_filled_without_a_connection_and_do_not_alias_connection_ids",
+      "after": "ai::ext::tests::provider_secret_references_can_be_filled_without_a_connection_and_do_not_alias_connection_ids",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::project_manifest_never_starts_before_review_and_byte_changes_revoke_trust",
+      "after": "ai::ext::tests::project_manifest_never_starts_before_review_and_byte_changes_revoke_trust",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::reset_missing_connection_key_archives_ciphertext_and_allows_new_secrets_only_in_fixture",
+      "after": "ai::ext::tests::reset_missing_connection_key_archives_ciphertext_and_allows_new_secrets_only_in_fixture",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::resources_templates_prompt_images_and_invalid_descriptors_use_the_same_connection",
+      "after": "ai::ext::tests::resources_templates_prompt_images_and_invalid_descriptors_use_the_same_connection",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::schema_keywords_in_property_names_and_literal_values_are_preserved",
+      "after": "ai::ext::tests::schema_keywords_in_property_names_and_literal_values_are_preserved",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::schemas_refuse_remote_refs_dialects_depth_and_validate_real_constraints",
+      "after": "ai::ext::tests::schemas_refuse_remote_refs_dialects_depth_and_validate_real_constraints",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::closure_test_retires_client_after_long_call_and_disable_stops_retired",
+      "after": "ai::ext::tests::closure_test_retires_client_after_long_call_and_disable_stops_retired",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::removing_an_extension_stops_retired_clients_and_their_pending_call",
+      "after": "ai::ext::tests::removing_an_extension_stops_retired_clients_and_their_pending_call",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::stdio_modern_and_legacy_test_enable_snapshot_call_and_encrypted_import",
+      "after": "ai::ext::tests::stdio_modern_and_legacy_test_enable_snapshot_call_and_encrypted_import",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::stopping_during_a_test_catalog_cancels_the_probe_and_prevents_adoption",
+      "after": "ai::ext::tests::stopping_during_a_test_catalog_cancels_the_probe_and_prevents_adoption",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::unrelated_edit_does_not_cancel_a_disabled_connection_test_and_success_resets_backoff",
+      "after": "ai::ext::tests::unrelated_edit_does_not_cancel_a_disabled_connection_test_and_success_resets_backoff",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::active_delete_and_clear_cannot_resurrect_transcript_files",
+      "after": "ai::native_tests::active_delete_and_clear_cannot_resurrect_transcript_files",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::silent_legacy_era_is_cached_by_trusted_connection_for_cold_snapshot",
+      "after": "ai::ext::tests::silent_legacy_era_is_cached_by_trusted_connection_for_cold_snapshot",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::delete_or_clear_between_registration_and_first_image_save_cannot_resurrect",
+      "after": "ai::native_tests::delete_or_clear_between_registration_and_first_image_save_cannot_resurrect",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::deleted_sessions_refuse_send_and_retry_before_any_work_even_after_restart",
+      "after": "ai::native_tests::deleted_sessions_refuse_send_and_retry_before_any_work_even_after_restart",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::legacy_pi_runtime_setting_executes_native_http",
+      "after": "ai::native_tests::legacy_pi_runtime_setting_executes_native_http",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::manual_retry_keeps_actual_completed_shell_effect_once",
+      "after": "ai::native_tests::manual_retry_keeps_actual_completed_shell_effect_once",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::missing_profile_fails_closed_before_provider_request",
+      "after": "ai::native_tests::missing_profile_fails_closed_before_provider_request",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::completed_effect_stays_once_across_byte_identical_turn_retry",
+      "after": "ai::native_tests::completed_effect_stays_once_across_byte_identical_turn_retry",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_cancel_kills_shell_descendants_and_prevents_late_mutation",
+      "after": "ai::native_tests::native_cancel_kills_shell_descendants_and_prevents_late_mutation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_cancellation_during_headers_body_and_pending_tools_has_zero_effects",
+      "after": "ai::native_tests::native_cancellation_during_headers_body_and_pending_tools_has_zero_effects",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_concurrent_approval_ownership_cancel_and_stale_responses",
+      "after": "ai::native_tests::native_concurrent_approval_ownership_cancel_and_stale_responses",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::ext::tests::stdio_crash_and_stdout_flood_report_unknown_without_replaying_effects",
+      "after": "ai::ext::tests::stdio_crash_and_stdout_flood_report_unknown_without_replaying_effects",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_edit_ambiguity_rejects_an_earlier_write_in_same_batch",
+      "after": "ai::native_tests::native_edit_ambiguity_rejects_an_earlier_write_in_same_batch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_context_limit_duplicate_live_run_and_literal_project_search",
+      "after": "ai::native_tests::native_context_limit_duplicate_live_run_and_literal_project_search",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_output_is_unicode_bounded_and_reported_to_model_and_stage",
+      "after": "ai::native_tests::native_output_is_unicode_bounded_and_reported_to_model_and_stage",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_permission_mode_changes_apply_to_later_tools_in_the_same_run",
+      "after": "ai::native_tests::native_permission_mode_changes_apply_to_later_tools_in_the_same_run",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_429_is_reported_without_replay_and_invalid_urls_are_configuration_errors",
+      "after": "ai::native_tests::native_429_is_reported_without_replay_and_invalid_urls_are_configuration_errors",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_review_applies_to_reads_and_always_decision_never_persists_file_content",
+      "after": "ai::native_tests::native_review_applies_to_reads_and_always_decision_never_persists_file_content",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_review_remembered_destructive_and_complex_commands_cannot_bypass_prompts",
+      "after": "ai::native_tests::native_review_remembered_destructive_and_complex_commands_cannot_bypass_prompts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_routes_search_in_process_and_rejects_images_explicitly",
+      "after": "ai::native_tests::native_routes_search_in_process_and_rejects_images_explicitly",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_write_read_answer_preserves_ids_schema_history_and_never_needs_pi",
+      "after": "ai::native_tests::native_write_read_answer_preserves_ids_schema_history_and_never_needs_pi",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::nonvision_ocr_uses_canonical_images_on_send_and_reopened_retry_only_in_wire_view",
+      "after": "ai::native_tests::nonvision_ocr_uses_canonical_images_on_send_and_reopened_retry_only_in_wire_view",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::shell_failure_stderr_success_and_timeout_keep_both_streams",
+      "after": "ai::native_tests::shell_failure_stderr_success_and_timeout_keep_both_streams",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::verbose_failed_shell_summary_reaches_actual_model_tool_result",
+      "after": "ai::native_tests::verbose_failed_shell_summary_reaches_actual_model_tool_result",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::oauth::resource_policy_tests::private_hostname_resource_is_pinned_and_public_metadata_cannot_rebind",
+      "after": "ai::oauth::resource_policy_tests::private_hostname_resource_is_pinned_and_public_metadata_cannot_rebind",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::oauth::tests::pkce_paste_checks_state_issuer_cancel_and_encrypts_successful_grant",
+      "after": "ai::oauth::tests::pkce_paste_checks_state_issuer_cancel_and_encrypts_successful_grant",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::process::capture_tests::cancelled_read_future_retains_ring_for_timeout_drain_and_unicode",
+      "after": "ai::process::capture_tests::cancelled_read_future_retains_ring_for_timeout_drain_and_unicode",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::process::capture_tests::invalid_bytes_cannot_expand_past_the_capture_budget",
+      "after": "ai::process::capture_tests::invalid_bytes_cannot_expand_past_the_capture_budget",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::process::capture_tests::verbose_failed_runner_preserves_both_stream_heads_and_summary_tails",
+      "after": "ai::process::capture_tests::verbose_failed_runner_preserves_both_stream_heads_and_summary_tails",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::process::tests::cancelled_process_is_reaped",
+      "after": "ai::process::tests::cancelled_process_is_reaped",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::process::tests::lf_only_split_utf8_and_partial_tail",
+      "after": "ai::process::tests::lf_only_split_utf8_and_partial_tail",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::process::tests::packaged_gui_path_finds_user_cli_and_reaches_child_tools",
+      "after": "ai::process::tests::packaged_gui_path_finds_user_cli_and_reaches_child_tools",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::provider::error_tests::provider_errors_keep_actionable_model_messages",
+      "after": "ai::provider::error_tests::provider_errors_keep_actionable_model_messages",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::antigravity_empty_reply_retries_and_model_fallback_has_its_own_budget",
+      "after": "ai::providers::tests::antigravity_empty_reply_retries_and_model_fallback_has_its_own_budget",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::antigravity_model_fallback_is_reached_with_all_three_endpoints_configured",
+      "after": "ai::providers::tests::antigravity_model_fallback_is_reached_with_all_three_endpoints_configured",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::antigravity_quota_rotates_accounts_and_transport_errors_walk_endpoints",
+      "after": "ai::providers::tests::antigravity_quota_rotates_accounts_and_transport_errors_walk_endpoints",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::antigravity_refresh_preserves_unknown_account_fields_and_corrupt_auth_is_never_overwritten",
+      "after": "ai::providers::tests::antigravity_refresh_preserves_unknown_account_fields_and_corrupt_auth_is_never_overwritten",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::copilot_catalog_exchanges_rejected_token_once_and_cache_is_credential_scoped",
+      "after": "ai::providers::tests::copilot_catalog_exchanges_rejected_token_once_and_cache_is_credential_scoped",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::copilot_refresh_is_serialized_and_catalog_routes_unusual_names",
+      "after": "ai::providers::tests::copilot_refresh_is_serialized_and_catalog_routes_unusual_names",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::copilot_rejected_direct_token_exchanges_once_and_never_persists_the_session",
+      "after": "ai::providers::tests::copilot_rejected_direct_token_exchanges_once_and_never_persists_the_session",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::credentialed_catalog_and_inference_refuse_redirects",
+      "after": "ai::providers::tests::credentialed_catalog_and_inference_refuse_redirects",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::custom_catalog_status_uses_protocol_and_headers",
+      "after": "ai::providers::tests::custom_catalog_status_uses_protocol_and_headers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::device_flow_cancellation_rejects_stale_success_and_success_returns_no_tokens",
+      "after": "ai::providers::tests::device_flow_cancellation_rejects_stale_success_and_success_returns_no_tokens",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::model_switch_migrates_legacy_credentials_to_their_original_owner",
+      "after": "ai::providers::tests::model_switch_migrates_legacy_credentials_to_their_original_owner",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::native_antigravity_search_and_image_tools_use_cloud_code_and_write_only_after_approval",
+      "after": "ai::providers::tests::native_antigravity_search_and_image_tools_use_cloud_code_and_write_only_after_approval",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::official_openai_chat_uses_completion_token_limit_through_real_transport",
+      "after": "ai::providers::tests::official_openai_chat_uses_completion_token_limit_through_real_transport",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::opencode_auth_file_key_and_native_catalog_do_not_require_execution",
+      "after": "ai::providers::tests::opencode_auth_file_key_and_native_catalog_do_not_require_execution",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::opencode_go_default_and_explicit_uncatalogued_protocol_are_native_routes",
+      "after": "ai::providers::tests::opencode_go_default_and_explicit_uncatalogued_protocol_are_native_routes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::oversized_historical_tool_image_is_projected_without_poisoning_or_mutating_history",
+      "after": "ai::providers::tests::oversized_historical_tool_image_is_projected_without_poisoning_or_mutating_history",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::provider_errors_keep_messages_retry_before_text_and_never_persist_opaque_secrets",
+      "after": "ai::providers::tests::provider_errors_keep_messages_retry_before_text_and_never_persist_opaque_secrets",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::revoked_unexpired_copilot_session_is_exchanged_again_once",
+      "after": "ai::providers::tests::revoked_unexpired_copilot_session_is_exchanged_again_once",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::providers::tests::unsigned_copilot_never_borrows_generic_credentials_or_makes_requests",
+      "after": "ai::providers::tests::unsigned_copilot_never_borrows_generic_credentials_or_makes_requests",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::anthropic_thinking_shape_matches_model_generation_and_gpt6_infers_vision_and_reasoning",
+      "after": "ai::review_regressions::anthropic_thinking_shape_matches_model_generation_and_gpt6_infers_vision_and_reasoning",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::closure_chat_blank_continuations_and_ollama_missing_arguments",
+      "after": "ai::review_regressions::closure_chat_blank_continuations_and_ollama_missing_arguments",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::closure_current_images_use_anthropic_route_budget_before_persistence",
+      "after": "ai::review_regressions::closure_current_images_use_anthropic_route_budget_before_persistence",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::closure_gemini_keyless_headers_and_signature_only_replay",
+      "after": "ai::review_regressions::closure_gemini_keyless_headers_and_signature_only_replay",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::coding_output_thinking_arguments_and_placeholder_keys_survive_all_codecs",
+      "after": "ai::review_regressions::coding_output_thinking_arguments_and_placeholder_keys_survive_all_codecs",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::host_derived_deepseek_replay_and_first_party_anthropic_budget",
+      "after": "ai::review_regressions::host_derived_deepseek_replay_and_first_party_anthropic_budget",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::json_provider_errors_preserve_message_and_typed_retry_policy_on_every_codec",
+      "after": "ai::review_regressions::json_provider_errors_preserve_message_and_typed_retry_policy_on_every_codec",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::regression_w_t02_responses_reasoning_without_encrypted_replay",
+      "after": "ai::review_regressions::regression_w_t02_responses_reasoning_without_encrypted_replay",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::regression_w_t03_thinking_checkbox_routes",
+      "after": "ai::review_regressions::regression_w_t03_thinking_checkbox_routes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_rejects_whole_malformed_batches_before_any_approval_or_effect",
+      "after": "ai::native_tests::native_rejects_whole_malformed_batches_before_any_approval_or_effect",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::regression_w_t05_anthropic_raw_empty_text_and_responses_shapes",
+      "after": "ai::review_regressions::regression_w_t05_anthropic_raw_empty_text_and_responses_shapes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::regression_w_t06_routes_and_json_errors",
+      "after": "ai::review_regressions::regression_w_t06_routes_and_json_errors",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::regression_w_t07_placeholder_key_and_override_headers",
+      "after": "ai::review_regressions::regression_w_t07_placeholder_key_and_override_headers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::repeated_signature_keeps_first_nonempty_and_invalid_argument_types_fail_closed",
+      "after": "ai::review_regressions::repeated_signature_keeps_first_nonempty_and_invalid_argument_types_fail_closed",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::streamed_empty_argument_fragments_never_replace_accumulated_arguments",
+      "after": "ai::review_regressions::streamed_empty_argument_fragments_never_replace_accumulated_arguments",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::unsupported_responses_include_falls_back_once_before_output_and_keeps_encrypted_replay",
+      "after": "ai::review_regressions::unsupported_responses_include_falls_back_once_before_output_and_keeps_encrypted_replay",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::runtime::clock::tests::approval_time_is_excluded_and_drop_resumes_deadline",
+      "after": "ai::runtime::clock::tests::approval_time_is_excluded_and_drop_resumes_deadline",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::runtime::policy::tests::file_mode_matrix",
+      "after": "ai::runtime::policy::tests::file_mode_matrix",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::runtime::policy::tests::risky_shell_always_precedes_remembered_and_turbo",
+      "after": "ai::runtime::policy::tests::risky_shell_always_precedes_remembered_and_turbo",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::runtime::transcript::repair_tests::nested_images_are_excluded_from_text_context_and_projected_recursively",
+      "after": "ai::runtime::transcript::repair_tests::nested_images_are_excluded_from_text_context_and_projected_recursively",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::approval_matching_cancellation_and_exact_persistence",
+      "after": "ai::tests::approval_matching_cancellation_and_exact_persistence",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::chat_metadata_handles_multibyte_answer_boundaries_without_panicking",
+      "after": "ai::tests::chat_metadata_handles_multibyte_answer_boundaries_without_panicking",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::dispatcher_future_can_be_installed_in_send_router",
+      "after": "ai::tests::dispatcher_future_can_be_installed_in_send_router",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::extension_ask_uses_native_http_and_action_provider",
+      "after": "ai::tests::extension_ask_uses_native_http_and_action_provider",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::hotkey_patch_preserves_platform_normalization_and_rejects_atomically",
+      "after": "ai::tests::hotkey_patch_preserves_platform_normalization_and_rejects_atomically",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::legacy_aliases_report_native_state_without_a_runtime",
+      "after": "ai::tests::legacy_aliases_report_native_state_without_a_runtime",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::native_source_has_only_reviewed_process_seams_and_never_stages_pi_policy",
+      "after": "ai::tests::native_source_has_only_reviewed_process_seams_and_never_stages_pi_policy",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::tests::superseded_answer_cannot_complete_replacement_stream",
+      "after": "ai::tests::superseded_answer_cannot_complete_replacement_stream",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::voice::subprocess_tests::stopping_speech_during_path_probe_prevents_late_playback",
+      "after": "ai::voice::subprocess_tests::stopping_speech_during_path_probe_prevents_late_playback",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::review_regressions::regression_w_t04_opencode_go_only_key",
+      "after": "ai::review_regressions::regression_w_t04_opencode_go_only_key",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::voice::tests::catalog_has_real_runtime_assets",
+      "after": "ai::voice::tests::catalog_has_real_runtime_assets",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::voice::tests::typed_array_json_forms_are_accepted_without_truncation",
+      "after": "ai::voice::tests::typed_array_json_forms_are_accepted_without_truncation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::redact::tests::secrets_split_at_every_byte_never_reach_visible_output",
+      "after": "ai::wire::redact::tests::secrets_split_at_every_byte_never_reach_visible_output",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::anthropic_saved_empty_tool_text_is_omitted_and_base64_image_limit_is_current",
+      "after": "ai::wire::tests::anthropic_saved_empty_tool_text_is_omitted_and_base64_image_limit_is_current",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::anthropic_signed_blocks_are_replayed_in_original_order",
+      "after": "ai::wire::tests::anthropic_signed_blocks_are_replayed_in_original_order",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::anthropic_terminal_does_not_complete_an_unclosed_tool_block_but_json_is_complete",
+      "after": "ai::wire::tests::anthropic_terminal_does_not_complete_an_unclosed_tool_block_but_json_is_complete",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::chat_preserves_reasoning_extra_content_and_missing_ids",
+      "after": "ai::wire::tests::chat_preserves_reasoning_extra_content_and_missing_ids",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::chat_tool_results_stay_contiguous_before_image_followups_across_messages",
+      "after": "ai::wire::tests::chat_tool_results_stay_contiguous_before_image_followups_across_messages",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::duplicate_ids_and_non_object_arguments_fail_before_execution",
+      "after": "ai::wire::tests::duplicate_ids_and_non_object_arguments_fail_before_execution",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::empty_tool_json_null_reasoning_and_completed_empty_responses_are_valid",
+      "after": "ai::wire::tests::empty_tool_json_null_reasoning_and_completed_empty_responses_are_valid",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::every_encoder_places_user_and_tool_images_without_flattening",
+      "after": "ai::wire::tests::every_encoder_places_user_and_tool_images_without_flattening",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::every_protocol_requires_terminal_signal",
+      "after": "ai::wire::tests::every_protocol_requires_terminal_signal",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::gemini_family_ids_and_error_results_are_correlated_without_synthesized_gemini_ids",
+      "after": "ai::wire::tests::gemini_family_ids_and_error_results_are_correlated_without_synthesized_gemini_ids",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::gemini_keeps_signed_part_boundaries_and_foreign_observations",
+      "after": "ai::wire::tests::gemini_keeps_signed_part_boundaries_and_foreign_observations",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::gemini_three_unsigned_same_origin_history_becomes_observation_without_losing_images",
+      "after": "ai::wire::tests::gemini_three_unsigned_same_origin_history_becomes_observation_without_losing_images",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::incomplete_tool_json_is_labelled_before_parsing",
+      "after": "ai::wire::tests::incomplete_tool_json_is_labelled_before_parsing",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::ollama_native_thinking_tool_arguments_and_done",
+      "after": "ai::wire::tests::ollama_native_thinking_tool_arguments_and_done",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::tests::responses_keeps_encrypted_reasoning_and_call_identity",
+      "after": "ai::wire::tests::responses_keeps_encrypted_reasoning_and_call_identity",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::wire::transport::repair_tests::local_header_wait_defaults_to_120_seconds_and_is_bounded",
+      "after": "ai::wire::transport::repair_tests::local_header_wait_defaults_to_120_seconds_and_is_bounded",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::common::tests::config_cache_detects_external_changes",
+      "after": "common::tests::config_cache_detects_external_changes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::common::tests::config_preserves_unknown_keys_and_serializes_concurrent_updates",
+      "after": "common::tests::config_preserves_unknown_keys_and_serializes_concurrent_updates",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::common::tests::headless_defaults_do_not_enable_desktop_services",
+      "after": "common::tests::headless_defaults_do_not_enable_desktop_services",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::common::tests::malformed_profile_is_never_replaced_by_defaults",
+      "after": "common::tests::malformed_profile_is_never_replaced_by_defaults",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination",
+      "after": "extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination",
+      "package": "tezbar-core",
+      "baseline": "ignored, requires built dist-backend/extension-worker.js and installed Bun; see TEZBAR_TEST_BUN"
+    },
+    {
+      "before": "native_core::extension_worker::tests::constructing_worker_does_not_launch_runtime_and_rejects_core_channels",
+      "after": "extension_worker::tests::constructing_worker_does_not_launch_runtime_and_rejects_core_channels",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extension_worker::tests::framing_bounds_unterminated_input_and_allows_multiple_records",
+      "after": "extension_worker::tests::framing_bounds_unterminated_input_and_allows_multiple_records",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extension_worker::tests::framing_preserves_unicode_and_rejects_truncation",
+      "after": "extension_worker::tests::framing_preserves_unicode_and_rejects_truncation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::declared_aliases_and_repository_share_local_acquisition",
+      "after": "extensions::acquisition::tests::declared_aliases_and_repository_share_local_acquisition",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::voice::subprocess_tests::wav_runs_whisper_with_temp_profile_and_cleans_artifacts",
+      "after": "ai::voice::subprocess_tests::wav_runs_whisper_with_temp_profile_and_cleans_artifacts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::empty_repository_markers_block_before_worker_dispatch",
+      "after": "extensions::acquisition::tests::empty_repository_markers_block_before_worker_dispatch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::js_whitespace_id_insertion_and_alias_conflicts_fail_closed",
+      "after": "extensions::acquisition::tests::js_whitespace_id_insertion_and_alias_conflicts_fail_closed",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::equivalent_repository_roots_share_local_acquisition",
+      "after": "extensions::acquisition::tests::equivalent_repository_roots_share_local_acquisition",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::normalization_applies_to_trusted_insertion_and_conflicts_fail_closed",
+      "after": "extensions::acquisition::tests::normalization_applies_to_trusted_insertion_and_conflicts_fail_closed",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::public_repository_install_still_dispatches_to_worker",
+      "after": "extensions::acquisition::tests::public_repository_install_still_dispatches_to_worker",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::repository_install_aliases_block_before_worker_dispatch",
+      "after": "extensions::acquisition::tests::repository_install_aliases_block_before_worker_dispatch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::non_equivalent_references_do_not_inherit_private_acquisition",
+      "after": "extensions::acquisition::tests::non_equivalent_references_do_not_inherit_private_acquisition",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::unknown_or_malformed_rules_never_enable_remote_install",
+      "after": "extensions::acquisition::tests::unknown_or_malformed_rules_never_enable_remote_install",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::surrounding_js_whitespace_preserves_declared_id_acquisition",
+      "after": "extensions::acquisition::tests::surrounding_js_whitespace_preserves_declared_id_acquisition",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::acquisition::tests::wrapped_declared_ids_block_before_worker_dispatch",
+      "after": "extensions::acquisition::tests::wrapped_declared_ids_block_before_worker_dispatch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::catalog::tests::curated_replacements_keep_live_counts_and_artwork",
+      "after": "extensions::catalog::tests::curated_replacements_keep_live_counts_and_artwork",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::catalog::tests::local_only_catalog_preserves_legacy_until_installed",
+      "after": "extensions::catalog::tests::local_only_catalog_preserves_legacy_until_installed",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::catalog::tests::missing_raycast_catalog_reports_unpublished_native_item",
+      "after": "extensions::catalog::tests::missing_raycast_catalog_reports_unpublished_native_item",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::catalog::tests::own_v1_catalog_keeps_declared_ids_and_command_count",
+      "after": "extensions::catalog::tests::own_v1_catalog_keeps_declared_ids_and_command_count",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::catalog::tests::short_queries_do_not_match_unrelated_substrings",
+      "after": "extensions::catalog::tests::short_queries_do_not_match_unrelated_substrings",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::catalog::tests::synthetic_native_coverage_preserves_legacy_before_pagination",
+      "after": "extensions::catalog::tests::synthetic_native_coverage_preserves_legacy_before_pagination",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::catalog::tests::cached_catalog_shares_entries_and_preserves_channel_pagination",
+      "after": "extensions::catalog::tests::cached_catalog_shares_entries_and_preserves_channel_pagination",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::continuously_invalidated_refresh_fails_boundedly_then_recovers",
+      "after": "extensions::command_list_tests::continuously_invalidated_refresh_fails_boundedly_then_recovers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::cached_display_never_authorizes_execution_and_corruption_recovers",
+      "after": "extensions::command_list_tests::cached_display_never_authorizes_execution_and_corruption_recovers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::environment_roots_and_direct_packages_are_part_of_the_snapshot_key",
+      "after": "extensions::command_list_tests::environment_roots_and_direct_packages_are_part_of_the_snapshot_key",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::cores_are_profile_isolated_and_clones_share_only_their_own_snapshot",
+      "after": "extensions::command_list_tests::cores_are_profile_isolated_and_clones_share_only_their_own_snapshot",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::failed_input_probe_is_not_cached_forever",
+      "after": "extensions::command_list_tests::failed_input_probe_is_not_cached_forever",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::external_activation_add_remove_and_identical_cli_import_are_reconciled",
+      "after": "extensions::command_list_tests::external_activation_add_remove_and_identical_cli_import_are_reconciled",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::old_refresh_cannot_publish_across_external_update",
+      "after": "extensions::command_list_tests::old_refresh_cannot_publish_across_external_update",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::legacy_manifest_icons_roots_and_non_dependencies",
+      "after": "extensions::command_list_tests::legacy_manifest_icons_roots_and_non_dependencies",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::old_refresh_cannot_publish_after_concurrent_core_uninstall",
+      "after": "extensions::command_list_tests::old_refresh_cannot_publish_after_concurrent_core_uninstall",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::overlapping_requests_share_one_refresh",
+      "after": "extensions::command_list_tests::overlapping_requests_share_one_refresh",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::reconciliation_expiry_and_failed_refresh_recover_without_sleeping",
+      "after": "extensions::command_list_tests::reconciliation_expiry_and_failed_refresh_recover_without_sleeping",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::oversized_inputs_and_outputs_use_uncached_source_without_retention",
+      "after": "extensions::command_list_tests::oversized_inputs_and_outputs_use_uncached_source_without_retention",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::uncached_fallback_cannot_return_removed_commands_after_uninstall",
+      "after": "extensions::command_list_tests::uncached_fallback_cannot_return_removed_commands_after_uninstall",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::unchanged_command_list_does_not_hash_package_bytes_again",
+      "after": "extensions::command_list_tests::unchanged_command_list_does_not_hash_package_bytes_again",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::worker_install_update_reinstall_and_failure_invalidate_the_core_snapshot",
+      "after": "extensions::command_list_tests::worker_install_update_reinstall_and_failure_invalidate_the_core_snapshot",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::actual_external_package_bootstraps_only_its_declared_index",
+      "after": "extensions::launcher::tests::actual_external_package_bootstraps_only_its_declared_index",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::actual_sdk_package_launcher_index_fences_and_uninstall",
+      "after": "extensions::launcher::tests::actual_sdk_package_launcher_index_fences_and_uninstall",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::bounded_selectors_and_own_command_index_validation",
+      "after": "extensions::launcher::tests::bounded_selectors_and_own_command_index_validation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::command_metadata_is_validated_with_absent_or_empty_contributions",
+      "after": "extensions::launcher::tests::command_metadata_is_validated_with_absent_or_empty_contributions",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::command_list_tests::uncached_fallback_fences_external_activation_and_removal",
+      "after": "extensions::command_list_tests::uncached_fallback_fences_external_activation_and_removal",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::invalid_launcher_rows_settle_and_recover",
+      "after": "extensions::launcher::tests::invalid_launcher_rows_settle_and_recover",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::failed_launcher_rpc_settles_and_recovers",
+      "after": "extensions::launcher::tests::failed_launcher_rpc_settles_and_recovers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::optional_index_activation_failure_keeps_command_sessions_available",
+      "after": "extensions::launcher::tests::optional_index_activation_failure_keeps_command_sessions_available",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::launcher_startup_failure_settles_without_self_retry",
+      "after": "extensions::launcher::tests::launcher_startup_failure_settles_without_self_retry",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::launcher::tests::timed_out_launcher_query_settles_and_recovers",
+      "after": "extensions::launcher::tests::timed_out_launcher_query_settles_and_recovers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::actual_startup_probe_once_and_shutdown_cancels_pending_restore",
+      "after": "extensions::native::tests::actual_startup_probe_once_and_shutdown_cancels_pending_restore",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::canonical_scalar_metadata_and_unknown_install_do_not_reach_worker",
+      "after": "extensions::native::tests::canonical_scalar_metadata_and_unknown_install_do_not_reach_worker",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::background_event_survives_interactive_work_but_has_a_bounded_deadline",
+      "after": "extensions::native::tests::background_event_survives_interactive_work_but_has_a_bounded_deadline",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::clear_other_extension_preserves_active_process_and_blur_cleanup",
+      "after": "extensions::native::tests::clear_other_extension_preserves_active_process_and_blur_cleanup",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::deadline_sends_real_cancel_packet_and_does_not_replay",
+      "after": "extensions::native::tests::deadline_sends_real_cancel_packet_and_does_not_replay",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::crash_malformed_and_bad_identity_drain_pending_launches",
+      "after": "extensions::native::tests::crash_malformed_and_bad_identity_drain_pending_launches",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::frame_limits_truncation_and_unicode",
+      "after": "extensions::native::tests::frame_limits_truncation_and_unicode",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::exe_named_fixture_keeps_open_and_call_crashes_distinct",
+      "after": "extensions::native::tests::exe_named_fixture_keeps_open_and_call_crashes_distinct",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::installed_package_round_trip",
+      "after": "extensions::native::tests::installed_package_round_trip",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::legacy_uninstall_does_not_stop_canonical_sessions",
+      "after": "extensions::native::tests::legacy_uninstall_does_not_stop_canonical_sessions",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::no_child_on_listing_and_canonical_damage_never_falls_back",
+      "after": "extensions::native::tests::no_child_on_listing_and_canonical_damage_never_falls_back",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::owned_revision_events_and_unknown_response_fence",
+      "after": "extensions::native::tests::owned_revision_events_and_unknown_response_fence",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::lazy_shared_process_capacity_and_stale_ids_never_worker",
+      "after": "extensions::native::tests::lazy_shared_process_capacity_and_stale_ids_never_worker",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::real_pipes_reverse_rpc_and_disposal",
+      "after": "extensions::native::tests::real_pipes_reverse_rpc_and_disposal",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::ai::native_tests::native_next_header_deadline_never_replays_completed_effects",
+      "after": "ai::native_tests::native_next_header_deadline_never_replays_completed_effects",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::rejected_background_lease_does_not_persist_an_unowned_activation",
+      "after": "extensions::native::tests::rejected_background_lease_does_not_persist_an_unowned_activation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::reverse_services_wait_for_initialization_acknowledgement",
+      "after": "extensions::native::tests::reverse_services_wait_for_initialization_acknowledgement",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::search_supersession_busy_refresh_dispose_and_generation_fences",
+      "after": "extensions::native::tests::search_supersession_busy_refresh_dispose_and_generation_fences",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::service_ports_keep_exact_migration_files_and_oauth_budget",
+      "after": "extensions::native::tests::service_ports_keep_exact_migration_files_and_oauth_budget",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::real_pipe_failures_stderr_and_handshake_fields",
+      "after": "extensions::native::tests::real_pipe_failures_stderr_and_handshake_fields",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::shutdown_aborts_reverse_host_future_without_deadlock",
+      "after": "extensions::native::tests::shutdown_aborts_reverse_host_future_without_deadlock",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::service_safety_shapes_reach_real_authorization_and_audit_without_os_actions",
+      "after": "extensions::native::tests::service_safety_shapes_reach_real_authorization_and_audit_without_os_actions",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::typed_grants_durable_ack_and_startup_probe_are_generic",
+      "after": "extensions::native::tests::typed_grants_durable_ack_and_startup_probe_are_generic",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::typed_services_preserve_core_argument_and_image_shapes",
+      "after": "extensions::native::tests::typed_services_preserve_core_argument_and_image_shapes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process::environment_tests::child_environment_keeps_public_client_id_and_filters_credentials",
+      "after": "extensions::process::environment_tests::child_environment_keeps_public_client_id_and_filters_credentials",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process::supervisor::tests::abrupt_host_death_closes_extension_protocol_and_kills_tree",
+      "after": "child_supervisor::tests::abrupt_host_death_closes_extension_protocol_and_kills_tree",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process::supervisor::tests::abrupt_host_death_closes_lease_and_kills_tree",
+      "after": "child_supervisor::tests::abrupt_host_death_closes_lease_and_kills_tree",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process::supervisor::tests::idle_supervisor_waits_without_periodic_wakeups",
+      "after": "child_supervisor::tests::idle_supervisor_waits_without_periodic_wakeups",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process::supervisor::tests::missing_child_fails_without_waiting_for_open_lease",
+      "after": "child_supervisor::tests::missing_child_fails_without_waiting_for_open_lease",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process::supervisor::tests::pipe_disconnect_kills_owned_tree_and_preserves_unrelated_process",
+      "after": "child_supervisor::tests::pipe_disconnect_kills_owned_tree_and_preserves_unrelated_process",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process::supervisor::tests::server_failure_preserves_status_and_cleans_descendants",
+      "after": "child_supervisor::tests::server_failure_preserves_status_and_cleans_descendants",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_host::shape_tests::clipboard_media_stays_file_references_and_os_failures_reject",
+      "after": "extensions::process_host::shape_tests::clipboard_media_stays_file_references_and_os_failures_reject",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_host::shape_tests::image_payload_is_real_png_and_bounded",
+      "after": "extensions::process_host::shape_tests::image_payload_is_real_png_and_bounded",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_host::shape_tests::migration_directories_are_narrow_and_symlink_free",
+      "after": "extensions::process_host::shape_tests::migration_directories_are_narrow_and_symlink_free",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_host::shape_tests::only_own_narrow_migration_directories_are_granted",
+      "after": "extensions::process_host::shape_tests::only_own_narrow_migration_directories_are_granted",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_host::shape_tests::private_directory_creation_is_safe_under_concurrent_first_use",
+      "after": "extensions::process_host::shape_tests::private_directory_creation_is_safe_under_concurrent_first_use",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::async_http_fixture_installs_and_production_rejects_http",
+      "after": "extensions::process_install::activation_tests::async_http_fixture_installs_and_production_rejects_http",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::combined_reference_derives_only_hash_verified_target_inventory",
+      "after": "extensions::process_install::activation_tests::combined_reference_derives_only_hash_verified_target_inventory",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::concurrent_reinstall_uninstall_serializes_without_losing_other_records",
+      "after": "extensions::process_install::activation_tests::concurrent_reinstall_uninstall_serializes_without_losing_other_records",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::local_only_import_is_offline_discoverable_and_preserves_active_on_bad_hash",
+      "after": "extensions::process_install::activation_tests::local_only_import_is_offline_discoverable_and_preserves_active_on_bad_hash",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::publication_failure_rolls_back_database_and_previous_version",
+      "after": "extensions::process_install::activation_tests::publication_failure_rolls_back_database_and_previous_version",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::published_combined_reference_omitted_files_installs_and_mismatch_rolls_back",
+      "after": "extensions::process_install::activation_tests::published_combined_reference_omitted_files_installs_and_mismatch_rolls_back",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::reject_invalid_package_without_changing_active_or_preferences",
+      "after": "extensions::process_install::activation_tests::reject_invalid_package_without_changing_active_or_preferences",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::reject_zip_symlinks_case_collisions_and_bombs",
+      "after": "extensions::process_install::activation_tests::reject_zip_symlinks_case_collisions_and_bombs",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::activation_tests::symlink_hardlink_extra_files_and_missing_executable_never_launch",
+      "after": "extensions::process_install::activation_tests::symlink_hardlink_extra_files_and_missing_executable_never_launch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::tests::host_target_mapping_includes_intel_mac_without_aliasing_architectures",
+      "after": "extensions::process_install::tests::host_target_mapping_includes_intel_mac_without_aliasing_architectures",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::tests::intel_mac_requires_its_own_artifact_and_has_no_public_catalog_pins",
+      "after": "extensions::process_install::tests::intel_mac_requires_its_own_artifact_and_has_no_public_catalog_pins",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::tests::rejects_cross_platform_paths",
+      "after": "extensions::process_install::tests::rejects_cross_platform_paths",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::process_install::tests::zip_security_and_inventory",
+      "after": "extensions::process_install::tests::zip_security_and_inventory",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::canonical_preferences_survive_core_uninstall_and_identical_reimports",
+      "after": "extensions::registry::tests::canonical_preferences_survive_core_uninstall_and_identical_reimports",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::canonical_uninstall_does_not_remove_legacy_package",
+      "after": "extensions::registry::tests::canonical_uninstall_does_not_remove_legacy_package",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::concurrent_save_and_uninstall_keep_the_latest_acknowledged_preferences",
+      "after": "extensions::registry::tests::concurrent_save_and_uninstall_keep_the_latest_acknowledged_preferences",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::detects_missing_and_tampered_legacy_scripts",
+      "after": "extensions::registry::tests::detects_missing_and_tampered_legacy_scripts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::launcher_prefers_native_commands_and_keeps_unported_legacy_commands",
+      "after": "extensions::registry::tests::launcher_prefers_native_commands_and_keeps_unported_legacy_commands",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::legacy_fallback_and_own_retained_precedence_survive_uninstall",
+      "after": "extensions::registry::tests::legacy_fallback_and_own_retained_precedence_survive_uninstall",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::legacy_fallback_retention_survives_a_changed_managed_install_root",
+      "after": "extensions::registry::tests::legacy_fallback_retention_survives_a_changed_managed_install_root",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::legacy_preferences_preserve_scopes_and_unknown_keys",
+      "after": "extensions::registry::tests::legacy_preferences_preserve_scopes_and_unknown_keys",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::shutdown_kills_actual_helper_process_group",
+      "after": "extensions::native::tests::shutdown_kills_actual_helper_process_group",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::native_install_reads_legacy_preferences_and_needs_no_script",
+      "after": "extensions::registry::tests::native_install_reads_legacy_preferences_and_needs_no_script",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::old_canonical_preferences_are_retained_from_every_managed_root",
+      "after": "extensions::registry::tests::old_canonical_preferences_are_retained_from_every_managed_root",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::preference_symlinks_cannot_redirect_retention_or_removal",
+      "after": "extensions::registry::tests::preference_symlinks_cannot_redirect_retention_or_removal",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::traversal_cannot_read_or_remove_external_data",
+      "after": "extensions::registry::tests::traversal_cannot_read_or_remove_external_data",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::v2_catalog::tests::catalog_without_pins_never_claims_installability",
+      "after": "extensions::v2_catalog::tests::catalog_without_pins_never_claims_installability",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::fts_rank::tests::scores_match_bundled_bm25_bits_across_phrase_counts_and_lengths",
+      "after": "fts_rank::tests::scores_match_bundled_bm25_bits_across_phrase_counts_and_lengths",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::fts_rank::tests::size_decoder_is_bounded_and_falls_back_on_invalid_input",
+      "after": "fts_rank::tests::size_decoder_is_bounded_and_falls_back_on_invalid_input",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::deep_search_limit_counts_sources_before_chunk_candidate_window",
+      "after": "knowledge::db::ranking_tests::deep_search_limit_counts_sources_before_chunk_candidate_window",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::exact_ocr_phrase_beats_short_separated_words_in_all_ranking_modes",
+      "after": "knowledge::db::ranking_tests::exact_ocr_phrase_beats_short_separated_words_in_all_ranking_modes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::exact_phrase_preserves_short_words_and_token_boundaries",
+      "after": "knowledge::db::ranking_tests::exact_phrase_preserves_short_words_and_token_boundaries",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::legacy_utf8_keeps_blob_content_and_path_identity_strict",
+      "after": "knowledge::db::ranking_tests::legacy_utf8_keeps_blob_content_and_path_identity_strict",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::legacy_utf8_pending_save_finishes_each_model_without_rewriting_text",
+      "after": "knowledge::db::ranking_tests::legacy_utf8_pending_save_finishes_each_model_without_rewriting_text",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::legacy_utf8_reusable_content_is_sanitized_and_copies_finish_pending",
+      "after": "knowledge::db::ranking_tests::legacy_utf8_reusable_content_is_sanitized_and_copies_finish_pending",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::legacy_utf8_save_checks_original_bytes_and_legacy_valid_manual_values",
+      "after": "knowledge::db::ranking_tests::legacy_utf8_save_checks_original_bytes_and_legacy_valid_manual_values",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::legacy_utf8_search_and_read_preserve_healthy_hits_and_scores",
+      "after": "knowledge::db::ranking_tests::legacy_utf8_search_and_read_preserve_healthy_hits_and_scores",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::partial_full_budget_must_find_stronger_unbackfilled_represented_chunk",
+      "after": "knowledge::db::ranking_tests::partial_full_budget_must_find_stronger_unbackfilled_represented_chunk",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::phrase_search_keeps_prefixes_and_respects_roots_and_source_status",
+      "after": "knowledge::db::ranking_tests::phrase_search_keeps_prefixes_and_respects_roots_and_source_status",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::review_partial_full_budget_must_find_best",
+      "after": "knowledge::db::ranking_tests::review_partial_full_budget_must_find_best",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::registry::tests::retention_failures_leave_original_package_and_ownership_untouched",
+      "after": "extensions::registry::tests::retention_failures_leave_original_package_and_ownership_untouched",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::semantic_builtin_sources_without_vec0",
+      "after": "knowledge::db::ranking_tests::semantic_builtin_sources_without_vec0",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::semantic_builtin_sources_vec0",
+      "after": "knowledge::db::ranking_tests::semantic_builtin_sources_vec0",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::semantic_learned_sources_vec0",
+      "after": "knowledge::db::ranking_tests::semantic_learned_sources_vec0",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::semantic_learned_sources_without_vec0",
+      "after": "knowledge::db::ranking_tests::semantic_learned_sources_without_vec0",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::extensions::native::tests::unused_process_stops_after_idle_grace_with_graceful_shutdown",
+      "after": "extensions::native::tests::unused_process_stops_after_idle_grace_with_graceful_shutdown",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::semantic_source_candidates_survive_unavailable_knn_tables",
+      "after": "knowledge::db::ranking_tests::semantic_source_candidates_survive_unavailable_knn_tables",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_bounded_loading_reconciles_inserts_and_replacements",
+      "after": "knowledge::db::search_cache::tests::cache_bounded_loading_reconciles_inserts_and_replacements",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_cancelled_authoritative_and_packed_query",
+      "after": "knowledge::db::search_cache::tests::cache_cancelled_authoritative_and_packed_query",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_cap_idle_and_exact_model_switch",
+      "after": "knowledge::db::search_cache::tests::cache_cap_idle_and_exact_model_switch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_external_writer_invalidates_even_same_count",
+      "after": "knowledge::db::search_cache::tests::cache_external_writer_invalidates_even_same_count",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_growth_cap_and_cancelled_loading_release_buffers",
+      "after": "knowledge::db::search_cache::tests::cache_growth_cap_and_cancelled_loading_release_buffers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_preserves_legacy_f64_and_short_vector_zip_norms",
+      "after": "knowledge::db::search_cache::tests::cache_preserves_legacy_f64_and_short_vector_zip_norms",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_pressure_releases_buffers_and_retains_authoritative_results",
+      "after": "knowledge::db::search_cache::tests::cache_pressure_releases_buffers_and_retains_authoritative_results",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_same_count_deltas_status_and_rollback",
+      "after": "knowledge::db::search_cache::tests::cache_same_count_deltas_status_and_rollback",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_source_root_and_model_deletes_follow_store_transactions",
+      "after": "knowledge::db::search_cache::tests::cache_source_root_and_model_deletes_follow_store_transactions",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::semantic_sources_fallback_updates_partially_accelerated_winners",
+      "after": "knowledge::db::ranking_tests::semantic_sources_fallback_updates_partially_accelerated_winners",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::cache_sparse_lane_still_visits_only_a_bounded_raw_batch",
+      "after": "knowledge::db::search_cache::tests::cache_sparse_lane_still_visits_only_a_bounded_raw_batch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::lexical_source_selection_matches_beta17_window_with_starvation_and_filters",
+      "after": "knowledge::db::search_cache::tests::lexical_source_selection_matches_beta17_window_with_starvation_and_filters",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::scaled_cache_memory",
+      "after": "knowledge::db::search_cache::tests::scaled_cache_memory",
+      "package": "tezbar-core",
+      "baseline": "ignored, scaled on-disk cache memory/parity probe; no inference or user data"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::search_matrix",
+      "after": "knowledge::db::search_cache::tests::search_matrix",
+      "package": "tezbar-core",
+      "baseline": "ignored, release-only deterministic 10k-vector search, excluding inference"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::source_winners_match_full_sort_for_dense_legacy_ties_and_updates",
+      "after": "knowledge::db::search_cache::tests::source_winners_match_full_sort_for_dense_legacy_ties_and_updates",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::store_selects_joined_rank_only_on_qualified_target",
+      "after": "knowledge::db::search_cache::tests::store_selects_joined_rank_only_on_qualified_target",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::drained_known_incomplete_progress_reconciles_once_without_per_chunk_counts",
+      "after": "knowledge::db::semantic_work::tests::drained_known_incomplete_progress_reconciles_once_without_per_chunk_counts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::exact_counts_and_gates_cover_real_mutations_and_rollback",
+      "after": "knowledge::db::semantic_work::tests::exact_counts_and_gates_cover_real_mutations_and_rollback",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::explain_exact_count_and_pending_on_bundled_sqlite",
+      "after": "knowledge::db::semantic_work::tests::explain_exact_count_and_pending_on_bundled_sqlite",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::external_commit_and_reconnect_invalidate_without_total_changes",
+      "after": "knowledge::db::semantic_work::tests::external_commit_and_reconnect_invalidate_without_total_changes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::external_commit_during_count_discards_result_and_retries",
+      "after": "knowledge::db::semantic_work::tests::external_commit_during_count_discards_result_and_retries",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::failed_and_cancelled_count_remain_dirty",
+      "after": "knowledge::db::semantic_work::tests::failed_and_cancelled_count_remain_dirty",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::identical_upsert_is_not_new_embedding_and_does_not_invalidate",
+      "after": "knowledge::db::semantic_work::tests::identical_upsert_is_not_new_embedding_and_does_not_invalidate",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::pending_completion_wakes_for_old_rowid_model_roots_and_forced_recheck",
+      "after": "knowledge::db::semantic_work::tests::pending_completion_wakes_for_old_rowid_model_roots_and_forced_recheck",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::queue_plan_active_checkpoint_resume_stale_completion_and_cancel",
+      "after": "knowledge::db::semantic_work::tests::queue_plan_active_checkpoint_resume_stale_completion_and_cancel",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::queue_restart_resumes_only_active_job",
+      "after": "knowledge::db::semantic_work::tests::queue_restart_resumes_only_active_job",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::readers_do_not_consume_search_cache_dirty_rows",
+      "after": "knowledge::db::semantic_work::tests::readers_do_not_consume_search_cache_dirty_rows",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::scope_key_covers_enabled_depth_settings_and_model",
+      "after": "knowledge::db::semantic_work::tests::scope_key_covers_enabled_depth_settings_and_model",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::semantic_work::tests::sqlite_progress_interrupts_large_count_and_is_removed_before_mutation",
+      "after": "knowledge::db::semantic_work::tests::sqlite_progress_interrupts_large_count_and_is_removed_before_mutation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::absent_embedding_table_is_created_and_missing_parent_is_not_created",
+      "after": "knowledge::embedding_schema::tests::absent_embedding_table_is_created_and_missing_parent_is_not_created",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::create_branch_fault_and_quoted_nonstandard_trigger_are_safe",
+      "after": "knowledge::embedding_schema::tests::create_branch_fault_and_quoted_nonstandard_trigger_are_safe",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::explicitly_declared_legacy_fk_is_preserved_as_cascade",
+      "after": "knowledge::embedding_schema::tests::explicitly_declared_legacy_fk_is_preserved_as_cascade",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::file_database_reopen_retains_migrated_data_and_keys",
+      "after": "knowledge::embedding_schema::tests::file_database_reopen_retains_migrated_data_and_keys",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::fk_itself_cascades_both_models_and_rejects_orphans",
+      "after": "knowledge::embedding_schema::tests::fk_itself_cascades_both_models_and_rejects_orphans",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::foreign_key_precondition_does_not_change_connection_or_schema",
+      "after": "knowledge::embedding_schema::tests::foreign_key_precondition_does_not_change_connection_or_schema",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::fresh_database_uses_actual_composite_schema_without_migration",
+      "after": "knowledge::embedding_schema::tests::fresh_database_uses_actual_composite_schema_without_migration",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::injected_failure_after_replacement_rolls_back_every_change_only",
+      "after": "knowledge::embedding_schema::tests::injected_failure_after_replacement_rolls_back_every_change_only",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::known_journal_precondition_rejects_legacy_without_losing_invalidation",
+      "after": "knowledge::embedding_schema::tests::known_journal_precondition_rejects_legacy_without_losing_invalidation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::legacy_fixture_accepts_lf_and_crlf_schema",
+      "after": "knowledge::embedding_schema::tests::legacy_fixture_accepts_lf_and_crlf_schema",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::legacy_fixture_proves_q4_overwrites_q8_before_migration",
+      "after": "knowledge::embedding_schema::tests::legacy_fixture_proves_q4_overwrites_q8_before_migration",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::legacy_invalid_rows_fail_copy_and_preserve_all_originals_even_deferred",
+      "after": "knowledge::embedding_schema::tests::legacy_invalid_rows_fail_copy_and_preserve_all_originals_even_deferred",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::malformed_shapes_and_fake_version_marker_fail_without_change",
+      "after": "knowledge::embedding_schema::tests::malformed_shapes_and_fake_version_marker_fail_without_change",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::migrate_then_journal_then_v2_noop_keeps_both_models_invalidation",
+      "after": "knowledge::embedding_schema::tests::migrate_then_journal_then_v2_noop_keeps_both_models_invalidation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::migrated_store_retains_both_exact_variant_keys_and_vectors",
+      "after": "knowledge::embedding_schema::tests::migrated_store_retains_both_exact_variant_keys_and_vectors",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::nested_rusqlite_transaction_owns_commit_and_rollback",
+      "after": "knowledge::embedding_schema::tests::nested_rusqlite_transaction_owns_commit_and_rollback",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::panic_unwinds_private_savepoint_without_leaking_transaction",
+      "after": "knowledge::embedding_schema::tests::panic_unwinds_private_savepoint_without_leaking_transaction",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::partial_journal_installation_is_also_rejected_before_rebuild",
+      "after": "knowledge::embedding_schema::tests::partial_journal_installation_is_also_rejected_before_rebuild",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::rerun_is_schema_noop_and_repairs_only_missing_covering_index",
+      "after": "knowledge::embedding_schema::tests::rerun_is_schema_noop_and_repairs_only_missing_covering_index",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::thousand_rows_preserve_unknown_keys_blob_bytes_counts_and_every_other_table",
+      "after": "knowledge::embedding_schema::tests::thousand_rows_preserve_unknown_keys_blob_bytes_counts_and_every_other_table",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::unrelated_schema_objects_and_exact_chunk_delete_sql_survive",
+      "after": "knowledge::embedding_schema::tests::unrelated_schema_objects_and_exact_chunk_delete_sql_survive",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::embedding_schema::tests::unsupported_dependencies_are_rejected_unchanged",
+      "after": "knowledge::embedding_schema::tests::unsupported_dependencies_are_rejected_unchanged",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::ranking_tests::semantic_sources_survive_partial_acceleration_backfill",
+      "after": "knowledge::db::ranking_tests::semantic_sources_survive_partial_acceleration_backfill",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::changed_during_indexing_retries_through_backoff_for_full_and_incremental_passes",
+      "after": "knowledge::lifecycle_tests::changed_during_indexing_retries_through_backoff_for_full_and_incremental_passes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::churn_intervals_and_memory_are_bounded",
+      "after": "knowledge::lifecycle_tests::churn_intervals_and_memory_are_bounded",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::incremental_churn_defers_without_reading_sources_and_eventually_indexes",
+      "after": "knowledge::lifecycle_tests::incremental_churn_defers_without_reading_sources_and_eventually_indexes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::incremental_rename_and_removed_directory_prune_only_their_children",
+      "after": "knowledge::lifecycle_tests::incremental_rename_and_removed_directory_prune_only_their_children",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::db::search_cache::tests::joined_lengths_preserve_source_and_chunk_apis_through_root_and_chunk_mutations",
+      "after": "knowledge::db::search_cache::tests::joined_lengths_preserve_source_and_chunk_apis_through_root_and_chunk_mutations",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::chrome_profiles_are_skipped_cached_and_previously_indexed_sources_pruned",
+      "after": "knowledge::lifecycle_tests::chrome_profiles_are_skipped_cached_and_previously_indexed_sources_pruned",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::pending_deadline_keeps_deferred_paths_separate_from_debounce_and_full_recovery",
+      "after": "knowledge::lifecycle_tests::pending_deadline_keeps_deferred_paths_separate_from_debounce_and_full_recovery",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::oversized_logs_are_skipped_and_existing_sources_pruned_by_full_scan",
+      "after": "knowledge::lifecycle_tests::oversized_logs_are_skipped_and_existing_sources_pruned_by_full_scan",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::profile_mutation_reindexes_unchanged_metadata_and_changed_work_keeps_pacing",
+      "after": "knowledge::lifecycle_tests::profile_mutation_reindexes_unchanged_metadata_and_changed_work_keeps_pacing",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::mixed_concurrent_pass_cancels_durably_and_reopens_without_double_counts",
+      "after": "knowledge::lifecycle_tests::mixed_concurrent_pass_cancels_durably_and_reopens_without_double_counts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::unchanged_failed_source_does_not_hash_or_extract_until_change_or_transient_retry",
+      "after": "knowledge::lifecycle_tests::unchanged_failed_source_does_not_hash_or_extract_until_change_or_transient_retry",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::runtime_changes_wake_both_observers_but_identical_status_does_not",
+      "after": "knowledge::lifecycle_tests::runtime_changes_wake_both_observers_but_identical_status_does_not",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::unchanged_real_pass_coalesces_progress_without_extraction_delays",
+      "after": "knowledge::lifecycle_tests::unchanged_real_pass_coalesces_progress_without_extraction_delays",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::watcher_single_file_update_is_incremental_and_preserves_job_queue",
+      "after": "knowledge::lifecycle_tests::watcher_single_file_update_is_incremental_and_preserves_job_queue",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::watcher_skips_browser_junk_and_pending_work_has_max_wait_and_full_rate_limit",
+      "after": "knowledge::lifecycle_tests::watcher_skips_browser_junk_and_pending_work_has_max_wait_and_full_rate_limit",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::watcher_uses_scanner_exclusions_but_keeps_uncertain_and_removed_directories",
+      "after": "knowledge::lifecycle_tests::watcher_uses_scanner_exclusions_but_keeps_uncertain_and_removed_directories",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::performance_tests::cancellation_during_real_count_does_not_publish_and_retries",
+      "after": "knowledge::performance_tests::cancellation_during_real_count_does_not_publish_and_retries",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::performance_tests::inactive_or_unavailable_model_never_counts_or_advertises_fresh_progress",
+      "after": "knowledge::performance_tests::inactive_or_unavailable_model_never_counts_or_advertises_fresh_progress",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::performance_tests::metadata_refresh_and_snapshot_polling_never_count",
+      "after": "knowledge::performance_tests::metadata_refresh_and_snapshot_polling_never_count",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::performance_tests::pause_resume_scope_and_variant_never_publish_other_counts",
+      "after": "knowledge::performance_tests::pause_resume_scope_and_variant_never_publish_other_counts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::performance_tests::queued_old_scope_and_dropped_read_do_not_execute_or_publish",
+      "after": "knowledge::performance_tests::queued_old_scope_and_dropped_read_do_not_execute_or_publish",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::performance_tests::unchanged_service_ticks_and_completed_batches_use_one_expensive_query",
+      "after": "knowledge::performance_tests::unchanged_service_ticks_and_completed_batches_use_one_expensive_query",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::quiescent_observers_sleep_and_shutdown_wakes_them",
+      "after": "knowledge::lifecycle_tests::quiescent_observers_sleep_and_shutdown_wakes_them",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::child_supervisor::tests::abrupt_host_death_closes_lease_and_kills_tree",
+      "after": "child_supervisor::tests::abrupt_host_death_closes_lease_and_kills_tree",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::child_supervisor::tests::abrupt_host_death_closes_extension_protocol_and_kills_tree",
+      "after": "child_supervisor::tests::abrupt_host_death_closes_extension_protocol_and_kills_tree",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::child_supervisor::tests::missing_child_fails_without_waiting_for_open_lease",
+      "after": "child_supervisor::tests::missing_child_fails_without_waiting_for_open_lease",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::child_supervisor::tests::pipe_disconnect_kills_owned_tree_and_preserves_unrelated_process",
+      "after": "child_supervisor::tests::pipe_disconnect_kills_owned_tree_and_preserves_unrelated_process",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::child_supervisor::tests::server_failure_preserves_status_and_cleans_descendants",
+      "after": "child_supervisor::tests::server_failure_preserves_status_and_cleans_descendants",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::runtime_bundle::tests::bundled_runtime_failed_publish_restores_previous_directory",
+      "after": "knowledge::runtime::runtime_bundle::tests::bundled_runtime_failed_publish_restores_previous_directory",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::child_supervisor::tests::idle_supervisor_waits_without_periodic_wakeups",
+      "after": "child_supervisor::tests::idle_supervisor_waits_without_periodic_wakeups",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::lifecycle_tests::unselected_download_keeps_progress_observation_active_then_returns_to_sleep",
+      "after": "knowledge::lifecycle_tests::unselected_download_keeps_progress_observation_active_then_returns_to_sleep",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::runtime_bundle::tests::bundled_runtime_real_source_configuration_finds_staged_pin_and_package_fails_closed",
+      "after": "knowledge::runtime::runtime_bundle::tests::bundled_runtime_real_source_configuration_finds_staged_pin_and_package_fails_closed",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::runtime_bundle::tests::bundled_runtime_resource_lookup_preserves_development_and_packaged_paths",
+      "after": "knowledge::runtime::runtime_bundle::tests::bundled_runtime_resource_lookup_preserves_development_and_packaged_paths",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::aborted_active_request_and_shutdown_release_the_owned_lease",
+      "after": "knowledge::runtime::tests::aborted_active_request_and_shutdown_release_the_owned_lease",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::aborted_foreground_future_drops_its_active_lease",
+      "after": "knowledge::runtime::tests::aborted_foreground_future_drops_its_active_lease",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::aborted_shutdown_future_still_closes_an_idle_owned_lease",
+      "after": "knowledge::runtime::tests::aborted_shutdown_future_still_closes_an_idle_owned_lease",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::runtime_bundle::tests::bundled_runtime_mid_extraction_cancel_cleans_staging_and_retry_works",
+      "after": "knowledge::runtime::runtime_bundle::tests::bundled_runtime_mid_extraction_cancel_cleans_staging_and_retry_works",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::cancel_download_preserves_independent_initial_and_reopen_verification",
+      "after": "knowledge::runtime::tests::cancel_download_preserves_independent_initial_and_reopen_verification",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::cancellation_while_waiting_for_another_request_is_prompt_and_not_an_error",
+      "after": "knowledge::runtime::tests::cancellation_while_waiting_for_another_request_is_prompt_and_not_an_error",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::cancelled_download_keeps_previous_install_and_removes_partial_staging",
+      "after": "knowledge::runtime::tests::cancelled_download_keeps_previous_install_and_removes_partial_staging",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::cancelled_owned_shutdown_future_still_closes_startup_lease",
+      "after": "knowledge::runtime::tests::cancelled_owned_shutdown_future_still_closes_startup_lease",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::cancelling_one_active_download_preserves_the_other_download",
+      "after": "knowledge::runtime::tests::cancelling_one_active_download_preserves_the_other_download",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::corrupt_installed_model_is_not_ready_and_reports_repairable_error",
+      "after": "knowledge::runtime::tests::corrupt_installed_model_is_not_ready_and_reports_repairable_error",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::downloads_require_exact_sha_and_size_and_leave_no_part_file",
+      "after": "knowledge::runtime::tests::downloads_require_exact_sha_and_size_and_leave_no_part_file",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::dropping_last_runtime_owner_aborts_warmup_promptly",
+      "after": "knowledge::runtime::tests::dropping_last_runtime_owner_aborts_warmup_promptly",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::explicit_repair_redownloads_startup_failed_install_and_healthy_download_is_idempotent",
+      "after": "knowledge::runtime::tests::explicit_repair_redownloads_startup_failed_install_and_healthy_download_is_idempotent",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::bundled_upgrade_verifies_q4_and_legacy_q8_without_rewriting_or_downloading_models",
+      "after": "knowledge::runtime::tests::bundled_upgrade_verifies_q4_and_legacy_q8_without_rewriting_or_downloading_models",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::first_foreground_query_returns_while_cold_runtime_is_warming",
+      "after": "knowledge::runtime::tests::first_foreground_query_returns_while_cold_runtime_is_warming",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::foreground_busy_does_not_cancel_background_indexing_request",
+      "after": "knowledge::runtime::tests::foreground_busy_does_not_cancel_background_indexing_request",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::foreground_changed_model_schedules_verification_without_using_cached_process",
+      "after": "knowledge::runtime::tests::foreground_changed_model_schedules_verification_without_using_cached_process",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::foreground_does_not_queue_behind_indexing_mutex",
+      "after": "knowledge::runtime::tests::foreground_does_not_queue_behind_indexing_mutex",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::failed_owned_prewarm_publishes_error_and_explicit_retry_recovers",
+      "after": "knowledge::runtime::tests::failed_owned_prewarm_publishes_error_and_explicit_retry_recovers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::idle_supervisor_does_not_retain_last_runtime_owner",
+      "after": "knowledge::runtime::tests::idle_supervisor_does_not_retain_last_runtime_owner",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::initialization_and_keyword_fallback_do_not_wait_for_background_hash",
+      "after": "knowledge::runtime::tests::initialization_and_keyword_fallback_do_not_wait_for_background_hash",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::installer_verifies_archive_and_model_and_redownload_repairs_without_destroying_old",
+      "after": "knowledge::runtime::tests::installer_verifies_archive_and_model_and_redownload_repairs_without_destroying_old",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::integrity_checks_same_length_replacement_missing_model_and_repaired_reinitialize",
+      "after": "knowledge::runtime::tests::integrity_checks_same_length_replacement_missing_model_and_repaired_reinitialize",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::idle_supervisor_is_independent_owned_and_protects_active_leases",
+      "after": "knowledge::runtime::tests::idle_supervisor_is_independent_owned_and_protects_active_leases",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::manifest_identity_and_runtime_file_digests_are_enforced",
+      "after": "knowledge::runtime::tests::manifest_identity_and_runtime_file_digests_are_enforced",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::launch_exit_and_readiness_timeout_publish_errors_cleanup_and_retry",
+      "after": "knowledge::runtime::tests::launch_exit_and_readiness_timeout_publish_errors_cleanup_and_retry",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::normalization_handles_finite_overflow_and_underflow_without_zero_vectors",
+      "after": "knowledge::runtime::tests::normalization_handles_finite_overflow_and_underflow_without_zero_vectors",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::native_inference_uses_auth_normalizes_768_to_256_and_stops_on_idle",
+      "after": "knowledge::runtime::tests::native_inference_uses_auth_normalizes_768_to_256_and_stops_on_idle",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::ordinary_indexing_still_awaits_cold_start_and_prewarm_changes_profile_safely",
+      "after": "knowledge::runtime::tests::ordinary_indexing_still_awaits_cold_start_and_prewarm_changes_profile_safely",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::protocol_fixture_serves_authenticated_inference_without_hostname_resolution",
+      "after": "knowledge::runtime::tests::protocol_fixture_serves_authenticated_inference_without_hostname_resolution",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::q4_manifest_requires_source_and_cannot_reuse_q8_cache_or_identity",
+      "after": "knowledge::runtime::tests::q4_manifest_requires_source_and_cannot_reuse_q8_cache_or_identity",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::runtime_bundle::tests::bundled_runtime_pin_install_reuse_tamper_cancel_and_rollback",
+      "after": "knowledge::runtime::runtime_bundle::tests::bundled_runtime_pin_install_reuse_tamper_cancel_and_rollback",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::protocol_errors_and_request_deadline_cleanup_and_retry",
+      "after": "knowledge::runtime::tests::protocol_errors_and_request_deadline_cleanup_and_retry",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::rapid_cancelled_queries_do_not_relaunch_or_cancel_owned_warmup",
+      "after": "knowledge::runtime::tests::rapid_cancelled_queries_do_not_relaunch_or_cancel_owned_warmup",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::registry_artifacts_urls_keys_and_wire_ids_are_exact",
+      "after": "knowledge::runtime::tests::registry_artifacts_urls_keys_and_wire_ids_are_exact",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::repeated_download_during_reopen_check_cannot_cancel_or_replace_installed_model",
+      "after": "knowledge::runtime::tests::repeated_download_during_reopen_check_cannot_cancel_or_replace_installed_model",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::readiness_cancellation_and_aborted_future_terminate_the_server_tree",
+      "after": "knowledge::runtime::tests::readiness_cancellation_and_aborted_future_terminate_the_server_tree",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::service_start_owns_one_idle_supervisor_per_runtime_and_shutdown_joins",
+      "after": "knowledge::runtime::tests::service_start_owns_one_idle_supervisor_per_runtime_and_shutdown_joins",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::spawn_failure_is_published_before_lexical_fallback",
+      "after": "knowledge::runtime::tests::spawn_failure_is_published_before_lexical_fallback",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::staged_install_rejects_bad_or_cancelled_replacement_and_can_repair",
+      "after": "knowledge::runtime::tests::staged_install_rejects_bad_or_cancelled_replacement_and_can_repair",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::q4_q8_stop_cancel_remove_and_failures_are_independent",
+      "after": "knowledge::runtime::tests::q4_q8_stop_cancel_remove_and_failures_are_independent",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::successful_warm_inference_does_not_publish_false_stopped_transitions",
+      "after": "knowledge::runtime::tests::successful_warm_inference_does_not_publish_false_stopped_transitions",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::variant_snapshot_uses_weights_progress_and_attributed_failures",
+      "after": "knowledge::runtime::tests::variant_snapshot_uses_weights_progress_and_attributed_failures",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::variants_have_independent_install_paths_and_legacy_q8_identity",
+      "after": "knowledge::runtime::tests::variants_have_independent_install_paths_and_legacy_q8_identity",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::verified_cache_is_process_local_and_does_not_rehash_unchanged_files",
+      "after": "knowledge::runtime::tests::verified_cache_is_process_local_and_does_not_rehash_unchanged_files",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::stop_remove_shutdown_abort_and_reap_owned_startup",
+      "after": "knowledge::runtime::tests::stop_remove_shutdown_abort_and_reap_owned_startup",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::additive_legacy_migration_and_failed_chunk_replacement_preserve_content",
+      "after": "knowledge::tests::additive_legacy_migration_and_failed_chunk_replacement_preserve_content",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::database_queue_supersession_and_chunk_isolation",
+      "after": "knowledge::tests::database_queue_supersession_and_chunk_isolation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::dropped_database_reply_cancels_running_search_without_mutation_cancel",
+      "after": "knowledge::tests::dropped_database_reply_cancels_running_search_without_mutation_cancel",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::durable_queue_recovers_paused_and_resumes_exactly_once",
+      "after": "knowledge::tests::durable_queue_recovers_paused_and_resumes_exactly_once",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::extractor_cancellation_terminates_descendant_converter",
+      "after": "knowledge::tests::extractor_cancellation_terminates_descendant_converter",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::extractor_drains_large_stderr_without_breaking_helper",
+      "after": "knowledge::tests::extractor_drains_large_stderr_without_breaking_helper",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::generated_typescript_vectors_and_chunk_ids_match_rust",
+      "after": "knowledge::tests::generated_typescript_vectors_and_chunk_ids_match_rust",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::runtime_limits_and_speed_modes_disable_cpu_polling_and_keep_metal_policy",
+      "after": "knowledge::runtime::tests::runtime_limits_and_speed_modes_disable_cpu_polling_and_keep_metal_policy",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::learned_normalization_and_sensitive_path_rules",
+      "after": "knowledge::tests::learned_normalization_and_sensitive_path_rules",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::indexes_searches_reads_and_reopens_legacy_database",
+      "after": "knowledge::tests::indexes_searches_reads_and_reopens_legacy_database",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::native_dispatch_uses_builtin_hybrid_without_learned_runtime",
+      "after": "knowledge::tests::native_dispatch_uses_builtin_hybrid_without_learned_runtime",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::native_pdf_helper_protocol_retains_ocr_and_partial_page_metadata",
+      "after": "knowledge::tests::native_pdf_helper_protocol_retains_ocr_and_partial_page_metadata",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::packaged_pdfkit_helper_extracts_real_temporary_pdf",
+      "after": "knowledge::tests::packaged_pdfkit_helper_extracts_real_temporary_pdf",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_actual_learned_batch_is_cancelled_before_obsolete_model_publication",
+      "after": "knowledge::tests::q4_actual_learned_batch_is_cancelled_before_obsolete_model_publication",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_actual_store_open_migrates_legacy_q8_without_text_or_checkpoint_changes",
+      "after": "knowledge::tests::q4_actual_store_open_migrates_legacy_q8_without_text_or_checkpoint_changes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_ipc_omission_targets_q8_and_switch_keeps_extraction_checkpoint",
+      "after": "knowledge::tests::q4_ipc_omission_targets_q8_and_switch_keeps_extraction_checkpoint",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_multimodel_pending_counts_remove_and_vec0_identity",
+      "after": "knowledge::tests::q4_multimodel_pending_counts_remove_and_vec0_identity",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::runtime::tests::warm_foreground_timeout_is_bounded_visible_cleans_lease_and_recovers",
+      "after": "knowledge::runtime::tests::warm_foreground_timeout_is_bounded_visible_cleans_lease_and_recovers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_selected_runtime_failure_stays_visible_and_search_uses_builtin_hybrid",
+      "after": "knowledge::tests::q4_selected_runtime_failure_stays_visible_and_search_uses_builtin_hybrid",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_service_snapshot_defaults_and_unknown_ipc_are_strict",
+      "after": "knowledge::tests::q4_service_snapshot_defaults_and_unknown_ipc_are_strict",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_store_keeps_composite_rows_in_fresh_database",
+      "after": "knowledge::tests::q4_store_keeps_composite_rows_in_fresh_database",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_old_snapshot_refresh_cannot_restore_previous_selection",
+      "after": "knowledge::tests::q4_old_snapshot_refresh_cannot_restore_previous_selection",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::rejects_payloads_and_background_remains_cached",
+      "after": "knowledge::tests::rejects_payloads_and_background_remains_cached",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::service_search_domains_supersede_only_their_own_callers",
+      "after": "knowledge::tests::service_search_domains_supersede_only_their_own_callers",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::q4_switch_fences_queued_search_and_learned_save_without_cancelling_extraction",
+      "after": "knowledge::tests::q4_switch_fences_queued_search_and_learned_save_without_cancelling_extraction",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::settings_snapshot_does_not_wait_for_busy_database",
+      "after": "knowledge::tests::settings_snapshot_does_not_wait_for_busy_database",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::settings_snapshot_receives_background_progress_and_completed_mutations",
+      "after": "knowledge::tests::settings_snapshot_receives_background_progress_and_completed_mutations",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::sqlite_search_cancellation_is_scoped_and_does_not_interrupt_next_commit",
+      "after": "knowledge::tests::sqlite_search_cancellation_is_scoped_and_does_not_interrupt_next_commit",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::utf16_feature_and_chunk_parity",
+      "after": "knowledge::tests::utf16_feature_and_chunk_parity",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::source_search_route_keeps_files_when_gemma_is_unavailable",
+      "after": "knowledge::tests::source_search_route_keeps_files_when_gemma_is_unavailable",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::text::exact_cosine_tests::borrowed_blob_scores_match_decoded_f64_including_legacy_and_odd_lengths",
+      "after": "knowledge::text::exact_cosine_tests::borrowed_blob_scores_match_decoded_f64_including_legacy_and_odd_lengths",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::text::performance_tests::built_in_embeddings_preserve_bits_without_per_ngram_allocation",
+      "after": "knowledge::text::performance_tests::built_in_embeddings_preserve_bits_without_per_ngram_allocation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::text::performance_tests::page_normalization_reuses_compiled_patterns_and_preserves_chunk_payloads",
+      "after": "knowledge::text::performance_tests::page_normalization_reuses_compiled_patterns_and_preserves_chunk_payloads",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::text::performance_tests::runtime_text_allocations",
+      "after": "knowledge::text::performance_tests::runtime_text_allocations",
+      "package": "tezbar-core",
+      "baseline": "ignored, release allocation/time probe"
+    },
+    {
+      "before": "native_core::launcher::clipboard::tests::blank_legacy_text_is_ignored_and_failed_capture_can_retry",
+      "after": "launcher::clipboard::tests::blank_legacy_text_is_ignored_and_failed_capture_can_retry",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::vec0_and_missing_extension_round_trip_preserve_float_embeddings",
+      "after": "knowledge::tests::vec0_and_missing_extension_round_trip_preserve_float_embeddings",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::clipboard::tests::history_ids_pins_and_safe_cleanup",
+      "after": "launcher::clipboard::tests::history_ids_pins_and_safe_cleanup",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::clipboard::tests::history_mutations_emit_only_after_successful_writes",
+      "after": "launcher::clipboard::tests::history_mutations_emit_only_after_successful_writes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::clipboard::tests::recapture_preserves_unknown_fields_and_non_image_preview_is_null",
+      "after": "launcher::clipboard::tests::recapture_preserves_unknown_fields_and_non_image_preview_is_null",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::clipboard::tests::sha_and_secret",
+      "after": "launcher::clipboard::tests::sha_and_secret",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::clipboard_native::tests::concealed_and_transient_contents_are_private",
+      "after": "launcher::clipboard_native::tests::concealed_and_transient_contents_are_private",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::performance_regression_tests::real_builder_payload_changes_get_change_time_and_ranking_recency",
+      "after": "launcher::db::performance_regression_tests::real_builder_payload_changes_get_change_time_and_ranking_recency",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::performance_regression_tests::real_builders_do_not_update_or_rewrite_fts_on_clock_only_refresh",
+      "after": "launcher::db::performance_regression_tests::real_builders_do_not_update_or_rewrite_fts_on_clock_only_refresh",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::performance_regression_tests::source_timestamps_still_update_and_category_only_changes_are_not_lost",
+      "after": "launcher::db::performance_regression_tests::source_timestamps_still_update_and_category_only_changes_are_not_lost",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::performance_regression_tests::watcher_composite_index_is_migrated_after_legacy_columns_and_is_idempotent",
+      "after": "launcher::db::performance_regression_tests::watcher_composite_index_is_migrated_after_legacy_columns_and_is_idempotent",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::performance_regression_tests::watcher_delete_keeps_exact_subtree_app_prefix_unicode_and_fts_semantics",
+      "after": "launcher::db::performance_regression_tests::watcher_delete_keeps_exact_subtree_app_prefix_unicode_and_fts_semantics",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::performance_regression_tests::watcher_plan_uses_bounded_composite_range_on_bundled_sqlite",
+      "after": "launcher::db::performance_regression_tests::watcher_plan_uses_bounded_composite_range_on_bundled_sqlite",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::performance_tests::broad_reader_matrix",
+      "after": "launcher::db::performance_tests::broad_reader_matrix",
+      "package": "tezbar-core",
+      "baseline": "ignored, frozen broad fixture through the production read-only snapshot"
+    },
+    {
+      "before": "native_core::launcher::db::performance_tests::search_benchmark",
+      "after": "launcher::db::performance_tests::search_benchmark",
+      "package": "tezbar-core",
+      "baseline": "ignored, synthetic 100k-file search benchmark"
+    },
+    {
+      "before": "native_core::launcher::db::performance_tests::search_matrix",
+      "after": "launcher::db::performance_tests::search_matrix",
+      "package": "tezbar-core",
+      "baseline": "ignored, release-only launcher query matrix over 100k files"
+    },
+    {
+      "before": "native_core::launcher::db::reader_tests::files_match_fts_but_are_not_fuzzy_candidates",
+      "after": "launcher::db::reader_tests::files_match_fts_but_are_not_fuzzy_candidates",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::reader_tests::fts_late_hydration_keeps_weighted_scores_and_rowid_ties_after_mutations",
+      "after": "launcher::db::reader_tests::fts_late_hydration_keeps_weighted_scores_and_rowid_ties_after_mutations",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::clipboard::tests::images_keep_legacy_sha_ids_and_resize_without_touching_native_clipboard",
+      "after": "launcher::clipboard::tests::images_keep_legacy_sha_ids_and_resize_without_touching_native_clipboard",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::reader_tests::nonfile_queries_use_partial_index",
+      "after": "launcher::db::reader_tests::nonfile_queries_use_partial_index",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::reader_tests::production_search_selects_joined_rank_only_on_qualified_target",
+      "after": "launcher::db::reader_tests::production_search_selects_joined_rank_only_on_qualified_target",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::reader_tests::reader_search_does_not_wait_for_writer_and_shutdown_joins_both",
+      "after": "launcher::db::reader_tests::reader_search_does_not_wait_for_writer_and_shutdown_joins_both",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::reader_tests::supplied_fts_lengths_preserve_builtin_scores",
+      "after": "launcher::db::reader_tests::supplied_fts_lengths_preserve_builtin_scores",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::refresh_tests::refresh_preserves_unchanged_rows_and_removes_stale_documents",
+      "after": "launcher::db::refresh_tests::refresh_preserves_unchanged_rows_and_removes_stale_documents",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::tests::legacy_migration_keeps_usage_and_non_ascii",
+      "after": "launcher::db::tests::legacy_migration_keeps_usage_and_non_ascii",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::providers::bundle_metadata::tests::cache_is_bounded",
+      "after": "launcher::providers::bundle_metadata::tests::cache_is_bounded",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::providers::bundle_metadata::tests::fixtures_and_cache_invalidation",
+      "after": "launcher::providers::bundle_metadata::tests::fixtures_and_cache_invalidation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::providers::bundle_metadata::tests::oversized_metadata_is_not_read_or_parsed",
+      "after": "launcher::providers::bundle_metadata::tests::oversized_metadata_is_not_read_or_parsed",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::stores::tests::concurrent_notes_preserve_envelope",
+      "after": "launcher::stores::tests::concurrent_notes_preserve_envelope",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::stores::tests::vault_names_are_searchable_without_values",
+      "after": "launcher::stores::tests::vault_names_are_searchable_without_values",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::terminal::tests::restore_and_exit_retention",
+      "after": "launcher::terminal::tests::restore_and_exit_retention",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::terminal::tests::retention_prunes_both_legacy_and_native_history_without_renderer",
+      "after": "launcher::terminal::tests::retention_prunes_both_legacy_and_native_history_without_renderer",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::terminal::tests::session_mutations_emit_after_successful_update",
+      "after": "launcher::terminal::tests::session_mutations_emit_after_successful_update",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::action_dispatch_is_in_process_and_query_learning_is_specific",
+      "after": "launcher::tests::action_dispatch_is_in_process_and_query_learning_is_specific",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::bundle_id_reads_temporary_plist_without_enumerating_installed_apps",
+      "after": "launcher::tests::bundle_id_reads_temporary_plist_without_enumerating_installed_apps",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::cancelling_shortcut_ipc_still_persists_the_registered_binding",
+      "after": "launcher::tests::cancelling_shortcut_ipc_still_persists_the_registered_binding",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::concurrent_usage_updates_and_failed_queries_preserve_statistics",
+      "after": "launcher::tests::concurrent_usage_updates_and_failed_queries_preserve_statistics",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::contribution_command_row_replaces_the_same_indexed_id_by_score",
+      "after": "launcher::tests::contribution_command_row_replaces_the_same_indexed_id_by_score",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::db::reader_tests::joined_lengths_keep_complete_order_scores_actions_after_stats_rollback_and_reopen",
+      "after": "launcher::db::reader_tests::joined_lengths_keep_complete_order_scores_actions_after_stats_rollback_and_reopen",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::deep_search_merges_knowledge_metadata_and_content_without_duplicate_paths",
+      "after": "launcher::tests::deep_search_merges_knowledge_metadata_and_content_without_duplicate_paths",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::directory_visits_collapse_siblings_and_prefer_strong_concrete_branch",
+      "after": "launcher::tests::directory_visits_collapse_siblings_and_prefer_strong_concrete_branch",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::extension_command_recommendations_are_declarative_and_keep_ids",
+      "after": "launcher::tests::extension_command_recommendations_are_declarative_and_keep_ids",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::extension_descriptor_contract_and_surface_catalog",
+      "after": "launcher::tests::extension_descriptor_contract_and_surface_catalog",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::file_scan_is_bounded_to_profile_roots_and_skip_directories",
+      "after": "launcher::tests::file_scan_is_bounded_to_profile_roots_and_skip_directories",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::global_search_finds_vault_items_by_name",
+      "after": "launcher::tests::global_search_finds_vault_items_by_name",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::hotkeys_persist_registered_accelerator_and_rollback_on_write_failure",
+      "after": "launcher::tests::hotkeys_persist_registered_accelerator_and_rollback_on_write_failure",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::install_safety_denial_preview_and_audit_are_not_duplicated",
+      "after": "launcher::tests::install_safety_denial_preview_and_audit_are_not_duplicated",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::crowded_index_preserves_application_and_keyboard_layout_parity",
+      "after": "launcher::tests::crowded_index_preserves_application_and_keyboard_layout_parity",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::local_stores_keep_legacy_ids_and_never_index_clipboard_secrets",
+      "after": "launcher::tests::local_stores_keep_legacy_ids_and_never_index_clipboard_secrets",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::path_completion_retains_values_ids_and_open_with_learning",
+      "after": "launcher::tests::path_completion_retains_values_ids_and_open_with_learning",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::names_typed_by_ear_in_cyrillic_find_latin_vault_items",
+      "after": "launcher::tests::names_typed_by_ear_in_cyrillic_find_latin_vault_items",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::startup_database_failure_can_retry_after_directory_repair",
+      "after": "launcher::tests::startup_database_failure_can_retry_after_directory_repair",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::startup_failure_can_retry_and_concurrent_starts_spawn_one_loop",
+      "after": "launcher::tests::startup_failure_can_retry_and_concurrent_starts_spawn_one_loop",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::storage_breakdown_uses_only_profile_and_skips_symlinks",
+      "after": "launcher::tests::storage_breakdown_uses_only_profile_and_skips_symlinks",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::windows_apps_folder_preserves_launch_targets_and_classic_shortcut_priority",
+      "after": "launcher::tests::windows_apps_folder_preserves_launch_targets_and_classic_shortcut_priority",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::tests::settings_shortcut_failure_is_atomic_and_toggles_preserve_concurrent_keys",
+      "after": "launcher::tests::settings_shortcut_failure_is_atomic_and_toggles_preserve_concurrent_keys",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::text::tests::multilingual",
+      "after": "launcher::text::tests::multilingual",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::text::tests::phonetic_keys_bridge_cyrillic_and_latin_spelling",
+      "after": "launcher::text::tests::phonetic_keys_bridge_cyrillic_and_latin_spelling",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::text::tests::phonetic_query_matches_only_across_scripts",
+      "after": "launcher::text::tests::phonetic_query_matches_only_across_scripts",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::text::tests::distance_matches_reference",
+      "after": "launcher::text::tests::distance_matches_reference",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::performance::core_idle",
+      "after": "performance::core_idle",
+      "package": "tezbar-core",
+      "baseline": "ignored, 30-second headless core idle CPU/RSS baseline; excludes WebView and models"
+    },
+    {
+      "before": "native_core::platform::tests::application_name_fallback_and_settings_routes",
+      "after": "platform::tests::application_name_fallback_and_settings_routes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::platform::tests::paste_existing_clipboard_never_requests_a_clipboard_write",
+      "after": "platform::tests::paste_existing_clipboard_never_requests_a_clipboard_write",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::platform::tests::persistence_failure_rolls_back_and_reports_rollback_failure",
+      "after": "platform::tests::persistence_failure_rolls_back_and_reports_rollback_failure",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::platform::tests::windows_shortcut_launch_keeps_untrusted_paths_out_of_script",
+      "after": "platform::tests::windows_shortcut_launch_keeps_untrusted_paths_out_of_script",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::accepted_preview_never_dispatches_effect_and_preserves_config",
+      "after": "system::tests::accepted_preview_never_dispatches_effect_and_preserves_config",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::audit_redacts_before_truncation",
+      "after": "system::tests::audit_redacts_before_truncation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::audit_redacts_nested_credentials_before_serializing_context",
+      "after": "system::tests::audit_redacts_nested_credentials_before_serializing_context",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::background_poll_only_uses_cached_knowledge_and_timer_files",
+      "after": "system::tests::background_poll_only_uses_cached_knowledge_and_timer_files",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::cancellation_and_dry_run_do_not_execute_os_effects",
+      "after": "system::tests::cancellation_and_dry_run_do_not_execute_os_effects",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::catalogs_match_all_ids",
+      "after": "system::tests::catalogs_match_all_ids",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::currency_validates_both_schemas",
+      "after": "system::tests::currency_validates_both_schemas",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::launcher::text::tests::prepared_scoring_matches_beta17_reference",
+      "after": "launcher::text::tests::prepared_scoring_matches_beta17_reference",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::generated_password_has_each_required_class",
+      "after": "system::tests::generated_password_has_each_required_class",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::invalid_shell_and_unknown_commands_never_dispatch_effects",
+      "after": "system::tests::invalid_shell_and_unknown_commands_never_dispatch_effects",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::malformed_audit_is_preserved",
+      "after": "system::tests::malformed_audit_is_preserved",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::missing_low_power_state_remains_unknown",
+      "after": "system::tests::missing_low_power_state_remains_unknown",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::timer_ignores_paused_and_invalid",
+      "after": "system::tests::timer_ignores_paused_and_invalid",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::top_parses_last_delta_sample",
+      "after": "system::tests::top_parses_last_delta_sample",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::unavailable_stats_are_null",
+      "after": "system::tests::unavailable_stats_are_null",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::terminal_bridge::terminal_bridge_tests::terminal_late_renderer_notifications_cannot_overwrite_new_generation",
+      "after": "terminal_bridge::terminal_bridge_tests::terminal_late_renderer_notifications_cannot_overwrite_new_generation",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::tests::every_pre_migration_ipc_channel_has_a_native_owner",
+      "after": "tests::every_pre_migration_ipc_channel_has_a_native_owner",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::tests::native_profile_survives_restart_without_an_extension_runtime",
+      "after": "tests::native_profile_survives_restart_without_an_extension_runtime",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::crypto::tests::decrypt_with_wrong_key_fails",
+      "after": "vault::crypto::tests::decrypt_with_wrong_key_fails",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::crypto::tests::encrypt_decrypt_roundtrip_uses_a_fresh_nonce",
+      "after": "vault::crypto::tests::encrypt_decrypt_roundtrip_uses_a_fresh_nonce",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::a_password_based_v1_file_is_set_aside",
+      "after": "vault::tests::a_password_based_v1_file_is_set_aside",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::custom_icon_persists_in_item_header_and_plaintext_index",
+      "after": "vault::tests::custom_icon_persists_in_item_header_and_plaintext_index",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::denied_or_cancelled_auth_keeps_the_vault_locked_without_reading_the_key",
+      "after": "vault::tests::denied_or_cancelled_auth_keeps_the_vault_locked_without_reading_the_key",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::first_unlock_creates_a_key_and_an_empty_encrypted_vault",
+      "after": "vault::tests::first_unlock_creates_a_key_and_an_empty_encrypted_vault",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::invalid_icons_are_dropped_and_edits_can_reset_to_default",
+      "after": "vault::tests::invalid_icons_are_dropped_and_edits_can_reset_to_default",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::items_roundtrip_across_lock_and_list_never_exposes_values",
+      "after": "vault::tests::items_roundtrip_across_lock_and_list_never_exposes_values",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::old_json_without_icons_deserializes",
+      "after": "vault::tests::old_json_without_icons_deserializes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::reset_requires_authentication",
+      "after": "vault::tests::reset_requires_authentication",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::vault::tests::unsupported_platforms_report_it_instead_of_faking_support",
+      "after": "vault::tests::unsupported_platforms_report_it_instead_of_faking_support",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_input::capture_tests::cancellation_drops_protection_guard",
+      "after": "native_input::capture_tests::cancellation_drops_protection_guard",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_input::capture_tests::cancelling_capture_request_keeps_blocking_task_cleanup_alive",
+      "after": "native_input::capture_tests::cancelling_capture_request_keeps_blocking_task_cleanup_alive",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_input::capture_tests::explicit_restoration_is_once_and_failed_restoration_retries_on_drop",
+      "after": "native_input::capture_tests::explicit_restoration_is_once_and_failed_restoration_retries_on_drop",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_input::capture_tests::pointer_selects_display_with_negative_origin_and_shared_edges",
+      "after": "native_input::capture_tests::pointer_selects_display_with_negative_origin_and_shared_edges",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::compact_launcher_paths_use_home_as_their_root",
+      "after": "terminal::pty::tests::compact_launcher_paths_use_home_as_their_root",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::history_session_ids_cannot_escape_the_history_directory",
+      "after": "terminal::pty::tests::history_session_ids_cannot_escape_the_history_directory",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::parses_the_cwd_record_from_lsof_field_output",
+      "after": "terminal::pty::tests::parses_the_cwd_record_from_lsof_field_output",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::pty_keeps_follow_up_commands_in_the_same_shell",
+      "after": "terminal::pty::tests::pty_keeps_follow_up_commands_in_the_same_shell",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::terminal_history_reads_both_locations_without_destroying_raw_bytes",
+      "after": "terminal::pty::tests::terminal_history_reads_both_locations_without_destroying_raw_bytes",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::knowledge::tests::native_watcher_reindexes_changed_files_and_removes_deleted_sources",
+      "after": "knowledge::tests::native_watcher_reindexes_changed_files_and_removes_deleted_sources",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::terminal_stop_reaps_a_controlled_shell_that_ignores_hangup",
+      "after": "terminal::pty::tests::terminal_stop_reaps_a_controlled_shell_that_ignores_hangup",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::terminal_utf8_preserves_every_multibyte_split_and_invalid_eof",
+      "after": "terminal::pty::tests::terminal_utf8_preserves_every_multibyte_split_and_invalid_eof",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_v2_cli::tests::legacy_matching_markers_are_not_executable_installations",
+      "after": "native_v2_cli::tests::legacy_matching_markers_are_not_executable_installations",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_v2_cli::tests::parser_claims_only_native_cli_arguments",
+      "after": "native_v2_cli::tests::parser_claims_only_native_cli_arguments",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_v2_cli::tests::platform_paths_and_overrides_are_isolated",
+      "after": "native_v2_cli::tests::platform_paths_and_overrides_are_isolated",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_v2_cli::tests::published_private_zip_cli_import_and_remote_reinstall_refusal",
+      "after": "native_v2_cli::tests::published_private_zip_cli_import_and_remote_reinstall_refusal",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "qr_download::tests::accepts_png_data_url",
+      "after": "qr_download::tests::accepts_png_data_url",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "qr_download::tests::rejects_non_png_data_url",
+      "after": "qr_download::tests::rejects_non_png_data_url",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "release_channels::tests::a_validly_signed_release_still_needs_the_correct_app_identity",
+      "after": "release_channels::tests::a_validly_signed_release_still_needs_the_correct_app_identity",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "release_channels::tests::all_channels_share_the_app_identity_and_normal_builds_default_to_stable",
+      "after": "release_channels::tests::all_channels_share_the_app_identity_and_normal_builds_default_to_stable",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "release_channels::tests::release_eligibility_is_not_inferred_from_version_precedence_alone",
+      "after": "release_channels::tests::release_eligibility_is_not_inferred_from_version_precedence_alone",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "release_channels::tests::three_way_selection_survives_upgrades_and_corruption_fails_closed",
+      "after": "release_channels::tests::three_way_selection_survives_upgrades_and_corruption_fails_closed",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "resource_directory::tests::missing_bundle_directory_propagates_resolution_error",
+      "after": "resource_directory::tests::missing_bundle_directory_propagates_resolution_error",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "resource_directory::tests::missing_packaged_vec_does_not_fall_back_to_source",
+      "after": "resource_directory::tests::missing_packaged_vec_does_not_fall_back_to_source",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "resource_directory::tests::packaged_debug_and_release_use_platform_resource_resolver",
+      "after": "resource_directory::tests::packaged_debug_and_release_use_platform_resource_resolver",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "resource_directory::tests::packaged_debug_app_with_spaces_uses_bundled_resources_even_with_dev_protocol",
+      "after": "resource_directory::tests::packaged_debug_app_with_spaces_uses_bundled_resources_even_with_dev_protocol",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "resource_directory::tests::release_preserves_resource_errors",
+      "after": "resource_directory::tests::release_preserves_resource_errors",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "resource_directory::tests::unbundled_debug_dev_preserves_source_and_does_not_resolve_bundle",
+      "after": "resource_directory::tests::unbundled_debug_dev_preserves_source_and_does_not_resolve_bundle",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater::tests::download_urls_are_version_pinned_and_belong_to_the_installed_product",
+      "after": "updater::tests::download_urls_are_version_pinned_and_belong_to_the_installed_product",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater::tests::failed_public_release_discovery_never_claims_the_app_is_up_to_date",
+      "after": "updater::tests::failed_public_release_discovery_never_claims_the_app_is_up_to_date",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater::tests::test_macos_manifest_with_platform_available",
+      "after": "updater::tests::test_macos_manifest_with_platform_available",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater::tests::test_real_network_and_signature_errors_remain_errors",
+      "after": "updater::tests::test_real_network_and_signature_errors_remain_errors",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater::tests::test_single_target_not_found_error_treated_as_up_to_date",
+      "after": "updater::tests::test_single_target_not_found_error_treated_as_up_to_date",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater::tests::test_windows_only_manifest_macos_apple_silicon_targets_not_found",
+      "after": "updater::tests::test_windows_only_manifest_macos_apple_silicon_targets_not_found",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater::tests::test_windows_only_manifest_macos_intel_targets_not_found",
+      "after": "updater::tests::test_windows_only_manifest_macos_intel_targets_not_found",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater_temp::tests::isolated_temp_dir_check",
+      "after": "updater_temp::tests::isolated_temp_dir_check",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater_temp::tests::unavailable_cache_returns_an_error_without_changing_temp_directory",
+      "after": "updater_temp::tests::unavailable_cache_returns_an_error_without_changing_temp_directory",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater_temp::tests::updater_handles_missing_inherited_temp_dir",
+      "after": "updater_temp::tests::updater_handles_missing_inherited_temp_dir",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "updater_temp::tests::updater_handles_temp_dir_deleted_after_launch",
+      "after": "updater_temp::tests::updater_handles_temp_dir_deleted_after_launch",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_layout::tests::a_corrupt_display_profile_does_not_destroy_other_displays",
+      "after": "window_layout::tests::a_corrupt_display_profile_does_not_destroy_other_displays",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_layout::tests::all_eight_handles_resize_the_requested_edges",
+      "after": "window_layout::tests::all_eight_handles_resize_the_requested_edges",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_layout::tests::edge_resizes_only_one_axis_and_maximum_is_enforced",
+      "after": "window_layout::tests::edge_resizes_only_one_axis_and_maximum_is_enforced",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_layout::tests::fits_small_displays_and_invalid_values",
+      "after": "window_layout::tests::fits_small_displays_and_invalid_values",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_layout::tests::minimum_keeps_opposite_corner_anchored",
+      "after": "window_layout::tests::minimum_keeps_opposite_corner_anchored",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_layout::tests::profiles_round_trip_independently_of_dpi_and_other_displays",
+      "after": "window_layout::tests::profiles_round_trip_independently_of_dpi_and_other_displays",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_layout::tests::saved_logical_size_survives_mixed_dpi_transitions",
+      "after": "window_layout::tests::saved_logical_size_survives_mixed_dpi_transitions",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::active_monitor_restores_and_clamps_its_own_saved_position",
+      "after": "window_placement_tests::active_monitor_restores_and_clamps_its_own_saved_position",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::broken_legacy_coordinates_are_reset_instead_of_restored",
+      "after": "window_placement_tests::broken_legacy_coordinates_are_reset_instead_of_restored",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::cursor_drag_preserves_the_initial_grab_offset",
+      "after": "window_placement_tests::cursor_drag_preserves_the_initial_grab_offset",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::cursor_monitor_is_the_active_monitor",
+      "after": "window_placement_tests::cursor_monitor_is_the_active_monitor",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::frontmost_monitor_is_used_when_cursor_detection_is_unavailable",
+      "after": "window_placement_tests::frontmost_monitor_is_used_when_cursor_detection_is_unavailable",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::macos_startup_overwritten_v2_position_is_reset",
+      "after": "window_placement_tests::macos_startup_overwritten_v2_position_is_reset",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::missing_position_centers_on_the_active_monitor",
+      "after": "window_placement_tests::missing_position_centers_on_the_active_monitor",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::mixed_dpi_monitor_scales_up_from_external_to_retina",
+      "after": "window_placement_tests::mixed_dpi_monitor_scales_up_from_external_to_retina",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::mixed_dpi_monitor_uses_its_own_scale_and_center",
+      "after": "window_placement_tests::mixed_dpi_monitor_uses_its_own_scale_and_center",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::monitor_storage_uses_only_the_monitor_id",
+      "after": "window_placement_tests::monitor_storage_uses_only_the_monitor_id",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::persistence_keeps_one_coordinate_pair_per_monitor_id",
+      "after": "window_placement_tests::persistence_keeps_one_coordinate_pair_per_monitor_id",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::reopening_a_collapsed_launcher_restores_standard_height",
+      "after": "window_placement_tests::reopening_a_collapsed_launcher_restores_standard_height",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::snap_guides_describe_a_fixed_centered_target_frame",
+      "after": "window_placement_tests::snap_guides_describe_a_fixed_centered_target_frame",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::window_does_not_snap_just_outside_the_soft_capture_radius",
+      "after": "window_placement_tests::window_does_not_snap_just_outside_the_soft_capture_radius",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::window_snap_uses_hysteresis_before_releasing",
+      "after": "window_placement_tests::window_snap_uses_hysteresis_before_releasing",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::window_snap_waits_for_a_slow_dwell_before_acquiring",
+      "after": "window_placement_tests::window_snap_waits_for_a_slow_dwell_before_acquiring",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::window_snaps_each_axis_independently",
+      "after": "window_placement_tests::window_snaps_each_axis_independently",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::window_snaps_to_monitor_center_when_both_axes_are_near",
+      "after": "window_placement_tests::window_snaps_to_monitor_center_when_both_axes_are_near",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::windows_mixed_dpi_centers_from_200_percent_to_100_percent",
+      "after": "window_placement_tests::windows_mixed_dpi_centers_from_200_percent_to_100_percent",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "window_placement_tests::windows_mixed_dpi_centers_on_negative_200_percent_monitor",
+      "after": "window_placement_tests::windows_mixed_dpi_centers_on_negative_200_percent_monitor",
+      "package": "tezbar",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_terminal::tests::terminal_input_does_not_wait_for_a_process_that_ignores_stdin",
+      "after": "terminal::pty::tests::terminal_input_does_not_wait_for_a_process_that_ignores_stdin",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    },
+    {
+      "before": "native_core::system::tests::durable_audit_bounded_and_password_redacted",
+      "after": "system::tests::durable_audit_bounded_and_password_redacted",
+      "package": "tezbar-core",
+      "baseline": "ok"
+    }
+  ]
+}

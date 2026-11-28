@@ -1,0 +1,13 @@
+{
+  "status": "draft-unexported-uncompiled; parent M7 ownership hold",
+  "files": {
+    "apps/tezbar/src/asset_transport.rs": "1cdf585835282b6c57861f964ea0fc1a382e2ac7092070d4e5851efa0b99ae8d",
+    "apps/tezbar/src/asset_transport_tests.rs": "7965c547220bdbb15e59d552c53911ab1f6b10e23941a7c7744b7e08272315f6",
+    "apps/tezbar/src/surfaces/extension_runtime/assets.rs": "fe33523eecc29791fb6d980e1de9ff318404ac164a0f21271764f95337b3dd7a",
+    "crates/tezbar-core/src/assets.rs": "73accb570c9258e6e374a9aa257eeb6cd8f761af10273e3d2c2312e2e1f2899a",
+    "crates/tezbar-core/src/extensions/asset_scope.rs": "94556156599f73f65231b7165ecfe4e1143621a9a2c6e051d7b1658adaa40ea4"
+  },
+  "exports": "pending parent freeze",
+  "cargo_executed": false,
+  "manifest_lock_deltas": []
+}

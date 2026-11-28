@@ -59,7 +59,6 @@ export type NativeCommandId =
   | 'show-memory-info'
   | 'show-disk-usage'
   | 'show-battery-status'
-  | 'list-listening-ports'
   | 'git-root'
   | 'brew-outdated'
   | 'brew-update'
@@ -67,6 +66,7 @@ export type NativeCommandId =
   | 'open-clipboard-history'
   | 'open-snippets'
   | 'open-quick-notes'
+  | 'open-vault'
   | 'open-emoji-picker'
   | 'generate-password'
 

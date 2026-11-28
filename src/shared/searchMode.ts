@@ -1,4 +1,6 @@
 import type { SearchResult } from './search'
+import { applicationNameMatchScore } from './applicationSearch'
+import { searchQueryVariants } from './searchQueryVariants'
 
 export const DEEP_SEARCH_PREFIX = '!'
 export const ACTIVATE_DEEP_SEARCH_COMMAND = 'activate-deep-search'
@@ -53,8 +55,8 @@ function metadataTokenMatchesQuery(metadataToken: string, queryToken: string): b
 
 /**
  * A broad OR match is not enough to suppress the deep-search suggestion.
- * Require the visible metadata to cover the whole query, while still accepting
- * a strong fuzzy match for a single misspelled term.
+ * Require metadata or a known app alias to cover a whole query variant.
+ * Layout corrections must use the same acceptance rules as literal input.
  */
 export function hasGoodMetadataMatch(
   query: string,
@@ -64,6 +66,7 @@ export function hasGoodMetadataMatch(
   const queryTokens = tokens(normalizedQuery)
   if (normalizedQuery.length < 2 || queryTokens.length === 0) return true
 
+  const variants = searchQueryVariants(normalizedQuery)
   return results.slice(0, 10).some((result) => {
     if (
       result.category === 'knowledge' ||
@@ -75,16 +78,20 @@ export function hasGoodMetadataMatch(
 
     const title = result.title.trim().toLowerCase()
     const metadata = `${title} ${result.subtitle.trim().toLowerCase()}`.trim()
-    if (title === normalizedQuery || title.startsWith(normalizedQuery)) return true
-    if (metadata.includes(normalizedQuery)) return true
-
     const metadataTokens = tokens(metadata)
-    const coversEveryTerm = queryTokens.every((queryToken) =>
-      metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
-    )
-    if (!coversEveryTerm) return false
+    return variants.some((variant) => {
+      if (result.category === 'applications' && applicationNameMatchScore(title, variant) > 0) {
+        return true
+      }
+      if (title === variant || title.startsWith(variant) || metadata.includes(variant)) return true
 
-    return queryTokens.length > 1 || result.score >= 650
+      const variantTokens = tokens(variant)
+      if (!variantTokens.length) return false
+      const coversEveryTerm = variantTokens.every((queryToken) =>
+        metadataTokens.some((metadataToken) => metadataTokenMatchesQuery(metadataToken, queryToken))
+      )
+      return coversEveryTerm && (variantTokens.length > 1 || result.score >= 650)
+    })
   })
 }
 

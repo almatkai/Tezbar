@@ -1,0 +1,6 @@
+{
+  "file": "apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs",
+  "before": "b83019e9438a9ef6c90cf52f8b2f53a6600e0cbe5d9518e61bfea8ddca034e3b",
+  "after": "3904b952ce74f78b594c3bed54779aba4ab3608d0c0592c18af4acea8ca25eec",
+  "patch": "d3b390164b70563cfc9cab0a789eedfef4b51522480168f4c05d0a5987ebfff0"
+}

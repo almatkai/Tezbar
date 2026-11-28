@@ -1,0 +1,32 @@
+file:///Users/almat/Desktop/code/Tezbar%20APP/Tezbar-native-rust-agent/scripts/native/build.mjs:73
+  const version=JSON.parse(readFileSync(join(root,'package.json'))).version
+        ^
+
+SyntaxError: Identifier 'version' has already been declared
+    at compileSourceTextModule (node:internal/modules/esm/utils:355:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:90:18)
+    at #translate (node:internal/modules/esm/loader:441:20)
+    at afterLoad (node:internal/modules/esm/loader:509:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:514:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:567:36)
+    at afterResolve (node:internal/modules/esm/loader:614:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:620:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:277:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:389:17)
+
+Node.js v26.7.0
+✖ scripts/native/build.test.mjs (27.370166ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 30.525542
+
+✖ failing tests:
+
+test at scripts/native/build.test.mjs:1:1
+✖ scripts/native/build.test.mjs (27.370166ms)
+  'test failed'

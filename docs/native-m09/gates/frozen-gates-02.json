@@ -1,0 +1,65 @@
+{
+  "freeze": "docs/native-m09/final-source-freeze-02.json",
+  "aggregate_sha256": "f93ca85b5ff916170e3985fa8f67083674919ad863108fc33e5184f577485161",
+  "gates": [
+    {
+      "gate": "model-extension-regressions",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--lib",
+        "--features",
+        "launcher-models,agent-models",
+        "extensions",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-02-model-extension-regressions.log",
+      "exit_code": 0,
+      "seconds": 0.31,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s",
+        "test extensions::images::tests::failed_empty_unavailable_app_lookups_keep_current_catalog_fallback ... ok",
+        "test extensions::images::tests::failed_or_oversize_image_has_placeholder_and_retries_with_new_token ... ok",
+        "test extensions::images::tests::missing_failed_catalog_icon_recovers_on_different_selection ... ok",
+        "test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 327 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "gate": "normal-native",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-02-normal-native.log",
+      "exit_code": 101,
+      "seconds": 2.26,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "error[E0616]: field `core` of struct `extension_integration::Extensions` is private"
+      ]
+    }
+  ]
+}

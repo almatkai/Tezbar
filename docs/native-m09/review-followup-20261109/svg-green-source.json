@@ -1,0 +1,33 @@
+{
+  "production_functions_sha256": "e80203d179008ad9cca158bceddbdb16025e190b5958757121d6faf3f38dff65",
+  "source_sha256": "77b92a39bd4823572b5273b5bb1716591c9dd025b4ddbc22d3d94382b1c37b84",
+  "command": [
+    "/Users/almat/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc",
+    "--edition=2024",
+    "--test",
+    "/tmp/tezbar-m9-svg-followup-20261109/svg-green.rs",
+    "-o",
+    "/tmp/tezbar-m9-svg-followup-20261109/svg-green",
+    "-L",
+    "dependency=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps",
+    "--extern",
+    "resvg=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libresvg-72e0428f81ac455e.rlib",
+    "--extern",
+    "simplecss=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libsimplecss-6ff443fc4bbbb94f.rlib",
+    "--extern",
+    "image=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libimage-2200612baf382664.rlib"
+  ],
+  "tests": [
+    "review_m810_r1_svg_rejects_simultaneous_layers_before_rasterization",
+    "review_m810_r2_stylesheets_are_bounded_before_usvg_css_parser",
+    "review_m810_r3_dash_expansion_is_bounded_before_stroking",
+    "review_followup_svg_descendant_selectors_are_bounded_before_matching",
+    "review_css_bound_covers_quote_roundtrip_that_ends_without_error",
+    "review_css_bound_charges_class_attribute_scan_bytes",
+    "review_css_declaration_copies_are_bounded_before_usvg",
+    "review_inline_css_copies_include_expanded_use_nodes",
+    "review_css_quote_delimiter_variants_are_refused_before_matching",
+    "review_followup_svg_clip_mask_and_opacity_keep_ordinary_icon_pixels",
+    "review_followup_svg_simple_css_relations_and_quoted_values_still_render"
+  ]
+}

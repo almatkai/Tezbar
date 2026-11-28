@@ -1,0 +1,80 @@
+// Compiled by host tests with rustc, not linked into the app or shipped.
+use std::io::{self,BufRead,Write};
+fn field(line:&str,key:&str)->String{
+    let needle=format!("\"{key}\":");
+    let Some(rest)=line.split_once(&needle).map(|(_,r)|r.trim_start()) else{return String::new()};
+    if !rest.starts_with('"'){return String::new();}rest[1..].split('"').next().unwrap_or("").to_string()
+}
+fn emit(value:&str){let mut out=io::stdout().lock();writeln!(out,"{value}").unwrap();out.flush().unwrap();}
+fn response(id:&str,result:&str){emit(&format!("{{\"type\":\"response\",\"id\":\"{id}\",\"result\":{result}}}"));}
+fn main(){
+    if std::env::args().any(|arg|arg=="--helper"){
+        #[cfg(unix)] unsafe { extern "C" {fn signal(sig:i32,handler:usize)->usize;} signal(15,1); }
+        loop{std::thread::sleep(std::time::Duration::from_secs(60));}}
+    let exe=std::env::current_exe().unwrap();let filename=exe.file_name().unwrap().to_string_lossy();
+    let mode=filename.strip_suffix(".exe").unwrap_or(&filename);
+    let launcher=mode.contains("launcher");
+    if launcher {emit("{\"type\":\"hello\",\"protocol\":1,\"id\":\"com.tezbar.native.perplexity\",\"version\":\"1.0.0\",\"sdkVersion\":\"0.1.1\",\"features\":[\"launcher.v1\"]}");}
+    else if mode.contains("eofhello"){return;}
+    else if mode.contains("badversion"){emit("{\"type\":\"hello\",\"protocol\":1,\"id\":\"com.tezbar.native.perplexity\",\"version\":\"0.0.0\",\"sdkVersion\":\"1\"}");}else if mode.contains("badid"){emit("{\"type\":\"hello\",\"protocol\":1,\"id\":\"evil\",\"version\":\"1.0.0\",\"sdkVersion\":\"1\"}");}else if mode.contains("badhello"){emit("{\"type\":\"hello\",\"protocol\":99,\"id\":\"evil\",\"version\":\"1\",\"sdkVersion\":\"1\"}");}else{
+    // Deliberately fragmented hello writes exercise actual pipes.
+    let mut out=io::stdout();out.write_all(b"{\"type\":\"hello\",\"protocol\":1,").unwrap();out.flush().unwrap();out.write_all(b"\"id\":\"com.tezbar.native.perplexity\",\"version\":\"1.0.0\",\"sdkVersion\":\"0.1.0\"}\n").unwrap();out.flush().unwrap();}
+    let mut waiting=String::new();let mut data=String::new();let mut publication=0u64;let mut publishing=String::new();
+    for line in io::stdin().lock().lines(){let line=line.unwrap();let id=field(&line,"id");let method=field(&line,"method");
+        if line.contains("\"type\":\"cancel\""){if !data.is_empty(){std::fs::write(std::path::Path::new(&data).join("cancelled"),b"yes").unwrap();}continue;}
+        if method=="initialize"{data=field(&line,"dataDir");
+            use std::fs::OpenOptions;
+            writeln!(OpenOptions::new().create(true).append(true).open(std::path::Path::new(&data).join("starts")).unwrap(),"{}",std::process::id()).unwrap();
+            if mode.contains("launcher-init-error") && !std::path::Path::new(&data).join("allow-initialize").exists(){emit(&format!("{{\"type\":\"response\",\"id\":\"{id}\",\"error\":{{\"code\":\"fixture\",\"message\":\"Initialization failed\"}}}}"));continue;}
+            if launcher {response(&id,"{\"ready\":true,\"features\":[\"launcher.v1\"]}");continue;}
+            if mode.contains("tree") { let helper=std::process::Command::new(&exe).arg("--helper").stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().unwrap(); std::fs::write(std::path::Path::new(&data).join("helper-pid"),helper.id().to_string()).unwrap(); }
+            if mode.contains("stderr"){io::stderr().write_all(&vec![b'x';256*1024]).unwrap();}
+            if mode.contains("initservice"){waiting=id;emit("{\"type\":\"request\",\"id\":\"e:00000000-0000-4000-8000-000000000002\",\"method\":\"host.shell.open\",\"params\":{\"target\":\"https://example.com/before-ready\"}}");}
+            else{response(&id,"{\"ready\":true}");}}
+        else if method=="launcher.activate" || method=="fixture.publish" {
+            publication+=1;publishing=id;
+            emit(&format!("{{\"type\":\"request\",\"id\":\"e:00000000-0000-4000-8000-{publication:012x}\",\"method\":\"host.launcher.publish\",\"params\":{{\"contributionId\":\"items\",\"revision\":{publication},\"rows\":[]}}}}"));
+        }else if launcher && id.starts_with("e:") && !publishing.is_empty() {
+            assert!(!line.contains("\"error\""),"{line}");response(&publishing,"true");publishing.clear();
+        }else if method=="launcher.search" {
+            use std::fs::OpenOptions;
+            writeln!(OpenOptions::new().create(true).append(true).open(std::path::Path::new(&data).join("launcher-calls")).unwrap(),"{}",field(&line,"text")).unwrap();
+            let failure=std::fs::read_to_string(std::path::Path::new(&data).join("launcher-failure")).unwrap_or_default();
+            if failure=="timeout" {continue;}
+            if failure=="error" {emit(&format!("{{\"type\":\"response\",\"id\":\"{id}\",\"error\":{{\"code\":\"fixture\",\"message\":\"Transient failure\"}}}}"));continue;}
+            let title=if failure=="invalid" {"Invalid\\nrow"} else {"Current snapshot"};
+            response(&id,&format!("{{\"rows\":[{{\"id\":\"dynamic:fixture\",\"title\":\"{title}\",\"subtitle\":\"Fixture\",\"score\":430,\"action\":{{\"type\":\"run-extension-command\",\"commandName\":\"ask-perplexity\",\"argumentValues\":{{\"value\":\"3000\"}}}}}}]}}"));
+        }
+        else if method=="session.open"{
+            if mode=="fixture-crash"{std::process::exit(17);}
+            if mode.contains("oversize"){io::stdout().write_all(&vec![b'x';16*1024*1024+1]).unwrap();io::stdout().flush().unwrap();continue;}
+            if mode.contains("truncated"){io::stdout().write_all(b"{partial").unwrap();return;}
+            if mode.contains("eofopen"){return;}
+            if mode.contains("malformed"){emit("not-json");continue;}
+            if mode.contains("delay"){waiting=id;continue;}
+            if mode.contains("reverse"){waiting=id;emit("{\"type\":\"request\",\"id\":\"e:00000000-0000-4000-8000-000000000001\",\"method\":\"host.shell.open\",\"params\":{\"target\":\"https://example.com/fixture\"}}");continue;}
+            response(&id,"{\"ok\":true,\"mode\":\"view\",\"title\":\"Fixture\",\"root\":{\"type\":\"Form\"},\"actions\":[]}");
+        }else if id=="e:00000000-0000-4000-8000-000000000002"&&!waiting.is_empty(){
+            std::fs::write(std::path::Path::new(&data).join("before-ready-response"),line.as_bytes()).unwrap();response(&waiting,"{\"ready\":true}");waiting.clear();
+        }else if id=="e:00000000-0000-4000-8000-000000000001"&&!waiting.is_empty(){
+            if line.contains("\"error\""){response(&waiting,"{\"ok\":false,\"message\":\"reverse RPC denied\"}");}else{response(&waiting,"{\"ok\":true,\"mode\":\"view\",\"title\":\"Reverse completed\",\"root\":{\"type\":\"Form\"},\"actions\":[]}");}waiting.clear();
+        }else if method=="session.call"{
+            if mode.contains("events") {
+                let session=field(&line,"sessionId");
+                for revision in [1,1,0,2]{emit(&format!("{{\"type\":\"event\",\"event\":\"session.invalidated\",\"sessionId\":\"{session}\",\"revision\":{revision}}}"));}
+            }
+            if mode.contains("unknownresponse"){response("h:00000000-0000-4000-8000-000000000099","true");continue;}
+            if mode.contains("crashcall"){std::process::exit(19);}
+            if line.contains("extension:search-text-changed") {
+                if field(&line,"searchText")=="latest" { response(&id,"{\"ok\":true,\"mode\":\"view\",\"title\":\"Latest 世界\",\"root\":{\"type\":\"List\"},\"actions\":[]}"); }
+                else {waiting=id;} continue;
+            }
+            if line.contains("extension:invoke-action") && mode.contains("busy"){waiting=id;continue;}
+            response(&id,"{\"ok\":true,\"mode\":\"unchanged\"}");
+        }else if method=="session.dispose"{response(&id,"true");}
+        else if method=="background.event"&&mode.contains("event-delay"){std::fs::write(std::path::Path::new(&data).join("background-event"),line.as_bytes()).unwrap();}
+        else if method=="background.activate"{std::fs::write(std::path::Path::new(&data).join("activated"),line.as_bytes()).unwrap();if !mode.contains("background-delay"){response(&id,"true");}}
+        else if method=="shutdown"{if mode.contains("hangshutdown"){continue;}std::fs::write(std::path::Path::new(&data).join("shutdown"),b"yes").unwrap();response(&id,"true");return;}
+        else{response(&id,"true");}
+    }
+}

@@ -43,7 +43,7 @@ export function verifyUpdaterSignature(bytes, encodedSignature, encodedPublicKey
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [artifact, signaturePath, configPath = 'src-tauri/tauri.conf.json'] = process.argv.slice(2)
+  const [artifact, signaturePath, configPath = 'packaging/legacy-app-policy.json'] = process.argv.slice(2)
   if (!artifact || !signaturePath)
     throw new Error('Usage: verify-updater-signature ARTIFACT SIGNATURE [CONFIG]')
   const config = JSON.parse(readFileSync(configPath, 'utf8'))

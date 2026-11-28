@@ -1,0 +1,29 @@
+{
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "source_freeze": "source-freeze-first-gate.json",
+  "status": "27 native target passed; compiled source frozen; parent App/Launcher composition pending",
+  "files": {
+    "apps/tezbar/src/surfaces/ai_chat/extensions.rs": "0a88f723f2e6a4ec325df1b8af9586ca5653ac0afda8dc5f260704a8865b4e15",
+    "apps/tezbar/src/surfaces/ai_chat/mod.rs": "b991d0913b88f05d6d4fbb789a8eae8945dbfebed409b59cff5ad34e5216fbf5",
+    "apps/tezbar/src/surfaces/ai_chat/references.rs": "5fd77176eb62a2290a11077c5e162d4e554b34af6c6cc6845d4e7b5b4249a118",
+    "apps/tezbar/src/surfaces/ai_chat/request.rs": "16a5bd08daa2fa0eefb691565753ea727067ac40737e150d545cbaa60be6aac8",
+    "apps/tezbar/src/surfaces/ai_chat/runtime.rs": "5f8e7c4cc0357bb35e4f8f18b1e66320fd52d9c8074cb4e79839d2858755b5d7",
+    "apps/tezbar/src/surfaces/ai_chat/tests/core_loopback.rs": "4eb2f5b45fb11e98961a5a7a24130b06cacd89892c60a433d97bedc5e30a3bac",
+    "apps/tezbar/src/surfaces/ai_chat/tests.rs": "7cb2d316324af43269cbdba5176edbd3412d2440ba4ad360455d191cb4e619ef",
+    "apps/tezbar/src/surfaces/ai_chat/view.rs": "d7f28e170d2be8c6bfaa1bcb6649629db20fda24c47492e9c64031925e025771",
+    "docs/native-m08/accesskit-red-probe.rs.txt": "26536d8cf66b30286227ca01d6f21404588aac1d2fcc01c1968b30a2906cc0f6",
+    "docs/native-m08/integration.md": "4b2748328a0272a3a8e084d6028fd74dd0ab6814f28a1bb99ca1a475cafe3ead",
+    "docs/native-m08/logs/check-02.log": "5cd9a2088fd0da100fba22fffd165c672d4a42c39d01ea05a0490772486e4030",
+    "docs/native-m08/logs/first-check.log": "c1eafca8735f5465e2328a23703ed3fc782f7c805c2d285d381ce7a1657d21c8",
+    "docs/native-m08/logs/native-02.log": "6bd355355880df7ffd60cf36ec9d31703341a454701e98fc9566a5542004c073",
+    "docs/native-m08/logs/native-03.log": "d8832577874583acd6bb3a9c8eddc4227d42c7c7d5fa505cd0079fe7654fd791",
+    "docs/native-m08/logs/native-04.log": "ba3680fadf755089abd33e3d7c850bdf1d440e2afe5f97c6ab880eeb1f80c27b",
+    "docs/native-m08/logs/native-05.log": "1e57f4bc270f96c562ea2f439acab2b244eb7999d0e86f182b37ad48eff4527d",
+    "docs/native-m08/logs/native-first.log": "0c1a574fff116b9a5a9c597bbc5d1f23eaaaf19555bb2ed2cc6f170bd4d13bc0",
+    "docs/native-m08/logs/owned-static-checks.log": "04b7334c4c0421296945c2b13cb8fbd43b6ded67f9a3084c7f8c73700997fc64",
+    "docs/native-m08/source-case-map.json": "31ff3b32f8bbd22029709fd12d87845241c41ed64a8952dfc93c94e3538fda66",
+    "docs/native-m08/source-freeze-first-gate.json": "22eeba536cb82f95faa8732bc91ac4f0c525703d66f9a4fd9cb3a313c66b9002",
+    "docs/native-m08/verification.md": "027d241defc2ef51d0135869f162e6059517c2ea866edbf724e4264bafb68e19"
+  }
+}

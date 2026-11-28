@@ -1,0 +1,15 @@
+✔ native build arguments cannot request release/signing/channel or partial packaging (0.368084ms)
+✔ locked template delta removes only bootstrap and retains all installer contracts (2.521917ms)
+✔ rehearsal proposal contains no executable commands and names disposable context (0.447875ms)
+✔ inventories reject traversal, collisions, missing provenance and symlink-shaped names (0.493875ms)
+✔ plist preserves production metadata and exact permission strings without LSUIElement (2.344791ms)
+✔ planning refuses installed app paths and invented identities before any I/O (0.35275ms)
+✔ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (33.303667ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 75.365958

@@ -1,0 +1,21 @@
+{
+  "state": "REGRESSION_RED",
+  "meaningful_regression_red": true,
+  "list_exit": 0,
+  "actual_registered_test": "asset_transport::status_icons::tests::status_icons_real_bun_declared_builtin_and_custom_pixels_cross_core_host",
+  "red_exit": 101,
+  "restoration": {
+    "crates/tezbar-core/src/extension_worker.rs": {
+      "expected_implementation_sha256": "03d8bfc52f29a253ba7afb5ce21509ed3716b59b01f55e3855b293ebc384b184",
+      "restored_sha256": "03d8bfc52f29a253ba7afb5ce21509ed3716b59b01f55e3855b293ebc384b184",
+      "restored": true
+    },
+    "crates/tezbar-core/src/extensions/process_host.rs": {
+      "expected_implementation_sha256": "7c56c5dbfeb6195284bae2211358b46e5f6a1cbcad956bc53ee66b5564047032",
+      "restored_sha256": "7c56c5dbfeb6195284bae2211358b46e5f6a1cbcad956bc53ee66b5564047032",
+      "restored": true
+    }
+  },
+  "whole_tree_restored": true,
+  "restored_aggregate": "afcafe604cce6011cbad4927db75dc7ee3b19a1b9d3721cb8361855192b454cf"
+}

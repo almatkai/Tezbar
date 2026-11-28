@@ -6,15 +6,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.join(__dirname, '..');
 
-const srcTauriIcons = path.join(root, 'src-tauri', 'icons');
-const ios1024 = path.join(srcTauriIcons, 'ios', 'AppIcon-512@2x.png');
-const png512 = path.join(srcTauriIcons, 'icon.png');
-const png256 = path.join(srcTauriIcons, '128x128@2x.png');
-const png128 = path.join(srcTauriIcons, '128x128.png');
-const png64 = path.join(srcTauriIcons, '64x64.png');
-const png32 = path.join(srcTauriIcons, '32x32.png');
-const ico = path.join(srcTauriIcons, 'icon.ico');
-const icns = path.join(srcTauriIcons, 'icon.icns');
+const nativeIcons = path.join(root, 'packaging', 'icons');
+const ios1024 = path.join(nativeIcons, 'ios', 'AppIcon-512@2x.png');
+const png512 = path.join(nativeIcons, 'icon.png');
+const png256 = path.join(nativeIcons, '128x128@2x.png');
+const png128 = path.join(nativeIcons, '128x128.png');
+const png64 = path.join(nativeIcons, '64x64.png');
+const png32 = path.join(nativeIcons, '32x32.png');
+const ico = path.join(nativeIcons, 'icon.ico');
+const icns = path.join(nativeIcons, 'icon.icns');
 
 function copy(src, dest) {
   if (fs.existsSync(src)) {

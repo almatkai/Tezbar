@@ -1,0 +1,23 @@
+{
+  "slug": "slack",
+  "sourceCommit": "fb381876f611fcc3568929575c94336d510f86ec",
+  "release": "https://github.com/almatkai/slack/releases/tag/v0.1.0",
+  "downloads": "passed",
+  "inventoriesAndPolicies": "passed",
+  "targetPins": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/slack/releases/download/v0.1.0/slack-aarch64-apple-darwin-development.zip",
+      "sha256": "07080eea0fb38df3717864fd1e48828b24ca2cb6b36afca346d1118644e33266",
+      "executable": "bin/tezbar-slack",
+      "executableSha256": "825818a34e312ed542fc99590053774be7ada76d01e1f36471ae6accff3c22ec"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/slack/releases/download/v0.1.0/slack-x86_64-pc-windows-msvc-development.zip",
+      "sha256": "8e2961ee5dbec21686385ea71833204fc8973b2af5ad06e408df048cf863e58d",
+      "executable": "bin/tezbar-slack.exe",
+      "executableSha256": "b6c192141f4e74f69282b4fa47f0755a56a3c12a9445d7061b834276caa89588"
+    }
+  },
+  "requiresHost": "0.3.0-beta.12",
+  "desktopAcceptance": "not-run"
+}

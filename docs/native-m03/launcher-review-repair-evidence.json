@@ -1,0 +1,363 @@
+{
+  "schema_version": 1,
+  "status": "implementation repairs complete; fresh Opus closure and native adapter/manual gates pending",
+  "audit": {
+    "starting_head": "33baae87be7df74cd198ed5df4e8ac9ae92826e5",
+    "current_head": "6c328c16fad59b144404d7484e81a873218f800e",
+    "branch": "feat/native-gpui-app",
+    "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+    "report_sha256": "010f95a36b90bfe9ac576353f6ff427c94454e2ec56c3075b8f48f79f854a98c",
+    "owned_source_sha256": {
+      "crates/tezbar-core/src/instant/calculator.rs": "58649ca24197651c9316644345b66210823ed209e8fac2a35c251f4b55c0c558",
+      "crates/tezbar-core/src/instant/color.rs": "8891021fbc24cc18d6706b7c7351b50e65c0a1f33b96e40909eb3e4c5e295ac1",
+      "crates/tezbar-core/src/instant/currency.rs": "4fea31f63a96d858b8bb59383bd48409d62297c18d4e347184dd20455e451c3c",
+      "crates/tezbar-core/src/instant/currency_synonyms.json": "f88d5a19c08da7b6d157701b036ae22e9d11fe70205d170413d9db63c6a129cc",
+      "crates/tezbar-core/src/instant/emoji.rs": "b5c78494f4e630874dc69062d8898725c7d1d723376e6f0c6a0b300c5449f6a1",
+      "crates/tezbar-core/src/instant/emoji_data.json": "e6ea7de54a1e7ed5f7d4346bbfa4708cb976fbe8b8633861e908f10dabf5f5db",
+      "crates/tezbar-core/src/instant/emoji_fixtures.json": "d19f449fa3ca633bc279e911105713f05432ef40b69df82664f5e6ea5d07af82",
+      "crates/tezbar-core/src/instant/fuse-license.txt": "cc807e3caa26cdee316bab2ff6fdb508a2f619b74959fe59e513ef6e61635ebe",
+      "crates/tezbar-core/src/instant/fuzzy.rs": "0cd31cdad3ae4084705e8342d6bf381d1a83eb87b37c62826c7608324b9df8d0",
+      "crates/tezbar-core/src/instant/qr.rs": "f0be74d43f0bfc25b02cdcfacce0b2654ff63c843fd2c5747982e1f7b3405809",
+      "crates/tezbar-core/src/instant/transform.rs": "8979434f1c4f7fd93bade4b1aaaaa42471a3db7e3e5bc50de26fe5d07d069429",
+      "crates/tezbar-core/src/instant/transform_tests.rs": "a9d6141c38bfdecff31ea71e1a71ffa2e50eec5a577e1d6987d75ff1b6f21fc6",
+      "crates/tezbar-core/src/instant.rs": "293410928cd09fa8ea90cbc39d89301a310d7624618d4a5160af760e14ad6ccf",
+      "crates/tezbar-ui-model/src/launcher/controller.rs": "ee84af224c055983ae823ff983c6aec92c6b61abde32d84c37956613a8ece0d6",
+      "crates/tezbar-ui-model/src/launcher/session.rs": "844551e5d97059f74edbc0f6d3ff7ecda2a950cb6e11f14d85b2184809d7e4de",
+      "crates/tezbar-ui-model/src/launcher/ts_cases.json": "2134c82699c63096279979d0b1378a0e99c6b3f4e795115f101602adf9fad495",
+      "crates/tezbar-ui-model/src/launcher/ts_cases.rs": "7075df9233e7db02aa07e1952881d5333f2188f637b2c853049881e688bfec83",
+      "crates/tezbar-ui-model/src/launcher.rs": "96194ef666f4112146184f199a540bdaaf2b366c09871313ec7d1cf5feff9cfd",
+      "crates/tezbar-ui-model/src/notes/opus_html_fixtures.json": "b8b807cf0cd549ed051835b2006f3a10ad10d27c1718e874f2d19b930fa896b1",
+      "crates/tezbar-ui-model/src/notes.rs": "347ee19e4e8caf524f03ff8ca807302cfb1de20c7d4f98215aeb34b317a592f4",
+      "crates/tezbar-ui-model/src/router.rs": "a0263a73610c89a0d7a435ab52eb8e13cf3fe8f942bb01eb7888a3adf8b27bd1",
+      "crates/tezbar-ui-model/src/ui_state/tests.rs": "3c076f1ae020d5a68fa887be94b7e1a9f1ebef99f7369f7c6f91821d5aa14887",
+      "crates/tezbar-ui-model/src/ui_state.rs": "a2cc49263fe5201a684b7e1b89da6cf0decf6eeb2b0b58cd8d6bc56f4699e97d",
+      "crates/tezbar-ui-model/src/utilities.rs": "ee4f8d173a2366ecc2fbcb24b2d97f5024ecfd2321c1c1fdefcf853e8e260c19",
+      "crates/tezbar-update/src/notes.rs": "0e7a31087d594a88215ae2c91cdd67e227c09470db70b133c1ef7c1731245dd4"
+    },
+    "owned_changed_files": [
+      "crates/tezbar-core/src/instant/calculator.rs",
+      "crates/tezbar-core/src/instant/color.rs",
+      "crates/tezbar-core/src/instant/currency.rs",
+      "crates/tezbar-core/src/instant/emoji.rs",
+      "crates/tezbar-core/src/instant/transform.rs",
+      "crates/tezbar-core/src/instant/transform_tests.rs",
+      "crates/tezbar-ui-model/src/launcher.rs",
+      "crates/tezbar-ui-model/src/launcher/controller.rs",
+      "crates/tezbar-ui-model/src/launcher/session.rs",
+      "crates/tezbar-ui-model/src/launcher/ts_cases.rs",
+      "crates/tezbar-ui-model/src/notes.rs",
+      "crates/tezbar-ui-model/src/ui_state.rs",
+      "crates/tezbar-ui-model/src/ui_state/tests.rs",
+      "crates/tezbar-ui-model/src/utilities.rs"
+    ],
+    "fmt": "passed",
+    "diff_check": "passed",
+    "manifests_locks": "unchanged",
+    "protected_sources": "No non-instant core/model or TS diffs; concurrent app/tezbar-ui changes excluded and not edited by this lane",
+    "concurrent_unowned_changes": [
+      "apps/tezbar/src/app.rs",
+      "apps/tezbar/src/cli.rs",
+      "apps/tezbar/src/core_client.rs",
+      "apps/tezbar/src/events.rs",
+      "apps/tezbar/src/host_adapter.rs",
+      "apps/tezbar/src/lib.rs",
+      "apps/tezbar/src/windows/launcher.rs",
+      "apps/tezbar/src/windows/mod.rs",
+      "apps/tezbar/src/windows/native.rs",
+      "apps/tezbar/src/windows/persistence.rs",
+      "apps/tezbar/src/windows/snap_overlay.rs",
+      "crates/tezbar-ui/src/controls.rs",
+      "crates/tezbar-ui/src/markdown.rs",
+      "crates/tezbar-ui/src/markdown_html.rs",
+      "crates/tezbar-ui/src/text_input.rs",
+      "crates/tezbar-ui/src/tokens.rs"
+    ],
+    "ts_test_files_unchanged": 82
+  },
+  "findings": [
+    {
+      "identity": "H1",
+      "disposition": "Repaired. AI Enter calls production `ai_boot` and submits the typed prompt unless history was deliberately selected. Empty AI opens a new chat. `/dir` resolves through a ticket-owned reply before boot; errors preserve input. Terminal effects distinguish command/new session from selected session. Edits, Hide, composition start and backend epoch retire submit ownership. Composition cancels deferred Enter.",
+      "evidence_and_gates": "`opus_h1_*`, `opus_ime_cancels_deferred_enter_before_async_result`, `opus_ai_history_selection_cannot_transfer_to_refreshed_first_row`; M5 must execute the explicit effects and acknowledge them. Real focus/IME/provider/PTY work is a native gate."
+    },
+    {
+      "identity": "H2",
+      "disposition": "Repaired. Ordered JSON object visitor uses a `HashMap<String,usize>`: last value, first position. Both direct JSON formatting and clipboard JSON parse once into that tree. Clipboard conversion is a worker intent, not a synchronous controller call. 1 MiB bound retained.",
+      "evidence_and_gates": "`opus_json_duplicate_order_large_objects_scaling`, `opus_clipboard_transform_is_off_thread_and_selection_owned`; 40k and 100k keys round-trip without loss; no timing threshold."
+    },
+    {
+      "identity": "M1",
+      "disposition": "Repaired. `Invalidate { text }` filters against current request input or `ArgumentValue`, excludes Deep, retains caches, and records hidden dirtiness. Show schedules one refresh.",
+      "evidence_and_gates": "`opus_m1_invalidation_payload_deep_hidden_and_cache`."
+    },
+    {
+      "identity": "M2",
+      "disposition": "Repaired. Backend change retires activation/resolution and old transport ownership before refreshing. Ticket identities prevent old completion from releasing a newer activation.",
+      "evidence_and_gates": "`opus_m2_backend_retires_activation_and_stale_completion_cannot_unlock_new`. Transport executors must report terminal success/error; restart no longer depends on that old callback."
+    },
+    {
+      "identity": "M3",
+      "disposition": "Repaired. Explicit and successful hides share `reset_hidden`, clearing input, composition draft, list/session selection, argument and terminal mode.",
+      "evidence_and_gates": "`opus_m3_all_hides_reset_input_composition_and_mode`, existing interrupted-IME test."
+    },
+    {
+      "identity": "M4",
+      "disposition": "Repaired with explicit authority policy. A Basic query of exactly one **UTF-16 unit** completes locally after the fixed coalescing window. Its filtered cache rows become current-generation authority; pending speculative rows never authorize clicks. Astral characters have length two and retain backend search.",
+      "evidence_and_gates": "`opus_m4_one_utf16_unit_has_local_authority_and_stale_click_fails`; metadata length thresholds also use UTF-16."
+    },
+    {
+      "identity": "M5",
+      "disposition": "Repaired: JS unary-left-of-exponent rejection, `**` and `^`, degree expansion as multiplication, NaN propagation in min/max and exact half-boundary round. Bounded grammar decision: leading-zero literals remain decimal (`010+1` = 11), and comma expressions are rejected; function argument commas remain supported. Sloppy-JS octal and the general JS comma operator are deliberately outside this arithmetic language.",
+      "evidence_and_gates": "`opus_calculator_js_edges`, original calculator cases, Node reference. No eval or JS runtime."
+    },
+    {
+      "identity": "M6",
+      "disposition": "Repaired. The existing html5ever tokenizer now handles markup structurally: comments/doctype/processing instructions/unknown and namespaced tags are dropped; quoted `>` and incomplete attributes follow tokenizer states. Script/style contents are suppressed in raw-text states. Allowed tags and decoded text are canonicalized to the stored subset; no DOM, WebView, scripting or I/O.",
+      "evidence_and_gates": "`opus_html_structural_tokens`, `opus_jsdom_office_webkit_structural_reference`, unchanged formatting/list/undo/entity tests. HTML corpus includes Office comments, namespace markup, WebKit paste, malformed quotes, lists and active content. This is a stored subset, not a general HTML DOM implementation."
+    },
+    {
+      "identity": "M7",
+      "disposition": "Repaired. Hot regexes use Rust-1.85-compatible `LazyLock`; Markdown patterns compile once. Notes list caches plain text by note ID + `updated_at` revision and invalidates on load/save/create/delete. Drafts retain serialized HTML by revision; each edit computes the new serialization once, and idle ticks only compare cached strings. Bounds compute escaped length without serializing a second document.",
+      "evidence_and_gates": "`opus_notes_revision_cache_and_idle_tick_scaling`; source inspection of `cached_regex!` and static Markdown rules; both toolchains pass. Public direct row mutation must advance `updated_at`, as core does; normal controller completions invalidate explicitly."
+    },
+    {
+      "identity": "M8",
+      "disposition": "Parent repair retained. Settings → General, Providers → AI; all three updater IDs → single status-dependent `UpdateAction`.",
+      "evidence_and_gates": "Four parent regressions remain green in combined suite. M5 resolves current updater state, not the command spelling."
+    },
+    {
+      "identity": "M9",
+      "disposition": "Repaired. Original 170-case map retained; harness calls production `input_mode`, `ai_boot`, `parse_search_query`, `deep_search_input`, `deep_search_draft_input`, `UiState::record_launcher_query` and `UiState::import_key`. Harness only adapts fixture wire shapes and numeric/default comparisons.",
+      "evidence_and_gates": "170 TS cases pass, mapped Rust cases pass; machine map includes production bindings. No source test weakened or removed. The old IME search test now uses two BMP characters to retain its backend-ownership intent under M4; all six prototype cases and four parent cases retained."
+    },
+    {
+      "identity": "M10",
+      "disposition": "Repaired at model boundary. `Timestamp`, `RelativeTime`, `ClipboardCount` expose structured values; `PresentationFormatter` injects local timestamp, relative text and number formatting. English fallback uses actual local timezone, `last week`/`next month`/`last year`, and grouped counts.",
+      "evidence_and_gates": "`opus_locale_structured_data_and_injected_formatter`. Native OS locale formatter remains an explicit M5/M6 adapter acceptance gate, including non-English locale and timezone tests. No OS formatter was exercised here."
+    },
+    {
+      "identity": "M11",
+      "disposition": "Repaired. JSON finite numbers use f64 + production `instant::number`: integral decimals/exponents, negative zero and large integer rounding match JS. JS whitespace/BOM trimming accepted. Exceeding the 128-level or finite-number bound returns an explicit error from clipboard conversion; it cannot silently encode the document as a string. Ordinary non-JSON clipboard text still intentionally becomes a JSON string.",
+      "evidence_and_gates": "`opus_json_js_numbers_bom_and_depth`, duplicate/order/scale test, Node reference. Explicit bound: non-finite numeric literals such as `1e400` error rather than silently losing them as JS stringify's null."
+    },
+    {
+      "identity": "L01 Clipboard previews",
+      "disposition": "Repaired. File and image entries load previews; `image_preview_loaded` accepts null and caches null/error/over-budget results. Eight-entry / 16 MiB cache and 8 MiB per preview bounds remain. Secure items do not request previews.",
+      "evidence_and_gates": "`opus_clipboard_file_negative_preview_filter_clamp`. Adapter may supply a bounded thumbnail; real clipboard/thumbnail behavior not run."
+    },
+    {
+      "identity": "L02 Clipboard selection and filters",
+      "disposition": "Repaired. Query/filter fields are private with setters that clamp selection and clear conversion ownership. Index-based selection matches TS. Late transforms are dropped after selection changes.",
+      "evidence_and_gates": "Clipboard regression tests; public read accessors retained."
+    },
+    {
+      "identity": "L03 Currency fallback",
+      "disposition": "Repaired. Compact fallback and whole-left fallback added; tokenizer matches the TS Latin/Russian character class, including replacement of Kazakh `ң`; percent rejection applies only to the left side. Removed unsupported extra Thai-symbol prefix/suffix extraction while retaining TS symbol tokenization.",
+      "evidence_and_gates": "`opus_currency_compact_fallback_script_and_percent_side`, original ten parser cases."
+    },
+    {
+      "identity": "L04 UI-state decoding / import / Windows writer",
+      "disposition": "Parent defaults/type/version/unknown-field repair retained. Legacy numeric pin IDs and null subtitles import; emoji and extension recents trim. Windows sharing/lock violations retry at most five times (150 ms total delay) without deleting the destination; other errors fail immediately.",
+      "evidence_and_gates": "`opus_legacy_pins_numeric_null_and_trimmed_recents`, `opus_windows_sharing_retry_is_bounded_and_other_errors_immediate`, atomic TempDir fixture. Windows retry policy is simulated on macOS; real sharing semantics and inherited ACLs remain platform gates, not claimed as verified. Unix 0600 behavior retained."
+    },
+    {
+      "identity": "L05 Snippets",
+      "disposition": "Repaired despite the same race existing in TS. Write records draft owner separately from revision. Concurrent saves for the same owner are blocked; `write_completed(request, Result<String,String>)` adopts the created ID into a newer revision of that same draft. New/cancelled/different drafts cannot adopt it. Validation matches core's Unicode lowercase and CRLF/UTF-16 rules.",
+      "evidence_and_gates": "`opus_snippet_create_adopts_id_for_newer_revision_and_unicode_uniqueness`, `opus_snippet_late_create_cannot_adopt_into_different_draft`. Core remains store authority."
+    },
+    {
+      "identity": "L06 Notes empty copy / serialization",
+      "disposition": "Repaired. Empty copy emits `Message(\"Note is empty\")`, never `Copy(\"\")`. Revision-cached HTML removes repeated full serialization from edits and idle ticks.",
+      "evidence_and_gates": "`opus_empty_note_copy`, note scaling regression, existing undo/autosave tests."
+    },
+    {
+      "identity": "L07 Notes list search",
+      "disposition": "Intentional documented policy: search visible plain text, not raw HTML. Invisible tags/comments/entities are not search terms. This improves the native surface; stored rich HTML remains compatible.",
+      "evidence_and_gates": "Notes revision-cache regression and HTML corpus. No claim of raw-HTML-search equivalence."
+    },
+    {
+      "identity": "L08 Session expiry",
+      "disposition": "Parent repair retained: deferred and explicit expiry use `>=`, independent of callback order.",
+      "evidence_and_gates": "`parent_review_enter_deadline_does_not_depend_on_callback_order`."
+    },
+    {
+      "identity": "L09 Emoji final ties",
+      "disposition": "Repaired. Final score ties use initial Fuse score, then source index, preserving Fuse's initial order through the final stable ranking.",
+      "evidence_and_gates": "All 57 unchanged source top-20 fixture cases pass; source comparator checked. No new ordering oracle invented."
+    },
+    {
+      "identity": "L10 QR",
+      "disposition": "Intentional policy, not a functional defect: keep bounded native error strings and standard-valid crate-selected masks rather than copying TS error prose/penalty-loop choices. Payload decoder, Unicode and multiblock tests remain. UI displays the returned error verbatim.",
+      "evidence_and_gates": "Existing QR decoder/PNG/size tests pass. No OS clipboard/save-dialog behavior claimed."
+    },
+    {
+      "identity": "L11 base64",
+      "disposition": "Repaired. Decoding permits noncanonical trailing bits as `atob` does, while retaining alphabet/padding checks and Unicode decoding.",
+      "evidence_and_gates": "`opus_base64_atob_trailing_bits` (`QR==` → `A`), existing malformed/URL-safe tests."
+    },
+    {
+      "identity": "L12 Router note row",
+      "disposition": "Repaired at launcher routing seam: a `quick-notes` row with `note:<u64>` emits `OpenNote { ticket,note_id }`; malformed IDs produce an explicit error.",
+      "evidence_and_gates": "`opus_note_rows_emit_typed_navigation_identity`. M5 opens Notes and selects that ID, then acknowledges ticket."
+    },
+    {
+      "identity": "L13 Calculator bounds",
+      "disposition": "Sound, retained. 4096-byte expression and depth bounds, finite results, no eval/shell/subprocess.",
+      "evidence_and_gates": "Original bounds/metacharacter tests."
+    }
+  ],
+  "checks": {
+    "model-final.log": {
+      "expected": "361 passed; 0 failed",
+      "observed": true
+    },
+    "model-msrv.log": {
+      "expected": "361 passed; 0 failed",
+      "observed": true
+    },
+    "core-instant-final.log": {
+      "expected": "93 passed; 0 failed",
+      "observed": true
+    },
+    "core-msrv-final.log": {
+      "expected": "93 passed; 0 failed",
+      "observed": true
+    },
+    "ts-original.log": {
+      "expected": "170 passed",
+      "observed": true
+    }
+  },
+  "regression_test_filters": [
+    "instant::calculator::opus_repairs::opus_calculator_js_edges",
+    "instant::currency::opus_repairs::opus_currency_compact_fallback_script_and_percent_side",
+    "instant::transform::tests::opus_base64_atob_trailing_bits",
+    "instant::transform::tests::opus_json_duplicate_order_large_objects_scaling",
+    "instant::transform::tests::opus_json_js_numbers_bom_and_depth",
+    "instant::transform::tests::opus_locale_structured_data_and_injected_formatter",
+    "launcher::controller::composition_ownership_repair::opus_ime_cancels_deferred_enter_before_async_result",
+    "launcher::controller::opus_repairs::opus_h1_ai_enter_submits_until_history_deliberately_selected",
+    "launcher::controller::opus_repairs::opus_h1_directory_resolution_is_once_owned_and_error_preserves_draft",
+    "launcher::controller::opus_repairs::opus_h1_empty_chat_terminal_command_session_and_ime",
+    "launcher::controller::opus_repairs::opus_m1_invalidation_payload_deep_hidden_and_cache",
+    "launcher::controller::opus_repairs::opus_m2_backend_retires_activation_and_stale_completion_cannot_unlock_new",
+    "launcher::controller::opus_repairs::opus_m3_all_hides_reset_input_composition_and_mode",
+    "launcher::controller::opus_repairs::opus_m4_one_utf16_unit_has_local_authority_and_stale_click_fails",
+    "launcher::controller::opus_repairs::opus_note_rows_emit_typed_navigation_identity",
+    "launcher::controller::refreshed_selection_repair::opus_ai_history_selection_cannot_transfer_to_refreshed_first_row",
+    "launcher::session::tests::parent_review_enter_deadline_does_not_depend_on_callback_order",
+    "notes::opus_html_fixtures::opus_jsdom_office_webkit_structural_reference",
+    "notes::opus_html_fixtures::opus_notes_revision_cache_and_idle_tick_scaling",
+    "notes::opus_repairs::opus_empty_note_copy",
+    "notes::opus_repairs::opus_html_structural_tokens",
+    "router::tests::parent_review_settings_command_selects_general",
+    "router::tests::parent_review_update_commands_share_current_status_dispatch",
+    "ui_state::tests::opus_legacy_pins_numeric_null_and_trimmed_recents",
+    "ui_state::tests::opus_windows_sharing_retry_is_bounded_and_other_errors_immediate",
+    "ui_state::tests::parent_review_native_state_defaults_only_missing_fields",
+    "utilities::opus_repairs::opus_clipboard_file_negative_preview_filter_clamp",
+    "utilities::opus_repairs::opus_clipboard_transform_is_off_thread_and_selection_owned",
+    "utilities::opus_repairs::opus_snippet_create_adopts_id_for_newer_revision_and_unicode_uniqueness",
+    "utilities::opus_repairs::opus_snippet_late_create_cannot_adopt_into_different_draft"
+  ],
+  "original_ts_source_filters": [
+    "src/renderer/calculator.test.ts",
+    "src/renderer/commandBarInputMode.test.ts",
+    "src/renderer/currency/currencyPreferences.test.ts",
+    "src/renderer/currency/parseCurrencyQuery.test.ts",
+    "src/renderer/launcherArgument.test.ts",
+    "src/renderer/launcherQueryHistory.test.ts",
+    "src/renderer/newItemShortcut.test.ts",
+    "src/renderer/optimisticSearch.test.ts",
+    "src/renderer/pinnedCommands.test.ts",
+    "src/renderer/qrImage.test.ts",
+    "src/renderer/releaseNotes.test.ts",
+    "src/renderer/searchResultPreview.test.ts",
+    "src/renderer/theme.test.ts",
+    "src/shared/applicationSearch.test.ts",
+    "src/shared/searchMode.test.ts",
+    "src/shared/searchQueryVariants.test.ts",
+    "src/shared/stringCache.test.ts",
+    "src/shared/textTransform.test.ts",
+    "src/shared/textTransformers.test.ts"
+  ],
+  "raw_log_directory": "/tmp/tezbar-native-m03a-repair-evidence",
+  "scaling": {
+    "current_rust_debug": [
+      {
+        "keys": 5000,
+        "bytes": 43669,
+        "debug_ms": 7.364
+      },
+      {
+        "keys": 20000,
+        "bytes": 178669,
+        "debug_ms": 25.46
+      },
+      {
+        "keys": 40000,
+        "bytes": 358669,
+        "debug_ms": 45.431
+      },
+      {
+        "keys": 100000,
+        "bytes": 952013,
+        "debug_ms": 108.89
+      }
+    ],
+    "original_review_historical_different_corpus": {
+      "5000_ms": 179,
+      "20000_ms": 2500,
+      "40000_ms": 8000
+    },
+    "node_reference": "node-jsdom-reference.log",
+    "timing_assertions": false
+  },
+  "full_core": {
+    "passed": 652,
+    "failed": 5,
+    "ignored": 8,
+    "result": "failed parallel run; all five unchanged failures passed isolated exact serial rechecks",
+    "rechecks": [
+      {
+        "case": "ai::native_tests::native_next_header_deadline_never_replays_completed_effects",
+        "exit": 0,
+        "log": "core-recheck-1.log"
+      },
+      {
+        "case": "ai::process::tests::packaged_gui_path_finds_user_cli_and_reaches_child_tools",
+        "exit": 0,
+        "log": "core-recheck-2.log"
+      },
+      {
+        "case": "extensions::native::tests::unused_process_stops_after_idle_grace_with_graceful_shutdown",
+        "exit": 0,
+        "log": "core-recheck-3.log"
+      },
+      {
+        "case": "knowledge::lifecycle_tests::unselected_download_keeps_progress_observation_active_then_returns_to_sleep",
+        "exit": 0,
+        "log": "core-recheck-4.log"
+      },
+      {
+        "case": "knowledge::runtime::tests::aborted_shutdown_future_still_closes_an_idle_owned_lease",
+        "exit": 0,
+        "log": "core-recheck-5.log"
+      }
+    ]
+  },
+  "before_regressions": {
+    "core-before.log": {
+      "failed": 3
+    },
+    "model-before.log": {
+      "failed": 2
+    },
+    "parent": "/tmp/tezbar-native-m03-parent-small-before.log (three failures) and after.log (four pass)"
+  },
+  "adapter_contract": "launcher-review-repair-evidence.md#exact-adapter-migration",
+  "original_fixture_and_license_changes": [],
+  "new_fixture": "crates/tezbar-ui-model/src/notes/opus_html_fixtures.json",
+  "update_notes": "unchanged; no finding required edits or rerun",
+  "hash_scope": "All owned source/data paths; evidence JSON excludes its own recursive hash. Complete source/doc hashes also recorded separately in raw logs."
+}

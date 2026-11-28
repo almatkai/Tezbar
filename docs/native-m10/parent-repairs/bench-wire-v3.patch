@@ -1,0 +1,92 @@
+--- a/apps/tezbar/src/windows/terminal_sessions.rs
++++ b/apps/tezbar/src/windows/terminal_sessions.rs
+@@ -14,13 +14,43 @@
+         ),
+     )
+ }
+-#[derive(Clone, Debug)]
++#[derive(Clone, Debug, serde::Deserialize)]
+ pub struct SessionRow {
+     pub id: String,
+     pub title: String,
++    #[serde(default)]
+     pub cwd: String,
++    #[serde(default)]
+     pub running: bool,
++    #[serde(default)]
+     pub active: bool,
++}
++/// The authenticated fixture channel predates typed production rows. Preserve
++/// its [id, title] wire while also accepting the richer native row objects.
++#[cfg(feature = "bench-control")]
++pub fn fixture_rows(value: serde_json::Value) -> Result<Vec<SessionRow>, String> {
++    #[derive(serde::Deserialize)]
++    #[serde(untagged)]
++    enum Row {
++        Native(SessionRow),
++        Legacy((String, String)),
++    }
++    serde_json::from_value::<Vec<Row>>(value)
++        .map(|rows| {
++            rows.into_iter()
++                .map(|row| match row {
++                    Row::Native(row) => row,
++                    Row::Legacy((id, title)) => SessionRow {
++                        id,
++                        title,
++                        cwd: String::new(),
++                        running: false,
++                        active: false,
++                    },
++                })
++                .collect()
++        })
++        .map_err(|error| error.to_string())
+ }
+ pub struct SessionsPanel {
+     pub sessions: Vec<SessionRow>,
+@@ -177,6 +207,32 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    #[cfg(feature = "bench-control")]
++    #[::core::prelude::v1::test]
++    fn bench_wire_preserves_legacy_rows_and_native_metadata() {
++        let rows = fixture_rows(serde_json::json!([
++            ["legacy", "Shell"],
++            {"id":"current", "title":"Project", "cwd":"/fixture", "running":true, "active":true},
++            {"id":"minimal", "title":"Saved"}
++        ]))
++        .unwrap();
++        assert_eq!(rows.len(), 3);
++        assert_eq!(
++            (rows[0].id.as_str(), rows[0].title.as_str()),
++            ("legacy", "Shell")
++        );
++        assert!(rows[0].cwd.is_empty() && !rows[0].running && !rows[0].active);
++        assert_eq!(rows[1].cwd, "/fixture");
++        assert!(rows[1].running && rows[1].active);
++        assert!(rows[2].cwd.is_empty() && !rows[2].running && !rows[2].active);
++        for invalid in [
++            serde_json::json!([["missing-title"]]),
++            serde_json::json!([{"id":"missing-title"}]),
++            serde_json::json!([{"id":"bad", "title":"bad", "active":"yes"}]),
++        ] {
++            assert!(fixture_rows(invalid).is_err());
++        }
++    }
+     #[::core::prelude::v1::test]
+     fn panel_tracks_parent_and_minimum() {
+         let b = bounds(Bounds::new(
+--- a/apps/tezbar/src/app.rs
++++ b/apps/tezbar/src/app.rs
+@@ -669,8 +669,7 @@
+                 Ok(serde_json::Value::Null)
+             }
+             "panel" => {
+-                let rows = serde_json::from_value(request["sessions"].clone())
+-                    .map_err(|e| e.to_string())?;
++                let rows = windows::terminal_sessions::fixture_rows(request["sessions"].clone())?;
+                 self.panel(rows, cx);
+                 Ok(serde_json::Value::Null)
+             }

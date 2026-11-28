@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-11-05T23:55:56.679383+00:00",
+  "scope": "M2/M3 Windows foundation/controller verification attempt; not M4/native UI or migration acceptance",
+  "result": "blocked",
+  "tested_source_commit": "86e9ab733815e0396cc2780cbdec64f3e2040eba",
+  "selected_local_worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "local_head_at_start_and_final_before_docs": "86e9ab733815e0396cc2780cbdec64f3e2040eba",
+  "archive": {
+    "path": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/source-86e9ab7.tar.gz",
+    "sha256": "ea7c7d62356ce15012526b21e344475eb73f8d7afc78db118e780853dac93abb",
+    "bytes": 110319775,
+    "tracked_file_count": 1800,
+    "manifest_path": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/manifest-86e9ab7.json",
+    "manifest_sha256": "e3cbaf4e93a1a2d0cfa303ecb544731896f2b361adaf5d7dd886bae02bb2a24b"
+  },
+  "source_verification": {
+    "status": "passed",
+    "before_build_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/source-before.json",
+    "after_build_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/source-after.json",
+    "final_after_compression_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/audit-final/source-integrity.json",
+    "verified_files": 1800,
+    "mismatched_files": 0,
+    "unexpected_files": 0,
+    "source_git_metadata": false,
+    "dirty_M4_files_archived": false,
+    "old_app_ui_skeleton_at_pin_is_in_archive": true
+  },
+  "remote": {
+    "machine": "DESKTOP-OB83S8J",
+    "ssh": "User@100.77.254.64",
+    "stage": "C:\\Users\\User\\AppData\\Local\\Temp\\tezbar-native-m23-86e9ab7-e063108b26e5",
+    "route": "Explicitly authorized Tailscale SSH fallback; parent reported environment link pending, not re-called or polled",
+    "os": "Windows 11 Pro 10.0.26200 x64",
+    "cpu": "Intel Core i5-12400F, 6 cores / 12 logical processors",
+    "total_memory_kib": 16608804,
+    "initial_free_memory_kib": 7277812,
+    "disk_initial_free_bytes": 5638025216,
+    "disk_full_gate_start_free_bytes": 2114609152,
+    "disk_minimum_recorded_free_bytes": 0,
+    "disk_final_free_bytes": 274378752,
+    "prerequisite_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/windows-initial-inventory.log"
+  },
+  "build_environment": {
+    "toolchain": "1.98.1-x86_64-pc-windows-msvc",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "1.98.1 (797e8a9bc 2026-08-05)",
+    "cargo_build_jobs": 2,
+    "test_threads": 2,
+    "incremental": false,
+    "dev_debug": 0,
+    "test_debug": 0,
+    "offline": true,
+    "auto_install": false,
+    "explicit_toolchain_note": "The PATH cargo is standalone 1.85. Called the exact 1.98.1 cargo/rustc/rustdoc paths resolved by existing rustup which --toolchain 1.98.1, equivalent to cargo +1.98.1; default/PATH unchanged globally.",
+    "log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/build-environment.json",
+    "dependency_cache": "Fresh private copy of existing registry archives/index and pinned Cargo git dependency cache; old target/evidence not reused or written; copied git metadata belongs to dependency cache only, not archived source.",
+    "dependency_seed_report": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/cache-seed.json",
+    "dependency_seed_added_archives": 41,
+    "dependency_seed_package_metadata_files": 681,
+    "downloaded_locked_public_archive": "cpufeatures-0.3.1.crate from static.crates.io, verified against Cargo.lock checksum; 40 other archives from existing Mac cache",
+    "compression": "NTFS compression only on task-private target, registry/src and archived source; no bytes deleted; source rehashed afterward."
+  },
+  "gates": [
+    {
+      "start_utc": "2026-11-05T23:48:09.4888086Z",
+      "log": "C:\\Users\\User\\AppData\\Local\\Temp\\tezbar-native-m23-86e9ab7-e063108b26e5\\evidence-round3\\core.log",
+      "disk_free_before": 2114609152,
+      "exit": 101,
+      "arguments": "test --locked -p tezbar-core --features native-ui-instant -- --test-threads=2",
+      "id": "core",
+      "finish_utc": "2026-11-05T23:51:03.7164048Z",
+      "executable": "C:\\Users\\User\\scoop\\persist\\rustup-msvc\\.rustup\\toolchains\\1.98.1-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+      "status": "blocked",
+      "cause": "Windows disk exhaustion",
+      "tests_executed": 0,
+      "passed": null,
+      "failed": null,
+      "ignored": null,
+      "mac_raw_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/core.log"
+    },
+    {
+      "start_utc": "2026-11-05T23:51:03.7471869Z",
+      "log": "C:\\Users\\User\\AppData\\Local\\Temp\\tezbar-native-m23-86e9ab7-e063108b26e5\\evidence-round3\\host.log",
+      "disk_free_before": 25247744,
+      "exit": 101,
+      "arguments": "test --locked -p tezbar-host -- --test-threads=2",
+      "id": "host",
+      "finish_utc": "2026-11-05T23:51:12.9319503Z",
+      "executable": "C:\\Users\\User\\scoop\\persist\\rustup-msvc\\.rustup\\toolchains\\1.98.1-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+      "status": "blocked",
+      "cause": "Windows disk exhaustion",
+      "tests_executed": 0,
+      "passed": null,
+      "failed": null,
+      "ignored": null,
+      "mac_raw_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/host.log"
+    },
+    {
+      "start_utc": "2026-11-05T23:51:12.9536410Z",
+      "log": "C:\\Users\\User\\AppData\\Local\\Temp\\tezbar-native-m23-86e9ab7-e063108b26e5\\evidence-round3\\update.log",
+      "disk_free_before": 12423168,
+      "exit": 101,
+      "arguments": "test --locked -p tezbar-update -- --test-threads=2",
+      "id": "update",
+      "finish_utc": "2026-11-05T23:51:14.9694398Z",
+      "executable": "C:\\Users\\User\\scoop\\persist\\rustup-msvc\\.rustup\\toolchains\\1.98.1-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+      "status": "blocked",
+      "cause": "Windows disk exhaustion",
+      "tests_executed": 0,
+      "passed": null,
+      "failed": null,
+      "ignored": null,
+      "mac_raw_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/update.log"
+    },
+    {
+      "start_utc": "2026-11-05T23:51:14.9879844Z",
+      "log": "C:\\Users\\User\\AppData\\Local\\Temp\\tezbar-native-m23-86e9ab7-e063108b26e5\\evidence-round3\\ui-model.log",
+      "disk_free_before": 0,
+      "exit": 101,
+      "arguments": "test --locked -p tezbar-ui-model --features launcher-models,agent-models -- --test-threads=2",
+      "id": "ui-model",
+      "finish_utc": "2026-11-05T23:51:16.7133986Z",
+      "executable": "C:\\Users\\User\\scoop\\persist\\rustup-msvc\\.rustup\\toolchains\\1.98.1-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+      "status": "blocked",
+      "cause": "Windows disk exhaustion",
+      "tests_executed": 0,
+      "passed": null,
+      "failed": null,
+      "ignored": null,
+      "mac_raw_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/ui-model.log"
+    },
+    {
+      "start_utc": "2026-11-05T23:51:16.7286575Z",
+      "log": "C:\\Users\\User\\AppData\\Local\\Temp\\tezbar-native-m23-86e9ab7-e063108b26e5\\evidence-round3\\windows-libraries.log",
+      "disk_free_before": 0,
+      "exit": 101,
+      "arguments": "check --locked --lib -p tezbar-core -p tezbar-host -p tezbar-update -p tezbar-ui-model --features tezbar-core/native-ui-instant,tezbar-ui-model/launcher-models,tezbar-ui-model/agent-models",
+      "id": "windows-libraries",
+      "finish_utc": "2026-11-05T23:51:17.8521171Z",
+      "executable": "C:\\Users\\User\\scoop\\persist\\rustup-msvc\\.rustup\\toolchains\\1.98.1-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+      "status": "blocked",
+      "cause": "Windows disk exhaustion",
+      "tests_executed": 0,
+      "passed": null,
+      "failed": null,
+      "ignored": null,
+      "mac_raw_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3/windows-libraries.log"
+    }
+  ],
+  "attempt_history": [
+    {
+      "attempt": "initial",
+      "outcome": "All five commands exit 101 before compilation: old dependency cache missing qrcode index entry",
+      "logs": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence",
+      "runner_ssh_exit": 0,
+      "cargo_exits": [
+        101,
+        101,
+        101,
+        101,
+        101
+      ]
+    },
+    {
+      "attempt": "round2",
+      "outcome": "Setup-only failure: private fixture-temp already existed; no cargo command started",
+      "log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/run-gates-round2-host.log",
+      "runner_ssh_exit": 1
+    },
+    {
+      "attempt": "round3",
+      "outcome": "All five commands exit 101 during compilation from disk exhaustion; zero tests ran",
+      "logs": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/remote-final/evidence-round3",
+      "runner_ssh_exit": 0,
+      "cargo_exits": [
+        101,
+        101,
+        101,
+        101,
+        101
+      ]
+    },
+    {
+      "attempt": "capacity-stop",
+      "outcome": "First ownership check found no core cargo process; subsequent exact coordinator check found zero matching runners. No process was stopped; runner had already completed. Helper error logs retained.",
+      "logs": [
+        "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/capacity-stop-host.log",
+        "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/capacity-stop-final-host.log"
+      ]
+    }
+  ],
+  "coverage_not_established": [
+    "M2 NSIS argv/ShellExecuteW wrapper tests/non-test compilation",
+    "short/retiring single-instance Windows SID/mutex/pipe takeover",
+    "NativeDesktop dispatch contracts",
+    "M3 context/effects/settings/image/legacy terminal/notes/controller Windows behavior",
+    "337-controller Windows count"
+  ],
+  "final_audit": {
+    "unrelated_processes_stopped": false,
+    "only_task_private_temp_writes": true,
+    "time_utc": "2026-11-05T23:53:32.1971313Z",
+    "source_verifier_exit": 0,
+    "compiler_processes": [],
+    "product_executable_or_installer_launched": false,
+    "owned_processes": [],
+    "any_process_stopped": false,
+    "product_processes": [],
+    "no_product_byte_hash_claim": "No Tezbar process was running in the initial inventory; no installed-profile inspection was performed. Unchanged-product claim is based on the exact task commands and confined writes, not a recursive product/profile hash audit.",
+    "disk_free_bytes": 274378752,
+    "profile_or_credentials_read": false,
+    "free_memory_kib": 6887612
+  },
+  "boundaries": {
+    "source_fixes": false,
+    "manifest_or_lock_edits": false,
+    "staging_commits_push_merge_pr_release_actions_install": false,
+    "new_local_checkout_worktree_branch": false,
+    "desktop_or_installer_or_production_services_launched": false,
+    "profile_credentials_clipboard_live_provider_mcp_access": false,
+    "production_binary_replacement": false,
+    "release_checkout_writes": false,
+    "earlier_stage_evidence_writes": false,
+    "default_toolchain_path_registry_vs_sdk_global_changes": false,
+    "new_ignores_skips_or_filters": false,
+    "tests_ever_started": false
+  },
+  "deferred": [
+    "Windows Bun live fixture: M9/whole-app gate, not run",
+    "All TypeScript reruns, GPUI app/UI builds, GUI/DirectX/IME/Narrator acceptance: not run",
+    "Fresh Opus review, M4-M11 native views/cutover, full-app RAM acceptance remain required"
+  ],
+  "resume_requirement": "Restore several GiB of Windows C: headroom (recommend at least 6 GiB free), preserve this stage and earlier evidence, reverify the same archive and all file hashes, then run unchanged full locked gates with a new evidence/fixture directory. No source fix justified by these logs.",
+  "raw_evidence_directory": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence",
+  "raw_evidence_index": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/raw-evidence-index.json",
+  "repository_delivery_files": [
+    "docs/native-m03/windows-86e9ab7.md",
+    "docs/native-m03/windows-86e9ab7.handoff.json"
+  ],
+  "local_helper_failures_log": "/tmp/tezbar-native-m23-windows-86e9ab7-evidence/local-helper-preparation-failures.log"
+}

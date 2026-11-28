@@ -1,0 +1,18 @@
+{
+  "head": "0c3dbea17b4681fb55887470c23897009420dc18",
+  "branch": "feat/native-gpui-app",
+  "state": "unstaged source freeze after 27 passing native target; no App/Launcher composition claim",
+  "files": {
+    "apps/tezbar/src/surfaces/ai_chat/extensions.rs": "0a88f723f2e6a4ec325df1b8af9586ca5653ac0afda8dc5f260704a8865b4e15",
+    "apps/tezbar/src/surfaces/ai_chat/mod.rs": "b991d0913b88f05d6d4fbb789a8eae8945dbfebed409b59cff5ad34e5216fbf5",
+    "apps/tezbar/src/surfaces/ai_chat/references.rs": "5fd77176eb62a2290a11077c5e162d4e554b34af6c6cc6845d4e7b5b4249a118",
+    "apps/tezbar/src/surfaces/ai_chat/request.rs": "16a5bd08daa2fa0eefb691565753ea727067ac40737e150d545cbaa60be6aac8",
+    "apps/tezbar/src/surfaces/ai_chat/runtime.rs": "5f8e7c4cc0357bb35e4f8f18b1e66320fd52d9c8074cb4e79839d2858755b5d7",
+    "apps/tezbar/src/surfaces/ai_chat/tests/core_loopback.rs": "4eb2f5b45fb11e98961a5a7a24130b06cacd89892c60a433d97bedc5e30a3bac",
+    "apps/tezbar/src/surfaces/ai_chat/tests.rs": "7cb2d316324af43269cbdba5176edbd3412d2440ba4ad360455d191cb4e619ef",
+    "apps/tezbar/src/surfaces/ai_chat/view.rs": "d7f28e170d2be8c6bfaa1bcb6649629db20fda24c47492e9c64031925e025771"
+  },
+  "test_count": 27,
+  "last_native_log": "docs/native-m08/logs/native-05.log",
+  "prohibited_actions": "No stage/commit/push/PR/release/Actions/install, actual clipboard/profile/permissions, external network or provider/MCP request."
+}

@@ -1,0 +1,47 @@
+// Historical failed probe; TestWindow has no a11y_init implementation. Original failure: /tmp/tezbar-native-m07-tests-7.log
+#[gpui::test]
+fn native_tab_keyboard_and_accessibility_tree_hide_provider_secrets(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let f = fixture();
+    let store = SettingsStore::new(f);
+    let (view, cx) =
+        cx.add_window_view(|w, cx| SettingsContent::new(store, &UiState::default(), w, cx));
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.activate(w, cx);
+            w.focus(&v.tabs[0], cx);
+        })
+    });
+    settle(&rt, cx);
+    let keystroke = Keystroke::parse("right").unwrap();
+    cx.simulate_event(KeyDownEvent {
+        keystroke: keystroke.clone(),
+        is_held: false,
+        prefer_character_input: false,
+    });
+    cx.simulate_event(KeyUpEvent { keystroke });
+    settle(&rt, cx);
+    assert_eq!(view.read_with(cx, |v, _| v.tab), Tab::Ai);
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            v.action(Action::Provider("openai".into()), w, cx)
+        })
+    });
+    settle(&rt, cx);
+    let tree = cx
+        .update(|w, _| w.debug_a11y_tree_json())
+        .expect("native test accessibility tree");
+    assert!(!tree.contains("fixture-peer"));
+    for name in [
+        "General",
+        "AI",
+        "Voice",
+        "Knowledge",
+        "Extensions",
+        "Permissions",
+        "Storage",
+        "Advanced",
+    ] {
+        assert!(tree.contains(name), "missing tab {name}");
+    }
+}

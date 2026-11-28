@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tezbar",
+  "version": "0.3.0-beta.16",
+  "identifier": "com.tezbar.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:53147",
+    "additionalWatchFolders": ["../dist-backend"],
+    "beforeDevCommand": "pnpm exec tsx scripts/build-backend.ts && pnpm exec vite",
+    "beforeBuildCommand": "pnpm exec tsx scripts/build-backend.ts && pnpm exec vite build"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Tezbar",
+        "width": 760,
+        "height": 640,
+        "resizable": true,
+        "minWidth": 480,
+        "minHeight": 360,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUwOUQ1QTBDOEQ2M0VCN0MKUldSODYyT05ERnFkNFBmWm9YRFZzdUpVa295eHdTMUNSVzFpa0wrbi9WRytoa3pqRTdWd3BHSnUK",
+      "endpoints": [
+        "https://github.com/almatkai/Tezbar/releases/download/channel-stable/latest.json",
+        "https://github.com/almatkai/Tezbar/releases/latest/download/latest.json",
+        "https://raw.githubusercontent.com/almatkai/Tezbar/main/latest.json"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../build/embedding-runtime/resources": "embedding-runtime",
+      "../licenses/raycast-extensions-MIT.txt": "licenses/raycast-extensions-MIT.txt",
+      "../dist-backend/vec0": "dist-backend/vec0",
+      "../dist-backend/node_modules": "dist-backend/node_modules",
+      "../resources/icons": "dist-backend/resources/icons",
+      "../native/color-picker/windows.ps1": "native/color-picker/windows.ps1",
+      "../native/image-colors/windows.ps1": "native/image-colors/windows.ps1",
+      "../resources/trayIconTemplate@2x.png": "trayIconTemplate@2x.png",
+      "../dist-backend/extension-worker.js": "dist-backend/extension-worker.js"
+    },
+    "macOS": {
+      "infoPlist": "../crates/tezbar-core/src/system/macos-permissions.plist",
+      "signingIdentity": "Apple Development: almat.2003@icloud.com (ABGRBU6DGZ)"
+    }
+  }
+}

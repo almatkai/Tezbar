@@ -1,0 +1,77 @@
+   Compiling tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core)
+warning: variable does not need to be mutable
+  --> crates/tezbar-core/src/assets.rs:97:21
+   |
+97 |                 let mut response = self
+   |                     ----^^^^^^^^
+   |                     |
+   |                     help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/native_tests.rs:617:9
+    |
+617 |     let mut http = server(vec![
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `gemma_has` and `gemma_counts` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1322:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+
+warning: `tezbar-core` (lib test) generated 5 warnings (run `cargo fix --lib -p tezbar-core --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 32.37s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_core-c00d984f6229fa74)
+
+running 9 tests
+test ai::voice::tests::catalog_has_real_runtime_assets ... ok
+test assets::race_tests::removed_or_symlink_replaced_after_authorization_is_denied_at_open ... ok
+test assets::tests::client_is_lazy_and_url_redirect_policy_is_strict ... ok
+test assets::tests::dropping_body_wait_drops_stream_and_releases_slot ... ok
+test assets::tests::file_bound_and_cancelled_admission_release ... ok
+test assets::tests::status_encoding_and_stream_are_bounded_without_network ... ok
+test assets::tests::strict_data_mime_and_full_byte_bound ... ok
+test assets::tests::symlink_escape_requires_exact_registry_grant ... FAILED
+test ai::voice::tests::cancel_one_download_cleans_partial_and_preserves_peers_assets_and_speech ... ok
+
+failures:
+
+---- assets::tests::symlink_escape_requires_exact_registry_grant stdout ----
+
+thread 'assets::tests::symlink_escape_requires_exact_registry_grant' (19650215) panicked at crates/tezbar-core/src/assets.rs:450:60:
+called `Result::unwrap()` on an `Err` value: "Image is outside the installed extension"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    assets::tests::symlink_escape_requires_exact_registry_grant
+
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 584 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p tezbar-core --lib`

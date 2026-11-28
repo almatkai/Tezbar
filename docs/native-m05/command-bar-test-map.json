@@ -1,0 +1,2551 @@
+{
+  "milestone": "M5 repairs implemented; independent 35dca9b review closed originals and found R-1/R-2/R-3, now repaired pending fresh closure; OS/visual/Windows and full migration remain pending",
+  "starting_head": "82688f7ed2538603ee906106adc61e3d40f3a13b",
+  "recorded_head": "7e21f21ce3ded3a4c18f0ea318174f9b9a68686a",
+  "dirty_source": true,
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "evidence_root": "/tmp/tezbar-native-m05-evidence",
+  "source_sha256": {
+    "apps/tezbar/src/core_client.rs": "a24c7a03c945275872e7581d967bf2865a6a0cd5c3bfadb1661ab8bd0c9083ac",
+    "apps/tezbar/src/lib.rs": "d997b31d7229e558c2c20066d794bf6e6b2f0aeb623fd08ba0ee56cd9f60fb7d",
+    "apps/tezbar/src/surfaces/command_bar/arguments.rs": "3a497834fdd2233385b5d1beed5523f55713b3a3c6496d1d4e62e2ab4e28f7cc",
+    "apps/tezbar/src/surfaces/command_bar/interactions.rs": "991813b90261e19c7414a1f8f3e48380f580c103795ff526b30022010e430854",
+    "apps/tezbar/src/surfaces/command_bar/locale.rs": "66189fe99bd53f49ffbaa974b913fed4c379336cf11cc8f7776a40206d5fca97",
+    "apps/tezbar/src/surfaces/command_bar/mod.rs": "c2d952689fefe7652ec0a058dc2a771f97ae76dcee942e22f7fbf1a3741812d6",
+    "apps/tezbar/src/surfaces/command_bar/model_picker.rs": "5826677a605375cccf93570731739abdac3661c9194c7d92605f202099e670ab",
+    "apps/tezbar/src/surfaces/command_bar/navigation.rs": "caf5dd11117b55a48aa5291a0dcec5539c5148bba3a4f9336e62fd3b061228ad",
+    "apps/tezbar/src/surfaces/command_bar/presentation.rs": "7c51a3f7d7b3fb592e717bd2ae14eca92929bdf2fcf0b58b068a229c0694f5b0",
+    "apps/tezbar/src/surfaces/command_bar/tests.rs": "e0da6c62f2bc56642783c2ddeaad9e7a5d0b55a93b8882e1809e90cdac6bc5a9",
+    "apps/tezbar/src/surfaces/command_bar/view.rs": "3f93cb6771bf2d35a2553ea440014da95814249f4818e3734a53c84105b4333e",
+    "apps/tezbar/src/surfaces/mod.rs": "326ea64b52da5deccd44a0bb3641dc9b8f305c5309915a274039548e24d0e0d3",
+    "apps/tezbar/src/windows/launcher.rs": "f3f0e5784b11bc61aa3787a0b06abf2ab5c1178080ea59e739e2e54cc1b7c4f4",
+    "apps/tezbar/src/surfaces/command_bar/review_regressions.rs": "5e2eb25c9aaf6dba5fd0498455ed54c3ca43947e7530fd3649ed5007bbb838f7",
+    "apps/tezbar/src/app.rs": "eccc32df7320975e49db9ed329280a2a82507c703c617a506ab4d81f650a2880",
+    "crates/tezbar-ui-model/src/launcher/controller.rs": "00f9a3d73672d258decfbd72fd690f55f890a82996e56d3222617be6a8248e90"
+  },
+  "reference_sha256": {
+    "docs/NATIVE_GPUI_APP_SPEC.md": "9814f4fe36cc478b7eff398309f17dc2db8650df194c90a6ed22e3564810a399",
+    "docs/NATIVE_GPUI_PARITY_LEDGER.md": "94636bc672301306a50a165599250f94bfee3e0246cf44d876b03d15a86adde1",
+    "src/renderer/CommandBar.tsx": "796722e4ec9d45e6d4d0a1ccf41d64cc7007eb8972e034c8476fd9cf2a3f86df",
+    "src/renderer/commandBarInputMode.ts": "74574b0efc7a9200a995313821eb9a2a99b1eb64bc99af9b0409dbadbb4a60c1",
+    "src/renderer/pinnedCommands.ts": "41f68568a5b570598a78ca3fe365d70b5165cf77c4a580c227deb21709f94a72",
+    "src/renderer/launcherArgument.ts": "0fd88b5f31862011f920cdc895707b6213d39a151b217f460f68fe5ff7e872c2",
+    "src/renderer/vaultCopy.ts": "caa129a3b67926cb19628121579c1be789a9fd2441c80f8b1bd0491b165b27cd",
+    "src/renderer/tauri-bridge.ts": "8cd44b966596ef466e1c36ed2085c637ea1d9be0811c6eaabe512c41def5ca7b",
+    "crates/tezbar-ui-model/src/launcher/controller.rs": "00f9a3d73672d258decfbd72fd690f55f890a82996e56d3222617be6a8248e90",
+    "crates/tezbar-ui-model/src/launcher/session.rs": "844551e5d97059f74edbc0f6d3ff7ecda2a950cb6e11f14d85b2184809d7e4de",
+    "crates/tezbar-ui-model/src/router.rs": "a0263a73610c89a0d7a435ab52eb8e13cf3fe8f942bb01eb7888a3adf8b27bd1",
+    "docs/native-m03/launcher-review-repair-evidence.md": "bd7a25a190231c68e88e15ab5f62fa783ac8028edce92183988d0de9d02fd566",
+    "docs/native-m05/parent-contracts.md": "728606900158aac6d936a717ea42c74b75c3d6933abfd721028824efc5cf282c",
+    "crates/tezbar-core/src/ai/memory.rs": "2c37c3251ee4cd13ba747633aedf17b8d703bffd0b3d923b83cbbf01424c1568",
+    "crates/tezbar-core/src/ai/mod.rs": "ee06694f2d0925075dc7cd6641c7e086449be53d43649a3e1db433517ce56aff",
+    "apps/tezbar/src/surfaces/command_bar/review_tests.rs": "c8b37f74fce9bc50056db63260d5cd5281b6df64dbf3484e86ecb29a63e69c21",
+    "src/renderer/ModelPicker.tsx": "b0e2542716cffffbb445c3f9f4b89cd8d943f63b3e363af9953207762a19a611",
+    "docs/native-m05/model-dependency-repairs.md": "0323498251e238a6a6d43adb91330e29170b2a6ed41807253bc74f7548ccb452"
+  },
+  "tests": [
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "wire_activation_keeps_identity_and_one_based_rank",
+      "kind": "direct pure wire/presentation or OS formatter contract",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_enter_executes_once_and_failure_keeps_input",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "real_input_composition_hide_reopen_and_stale_click",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_argument_fields_validate_and_tab_without_executing",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_grid_arrows_and_pin_picker_have_authoritative_identity",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "update_actions_are_status_driven_and_downloading_is_inert",
+      "kind": "direct pure wire/presentation or OS formatter contract",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "render_is_pure_and_result_element_exposes_native_accessibility",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "ai_submit_preserves_prompt_and_directory_through_typed_navigation",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "sentinels_have_hidden_prefix_and_two_step_escape",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "canonical_surface_shortcuts_have_typed_destinations",
+      "kind": "direct pure wire/presentation or OS formatter contract",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "presentation_uses_current_os_locale_for_currency_date_relative_and_count",
+      "kind": "direct pure wire/presentation or OS formatter contract",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "committed_input_coalesces_to_one_latest_search",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "path_tab_records_visit_and_fences_completion",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "directory_submit_resolves_before_navigation_and_records_visit",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "terminal_session_controls_use_core_channels_and_persist_defaults",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "vault_copy_checks_unlock_then_copies_without_replaying_effects",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "pending_enter_expires_at_one_second_before_async_result",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "composition_start_cancels_pending_enter_before_result_arrives",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "pin_drag_requires_six_pixels_reorders_and_unpins_outside",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "starting_core_preserves_latest_text_and_searches_once_when_ready",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "model_selection_uses_fresh_model_write_owner_and_blocks_submit_until_saved",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "answer_stream_uses_preinstalled_subscription_and_hide_discards_updates",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "password_result_expires_and_releases_document_text",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "currency_uses_mocked_core_rates_and_current_owner",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "picker_search_provider_preview_ime_hidden_selection_and_setup_guard",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "alt_slot_runs_persisted_pin_absent_from_current_results_once",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "queued_old_owner_and_legacy_events_cannot_change_replacement_answer",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "pin_activation_uses_saved_action_when_live_row_has_same_id",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "ai_history_does_not_replace_home_while_reopen_refresh_is_pending",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "off_query_saved_pin_preserves_title_category_and_declared_argument_form",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "pinned_argument_form_supersedes_earlier_pending_enter",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_answer_tokens_coalesce_to_one_frame_revision",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "provider_preview_survives_earlier_config_reply",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "inline_argument_ime_escape_and_terminal_defaults_enter_keep_their_owners",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "directory_terminal_sentinel_prompt_and_ai_escape_preserve_native_payload",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "query_recall_respects_top_boundary_and_ai_pin_shortcut_is_inert",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_result_menu_quicklook_uses_clicked_row_and_list_scroll_keeps_selection",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_path_sections_keep_row_height_and_keyboard_identity",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_command_ids_route_and_record_usage_once",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "update_command_activation_uses_current_status_not_saved_row_id",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "backend_epoch_retires_native_form_and_answer_owners",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "argument_escape_retires_declared_filter_and_late_contribution_owner",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "saved_note_pin_preserves_note_id_and_quit_command_only_emits_explicit_intent",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_action_variants_keep_the_canonical_execute_envelope",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "failed_start_retry_keeps_editable_input_and_emits_only_retry_intent",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "deep_recommendation_is_model_backed_and_enters_hidden_prefix_mode",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "native_argument_dropdown_keeps_default_and_submits_wire_value_not_title",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "cached_ai_history_paints_on_reentry_before_its_new_request_completes",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "typed_command_return_retires_directory_ticket_and_clears_answer_resources",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "name": "icon_requests_follow_virtual_viewport_past_initial_cap_and_stop_while_idle",
+      "kind": "real GPUI entity/input/effect integration with mocked adapter",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_directory_ai_prompt_preserves_greater_than",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_cancelled_quit_and_update_keep_the_current_query_usable",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_hotkey_no_view_does_not_hijack_next_open",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_hotkey_failed_result_does_not_open_runtime",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_hotkey_view_result_keeps_runtime_handoff",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_pin_click_after_reorder_runs_on_first_click",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_icon_frame_tracks_the_latest_generation",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_optional_only_arguments_execute_without_a_form",
+      "kind": "review regression through real GPUI/transport",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/navigation.rs",
+      "name": "pending_routes_are_preserved_per_surface_and_in_order",
+      "kind": "pure typed handoff contract",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/navigation.rs",
+      "name": "full_route_inbox_rejects_new_work_without_dropping_admitted_routes",
+      "kind": "pure typed handoff contract",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/navigation.rs",
+      "name": "update_actions_have_a_separate_ordered_monotonic_owner",
+      "kind": "pure typed handoff contract",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok",
+      "historical_log": "/tmp/tezbar-m5-review-parent-commandbar.log"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_deep_search_row_retains_live_model_and_pin_activation",
+      "kind": "permanent production-controller/native-view regression",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_quit_completion_releases_its_ticket_after_results_refresh",
+      "kind": "permanent production-controller/native-view regression",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_regressions.rs",
+      "name": "review_delivered_settings_and_placeholder_routes_retire_admission",
+      "kind": "permanent production-controller/native-view regression",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok"
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/navigation.rs",
+      "name": "repeated_pending_updates_coalesce_and_command_never_consumes_admission",
+      "kind": "permanent production-controller/native-view regression",
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "result": "ok"
+    }
+  ],
+  "request_owner_test": {
+    "file": "apps/tezbar/src/core_client.rs",
+    "name": "cancelling_waiter_keeps_admitted_core_work_owned_and_bounded",
+    "log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+  },
+  "rows": [
+    {
+      "id": "L-01",
+      "behavior": "Mode priority from `commandBarInputMode` (terminal > deep > AI > slash/app > search)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "sentinels_have_hidden_prefix_and_two_step_escape"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-02",
+      "behavior": "Core starting: input usable, footer “Starting search…”, latest text searched when ready",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "starting_core_preserves_latest_text_and_searches_once_when_ready"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-03",
+      "behavior": "Core failed: danger line + Retry",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "failed_start_retry_keeps_editable_input_and_emits_only_retry_intent"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Real native failed-start input/Retry intent tested; actual core restart/OS window gate remains.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-04",
+      "behavior": "Home (empty input): pins rail (up to 12, ⌥ slots), recents, unread release-notes row first, cached home results shown first frame, delayed home warmup not run in Deep Search",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "pin_drag_requires_six_pixels_reorders_and_unpins_outside",
+        "native_grid_arrows_and_pin_picker_have_authoritative_identity",
+        "ai_history_does_not_replace_home_while_reopen_refresh_is_pending"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Parent f3234cd separates AI history from ordinary home/candidates; actual GPUI hide/reopen pending-home regression passes. Native/physical visual acceptance remains open.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-05",
+      "behavior": "Typing: 8 ms coalescing, ≤1 in flight, latest-wins, stale suppression, no flash of empty list",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "committed_input_coalesces_to_one_latest_search",
+        "pending_enter_expires_at_one_second_before_async_result",
+        "composition_start_cancels_pending_enter_before_result_arrives"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-06",
+      "behavior": "IME: no searches during composition; recover when hide interrupts composition",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "real_input_composition_hide_reopen_and_stale_click",
+        "composition_start_cancels_pending_enter_before_result_arrives"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-07",
+      "behavior": "Results list: 36 px rows, icon, title ≤70 %, subtitle, kind tag, selection fill; same-frame highlight; fresh row content and icon replacement; image error recovery",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "render_is_pure_and_result_element_exposes_native_accessibility",
+        "icon_requests_follow_virtual_viewport_past_initial_cap_and_stop_while_idle",
+        "review_icon_frame_tracks_the_latest_generation"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Icon/GPU pressure, replacement screenshots and exact visual comparison remain open.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-08",
+      "behavior": "Pointer-move selects, scroll doesn't",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_result_menu_quicklook_uses_clicked_row_and_list_scroll_keeps_selection"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Real virtual list pointer and stationary-scroll selection tested; physical device gate remains.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-09",
+      "behavior": "Single-character local matching does not extend the deadline",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Repaired model has local one-unit authority; native map relies on model regression opus_m4_one_utf16_unit_has_local_authority_and_stale_click_fails. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null
+    },
+    {
+      "id": "L-10",
+      "behavior": "`launcher:invalidated` refreshes latest query; older in-flight ignored",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "argument_escape_retires_declared_filter_and_late_contribution_owner"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Repaired model regression opus_m1_invalidation_payload_deep_hidden_and_cache; no new dedicated native invalidation test.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-11",
+      "behavior": "Hide drops pending query; reopen shows latest home result; one authoritative home refresh on hide",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "real_input_composition_hide_reopen_and_stale_click",
+        "typed_command_return_retires_directory_ticket_and_clears_answer_resources"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-12",
+      "behavior": "Deep Search (`!`): hidden prefix, ≥3 chars loading row, Knowledge results, navigation activation (Enter/Esc inside results), Backspace on empty leaves mode, two-step Esc",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "sentinels_have_hidden_prefix_and_two_step_escape",
+        "review_deep_search_row_retains_live_model_and_pin_activation"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-13",
+      "behavior": "Deep Search recommendation row when no good metadata match (≥3 chars, layout variants)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "deep_recommendation_is_model_backed_and_enters_hidden_prefix_mode"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Real M3 deep recommendation and native hidden-prefix transition tested. Knowledge provider/index acceptance remains M7.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-14",
+      "behavior": "AI mode: leading space, trailing double space, `/dir  task`; Enter opens AI chat (submit / newChat with cwd); Esc clears then leaves; pending search cancelled on entering AI",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "ai_submit_preserves_prompt_and_directory_through_typed_navigation",
+        "directory_submit_resolves_before_navigation_and_records_visit",
+        "directory_terminal_sentinel_prompt_and_ai_escape_preserve_native_payload",
+        "review_directory_ai_prompt_preserves_greater_than"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-15",
+      "behavior": "AI mode chrome: model picker menu, identity, task-status slot; ⌘⇧S capture; ⌘Enter",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs",
+        "apps/tezbar/src/surfaces/command_bar/model_picker.rs"
+      ],
+      "native_tests": [
+        "model_selection_uses_fresh_model_write_owner_and_blocks_submit_until_saved",
+        "picker_search_provider_preview_ime_hidden_selection_and_setup_guard",
+        "provider_preview_survives_earlier_config_reply"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native search/provider preview/hidden active model/setup gating/IME/late config and save ownership tested. Capture destination is M8; visual/provider configuration gate remains.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-16",
+      "behavior": "Chat history list (in AI mode, empty task): Up/Down, Enter resumes, cached rows paint immediately",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "cached_ai_history_paints_on_reentry_before_its_new_request_completes",
+        "ai_history_does_not_replace_home_while_reopen_refresh_is_pending"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Separate bounded AI cache preserves cached history on reentry and ordinary home on return; both native regressions pass. M8 chat destination content/OS acceptance remains outside M5.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-17",
+      "behavior": "Terminal mode (`>` on empty bar): prompt info, sessions list with pins, ⌘K settings drawer (save-for, keep-alive), ⌘X stop, ⌘P pin, ⌘D delete, Backspace on empty leaves",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "terminal_session_controls_use_core_channels_and_persist_defaults",
+        "inline_argument_ime_escape_and_terminal_defaults_enter_keep_their_owners",
+        "directory_terminal_sentinel_prompt_and_ai_escape_preserve_native_payload"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native command-bar prompt/cwd/sessions/defaults keyboard tested; actual PTY and terminal destination content are M10.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-18",
+      "behavior": "Slash path completion (`/`): `path:complete`, sections, Tab completes, space after path switches to AI mode, ⌘Enter opens folder, Enter on a typed path opens it, directory visits recorded",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "path_tab_records_visit_and_fences_completion",
+        "native_path_sections_keep_row_height_and_keyboard_identity"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-19",
+      "behavior": "Application grid (`` ` ``): 7 columns, arrow grid navigation, app icons, Backspace on empty leaves, two-step Esc",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_grid_arrows_and_pin_picker_have_authoritative_identity"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-20",
+      "behavior": "Extension arguments: inline chip, Tab/Shift+Tab between fields, declared argument metadata, launcher argument surface `extension:launcher-search`, clear-then-exit Escape",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs",
+        "apps/tezbar/src/surfaces/command_bar/arguments.rs"
+      ],
+      "native_tests": [
+        "native_argument_fields_validate_and_tab_without_executing",
+        "off_query_saved_pin_preserves_title_category_and_declared_argument_form",
+        "native_argument_dropdown_keeps_default_and_submits_wire_value_not_title",
+        "argument_escape_retires_declared_filter_and_late_contribution_owner",
+        "review_optional_only_arguments_execute_without_a_form"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Inline native text/password field and real native combobox/default/wire-value keyboard tested; argument contribution owner/filter retired on exit. Real extension SDK integration remains a M9 gate.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-21",
+      "behavior": "Calculator rows (`=` prefix and expressions incl. `%`), copy on Enter",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Actual core instant evaluator reused; core calculator tests are parent-owned evidence, not a new native calculator test. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null
+    },
+    {
+      "id": "L-22",
+      "behavior": "Currency rows (Frankfurter, preferred currencies, synonyms)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "currency_uses_mocked_core_rates_and_current_owner",
+        "presentation_uses_current_os_locale_for_currency_date_relative_and_count"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-23",
+      "behavior": "Colour conversion rows",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Actual core color rows reused; colour swatch/icon pixel parity remains unverified. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null
+    },
+    {
+      "id": "L-24",
+      "behavior": "Answer card: `query` intent → `stream-token/done/error`; empty answer; providers and extensions intents redirect",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "answer_stream_uses_preinstalled_subscription_and_hide_discards_updates",
+        "queued_old_owner_and_legacy_events_cannot_change_replacement_answer",
+        "native_answer_tokens_coalesce_to_one_frame_revision",
+        "backend_epoch_retires_native_form_and_answer_owners"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Owned query envelope and queued old/legacy/error/done filtering tested with the preinstalled real CoreEvents subscription. One parse revision per requested frame; actual providers unrun.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-25",
+      "behavior": "Action message card (password 9 s, copied/toggle/info 7 s, plain 4 s) with native command results",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "password_result_expires_and_releases_document_text"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-26",
+      "behavior": "Vault copy feedback: “Copying…”, “Waiting for Touch ID…”, done or error 2.5 s; ⌘C on vault row unless text is selected",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "vault_copy_checks_unlock_then_copies_without_replaying_effects"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-27",
+      "behavior": "Update status row states (checking, available, manualAvailable, downloading, ready, upToDate “checked in this window”, error) and its actions",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "update_actions_are_status_driven_and_downloading_is_inert",
+        "update_command_activation_uses_current_status_not_saved_row_id",
+        "review_cancelled_quit_and_update_keep_the_current_query_usable",
+        "repeated_pending_updates_coalesce_and_command_never_consumes_admission"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Current-status action dispatch tested for all three command IDs; actual updater execution is explicitly deferred to M11 preview/updater owner.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-28",
+      "behavior": "Pins: ⌘P pin picker / unpin, “Temporary results can’t be pinned”, drag to reorder (threshold 6 px), drag-out to unpin, tooltip, ⌥ slot run",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "pin_drag_requires_six_pixels_reorders_and_unpins_outside",
+        "native_grid_arrows_and_pin_picker_have_authoritative_identity",
+        "alt_slot_runs_persisted_pin_absent_from_current_results_once",
+        "pin_activation_uses_saved_action_when_live_row_has_same_id",
+        "off_query_saved_pin_preserves_title_category_and_declared_argument_form",
+        "pinned_argument_form_supersedes_earlier_pending_enter",
+        "review_pin_click_after_reorder_runs_on_first_click"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Persisted off-query/rich/note pins use canonical UiState and model tickets; tooltip/physical Alt/OS visual acceptance remains. Pending-Enter controller blocker is tracked under A-16.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-29",
+      "behavior": "Query history recall (Up on empty input)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "query_recall_respects_top_boundary_and_ai_pin_shortcut_is_inert"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Real native Up recall only at top boundary tested; physical keyboard gate remains.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-30",
+      "behavior": "Quick Look: Space on a file result",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_result_menu_quicklook_uses_clicked_row_and_list_scroll_keeps_selection"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Quick Look uses clicked row first and canonical request; actual native OS preview/focus gate unrun.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-31",
+      "behavior": "Rolling hint placeholder and command hints (`/directory`, `` ` ``, `!`, `SPACE`, `>`)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "sentinels_have_hidden_prefix_and_two_step_escape"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Static source command hints only, with no rolling idle timer.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "L-32",
+      "behavior": "Footer hints per state (Open ↵, Pin ⌘P, Quick Look Space, Save note, Deep Search…)",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "State footer composition exists; exact screenshot acceptance remains open. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null
+    },
+    {
+      "id": "A-01",
+      "behavior": "`open-app`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-02",
+      "behavior": "`open-file`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-03",
+      "behavior": "`open-url`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-04",
+      "behavior": "`open-with-app`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-05",
+      "behavior": "`copy-text` (snippets show “Copied”)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-06",
+      "behavior": "`copy-and-paste-text`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-07",
+      "behavior": "`add-note`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-08",
+      "behavior": "`run-extension-command`: no-view (message + effects), view (runtime surface), preference setup, arguments, AI-powered titles, colour conversion pending",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_argument_dropdown_keeps_default_and_submits_wire_value_not_title"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Typed extension run/argument/runtime payload and WorkerRecords notice only. Real Bun/native extension SDK fixture and M9 runtime content not exercised.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-09",
+      "behavior": "`invoke-command` ids: `open-settings`, `activate-deep-search`, `open-extensions-settings`, `open-extensions`, `open-snippets`, `open-vault`, `open-notes`, `open-emoji-picker`, `open-indexing`, `start-onboarding`, `download-app-update`, `restart-app-update`, `check-for-updates`, `open-settings-updates`, `show-updated-version`, `open-providers`, `quit-tezbar`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "canonical_surface_shortcuts_have_typed_destinations",
+        "native_command_ids_route_and_record_usage_once",
+        "update_command_activation_uses_current_status_not_saved_row_id",
+        "saved_note_pin_preserves_note_id_and_quit_command_only_emits_explicit_intent",
+        "deep_recommendation_is_model_backed_and_enters_hidden_prefix_mode",
+        "review_deep_search_row_retains_live_model_and_pin_activation",
+        "review_quit_completion_releases_its_ticket_after_results_refresh",
+        "review_delivered_settings_and_placeholder_routes_retire_admission",
+        "repeated_pending_updates_coalesce_and_command_never_consumes_admission"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-10",
+      "behavior": "`run-native-command`: 43 descriptors (macOS and Windows JSON; Windows equivalents per WINDOWS_SUPPORT) via `core:native:execute` with safety",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Canonical search:execute delegates to existing safety/native execution; all 43 real OS descriptors were not activated by tests.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-11",
+      "behavior": "Native commands that open surfaces: `show-system-monitor`, `open-clipboard-history`, `open-snippets`, `open-vault`, `open-quick-notes`, `open-emoji-picker`; `quit-tezbar` → confirm",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "canonical_surface_shortcuts_have_typed_destinations",
+        "native_command_ids_route_and_record_usage_once",
+        "review_cancelled_quit_and_update_keep_the_current_query_usable",
+        "review_quit_completion_releases_its_ticket_after_results_refresh",
+        "review_delivered_settings_and_placeholder_routes_retire_admission"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-12",
+      "behavior": "`run-shell`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Existing safety/core execution channel, never a direct process in view; no real shell activation.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-13",
+      "behavior": "`install-extension`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Existing safety/core install route; no installer/provider exercised.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-14",
+      "behavior": "`open-vault-item` (opens Vault on item; ⌘C copies)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "review_cancelled_quit_and_update_keep_the_current_query_usable"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Vault item ID is retained in typed navigation. Destination M6 content not claimed.",
+      "destination_owner": null,
+      "historical_evidence": null
+    },
+    {
+      "id": "A-15",
+      "behavior": "Usage recording: `search:execute` records once; handled-locally commands call `search:record-usage` once",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "wire_activation_keeps_identity_and_one_based_rank",
+        "native_command_ids_route_and_record_usage_once",
+        "native_argument_dropdown_keeps_default_and_submits_wire_value_not_title"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "One execute envelope; handled record tasks survive view hide. Full usage DB assertion not repeated against real core here.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-16",
+      "behavior": "Exactly-once activation ticket, held Enter ignored, pending generation Enter (1 s)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "committed_input_coalesces_to_one_latest_search",
+        "pending_enter_expires_at_one_second_before_async_result",
+        "composition_start_cancels_pending_enter_before_result_arrives",
+        "native_enter_executes_once_and_failure_keeps_input",
+        "pinned_argument_form_supersedes_earlier_pending_enter",
+        "alt_slot_runs_persisted_pin_absent_from_current_results_once"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Parent f3234cd cancels queued Enter when accepting an explicit pin. Strengthened real native form/input/generation regression passes, along with pending expiry, held Enter, IME and off-query activation tests. Physical keyboard/IME gate remains.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-17",
+      "behavior": "`query` fallback when nothing is selected",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "answer_stream_uses_preinstalled_subscription_and_hide_discards_updates"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-18",
+      "behavior": "Path direct open `path-direct:`",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "path_tab_records_visit_and_fences_completion"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-19",
+      "behavior": "Directory visit record",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "path_tab_records_visit_and_fences_completion",
+        "directory_submit_resolves_before_navigation_and_records_visit"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-20",
+      "behavior": "TTS speak of answer (`voice:tts:speak`)",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Typed voice:tts:speak request from answer; no actual TTS/provider run. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null
+    },
+    {
+      "id": "A-21",
+      "behavior": "Hide after success (window hides, input clears) and failure keeps window with message",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "native_action_variants_keep_the_canonical_execute_envelope"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-22",
+      "behavior": "Recent extension commands list (20)",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Existing 20-command recency state/helper, no native recency assertion. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null
+    },
+    {
+      "id": "A-23",
+      "behavior": "Command aliases (`commandAliases`) and disabled commands (`disabledCommands`) affect search",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_enter_executes_once_and_failure_keeps_input",
+        "wire_activation_keeps_identity_and_one_based_rank"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Core-owned alias/disabled ranking unchanged; parent core evidence applies.",
+      "destination_owner": null,
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "A-24",
+      "behavior": "Extension command hotkey run (`run-extension-command-from-hotkey`) opens runtime view",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "review_hotkey_no_view_does_not_hijack_next_open",
+        "review_hotkey_failed_result_does_not_open_runtime",
+        "review_hotkey_view_result_keeps_runtime_handoff"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Subscribed hotkey result dispatch is implemented; real hotkey/worker fixture not exercised.",
+      "destination_owner": null,
+      "historical_evidence": null
+    },
+    {
+      "id": "A-25",
+      "behavior": "Command shortcuts that open surfaces (`execute_command_shortcut` surface map incl. `check-for-updates` → settings)",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Canonical core surface strings mapped; actual OS hotkey delivery belongs to platform gate. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null
+    },
+    {
+      "id": "K-01",
+      "behavior": "Global: launcher hotkey → toggle launcher",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "M4 global hotkey/preview policy and real OS gate, not implemented by this lane. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null,
+      "context": "Global",
+      "key_binding": "launcher hotkey"
+    },
+    {
+      "id": "K-02",
+      "behavior": "Global (in app): ⌘Esc / Ctrl+Esc → hide from anywhere",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null,
+      "context": "Global (in app)",
+      "key_binding": "⌘Esc / Ctrl+Esc"
+    },
+    {
+      "id": "K-03",
+      "behavior": "Any surface: Esc → back rules (S-19)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "sentinels_have_hidden_prefix_and_two_step_escape",
+        "directory_terminal_sentinel_prompt_and_ai_escape_preserve_native_payload",
+        "typed_command_return_retires_directory_ticket_and_clears_answer_resources"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Any surface",
+      "key_binding": "Esc",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-04",
+      "behavior": "Any surface: ⌘, / Ctrl+, → open Settings at AI tab",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null,
+      "context": "Any surface",
+      "key_binding": "⌘, / Ctrl+,"
+    },
+    {
+      "id": "K-05",
+      "behavior": "Any surface: ⌘N / Ctrl+N → new item for surface",
+      "status": "partial-unverified",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior. No named native fixture proves this row; source implementation alone does not accept it.",
+      "destination_owner": null,
+      "context": "Any surface",
+      "key_binding": "⌘N / Ctrl+N"
+    },
+    {
+      "id": "K-06",
+      "behavior": "Launcher: ↑ ↓ ↵, no wrap → select and activate",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "committed_input_coalesces_to_one_latest_search",
+        "pending_enter_expires_at_one_second_before_async_result",
+        "composition_start_cancels_pending_enter_before_result_arrives",
+        "native_enter_executes_once_and_failure_keeps_input"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "↑ ↓ ↵, no wrap",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-07",
+      "behavior": "Launcher: ⌘↵ / Ctrl+Enter → secondary (open folder in completion; AI submit variants)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "ai_submit_preserves_prompt_and_directory_through_typed_navigation",
+        "directory_submit_resolves_before_navigation_and_records_visit"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "⌘↵ / Ctrl+Enter",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-08",
+      "behavior": "Launcher: Tab / ⇧Tab → complete path, argument fields",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "path_tab_records_visit_and_fences_completion",
+        "native_argument_fields_validate_and_tab_without_executing",
+        "native_argument_dropdown_keeps_default_and_submits_wire_value_not_title"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "Tab / ⇧Tab",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-09",
+      "behavior": "Launcher: Space → Quick Look (file selected, plain Space)",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_result_menu_quicklook_uses_clicked_row_and_list_scroll_keeps_selection"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "Space",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-10",
+      "behavior": "Launcher: ⌘P / Ctrl+P → pin or unpin",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_grid_arrows_and_pin_picker_have_authoritative_identity"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "⌘P / Ctrl+P",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-11",
+      "behavior": "Launcher: ⌥1…9,0,-,= / Alt+… → run pinned slot",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_grid_arrows_and_pin_picker_have_authoritative_identity",
+        "alt_slot_runs_persisted_pin_absent_from_current_results_once",
+        "off_query_saved_pin_preserves_title_category_and_declared_argument_form",
+        "saved_note_pin_preserves_note_id_and_quit_command_only_emits_explicit_intent"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Real Alt slot absent from results and rich/note pin payload tested; physical keyboard/layout gate unrun.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "⌥1…9,0,-,= / Alt+…",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-12",
+      "behavior": "Launcher: ⌘C / Ctrl+C on vault row → copy secret",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "vault_copy_checks_unlock_then_copies_without_replaying_effects"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "⌘C / Ctrl+C on vault row",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-13",
+      "behavior": "Launcher: ⌘H / Ctrl+H → open Clipboard history; the retired local history popover is not reachable",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "query_recall_respects_top_boundary_and_ai_pin_shortcut_is_inert"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Ledger text differs from TS: actual CommandBar.tsx:4163 routes Cmd/Ctrl+H to Clipboard History; native route follows TS.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "⌘H / Ctrl+H",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-14",
+      "behavior": "Launcher: `>` on empty bar → terminal mode",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "terminal_session_controls_use_core_channels_and_persist_defaults"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "`>` on empty bar",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-15",
+      "behavior": "Launcher: Backspace on empty mode input → leave mode",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "sentinels_have_hidden_prefix_and_two_step_escape",
+        "directory_terminal_sentinel_prompt_and_ai_escape_preserve_native_payload"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Launcher",
+      "key_binding": "Backspace on empty mode input",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-16",
+      "behavior": "Terminal mode: ⌘K ⌘X ⌘P ⌘D → settings, stop, pin, delete session",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "terminal_session_controls_use_core_channels_and_persist_defaults",
+        "inline_argument_ime_escape_and_terminal_defaults_enter_keep_their_owners"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Terminal mode",
+      "key_binding": "⌘K ⌘X ⌘P ⌘D",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-17",
+      "behavior": "App grid: ← → ↑ ↓ → grid navigation by 1 and by row",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "native_grid_arrows_and_pin_picker_have_authoritative_identity"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "App grid",
+      "key_binding": "← → ↑ ↓",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-18",
+      "behavior": "AI: ⌘⇧S → attach active screen",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "ai_submit_preserves_prompt_and_directory_through_typed_navigation",
+        "directory_submit_resolves_before_navigation_and_records_visit"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "AI",
+      "key_binding": "⌘⇧S",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    },
+    {
+      "id": "K-19",
+      "behavior": "AI: ⌘. → stop",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M8; only typed command-bar navigation is owned here.",
+      "destination_owner": "M8",
+      "context": "AI",
+      "key_binding": "⌘."
+    },
+    {
+      "id": "K-20",
+      "behavior": "AI: ⌘N → new chat",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M8; only typed command-bar navigation is owned here.",
+      "destination_owner": "M8",
+      "context": "AI",
+      "key_binding": "⌘N"
+    },
+    {
+      "id": "K-21",
+      "behavior": "AI: Enter / ⇧Enter → send / newline (composer)",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M8; only typed command-bar navigation is owned here.",
+      "destination_owner": "M8",
+      "context": "AI",
+      "key_binding": "Enter / ⇧Enter"
+    },
+    {
+      "id": "K-22",
+      "behavior": "AI approval: Tab, Enter on focused button only → approve, deny",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M8; only typed command-bar navigation is owned here.",
+      "destination_owner": "M8",
+      "context": "AI approval",
+      "key_binding": "Tab, Enter on focused button only"
+    },
+    {
+      "id": "K-23",
+      "behavior": "Notes: ⌘B ⌘I ⌘U, ⌘N, ⌘D (outside editor), ⌘↵ copy, ↑↓ ↵ edit → formatting and list",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M6; only typed command-bar navigation is owned here.",
+      "destination_owner": "M6",
+      "context": "Notes",
+      "key_binding": "⌘B ⌘I ⌘U, ⌘N, ⌘D (outside editor), ⌘↵ copy, ↑↓ ↵ edit"
+    },
+    {
+      "id": "K-24",
+      "behavior": "Extension runtime: ⌘K, ↵, ⌘↵, action shortcuts, Esc pop → action panel and navigation",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M9; only typed command-bar navigation is owned here.",
+      "destination_owner": "M9",
+      "context": "Extension runtime",
+      "key_binding": "⌘K, ↵, ⌘↵, action shortcuts, Esc pop"
+    },
+    {
+      "id": "K-25",
+      "behavior": "Clipboard: ↑↓, ↵ restore, pin, delete, Save to Vault, convert chips → list actions",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M6; only typed command-bar navigation is owned here.",
+      "destination_owner": "M6",
+      "context": "Clipboard",
+      "key_binding": "↑↓, ↵ restore, pin, delete, Save to Vault, convert chips"
+    },
+    {
+      "id": "K-26",
+      "behavior": "Snippets: ⌘N new, ↵ copy, edit, delete, jump → list actions",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M6; only typed command-bar navigation is owned here.",
+      "destination_owner": "M6",
+      "context": "Snippets",
+      "key_binding": "⌘N new, ↵ copy, edit, delete, jump"
+    },
+    {
+      "id": "K-27",
+      "behavior": "Vault: ⌘N, ↵ copy, edit, lock → list actions",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M6; only typed command-bar navigation is owned here.",
+      "destination_owner": "M6",
+      "context": "Vault",
+      "key_binding": "⌘N, ↵ copy, edit, lock"
+    },
+    {
+      "id": "K-28",
+      "behavior": "Emoji: arrows, ↵ copy, recent → grid actions",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M6; only typed command-bar navigation is owned here.",
+      "destination_owner": "M6",
+      "context": "Emoji",
+      "key_binding": "arrows, ↵ copy, recent"
+    },
+    {
+      "id": "K-29",
+      "behavior": "Terminal: ⌘+ ⌘− ⌘0 text zoom, Alt-modified UI zoom, ⌘K/⌘X/⌘P/⌘D, sessions toggle → terminal",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M10; only typed command-bar navigation is owned here.",
+      "destination_owner": "M10",
+      "context": "Terminal",
+      "key_binding": "⌘+ ⌘− ⌘0 text zoom, Alt-modified UI zoom, ⌘K/⌘X/⌘P/⌘D, sessions toggle"
+    },
+    {
+      "id": "K-30",
+      "behavior": "Settings: Enter save, Esc close, Tab order → settings",
+      "status": "destination-later-milestone",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [],
+      "evidence": null,
+      "remaining": "Destination content/keys are M7; only typed command-bar navigation is owned here.",
+      "destination_owner": "M7",
+      "context": "Settings",
+      "key_binding": "Enter save, Esc close, Tab order"
+    },
+    {
+      "id": "K-31",
+      "behavior": "Text fields: select all, word/line movement, undo/redo, IME → all inputs",
+      "status": "implemented-unaccepted",
+      "source": [
+        "apps/tezbar/src/surfaces/command_bar/mod.rs",
+        "apps/tezbar/src/surfaces/command_bar/view.rs"
+      ],
+      "native_tests": [
+        "real_input_composition_hide_reopen_and_stale_click",
+        "composition_start_cancels_pending_enter_before_result_arrives"
+      ],
+      "evidence": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "remaining": "Native OS/IME/a11y/visual acceptance remains open; tests below cover only named behavior.",
+      "destination_owner": null,
+      "context": "Text fields",
+      "key_binding": "select all, word/line movement, undo/redo, IME",
+      "historical_evidence": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log"
+    }
+  ],
+  "manual_gates": [
+    "No new screenshot, CUA observation or real OS effect",
+    "OS IME/VoiceOver/Narrator/physical keyboard and Alt slots",
+    "Windows build/GUI and ICU locale gate",
+    "App grid/list/icon/theme exact visual comparison, tooltips",
+    "Native Quick Look and focus/blur",
+    "Real GPU pressure and full-app matched RAM",
+    "M6-M10 destination content and M11 updater/profile cutover"
+  ],
+  "validation": {
+    "normal_native": {
+      "passed": 133,
+      "failed": 0,
+      "ignored": 0,
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "scope": "full integration tree; includes 65 M5 cases, three M4 durable-state cases, five parent utility fixtures and other native tests"
+    },
+    "bench_control": {
+      "passed": 134,
+      "failed": 0,
+      "ignored": 0,
+      "log": "/tmp/tezbar-m5-m6-parent-final-bench.log"
+    },
+    "ui": {
+      "passed": 47,
+      "log": "/tmp/tezbar-native-m06-evidence/ui-final.log",
+      "source_status": "UI source unchanged since this M6 run"
+    },
+    "format_diff": "passed",
+    "pre_closure_binary": "M6 clean 7e21f21 binary is historical for these new root lifecycle repairs; fresh clean build receipt is separate"
+  },
+  "parent_state_repair": {
+    "source": "apps/tezbar/src/surfaces/command_bar/review_tests.rs",
+    "commit": "b31de671c5b6cd51aeba66021eb8d7ea15f84812",
+    "contract": "state_save_error is only UiState durability; drain_state(cx) retries current state before draining; model save does not clear state error",
+    "validation": "three parent-owned real GPUI/atomic-file regressions, included in normal integrated gate"
+  },
+  "pre_dependency_validation": {
+    "native_app": {
+      "passed": 83,
+      "failed": 2,
+      "ignored": 0,
+      "log": "/tmp/tezbar-native-m05-evidence/post-checkpoint-normal-tests.log"
+    },
+    "ui": {
+      "passed": 39,
+      "failed": 0,
+      "ignored": 0,
+      "log": "/tmp/tezbar-native-m05-evidence/post-checkpoint-ui-tests-corrected.log"
+    },
+    "check_build_receipt": "/tmp/tezbar-native-m05-evidence/post-checkpoint-normal-build-receipt.json",
+    "scope": "Historical pre-hint/normal-text amendments and pre-final parent model/UI closure. Not final v3 validation."
+  },
+  "historical_pre_review_v3": {
+    "validation": {
+      "state": "all final v3 gates passed; no source or HEAD changes during gates",
+      "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+      "compiled_input_count": 75,
+      "parent_frozen_manifest": "/tmp/tezbar-native-m05-parent-f3234cd-frozen.json",
+      "parent_frozen_manifest_sha256": "82b868979cb34bf7b237ffad1ad39862ee4962960cd4e7afeafc779f8a5d7b02",
+      "own_v3_manifest": "/tmp/tezbar-native-m05-evidence/post-checkpoint-frozen-source-hashes-v3.json",
+      "own_v3_manifest_sha256": "c0209a5038468419951e5aee66877b7933988979799369765fb35a13384db849",
+      "all_frozen_hashes_verified_before_after_every_gate": true,
+      "gates": {
+        "targeted-ai-history": {
+          "command": [
+            "cargo",
+            "+1.98.1",
+            "test",
+            "--locked",
+            "-p",
+            "tezbar-native",
+            "--features",
+            "runtime-shaders",
+            "surfaces::command_bar::tests::ai_history_does_not_replace_home_while_reopen_refresh_is_pending",
+            "--",
+            "--exact"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-targeted-ai-history.log",
+          "started_utc": "2026-11-06T07:57:13.959063+00:00",
+          "ended_utc": "2026-11-06T07:57:25.628857+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 0
+            }
+          ]
+        },
+        "targeted-pin-enter": {
+          "command": [
+            "cargo",
+            "+1.98.1",
+            "test",
+            "--locked",
+            "-p",
+            "tezbar-native",
+            "--features",
+            "runtime-shaders",
+            "surfaces::command_bar::tests::pinned_argument_form_supersedes_earlier_pending_enter",
+            "--",
+            "--exact"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-targeted-pin-enter.log",
+          "started_utc": "2026-11-06T07:57:25.638948+00:00",
+          "ended_utc": "2026-11-06T07:57:31.899276+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 0
+            }
+          ]
+        },
+        "normal-tests": {
+          "command": [
+            "cargo",
+            "+1.98.1",
+            "test",
+            "--locked",
+            "-p",
+            "tezbar-native",
+            "-p",
+            "tezbar-ui",
+            "--features",
+            "runtime-shaders",
+            "--",
+            "--test-threads=2"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-tests.log",
+          "started_utc": "2026-11-06T07:57:31.909629+00:00",
+          "ended_utc": "2026-11-06T07:57:39.366786+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": [
+            {
+              "status": "ok",
+              "passed": 85,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 43,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 0
+            }
+          ]
+        },
+        "bench-tests": {
+          "command": [
+            "cargo",
+            "+1.98.1",
+            "test",
+            "--locked",
+            "-p",
+            "tezbar-native",
+            "--features",
+            "runtime-shaders,bench-control",
+            "--",
+            "--test-threads=2"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-bench-tests.log",
+          "started_utc": "2026-11-06T07:57:39.376318+00:00",
+          "ended_utc": "2026-11-06T07:57:55.608827+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": [
+            {
+              "status": "ok",
+              "passed": 86,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 0
+            }
+          ]
+        },
+        "check": {
+          "command": [
+            "cargo",
+            "+1.98.1",
+            "check",
+            "--locked",
+            "-p",
+            "tezbar-native",
+            "--features",
+            "runtime-shaders"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-check.log",
+          "started_utc": "2026-11-06T07:57:55.619589+00:00",
+          "ended_utc": "2026-11-06T07:57:59.322904+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": []
+        },
+        "normal-build": {
+          "command": [
+            "cargo",
+            "+1.98.1",
+            "build",
+            "--locked",
+            "-p",
+            "tezbar-native",
+            "--features",
+            "runtime-shaders"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-normal-build.log",
+          "started_utc": "2026-11-06T07:57:59.333267+00:00",
+          "ended_utc": "2026-11-06T07:58:09.107541+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": []
+        },
+        "fmt": {
+          "command": [
+            "cargo",
+            "+1.98.1",
+            "fmt",
+            "-p",
+            "tezbar-native",
+            "--",
+            "--check"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-fmt.log",
+          "started_utc": "2026-11-06T07:58:09.119294+00:00",
+          "ended_utc": "2026-11-06T07:58:09.377567+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": []
+        },
+        "diff-check": {
+          "command": [
+            "git",
+            "diff",
+            "--check",
+            "--",
+            "apps/tezbar/src/core_client.rs",
+            "apps/tezbar/src/lib.rs",
+            "apps/tezbar/src/surfaces/command_bar/arguments.rs",
+            "apps/tezbar/src/surfaces/command_bar/interactions.rs",
+            "apps/tezbar/src/surfaces/command_bar/locale.rs",
+            "apps/tezbar/src/surfaces/command_bar/mod.rs",
+            "apps/tezbar/src/surfaces/command_bar/model_picker.rs",
+            "apps/tezbar/src/surfaces/command_bar/navigation.rs",
+            "apps/tezbar/src/surfaces/command_bar/presentation.rs",
+            "apps/tezbar/src/surfaces/command_bar/tests.rs",
+            "apps/tezbar/src/surfaces/command_bar/view.rs",
+            "apps/tezbar/src/surfaces/mod.rs",
+            "apps/tezbar/src/windows/launcher.rs",
+            "docs/native-m05/command-bar.md",
+            "docs/native-m05/command-bar-test-map.json"
+          ],
+          "CARGO_BUILD_JOBS": 2,
+          "exit_code": 0,
+          "timed_out": false,
+          "log": "/tmp/tezbar-native-m05-evidence/final-v3-diff-check.log",
+          "started_utc": "2026-11-06T07:58:09.388386+00:00",
+          "ended_utc": "2026-11-06T07:58:09.420555+00:00",
+          "head": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+          "parent_frozen_hashes_verified": true,
+          "own_v3_hashes_verified": true,
+          "all_compiled_inputs_stable": true,
+          "test_summaries": []
+        }
+      },
+      "normal_app": {
+        "passed": 85,
+        "failed": 0,
+        "ignored": 0
+      },
+      "normal_ui": {
+        "passed": 43,
+        "failed": 0,
+        "ignored": 0
+      },
+      "bench_app": {
+        "passed": 86,
+        "failed": 0,
+        "ignored": 0
+      },
+      "M5_native_and_contract_tests": {
+        "passed": 50,
+        "failed": 0,
+        "ignored": 0
+      },
+      "normal_binary": "/tmp/tezbar-native-m05-evidence/tezbar-m05-final-v3",
+      "normal_binary_sha256": "4191758ba707e15f1ae7f97c02a914461fe737a56138ebfad15e321dae2f9c18",
+      "version": {
+        "version": "0.3.0-beta.7",
+        "source": "f3234cdb16f656fba8e46dfd9ed420a06a54a54b",
+        "dirty": "true",
+        "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+        "preview": true,
+        "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+        "runtime_shaders": true,
+        "bench_control": false
+      },
+      "no_webkit_linkage": true,
+      "normal_build_receipt": "/tmp/tezbar-native-m05-evidence/final-v3-normal-build-receipt.json",
+      "compiled_source_snapshot": "/tmp/tezbar-native-m05-evidence/final-v3-compiled-source-sha256.json",
+      "red_before_preserved": [
+        "/tmp/tezbar-native-m05-evidence/post-checkpoint-normal-tests.log",
+        "/tmp/tezbar-native-m05-evidence/pin-pending-enter-strong-regression.log",
+        "/tmp/tezbar-m5-parent-model-red.log",
+        "/tmp/tezbar-native-m05-evidence/final-bench-control-tests.log"
+      ],
+      "scope_limits": "Native test/build evidence only. OS visual/IME/AX/Windows/live effects/GPU/RAM and M6-M11 content acceptance unrun here."
+    },
+    "frozen_checkpoint_validation": {
+      "normal_test_command": "CARGO_BUILD_JOBS=2 cargo +1.98.1 test --locked -p tezbar-native -p tezbar-ui --features runtime-shaders",
+      "normal_app_passed": 56,
+      "ui_passed": 37,
+      "normal_failures": 0,
+      "normal_ignored": 0,
+      "normal_log": "/tmp/tezbar-native-m05-evidence/final-tests.log",
+      "m5_tests": 24,
+      "bench_control_m5_command": "CARGO_BUILD_JOBS=2 cargo +1.98.1 test --locked -p tezbar-native --lib --features runtime-shaders,bench-control surfaces::command_bar",
+      "bench_control_m5_passed": 24,
+      "bench_control_m5_failures": 0,
+      "bench_control_m5_ignored": 0,
+      "bench_control_m5_log": "/tmp/tezbar-native-m05-evidence/final-bench-command-bar.log",
+      "full_bench_control": "failed M4 events::repair_tests::two_worker_two_producer_flood_control_and_quit_remain_live; process remained live during teardown and owned test run was interrupted, not a pass",
+      "full_bench_control_log": "/tmp/tezbar-native-m05-evidence/final-bench-control-tests.log",
+      "native_check": "passed; /tmp/tezbar-native-m05-evidence/final-check.log",
+      "normal_debug_build": "passed; /tmp/tezbar-native-m05-evidence/final-normal-build.log",
+      "normal_build_receipt": "/tmp/tezbar-native-m05-evidence/final-normal-build-receipt.json",
+      "package_fmt_check": "passed; cargo +1.98.1 fmt -p tezbar-native -- --check",
+      "owned_diff_check": "passed",
+      "source_freeze_manifest": "/tmp/tezbar-native-m05-evidence/frozen-source-hashes.json",
+      "m4_receipt_comparison": "/tmp/tezbar-native-m05-evidence/m4-receipt-comparison.json",
+      "visual_os_windows_acceptance": false
+    },
+    "source_freeze_manifest": "/tmp/tezbar-native-m05-evidence/post-checkpoint-frozen-source-hashes-v3.json",
+    "source_freeze_manifest_sha256": "c0209a5038468419951e5aee66877b7933988979799369765fb35a13384db849",
+    "note": "Preserved pre-review evidence; these hashes/results do not validate the subsequent review repairs."
+  },
+  "review_repair_source": {
+    "base": "7e21f21ce3ded3a4c18f0ea318174f9b9a68686a",
+    "note": "Current per-file M5/App source hashes after M6 integration and R-1/R-2/R-3 repairs. Historical pre-doc source tree retained in historical_pre_closure_35dca9b; no current root-tree equivalence is claimed."
+  },
+  "review_repairs": {
+    "report": "docs/reviews/GPUI_M45_OPUS_686d98e.md",
+    "report_sha256": "1be0dcfda29ba4754cefab8e56612c51207daf98e379ae0d3eeb38dae3cc0cd8",
+    "ids": [
+      "F-01",
+      "F-02",
+      "F-03",
+      "F-04",
+      "F-05",
+      "F-06",
+      "F-07",
+      "F-08"
+    ],
+    "queue_tests": [
+      "pending_routes_are_preserved_per_surface_and_in_order",
+      "full_route_inbox_rejects_new_work_without_dropping_admitted_routes",
+      "update_actions_have_a_separate_ordered_monotonic_owner"
+    ],
+    "fresh_opus_required": true
+  },
+  "historical_pre_closure_35dca9b": {
+    "recorded_head": "30f708495b382ab97051d14b427f5252d69c3c98",
+    "source": {
+      "source_tree": "5866ade44629e7e7e26dac6c9001db124103d9e9",
+      "base": "686d98e56c967c98c5b38dd284c1d8a81ce0a14f",
+      "note": "Hashes are indexed M5 repair source, excluding live uncommitted M6 bridge/UI work."
+    },
+    "validation": {
+      "scope": "command-bar namespace on current integration tree; M6 still actively edited",
+      "passed": 64,
+      "failed": 0,
+      "ignored": 0,
+      "log": "/tmp/tezbar-m5-review-parent-commandbar.log",
+      "clean_archive_build": false
+    }
+  },
+  "closure_repairs": {
+    "report": "docs/reviews/GPUI_M5_OPUS_35dca9b.md",
+    "report_sha256": "f0087c4d8d403ecdef53b2580fd2204ad9d1aa86ee282a102bde2fab9f3a6330",
+    "ids": [
+      "R-1",
+      "R-2",
+      "R-3"
+    ],
+    "native_regressions": [
+      "review_deep_search_row_retains_live_model_and_pin_activation",
+      "review_quit_completion_releases_its_ticket_after_results_refresh",
+      "review_delivered_settings_and_placeholder_routes_retire_admission",
+      "repeated_pending_updates_coalesce_and_command_never_consumes_admission"
+    ],
+    "exact_duplicate_pending_update_policy": "coalesced under original nonzero nonce; distinct admitted actions remain ordered",
+    "fresh_opus_required": true,
+    "native_run": {
+      "log": "/tmp/tezbar-m5-m6-parent-final-native-2.log",
+      "passed": 133,
+      "failed": 0,
+      "ignored": 0,
+      "scope": "full native integration tree, including five M6 parent fixtures; not a clean archive"
+    }
+  }
+}

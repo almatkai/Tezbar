@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/tezbar_native-90a5bca15c6ebe0e",
+    "asset_transport::",
+    "app::m9_review_tests::",
+    "app::m11::prequit_update_tests::",
+    "app::m8::tests::",
+    "surfaces::command_bar::extension_integration",
+    "sdk_",
+    "--test-threads=2",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "timezone": "America/Los_Angeles",
+  "prepared_seed": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-Rli7kv/prepared.json",
+  "bun": "/opt/homebrew/bin/bun",
+  "test_binary_sha256": "a53fd9aa20144de16e1158ef5bc79adea2bd221e91170277702ca23c072d168a",
+  "own_inputs_stable": true
+}

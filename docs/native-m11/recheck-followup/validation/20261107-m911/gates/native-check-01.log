@@ -1,0 +1,54 @@
+    Checking tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core)
+    Checking tezbar-update v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-update)
+   Compiling tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+error: future cannot be sent between threads safely
+   --> crates/tezbar-core/src/extension_worker.rs:888:21
+    |
+888 |             runtime.spawn(async move {
+    |                     ^^^^^ future created by async block is not `Send`
+    |
+    = note: cannot satisfy `impl Future<Output = Result<(), String>>: Send`
+note: future is not `Send` as it awaits another future which is not `Send`
+   --> crates/tezbar-core/src/extension_worker.rs:282:9
+    |
+282 |         self.sync_sdk_status(&response).await?;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ await occurs here on type `impl futures_util::Future<Output = std::result::Result<(), std::string::String>>`, which is not `Send`
+note: required by a bound in `tokio::runtime::Handle::spawn`
+   --> /Users/almat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.52.3/src/runtime/handle.rs:199:21
+    |
+197 |     pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
+    |            ----- required by a bound in this associated function
+198 |     where
+199 |         F: Future + Send + 'static,
+    |                     ^^^^ required by this bound in `Handle::spawn`
+    = note: the full name for the type has been written to '/tmp/tezbar-m9-c01-validation-Rffw07/target/debug/deps/tezbar_core-d0ecf1f0bd8086fb.long-type-16256623280518017732.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: `tezbar-core` (lib) generated 3 warnings
+error: could not compile `tezbar-core` (lib) due to 1 previous error; 3 warnings emitted

@@ -1,0 +1,16 @@
+{
+  "freeze": "composition-source-freeze-02.json",
+  "binary": "target/debug/tezbar",
+  "sha256": "f86c946aa4d674410fbd1b84481a47e46ce510715a01c5e7b616c3fd908ef544",
+  "bytes": 202436920,
+  "metadata_head": "409dbf3c5950b0065aff900b2906b548660bc264",
+  "source_dirty": true,
+  "source_proof": "36d27bb8c6798a1850eaea51fe535093bfcb08f70a64b4e70c2dd7bd309282b3",
+  "normal_features": [
+    "runtime-shaders"
+  ],
+  "bench_control": false,
+  "no_webkit_linkage": true,
+  "normal_tree_no_tauri_wry_tao": true,
+  "never_launched": true
+}

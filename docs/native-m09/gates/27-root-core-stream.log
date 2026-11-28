@@ -1,0 +1,59 @@
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/native_tests.rs:617:9
+    |
+617 |     let mut http = server(vec![
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `gemma_has` and `gemma_counts` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1322:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+
+warning: `tezbar-core` (lib test) generated 5 warnings (run `cargo fix --lib -p tezbar-core --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_core-c00d984f6229fa74)
+
+running 5 tests
+test terminal::pty::stream::tests::binary_limits_and_invalid_encoding ... ok
+test terminal::pty::stream::tests::deletion_replacement_generation_and_disk_failure_are_truthful ... ok
+test terminal::pty::stream::tests::registry_capacity_and_cancel_are_bounded ... ok
+test terminal::pty::stream::tests::review_m10_f6_origin_distinguishes_prior_history_from_this_process ... ok
+test terminal::pty::stream::tests::bounded_history_repeated_bytes_watermark_release_expiry_and_truncation ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 600 filtered out; finished in 0.04s
+

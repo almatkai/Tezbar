@@ -1,0 +1,34 @@
+{
+  "scope": "Final handoff verification; preserves the preceding performance snapshot and all historical evidence.",
+  "summary": {
+    "path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-performance/docs/performance/beta17-responsiveness-results.json",
+    "sha256": "c7487e92e580eee89f791007080096a6ce693519b62d6a666510e34b6adbdbd3"
+  },
+  "production_and_benchmark_script_hashes_unchanged": true,
+  "post_measurement_change": "Only the continuous-input component test was refined to assert dispatch progress during a 24ms input stream and eventual final delivery, instead of pinning an 8ms timer implementation. No production/build changes.",
+  "final_test_source": {
+    "path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-performance/src/renderer/CommandBar.lifecycle.test.ts",
+    "sha256": "b21b76cc5a360ff5741d93bae02ba79fa45e5f944cb75faaf1dee67605d69313"
+  },
+  "checks": {
+    "typecheck": "passed",
+    "ts_passed": 747,
+    "ts_skipped": 9,
+    "component_tests_passed": 27,
+    "logs": {
+      "responsiveness-handoff-typecheck.log": {
+        "path": "/tmp/tezbar-beta17-perf.e1qzXU/responsiveness-handoff-typecheck.log",
+        "sha256": "0dcb57addcc84ba780c0cad07d42eea401728972f4f1e16464a6bc04cdef2e9b"
+      },
+      "responsiveness-handoff-tests.log": {
+        "path": "/tmp/tezbar-beta17-perf.e1qzXU/responsiveness-handoff-tests.log",
+        "sha256": "a16e4b1debbcee3e58adcf06b825ec012c9bf6e9c10b6162402cff588a3ad178"
+      }
+    }
+  },
+  "owned_process_cleanup": {
+    "recorded_benchmark_families_remaining": 0,
+    "benchmark_or_compiler_executable_paths_remaining": 0
+  },
+  "review": "Executor self-review of scheduling bounds, stale-response guards, composition/hide recovery, cache/action behavior, source identity, evidence boundaries and work/CPU/RAM tradeoffs. No child agents or independent reviewer used."
+}

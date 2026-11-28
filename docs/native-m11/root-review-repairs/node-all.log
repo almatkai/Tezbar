@@ -1,0 +1,17 @@
+✔ native build arguments cannot request signing/channel/version or partial packaging (0.43675ms)
+✔ assembly uses Cargo target/profile and refuses source changes (0.4455ms)
+✔ locked template delta removes only bootstrap and retains all installer contracts (2.369666ms)
+✔ rehearsal proposal contains no executable commands and names disposable context (0.414875ms)
+✔ inventories reject traversal, collisions, missing provenance and symlink-shaped names (0.502417ms)
+✔ plist preserves production metadata and exact permission strings without LSUIElement (2.512708ms)
+✔ planning refuses installed app paths and invented identities before any I/O (0.294833ms)
+✔ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (31.10975ms)
+✔ real native build script rechecks dependency edits and refuses unattested archives (3266.478375ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3306.818958

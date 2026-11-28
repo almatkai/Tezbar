@@ -1,0 +1,105 @@
+{
+  "state": "SOURCE_STABLE_AWAIT_PARENT_FREEZE_AND_ONE_GATE_OWNER",
+  "timestamp_utc": "2026-11-07T16:04:42.569620+00:00",
+  "tree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "head": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+  "source_compiled_aggregate_sha256": "c2d9acc6dd798bfa91c9017e49de33065bd6dd77b8343934dd9f6a3acab8698d",
+  "migration_complete": false,
+  "integration_accepted": false,
+  "compile_hold_released": false,
+  "product_compilation_attempted": false,
+  "subagents": 0,
+  "executed": [
+    {
+      "command": "node --test scripts/native/build.test.mjs scripts/native/package-macos.test.mjs scripts/native/cargo-artifact.test.mjs scripts/native/admission-fixture.test.mjs",
+      "log": {
+        "path": "docs/native-m11/recheck-followup/node-isolated-01.log",
+        "sha256": "1a3d2fe10882bef576891eda7fc7b11e80152260c2a1218cd81251c24f154b3c",
+        "bytes": 8236
+      },
+      "result": "10 Node passed; 5 private toy Rust tests; expected diagnostic-negative toy compile"
+    },
+    {
+      "command": "node --test scripts/native/build.test.mjs scripts/native/package-macos.test.mjs scripts/native/cargo-artifact.test.mjs scripts/native/admission-fixture.test.mjs scripts/native/theme-fixture.test.mjs",
+      "log": {
+        "path": "docs/native-m11/recheck-followup/node-isolated-final.log",
+        "sha256": "7e4f2b20dd1e4958f316c028ef2715248934b17701da4b2296fddf54df1d7fd5",
+        "bytes": 7763
+      },
+      "result": "11 Node passed; 5 private toy Rust tests plus 1 recording-adapter Rust theme test; product/native gates UNRUN"
+    },
+    {
+      "command": "python3 scripts/native/cutover.test.py",
+      "log": {
+        "path": "docs/native-m11/recheck-followup/cutover-unit-01.log",
+        "sha256": "e92b0ffd03bb5447a0dbd23d6627ba8b9193e54e2b435416328ff01c3080cf06",
+        "bytes": 98
+      },
+      "result": "1 passed"
+    },
+    {
+      "command": "python3 docs/native-m11/integration/prepare-cutover.py --output-dir docs/native-m11/recheck-followup/cutover-successor",
+      "log": {
+        "path": "docs/native-m11/recheck-followup/cutover-successor-01.log",
+        "sha256": "028045d53815d1df8022391990fd00a4fc7980e5a0b2f1c2b3a6db5d7cb9aa95",
+        "bytes": 68
+      },
+      "result": "private scratch byte roundtrip passed; product not modified"
+    },
+    {
+      "command": "git diff --check",
+      "result": "exit 0"
+    }
+  ],
+  "failed_attempts": [
+    {
+      "kind": "read_only_path_lookup",
+      "command": "cat apps/tezbar/src/production_launch.rs",
+      "result": "ENOENT; actual file is apps/tezbar/src/app/production_launch.rs"
+    },
+    {
+      "kind": "read_only_test_lookup",
+      "command": "cat scripts/native/production.test.mjs",
+      "result": "ENOENT; used existing build/package suites and new isolated fixtures"
+    },
+    {
+      "kind": "bounded_stale_XERJ_lookup",
+      "command": "/Users/almat/.local/bin/xerj search --prefix ax-65b00e69da24 production_launch Admission quit_budget",
+      "result": "returned stale unrelated matches; exact rg/current sources used, no index retry"
+    },
+    {
+      "kind": "expected_negative_test",
+      "command": "private toy cargo build after introducing missing_function()",
+      "result": "exit 101 intentionally; runCargo rejection and readable diagnostics asserted; both logs preserved"
+    }
+  ],
+  "preserved_parent_fixes": {
+    "R0": "unchanged source hashes; FirstInstall true production-order native execution remains pending",
+    "R1": "permission implementation/tests unchanged; parent 43 pass / 1 existing ignored on 1.85 and 1.98.1 is inherited evidence, not rerun here",
+    "R2": "build.rs/provenance.test.mjs unchanged; sourceSnapshot root/provenance guards preserved in modified build.mjs",
+    "R4": "actual installation/rollback error logging preserved in co-owned app/m11.rs"
+  },
+  "open": [
+    "M6 cold-start timing",
+    "L5 WAL observation",
+    "L9 actor/feed observation",
+    "L10 download-stream observation",
+    "Windows/NSIS/storage",
+    "signed update/install continuity",
+    "manual GUI/IME/AX/GPU/RAM",
+    "integrated Rust/GPUI migration",
+    "actual native public signed release builder/feed cutover"
+  ],
+  "not_performed": [
+    "Git stage/commit/checkout/push",
+    "shared Cargo/Bun/esbuild/native gates",
+    "release/install/signing",
+    "network updater or public pipeline",
+    "profiles/Keychain/clipboard",
+    "GUI/remote work",
+    "production /Applications access",
+    "preview PID 79164 process interaction"
+  ],
+  "requested_parent_action": "Review exact source hashes/API changes, coordinate one whole-tree freeze and designate one gate owner. No independent shared compilation is authorized by this receipt."
+}

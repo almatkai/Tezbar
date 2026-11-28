@@ -1,0 +1,31 @@
+{
+  "supersedes_only_the_historical_query": "docs/native-m09/root-validation/20261107-c01-root-test-patch-Rffw07/api-source-map.json: Worker grants / retired ownership",
+  "file": "crates/tezbar-core/src/extension_worker.rs",
+  "query": "RunGrant|in_flight_runs|status_signatures|sdk_status_items|set_sdk_status_item",
+  "source_sha256": "a76dad693d217de7e94a8db286e6890787f5e585baa6510acc52dd388817cbdc",
+  "matches": [
+    "52:struct RunGrant {",
+    "59:    runs: Arc<Mutex<HashMap<String, RunGrant>>>,",
+    "99:    status_signatures: Arc<Mutex<HashMap<String, Option<u64>>>>,",
+    "101:    in_flight_runs: Arc<Mutex<HashMap<String, RunGrant>>>,",
+    "111:            status_signatures: Default::default(),",
+    "113:            in_flight_runs: Default::default(),",
+    "182:                self.in_flight_runs",
+    "187:                        RunGrant {",
+    "197:            runs: self.in_flight_runs.clone(),",
+    "218:                .in_flight_runs",
+    "390:        let in_flight_runs = self.in_flight_runs.clone();",
+    "391:        let status_signatures = self.status_signatures.clone();",
+    "435:                        let runs = in_flight_runs.clone();",
+    "548:                                    if let Ok(mut s) = status_signatures.lock() {",
+    "562:                                    && status_signatures",
+    "653:        let sdk_signatures = self.status_signatures.clone();",
+    "742:        if let Ok(mut signatures) = self.status_signatures.lock() {",
+    "757:        if !self.ctx.host.sdk_status_items() {",
+    "776:                .status_signatures",
+    "874:            .status_signatures",
+    "885:        crate::extensions::process_host::set_sdk_status_item(&self.ctx, &scope, &params, callback)?;",
+    "886:        self.status_signatures",
+    "893:        if let Ok(mut signatures) = self.status_signatures.lock() {"
+  ]
+}

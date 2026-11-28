@@ -1,0 +1,69 @@
+   Compiling tezbar-core v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-core)
+warning: variable does not need to be mutable
+  --> crates/tezbar-core/src/assets.rs:97:21
+   |
+97 |                 let mut response = self
+   |                     ----^^^^^^^^
+   |                     |
+   |                     help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/native_tests.rs:617:9
+    |
+617 |     let mut http = server(vec![
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `gemma_has` and `gemma_counts` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1322:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+
+warning: `tezbar-core` (lib test) generated 5 warnings (run `cargo fix --lib -p tezbar-core --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.73s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_core-c00d984f6229fa74)
+
+running 1 test
+test assets::race_tests::root_ancestor_swap_after_authorization_cannot_redirect_scoped_open ... FAILED
+
+failures:
+
+---- assets::race_tests::root_ancestor_swap_after_authorization_cannot_redirect_scoped_open stdout ----
+
+thread 'assets::race_tests::root_ancestor_swap_after_authorization_cannot_redirect_scoped_open' (19725633) panicked at crates/tezbar-core/src/assets.rs:471:9:
+assertion failed: read_scoped(&scope, &file, 8).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    assets::race_tests::root_ancestor_swap_after_authorization_cannot_redirect_scoped_open
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 593 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p tezbar-core --lib`

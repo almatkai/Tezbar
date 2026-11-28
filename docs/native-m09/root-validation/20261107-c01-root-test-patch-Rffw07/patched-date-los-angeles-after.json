@@ -1,0 +1,10 @@
+{
+  "source_label": "c01fa313fb04b5b53a97780c03ce2cb1838bb352 + exact root test patch d3b390164b70563cfc9cab0a789eedfef4b51522480168f4c05d0a5987ebfff0; dirty",
+  "head": "c01fa313fb04b5b53a97780c03ce2cb1838bb352",
+  "branch": "feat/native-gpui-app",
+  "status": "M apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs",
+  "file_count": 2691,
+  "root_freeze_files": 608,
+  "root_freeze_aggregate": "4aaab379936783b63057dd566881b10a8518c098f6007e985c4fc0ba4925896d",
+  "aggregate": "7489620ceef8fcf88e34c1e4e7143a27178f6158ac5b5e2de0f3db829230f84a"
+}

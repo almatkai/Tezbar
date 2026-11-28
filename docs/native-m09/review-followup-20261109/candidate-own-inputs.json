@@ -1,0 +1,12 @@
+{
+  "apps/tezbar/src/asset_transport.rs": "e3584f04d4b457a96b3b0983d28e7985d5b28a48422dbed8557f5b74cda14399",
+  "apps/tezbar/src/asset_transport_tests.rs": "af704a68de60ff35fc4c87461f3b712fd99956b3681617edc7c656266a4d6916",
+  "apps/tezbar/src/asset_transport/status_icons.rs": "cdbf40b4476d3b276adffc25b65cf1d4eafdb05d9e52231437e9b9cf76bedca3",
+  "apps/tezbar/src/asset_transport/status_icons_tests.rs": "ada5d08e9b878736ed967e8f9c5b7fb97ac67ab91ffbc508a7ff37efa6648cfb",
+  "apps/tezbar/src/app.rs": "6c5721dbb0a669c36feb50e5dad3b2bf924302ed0183d966f35ea17c6a5f0079",
+  "apps/tezbar/src/app/m9_review_tests.rs": "3da796f5fd0c0c269a1b2d7c8488e531c99852f4e845a7ef971c7513b33be3ee",
+  "apps/tezbar/Cargo.toml": "cd6de5e9301ae002d199890fb5ee6fc61f167581c587fb224cedd064c68750aa",
+  "Cargo.lock": "b24f6ab5f73fcd0ff1a5941be930b6207737ced02fd2415dc83a704b2274ecfb",
+  "crates/tezbar-ui-model/src/extensions/images.rs": "3797cf2577958060b190d1adcae2c5ee46d0f15d7f157b81f746dab544c9ff1a",
+  "crates/tezbar-ui-model/src/extensions/images/tests.rs": "c6ce37264bd2600cfd56731a36b58fae2cf312f7d00c40ed7534c33dc86053e0"
+}

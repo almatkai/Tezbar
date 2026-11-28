@@ -1,0 +1,97 @@
+{
+  "acceptance": "pending parent fresh Opus and platform/manual; no full parity acceptance",
+  "findings": {
+    "H1": {
+      "cases": [
+        "repair_actual_app_append_failure_then_resume_send_approve_quit",
+        "repair_actual_app_settings_failure_preserves_live_approval",
+        "repair_actual_app_layout_failure_preserves_live_approval",
+        "repair_quit_preparation_preserves_terminal_and_resumes_binary_input"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "native-frozen-final"
+      ]
+    },
+    "H2": {
+      "cases": [
+        "actual_blocking_decodes_hold_four_slots_across_three_release_cycles"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "native-frozen-final"
+      ]
+    },
+    "M1": {
+      "cases": [
+        "repair_svg_reference_expansion_is_bounded_before_usvg_and_icons_render"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "native-frozen-final"
+      ]
+    },
+    "M2": {
+      "cases": [
+        "chosen_waits_fairly_for_shared_slot_and_cancelled_job_keeps_permit"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "core-assets-final"
+      ]
+    },
+    "M3": {
+      "cases": [
+        "chosen_and_scoped_fifo_rejected_before_read",
+        "chosen_waits_fairly_for_shared_slot_and_cancelled_job_keeps_permit",
+        "root_ancestor_swap_after_authorization_cannot_redirect_scoped_open"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "core-assets-final"
+      ]
+    },
+    "L1": {
+      "cases": [
+        "repair_prepared_append_is_durable_work_and_attachment_queue_refusals_settle"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "native-frozen-final"
+      ]
+    },
+    "L2": {
+      "cases": [
+        "repair_prepared_append_is_durable_work_and_attachment_queue_refusals_settle"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "native-frozen-final"
+      ]
+    },
+    "L3": {
+      "cases": [],
+      "local_result": "static full-catalog uniform_list seam; no dedicated rendering fixture",
+      "evidence": []
+    },
+    "L4": {
+      "cases": [
+        "repair_actual_app_append_failure_then_resume_send_approve_quit",
+        "repair_actual_app_settings_failure_preserves_live_approval",
+        "repair_actual_app_layout_failure_preserves_live_approval"
+      ],
+      "local_result": "passed assertion subsets",
+      "evidence": [
+        "native-frozen-final"
+      ]
+    },
+    "WINDOWS": {
+      "cases": [
+        "windows_scope_paths_aliases_links_legacy_and_removal",
+        "windows_ancestor_root_nested_junction_swap_and_handle_write_locks"
+      ],
+      "local_result": "unexecuted on macOS; real Windows blocker",
+      "evidence": []
+    }
+  }
+}

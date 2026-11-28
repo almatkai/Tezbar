@@ -1,0 +1,37 @@
+{
+  "generator": "Node jsdom 26; detached HTML fragment; no script execution",
+  "fixtures": [
+    {
+      "input": "<div><!--StartFragment-->Hello<o:p></o:p></div>",
+      "plain": "Hello"
+    },
+    {
+      "input": "<div title=\"a>b\">x",
+      "plain": "x"
+    },
+    {
+      "input": "<div><?xml version=\"1.0\"?><span>Office</span></div>",
+      "plain": "Office"
+    },
+    {
+      "input": "<div class=\"Apple-interchange-newline\">A&nbsp;<b>B &copy;</b><br/>C</div>",
+      "plain": "A B ©\nC"
+    },
+    {
+      "input": "<ul><li>A</li><li><i>B</i></li></ul>",
+      "plain": "A\nB"
+    },
+    {
+      "input": "<div><!--[if mso]><xml>metadata</xml><![endif]-->Text</div>",
+      "plain": "Text"
+    },
+    {
+      "input": "<div title=\"unterminated>hidden",
+      "plain": ""
+    },
+    {
+      "input": "<div><script>if(1<2){throw 1}</script>safe<style>a>b{}</style></div>",
+      "plain": "safe"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "path": "apps/tezbar/src/app/m10.rs",
+    "actual": "69526ebade12170caa1629c7c118e9e309cbc2809270c1dc525207e61c42796c",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/app.rs",
+    "actual": "1ea22232339edc7b84ca7c31779d29871c43243fd92ab7bd8cc64590224a4be5",
+    "exact_root_after": false,
+    "M9_composed": true
+  },
+  {
+    "path": "apps/tezbar/src/events.rs",
+    "actual": "1d0d8faed34ddd05acad2fe5939e1cb8a7d5d1c0d92e6cb1650ee33b7e9d08ae",
+    "exact_root_after": false,
+    "M9_composed": true
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/command_bar/mod.rs",
+    "actual": "89ce467f67bec6d2feaca0444ca5c51ddd1e2d9f96824d5141859fa2306a7b88",
+    "exact_root_after": false,
+    "M9_composed": true
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration.rs",
+    "actual": "860efe59db9ab44510fc5ed75f06c44f707b3a111a9603400a56f4d7424f7150",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs",
+    "actual": "4b227345b92230bbe060960b25c3c58e754002d6ed1f80efc16ee78fd78d3434",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/input.rs",
+    "actual": "e9f855c63b16494535c578e3f3a36d3ab1259cca4eb0e0c6d078cd1eadf24e93",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/mod.rs",
+    "actual": "44d69ce34ca075175b92eda98192b6465edb46bfcb02d2f142ee0fa327def92b",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/request.rs",
+    "actual": "35d77c8aea617b2bdf59f233686a8d2234020a608c870eeeb3855f7e11d93848",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/state.rs",
+    "actual": "176c6be5ca72ebb8dfca89424a437f47e570b188418fb2833fe1a9cb6c80d7d2",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+    "actual": "4c18feed5b8cf9bc0340fa9246241d4d0190925f7c5d50f75609dccccaffa592",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/surfaces/terminal/view.rs",
+    "actual": "80eebcaaa1b114aaf723fa1d1b899f59ba5e891824416c76686fa2eabd60a984",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "apps/tezbar/src/windows/terminal_sessions.rs",
+    "actual": "7b9f2a5c840335f47d7ddc0e067302a776ca1037d28695d81ada0d2a9fabfaf2",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "crates/tezbar-core/src/terminal/stream.rs",
+    "actual": "be2faaf8952d8fbaa2d866dfc3031be3a717364baa76f147973b056287e4a1d5",
+    "exact_root_after": true,
+    "M9_composed": false
+  },
+  {
+    "path": "crates/tezbar-ui/src/terminal_grid.rs",
+    "actual": "b0090cc1fce63b81325a013d3230afe46f0e114b46c04ec42a2466686f9650ae",
+    "exact_root_after": true,
+    "M9_composed": false
+  }
+]

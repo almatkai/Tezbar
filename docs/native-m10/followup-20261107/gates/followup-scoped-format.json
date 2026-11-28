@@ -1,0 +1,68 @@
+[
+  {
+    "command": [
+      "rustfmt",
+      "+1.98.1",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "apps/tezbar/src/app.rs",
+      "apps/tezbar/src/app/m8_tests.rs",
+      "apps/tezbar/src/app/m9.rs",
+      "apps/tezbar/src/asset_transport.rs",
+      "apps/tezbar/src/asset_transport_tests.rs",
+      "apps/tezbar/src/cli.rs",
+      "apps/tezbar/src/core_client.rs",
+      "apps/tezbar/src/core_client_command_tests.rs",
+      "apps/tezbar/src/host_adapter.rs",
+      "apps/tezbar/src/main.rs",
+      "apps/tezbar/src/surfaces/command_bar/extension_integration.rs",
+      "apps/tezbar/src/surfaces/command_bar/icons.rs",
+      "apps/tezbar/src/surfaces/command_bar/m9_followup_tests.rs",
+      "apps/tezbar/src/surfaces/command_bar/mod.rs",
+      "apps/tezbar/src/surfaces/command_bar/navigation.rs",
+      "apps/tezbar/src/surfaces/command_bar/presentation.rs",
+      "apps/tezbar/src/surfaces/command_bar/tests.rs",
+      "apps/tezbar/src/surfaces/command_bar/view.rs",
+      "apps/tezbar/src/surfaces/extension_runtime/followup_dropdown.rs",
+      "apps/tezbar/src/surfaces/extension_runtime/mod.rs",
+      "apps/tezbar/src/surfaces/extension_runtime/review_regressions.rs",
+      "apps/tezbar/src/surfaces/extension_runtime/view.rs",
+      "apps/tezbar/src/surfaces/extensions_store/followup_tests.rs",
+      "apps/tezbar/src/surfaces/extensions_store/mod.rs",
+      "apps/tezbar/src/surfaces/extensions_store/view.rs",
+      "apps/tezbar/src/surfaces/settings/mod.rs",
+      "apps/tezbar/src/surfaces/terminal/m810_review_regressions.rs",
+      "apps/tezbar/src/surfaces/terminal/state.rs",
+      "apps/tezbar/src/surfaces/terminal/view.rs",
+      "crates/tezbar-ui/src/virtual_list.rs"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "rustfmt",
+      "+1.98.1",
+      "--edition",
+      "2021",
+      "--config",
+      "skip_children=true",
+      "--check",
+      "crates/tezbar-core/src/extension_worker.rs"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "output": ""
+  }
+]

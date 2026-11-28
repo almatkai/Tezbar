@@ -1,0 +1,259 @@
+diff --git a/apps/tezbar/build.rs b/apps/tezbar/build.rs
+index bea41ce..5ab25c5 100644
+--- a/apps/tezbar/build.rs
++++ b/apps/tezbar/build.rs
+@@ -1,5 +1,9 @@
+ use std::process::Command;
+ fn main() {
++    let workspace = std::fs::canonicalize(
++        std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../.."),
++    )
++    .expect("Native workspace directory");
+     println!("cargo:rerun-if-env-changed=TEZBAR_RELEASE_NOTES_PATH");
+     let notes_path = std::env::var_os("TEZBAR_RELEASE_NOTES_PATH")
+         .map(std::path::PathBuf::from)
+@@ -51,12 +55,26 @@ fn main() {
+     }
+     let git = |args: &[&str]| {
+         Command::new("git")
++            .arg("--no-optional-locks")
+             .args(args)
++            .current_dir(&workspace)
+             .output()
+             .ok()
+             .filter(|o| o.status.success())
+             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+     };
++    // An ignored archive nested in another repository must not inherit that
++    // repository's clean status or HEAD as an attestation of its own contents.
++    let own_repository = git(&["rev-parse", "--show-toplevel"])
++        .and_then(|root| std::fs::canonicalize(root).ok())
++        .is_some_and(|root| root == workspace)
++        && git(&["ls-files", "--error-unmatch", "--", "apps/tezbar/build.rs"]).is_some();
++    let tracked_notes = std::fs::canonicalize(&notes_path).ok().is_some_and(|path| {
++        path.strip_prefix(&workspace)
++            .ok()
++            .and_then(|relative| relative.to_str())
++            .is_some_and(|relative| git(&["ls-files", "--error-unmatch", "--", relative]).is_some())
++    });
+     let observed_sha = git(&["rev-parse", "HEAD"]);
+     let sha = std::env::var("TEZBAR_NATIVE_SOURCE_SHA")
+         .ok()
+@@ -77,9 +95,11 @@ fn main() {
+     println!("cargo:rustc-env=TEZBAR_NATIVE_GIT_SHA={sha}");
+     println!(
+         "cargo:rustc-env=TEZBAR_NATIVE_DIRTY={}",
+-        git(&["status", "--porcelain"])
+-            .map(|v| !v.is_empty())
+-            .unwrap_or(true)
++        !own_repository
++            || !tracked_notes
++            || git(&["status", "--porcelain"])
++                .map(|v| !v.is_empty())
++                .unwrap_or(true)
+             || observed_sha.as_deref() != Some(sha.as_str())
+     );
+ }
+diff --git a/apps/tezbar/src/app/m11.rs b/apps/tezbar/src/app/m11.rs
+index be4ef06..274a8ab 100644
+--- a/apps/tezbar/src/app/m11.rs
++++ b/apps/tezbar/src/app/m11.rs
+@@ -212,11 +212,13 @@ impl Owner {
+             .as_ref()
+             .ok_or("Installed executable unavailable".to_string())
+             .and_then(|exe| install(artifact, exe));
+-        if result.is_err() {
++        if let Err(error) = result {
+             if let Some(client) = &self.updater {
+                 let _ = client.send(Command::InstallFailed { generation });
+             }
+-            let _=self.log.write(b"Update install/relaunch failed; previous bundle preserved or rollback attempted.\n");
++            let _ = self
++                .log
++                .write(format!("Update install/relaunch failed: {error}\n").as_bytes());
+             if let Some(executable) = &self.installed_executable {
+                 let _ = std::process::Command::new(executable)
+                     .args(std::env::args_os().skip(1))
+diff --git a/apps/tezbar/src/legacy_state/mod.rs b/apps/tezbar/src/legacy_state/mod.rs
+index 3a08bd1..ea21311 100644
+--- a/apps/tezbar/src/legacy_state/mod.rs
++++ b/apps/tezbar/src/legacy_state/mod.rs
+@@ -216,6 +216,11 @@ pub fn bootstrap(
+         && report.diagnostics == [(None, Diagnostic::Missing)]
+     {
+         let state = UiState::default();
++        std::fs::create_dir_all(
++            path.parent()
++                .ok_or("Native preferences need a parent directory")?,
++        )
++        .map_err(|_| "Could not create the native preferences directory")?;
+         state.write_atomic_if_absent(path)?;
+         return Ok(state);
+     }
+diff --git a/apps/tezbar/src/legacy_state/tests.rs b/apps/tezbar/src/legacy_state/tests.rs
+index b05fd59..20abff7 100644
+--- a/apps/tezbar/src/legacy_state/tests.rs
++++ b/apps/tezbar/src/legacy_state/tests.rs
+@@ -288,12 +288,16 @@ fn review_m11_fresh_install_defaults_but_missing_upgrade_profile_still_refuses()
+     let data = d.path().join("data");
+     let store = d.path().join("WebKit/com.tezbar.app/WebsiteData/Default");
+     let source = Source::WebKit(store.clone()).for_install(&config, &data);
+-    std::fs::create_dir_all(&config).unwrap(); // this launch may now create its own directories
++    // Production snapshots FirstInstall, then creates only data/log directories
++    // before Launcher hydrates. It does not create ~/.openray in advance.
+     std::fs::create_dir_all(&data).unwrap();
++    std::fs::create_dir_all(data.join("logs")).unwrap();
++    assert!(!config.exists());
+     let path = config.join("ui-state.json");
+     let state = bootstrap(&path, 0, &source).unwrap();
+     assert!(!state.imported_legacy);
+     assert!(path.is_file());
++    assert_eq!(bootstrap(&path, 1, &source).unwrap(), state);
+     let upgrade = Source::WebKit(store).for_install(&config, &data);
+     let untouched = config.join("upgrade.json");
+     assert!(bootstrap(&untouched, 0, &upgrade).is_err());
+diff --git a/crates/tezbar-update/src/native.rs b/crates/tezbar-update/src/native.rs
+index c532313..de40b16 100644
+--- a/crates/tezbar-update/src/native.rs
++++ b/crates/tezbar-update/src/native.rs
+@@ -581,13 +581,29 @@ fn pinned_team(detail: &str, team: &str) -> bool {
+ /// The probe owns and removes only a newly created private directory.
+ #[cfg(unix)]
+ pub fn preflight_macos_install(installed: &Path) -> Result<(), String> {
+-    if installed.file_name().and_then(|v| v.to_str()) != Some("Tezbar.app") || !installed.is_dir() {
++    use std::os::unix::{ffi::OsStrExt, fs::MetadataExt};
++    const REFUSAL: &str = "Tezbar cannot update in this folder. Move it to a writable Applications folder, then retry. The verified download has been kept.";
++    let meta = std::fs::symlink_metadata(installed).map_err(|_| REFUSAL)?;
++    if installed.file_name().and_then(|v| v.to_str()) != Some("Tezbar.app") || !meta.is_dir() {
+         return Err("The installed Tezbar bundle is unavailable".into());
+     }
+-    tempfile::Builder::new().prefix(".tezbar-install-check-")
+-        .tempdir_in(installed.parent().ok_or("Missing installation directory")?)
++    let directory = installed.parent().ok_or("Missing installation directory")?;
++    let parent = std::fs::metadata(directory).map_err(|_| REFUSAL)?;
++    let bundle_path =
++        std::ffi::CString::new(installed.as_os_str().as_bytes()).map_err(|_| REFUSAL)?;
++    // access() includes the current user's ACLs; mode bits alone miss MDM and
++    // cross-user installations. A sticky parent also requires bundle ownership.
++    let writable = unsafe { libc::access(bundle_path.as_ptr(), libc::W_OK) == 0 };
++    if !writable
++        || parent.mode() & u32::from(libc::S_ISVTX) != 0 && meta.uid() != unsafe { libc::geteuid() }
++    {
++        return Err(REFUSAL.into());
++    }
++    tempfile::Builder::new()
++        .prefix(".tezbar-install-check-")
++        .tempdir_in(directory)
+         .and_then(|probe| probe.close())
+-        .map_err(|_| "Tezbar cannot update in this folder. Move it to a writable Applications folder, then retry. The verified download has been kept.".into())
++        .map_err(|_| REFUSAL.into())
+ }
+ #[cfg(unix)]
+ fn swap_bundle(staged: &Path, installed: &Path) -> Result<InstalledMac, String> {
+@@ -1114,6 +1130,30 @@ mod lifecycle_tests {
+     }
+     #[cfg(unix)]
+     #[test]
++    fn review_m11_recheck_unwritable_bundle_is_refused_before_quit() {
++        use std::os::unix::{ffi::OsStrExt, fs::PermissionsExt};
++        let d = tempfile::tempdir().unwrap();
++        let installed = d.path().join("Tezbar.app");
++        std::fs::create_dir(&installed).unwrap();
++        std::fs::write(installed.join("identity"), b"old").unwrap();
++        std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o555)).unwrap();
++        let path = std::ffi::CString::new(installed.as_os_str().as_bytes()).unwrap();
++        let allowed_by_os = unsafe { libc::access(path.as_ptr(), libc::W_OK) == 0 };
++        let refused = preflight_macos_install(&installed);
++        // Restore before assertions so even a failing regression cleans its own fixture.
++        std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o755)).unwrap();
++        assert_eq!(refused.is_ok(), allowed_by_os);
++        if !allowed_by_os {
++            assert!(refused
++                .unwrap_err()
++                .contains("verified download has been kept"));
++        }
++        preflight_macos_install(&installed).unwrap();
++        assert_eq!(std::fs::read(installed.join("identity")).unwrap(), b"old");
++        assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
++    }
++    #[cfg(unix)]
++    #[test]
+     fn review_m11_successful_relaunch_removes_old_signed_bundle_directory() {
+         let d = tempfile::tempdir().unwrap();
+         let old = d.path().join("Tezbar.app");
+diff --git a/scripts/native/build.mjs b/scripts/native/build.mjs
+index 63f0694..2a82a82 100644
+--- a/scripts/native/build.mjs
++++ b/scripts/native/build.mjs
+@@ -25,7 +25,9 @@ export function binaryPath(target, options, platform=process.platform) {
+   return join(target, options.release ? 'release' : 'debug', platform==='win32' ? 'tezbar.exe' : 'tezbar')
+ }
+ export function sourceSnapshot(directory=root) {
+-  const git=args=>{const r=spawnSync('git',args,{cwd:directory,encoding:'utf8'});if(r.status!==0) throw Error('Cannot attest native source: Git unavailable');return r.stdout}
++  const git=args=>{const r=spawnSync('git',['--no-optional-locks',...args],{cwd:directory,encoding:'utf8'});if(r.status!==0) throw Error('Cannot attest native source: Git unavailable');return r.stdout}
++  if(realpathSync(git(['rev-parse','--show-toplevel']).trim())!==realpathSync(directory)) throw Error('Cannot attest native source: workspace root differs from Git root')
++  git(['ls-files','--error-unmatch','--','apps/tezbar/build.rs'])
+   const sourceCommit=git(['rev-parse','HEAD']).trim()
+   if(!/^[0-9a-f]{40}$/.test(sourceCommit)) throw Error('Invalid native source commit')
+   const sourceDirty=Boolean(git(['status','--porcelain','--untracked-files=all']).trim())
+diff --git a/scripts/native/provenance.test.mjs b/scripts/native/provenance.test.mjs
+index f155ea5..2f09ba2 100644
+--- a/scripts/native/provenance.test.mjs
++++ b/scripts/native/provenance.test.mjs
+@@ -1,19 +1,19 @@
+ import test from 'node:test'
+ import {sourceSnapshot} from './build.mjs'
+ import assert from 'node:assert/strict'
+-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync,unlinkSync} from 'node:fs'
++import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,cpSync,symlinkSync,unlinkSync} from 'node:fs'
+ import {tmpdir} from 'node:os'
+ import {join} from 'node:path'
+ import {spawnSync} from 'node:child_process'
+ test('real native build script rechecks dependency edits and refuses unattested archives',()=>{
+  const root=mkdtempSync(join(tmpdir(),'tezbar-build-provenance-'))
+  try {
+-  const run=(exe,args)=>{const r=spawnSync(exe,args,{cwd:root,encoding:'utf8',env:{...process.env,CARGO_TARGET_DIR:join(root,'target'),CARGO_INCREMENTAL:'0',TEZBAR_RELEASE_NOTES_PATH:join(root,'notes.md')}});assert.equal(r.status,0,r.stderr);return r.stdout.trim()}
+-  for(const d of ['app/src','dependency/src'])mkdirSync(join(root,d),{recursive:true})
+-  writeFileSync(join(root,'Cargo.toml'),'[workspace]\nmembers=["app","dependency"]\nresolver="2"\n')
+-  writeFileSync(join(root,'app/Cargo.toml'),'[package]\nname="native-provenance-fixture"\nversion="0.0.0"\nedition="2021"\n[dependencies]\ndependency={path="../dependency"}\n')
+-  writeFileSync(join(root,'app/build.rs'),readFileSync(new URL('../../apps/tezbar/build.rs',import.meta.url)))
+-  writeFileSync(join(root,'app/src/main.rs'),'fn main(){println!("{}:{}",env!("TEZBAR_NATIVE_DIRTY"),dependency::value());}')
++  const run=(exe,args,extra={})=>{const r=spawnSync(exe,args,{cwd:root,encoding:'utf8',env:{...process.env,CARGO_TARGET_DIR:join(root,'target'),CARGO_INCREMENTAL:'0',TEZBAR_RELEASE_NOTES_PATH:join(root,'notes.md'),...extra}});assert.equal(r.status,0,r.stderr);return r.stdout.trim()}
++  for(const d of ['apps/tezbar/src','dependency/src'])mkdirSync(join(root,d),{recursive:true})
++  writeFileSync(join(root,'Cargo.toml'),'[workspace]\nmembers=["apps/tezbar","dependency"]\nresolver="2"\n')
++  writeFileSync(join(root,'apps/tezbar/Cargo.toml'),'[package]\nname="native-provenance-fixture"\nversion="0.0.0"\nedition="2021"\n[dependencies]\ndependency={path="../../dependency"}\n')
++  writeFileSync(join(root,'apps/tezbar/build.rs'),readFileSync(new URL('../../apps/tezbar/build.rs',import.meta.url)))
++  writeFileSync(join(root,'apps/tezbar/src/main.rs'),'fn main(){println!("{}:{}",env!("TEZBAR_NATIVE_DIRTY"),dependency::value());}')
+   writeFileSync(join(root,'dependency/Cargo.toml'),'[package]\nname="dependency"\nversion="0.0.0"\nedition="2021"\n')
+   writeFileSync(join(root,'dependency/src/lib.rs'),'pub fn value()->u8{1}')
+   writeFileSync(join(root,'notes.md'),'private fixture notes\n')
+@@ -26,6 +26,29 @@ test('real native build script rechecks dependency edits and refuses unattested
+   assert.equal(run('cargo',command),'true:2')
+   run('git',['add','.']);run('git',['-c','user.name=Fixture','-c','user.email=fixture@localhost','-c','commit.gpgsign=false','commit','-qm','dependency'])
+   assert.equal(run('cargo',command),'false:2')
++  const external=mkdtempSync(join(tmpdir(),'tezbar-untracked-notes-'))
++  try {
++   writeFileSync(join(external,'notes.md'),'external notes\n')
++   assert.equal(run('cargo',command,{TEZBAR_RELEASE_NOTES_PATH:join(external,'notes.md')}),'true:2')
++   assert.equal(run('cargo',command),'false:2')
++  } finally {rmSync(external,{recursive:true,force:true})}
++  // Reuse this real workspace inside an ignored directory of another clean repo.
++  // Git must not attest the outer repository as the native workspace's source.
++  const ignored=mkdtempSync(join(tmpdir(),'tezbar-outer-provenance-'))
++  try {
++   const git=args=>{const r=spawnSync('git',args,{cwd:ignored,encoding:'utf8'});assert.equal(r.status,0,r.stderr)}
++   mkdirSync(join(ignored,'out'))
++   writeFileSync(join(ignored,'.gitignore'),'out/\n')
++   git(['init','-q']);git(['add','.']);git(['-c','user.name=Fixture','-c','user.email=fixture@localhost','-c','commit.gpgsign=false','commit','-qm','outer'])
++   const nested=join(ignored,'out/native')
++   cpSync(root,nested,{recursive:true,filter:path=>path!==join(root,'.git')&&!path.startsWith(join(root,'.git')+'/')&&path!==join(root,'target')&&!path.startsWith(join(root,'target')+'/')})
++   const nestedEnv={...process.env,CARGO_TARGET_DIR:join(ignored,'out/target'),CARGO_INCREMENTAL:'0',TEZBAR_RELEASE_NOTES_PATH:join(nested,'notes.md')}
++   const nestedRun=()=>{const r=spawnSync('cargo',command,{cwd:nested,encoding:'utf8',env:nestedEnv});assert.equal(r.status,0,r.stderr);return r.stdout.trim()}
++   assert.equal(nestedRun(),'true:2')
++   writeFileSync(join(nested,'dependency/src/lib.rs'),'pub fn value()->u8{3}')
++   assert.equal(nestedRun(),'true:3')
++   assert.throws(()=>sourceSnapshot(nested),/workspace root/)
++  } finally {rmSync(ignored,{recursive:true,force:true})}
+   symlinkSync('missing-one',join(root,'broken'))
+   const first=sourceSnapshot(root)
+   unlinkSync(join(root,'broken'));symlinkSync('missing-two',join(root,'broken'))

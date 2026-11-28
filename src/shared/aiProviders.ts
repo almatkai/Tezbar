@@ -1,16 +1,22 @@
-import type { AiModelCapability, AiProviderModel, BuiltInProviderId, LlmConfigRecord, ProviderId } from './llmConfig'
+import type {
+  AiModelCapability,
+  AiProviderModel,
+  BuiltInProviderId,
+  LlmConfigRecord,
+  ProviderId,
+} from './llmConfig'
 
 export const AI_PROVIDER_ROWS: Array<{ id: BuiltInProviderId; title: string; subtitle: string }> = [
   { id: 'openai', title: 'OpenAI', subtitle: 'Official OpenAI API' },
   { id: 'deepseek', title: 'DeepSeek', subtitle: 'DeepSeek V4 Flash and Pro' },
-  { id: 'antigravity', title: 'Antigravity', subtitle: 'Google Antigravity via Pi Agent' },
+  { id: 'antigravity', title: 'Antigravity', subtitle: 'Google Antigravity' },
   { id: 'openai-compatible', title: 'OpenAI Compatible', subtitle: 'Custom OpenAI-style endpoint' },
   { id: 'tokenrouter', title: 'TokenRouter', subtitle: 'TokenRouter OpenAI-compatible gateway' },
-  { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini via OpenAI-compatible API' },
+  { id: 'gemini', title: 'Gemini', subtitle: 'Google Gemini API' },
   { id: 'anthropic', title: 'Anthropic', subtitle: 'Claude via the official API' },
   { id: 'ollama', title: 'Ollama', subtitle: 'Local models on this machine' },
   { id: 'copilot', title: 'GitHub Copilot', subtitle: 'Copilot Chat access token' },
-  { id: 'opencode', title: 'OpenCode', subtitle: 'OpenCode Zen through the CLI/API' },
+  { id: 'opencode', title: 'OpenCode', subtitle: 'OpenCode API' },
 ]
 
 export const AI_CAPABILITIES: Array<{ id: AiModelCapability; label: string }> = [
@@ -29,7 +35,7 @@ export const RECOMMENDED_AI_MODEL: Record<BuiltInProviderId, string> = {
   anthropic: 'claude-haiku-4-5-20251001',
   ollama: 'llama3.2',
   copilot: 'gpt-5-mini',
-  opencode: 'opencode/big-pickle',
+  opencode: 'opencode/gpt-5.4-mini',
 }
 
 export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
@@ -45,12 +51,28 @@ export const DEFAULT_BASE_URL: Partial<Record<BuiltInProviderId, string>> = {
 
 export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[]> = {
   antigravity: [
-    { id: 'gemini-3.8-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'gemini-3.7-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'gemini-3.5-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    {
+      id: 'gemini-3.8-flash',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1048576,
+    },
+    {
+      id: 'gemini-3.7-flash',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1048576,
+    },
+    {
+      id: 'gemini-3.5-flash',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1048576,
+    },
     { id: 'gemini-3.1-pro', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
     { id: 'gemini-2.5-pro', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'claude-sonnet-4-6', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 200000 },
+    {
+      id: 'claude-sonnet-4-6',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 200000,
+    },
     { id: 'claude-opus-4-6', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 250000 },
     { id: 'gpt-oss-120b', capabilities: ['thinking', 'tools'], contextWindow: 131072 },
   ],
@@ -71,21 +93,43 @@ export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[
     { id: 'gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
   ],
 
-  tokenrouter: [
-    { id: 'moonshotai/kimi-k3-free', capabilities: ['tools'], contextWindow: 128000 },
-  ],
+  tokenrouter: [{ id: 'moonshotai/kimi-k3-free', capabilities: ['tools'], contextWindow: 128000 }],
 
   gemini: [
-    { id: 'gemini-3.5-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'gemini-3.1-flash-lite', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'gemini-3.1-pro-preview', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    {
+      id: 'gemini-3.5-flash',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1048576,
+    },
+    {
+      id: 'gemini-3.1-flash-lite',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1048576,
+    },
+    {
+      id: 'gemini-3.1-pro-preview',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1048576,
+    },
     { id: 'gemini-3-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
   ],
 
   anthropic: [
-    { id: 'claude-haiku-4-5-20251001', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 200000 },
-    { id: 'claude-sonnet-5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
-    { id: 'claude-opus-4-8', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
+    {
+      id: 'claude-haiku-4-5-20251001',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 200000,
+    },
+    {
+      id: 'claude-sonnet-5',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1000000,
+    },
+    {
+      id: 'claude-opus-4-8',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1000000,
+    },
     { id: 'claude-fable-5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
   ],
 
@@ -100,25 +144,48 @@ export const DEFAULT_PROVIDER_MODELS: Record<BuiltInProviderId, AiProviderModel[
     { id: 'gpt-5.4', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
     { id: 'gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
     { id: 'gpt-5.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
-    { id: 'claude-haiku-4.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 200000 },
-    { id: 'claude-sonnet-4.6', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
-    { id: 'claude-sonnet-5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1000000 },
-    { id: 'gemini-3.5-flash', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
+    {
+      id: 'claude-haiku-4.5',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 200000,
+    },
+    {
+      id: 'claude-sonnet-4.6',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1000000,
+    },
+    {
+      id: 'claude-sonnet-5',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1000000,
+    },
+    {
+      id: 'gemini-3.5-flash',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1048576,
+    },
     { id: 'gemini-3.1-pro', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1048576 },
     { id: 'mai-code-1-flash', capabilities: ['thinking', 'tools'], contextWindow: 400000 },
     { id: 'kimi-k2.7-code', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
   ],
 
   opencode: [
-    { id: 'opencode/big-pickle', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
-    { id: 'opencode/gpt-5.5', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 1050000 },
-    { id: 'opencode/gpt-5.4-mini', capabilities: ['vision', 'thinking', 'tools'], contextWindow: 400000 },
+    {
+      id: 'opencode/gpt-5.5',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 1050000,
+    },
+    {
+      id: 'opencode/gpt-5.4-mini',
+      capabilities: ['vision', 'thinking', 'tools'],
+      contextWindow: 400000,
+    },
     { id: 'opencode/deepseek-v4-pro', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'opencode/deepseek-v4-flash', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'opencode/deepseek-v4-flash-free', capabilities: ['thinking', 'tools'], contextWindow: 1048576 },
-    { id: 'opencode/mimo-v2.5-free', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
-    { id: 'opencode/nemotron-3-ultra-free', capabilities: ['tools'], contextWindow: 128000 },
-    { id: 'opencode/north-mini-code-free', capabilities: ['tools'], contextWindow: 128000 },
+    {
+      id: 'opencode/deepseek-v4-flash',
+      capabilities: ['thinking', 'tools'],
+      contextWindow: 1048576,
+    },
     { id: 'opencode/kimi-k2.7-code', capabilities: ['thinking', 'tools'], contextWindow: 128000 },
   ],
 }
@@ -127,7 +194,9 @@ export function isCustomProvider(id: ProviderId): id is `custom:${string}` {
   return id.startsWith('custom:')
 }
 
-export function providerRows(config: Pick<LlmConfigRecord, 'customProviders'>): Array<{ id: ProviderId; title: string; subtitle: string }> {
+export function providerRows(
+  config: Pick<LlmConfigRecord, 'customProviders'>
+): Array<{ id: ProviderId; title: string; subtitle: string }> {
   return [
     ...AI_PROVIDER_ROWS,
     ...(config.customProviders ?? []).map((provider) => ({
@@ -138,7 +207,10 @@ export function providerRows(config: Pick<LlmConfigRecord, 'customProviders'>): 
   ]
 }
 
-export function providerTitle(id: ProviderId, config?: Pick<LlmConfigRecord, 'customProviders'>): string {
+export function providerTitle(
+  id: ProviderId,
+  config?: Pick<LlmConfigRecord, 'customProviders'>
+): string {
   return providerRows(config ?? {}).find((provider) => provider.id === id)?.title ?? id
 }
 
@@ -156,36 +228,42 @@ export function defaultBaseUrl(provider: ProviderId): string {
 
 export function isAiProviderConfigured(config: LlmConfigRecord, provider: ProviderId): boolean {
   const models = config.providerModels?.[provider] ?? defaultModels(provider)
-  if (provider === 'ollama' || provider === 'opencode') return models.length > 0
+  if (provider === 'ollama') return models.length > 0
+  if (provider === 'opencode')
+    return Boolean(
+      config.nativeProviderCredentials?.opencode?.hasValue ||
+      config.providerConfigs?.opencode?.apiKey?.trim() ||
+      (config.provider === 'opencode' && config.apiKey?.trim())
+    )
 
   const providerConfig = config.providerConfigs?.[provider]
   const isActiveLegacyProvider = config.provider === provider
   if (provider === 'gemini') {
     const apiKey =
       providerConfig?.geminiApiKey ??
-      (isActiveLegacyProvider ? config.geminiApiKey ?? config.apiKey ?? '' : '')
+      (isActiveLegacyProvider ? (config.geminiApiKey ?? config.apiKey ?? '') : '')
     return Boolean(apiKey.trim())
   }
   if (provider === 'copilot') {
     const token =
       providerConfig?.copilotGithubToken ??
-      (isActiveLegacyProvider ? config.copilotGithubToken ?? '' : '')
+      (isActiveLegacyProvider ? (config.copilotGithubToken ?? '') : '')
     return Boolean(token.trim())
   }
   if (provider === 'antigravity') {
-    return models.length > 0
+    return config.nativeProviderCredentials?.antigravity?.hasValue === true
   }
 
   if (isCustomProvider(provider) || provider === 'openai-compatible') {
     const baseUrl =
       providerConfig?.openaiCompatibleBaseURL ??
       providerConfig?.baseURL ??
-      (isActiveLegacyProvider ? config.openaiCompatibleBaseURL ?? config.baseURL ?? '' : '')
-    const apiKey = providerConfig?.apiKey ?? (isActiveLegacyProvider ? config.apiKey ?? '' : '')
+      (isActiveLegacyProvider ? (config.openaiCompatibleBaseURL ?? config.baseURL ?? '') : '')
+    const apiKey = providerConfig?.apiKey ?? (isActiveLegacyProvider ? (config.apiKey ?? '') : '')
     return Boolean(baseUrl.trim()) || Boolean(apiKey.trim()) || models.length > 0
   }
 
-  const apiKey = providerConfig?.apiKey ?? (isActiveLegacyProvider ? config.apiKey ?? '' : '')
+  const apiKey = providerConfig?.apiKey ?? (isActiveLegacyProvider ? (config.apiKey ?? '') : '')
   return Boolean(apiKey.trim())
 }
 
@@ -193,14 +271,12 @@ export function inferCapabilities(modelId: string): AiModelCapability[] {
   const lower = modelId.toLowerCase()
   const caps: AiModelCapability[] = []
 
-  if (
-    /vision|vl|llava|gpt-4o|gpt-5|gemini|claude|fable|opus|sonnet|haiku/.test(lower)
-  ) {
+  if (/vision|vl|llava|gpt-4o|gpt-[56]|gemini|claude|fable|opus|sonnet|haiku/.test(lower)) {
     caps.unshift('vision')
   }
 
   if (
-    /reason|think|r1|o\d|gpt-5|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek/.test(lower)
+    /reason|think|r1|o\d|gpt-[56]|codex|sonnet|opus|fable|haiku|pro|v4|claude|deepseek/.test(lower)
   ) {
     caps.push('thinking')
   }
@@ -212,7 +288,10 @@ export function inferCapabilities(modelId: string): AiModelCapability[] {
   return Array.from(new Set(caps))
 }
 
-export function normalizeModelList(models: AiProviderModel[], fallbackId: string): AiProviderModel[] {
+export function normalizeModelList(
+  models: AiProviderModel[],
+  fallbackId: string
+): AiProviderModel[] {
   const seen = new Set<string>()
   const normalized: AiProviderModel[] = models
     .map((model) => {
@@ -225,6 +304,8 @@ export function normalizeModelList(models: AiProviderModel[], fallbackId: string
             )
           : inferCapabilities(model.id),
       }
+      if (model.protocol) next.protocol = model.protocol
+      if (model.maxTokens) next.maxTokens = model.maxTokens
       if (typeof model.contextWindow === 'number' && Number.isFinite(model.contextWindow)) {
         next.contextWindow = Math.max(0, Math.round(model.contextWindow))
       }

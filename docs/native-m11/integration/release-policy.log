@@ -1,0 +1,30 @@
+✔ local ad-hoc runtime cannot enter a signed release build (0.428916ms)
+✔ missing provenance cannot enter a signed release build (0.056917ms)
+✔ explicit local previews stay usable (0.368625ms)
+✔ reviewed Developer ID pin permits the remaining signing/notarization gates (0.091292ms)
+✔ darwin/x64 retains its existing runtime/distribution policy (0.038875ms)
+✔ win32/x64 retains its existing runtime/distribution policy (0.028708ms)
+✔ win32/arm64 retains its existing runtime/distribution policy (0.02475ms)
+✔ linux/x64 retains its existing runtime/distribution policy (0.025084ms)
+✔ certificate identity stays fixed while build hashes change (0.975459ms)
+✔ ad-hoc, different-team, different-app, and changed requirements fail closed (0.245875ms)
+✔ beta build preview preserves certificate signing even with --allow-unsigned (31.1495ms)
+✔ distributed macOS builds reject an explicit ad-hoc override before building (28.916833ms)
+﹣ two real certificate-signed builds satisfy the pinned identity, while ad-hoc does not (0.059375ms) # SKIP
+﹣ a hardened certificate-signed process loads extensionless native resources from the same team (0.04725ms) # SKIP
+✔ missing or weakened GitHub environment approval rules fail closed (0.837959ms)
+✔ a private local preview can start on Stable without enabling unsigned Stable publication (0.692458ms)
+✔ channels cannot be confused by semver precedence (0.217958ms)
+✔ all channels keep the same installation and preserve normal upgrades (0.090208ms)
+✔ release promotion follows the channel hierarchy and never rolls it back (0.34125ms)
+✔ wrong feeds, identities, assets, and rollbacks are rejected (0.132375ms)
+✔ actual signatures and post-verification artifact hashes are enforced (3.104959ms)
+✔ a complete release requires matching signed receipts for every platform (3.073459ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 98.473166

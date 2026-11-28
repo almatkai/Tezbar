@@ -2,7 +2,9 @@ import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node
 import { join, basename } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { transformSync } from 'esbuild'
-import { LOVED_EXTENSIONS } from '../../src/shared/lovedExtensions'
+import type { ExtensionManifest } from '../../src/shared/extensions'
+import lovedCatalog from '../../crates/tezbar-core/src/extensions/loved_extensions.json'
+const LOVED_EXTENSIONS = lovedCatalog as unknown as ExtensionManifest[]
 const root = process.env.TEZBAR_CATALOG_ROOT || '/tmp/tezbar-full-catalog-audit'
 vi.mock('@tezbar/desktop-runtime', () => ({
   app: { isPackaged: false, getPath: () => root, getAppPath: () => process.cwd() },

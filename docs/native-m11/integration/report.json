@@ -1,0 +1,1270 @@
+{
+  "base": "05133210b78f125b83ffdf2482e09e72533ff219",
+  "branch": "feat/native-gpui-app",
+  "freeze": "final-source-freeze.json",
+  "aggregate_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+  "hashed_inputs": 597,
+  "binary": "binary.json",
+  "owned_files": "owned-files.json",
+  "case_map": "case-map.json",
+  "ports": "ports-and-ownership.md",
+  "gate_receipts": {
+    "matched-check": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 3.02,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "cd3ae555c1cbb8efec53295703ff4bd08bc52c861951cec31310ca1b15233d4a"
+    },
+    "packaging-node-03": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/native/package-macos.test.mjs",
+        "scripts/native/nsis-template.test.mjs",
+        "scripts/native/build.test.mjs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.12,
+      "inputs_sha256": "fc8f4f2a1d864be859e97f97c10c07adb49e2b3865c7b535aef36022cb5068d0",
+      "changed_inputs": [],
+      "log_sha256": "326cb2507aee8d3525495798922c121e6a573bea732bfc5472e3bc84a6a96e53"
+    },
+    "final-updater": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-update",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 2.33,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "f229684d4ce11db288cc59241f19d365e08231a957db0ad261c808f39761dba0"
+    },
+    "normal-native-final": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 101,
+      "seconds": 4.14,
+      "inputs_sha256": "729e53bdfa52e9e913c70e6dc9f5f9ce380ce9aedc351d8f8f77c227083a960d",
+      "changed_inputs": [],
+      "log_sha256": "31b7450b75dfb2b7250de2d66b2ad5c776d8fb284553e10bacddb6cfbbccc1c7"
+    },
+    "owned-format": {
+      "command": [
+        "rustfmt",
+        "+1.98.1",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "apps/tezbar/src/app/m11.rs",
+        "apps/tezbar/src/app/production_launch.rs",
+        "apps/tezbar/src/app/update_integration.rs",
+        "apps/tezbar/src/legacy_state/mod.rs",
+        "apps/tezbar/src/legacy_state/leveldb.rs",
+        "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+        "apps/tezbar/src/legacy_state/tests.rs",
+        "apps/tezbar/src/legacy_state/webkit.rs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.06,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "diff": {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.04,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "final-native": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 49.54,
+      "inputs_sha256": "4ece8998014459bc5c9c22a2cf798a25eba0f0c178c122aa21c417a1ffbf6133",
+      "changed_inputs": [],
+      "log_sha256": "f9b8028f79283dc67c5119a294431f31080be1318475068e321fda0d2105da39"
+    },
+    "host": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-host",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 20.79,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "d5433c5eef9118ec2c893e71e6bf7d8ce022048178005376fcff8833d3d99bc6"
+    },
+    "models": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--lib",
+        "--features",
+        "launcher-models,agent-models",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 13.69,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "e24d93fcffa75d439c818cfc4f650f4a0ddd044035867d94f3a539b7a23d5241"
+    },
+    "msrv-update": {
+      "command": [
+        "env",
+        "CARGO_TARGET_DIR=target/msrv-m09",
+        "cargo",
+        "+1.85.0",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-update",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 7.67,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "d43f400d1ee725db8acd28cf083ff0b2bc9524a602357bda0ab9ad335ad18c32"
+    },
+    "matched-tree": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "tree",
+        "--locked",
+        "--offline",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--edges",
+        "normal"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.27,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "aa9f416a7ae25496406f0dd376b6b1c5bd15696212176657325c84472c436b83"
+    },
+    "final-release-policy": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/release-policy.test.mjs",
+        "scripts/embedding-runtime-policy.test.mjs",
+        "scripts/macos-signing.test.mjs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.15,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "8182e7bcf2e73d8ac523117515d9ef9182c3031931c6e14f3b88bb5dd81004e4"
+    },
+    "matched-ui": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 3.59,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "a7275352d9af10abdc6db3acfc9c1fc82220f4f961603e6e1d132a21c2f022e4"
+    },
+    "packaging-node-02": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/native/package-macos.test.mjs",
+        "scripts/native/nsis-template.test.mjs",
+        "scripts/native/build.test.mjs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 1,
+      "seconds": 0.1,
+      "inputs_sha256": "cb4b78be3ee56a493826bb7ad526216d59f6adfadc7fa16620a147bfbdfebb3b",
+      "changed_inputs": [],
+      "log_sha256": "4faab5091a94bfa127566b5621375535fcc94a340304b75a7c4784889a43f51b"
+    },
+    "core-host-port": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "platform::tests::host_",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 1.08,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "18a5a018833fcb882134a1c81e5b7dcdeaf2e930e3e1c47a262db58b100db4b1"
+    },
+    "normal-native": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 53.0,
+      "inputs_sha256": "34b6ab5b773a80e7d770a0e93635ccb5cc1ced6100e9a9e0556065d54ab10fd0",
+      "changed_inputs": [],
+      "log_sha256": "220fc2f5163d85cc82d5d83a22497ec7745ed67fa222fd40cec21778d3e01011"
+    },
+    "closure-native": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 49.69,
+      "inputs_sha256": "a2197a53c2566ee71774bee99477f7500d2cbce132b46158b5af0ecfae4deba4",
+      "changed_inputs": [],
+      "log_sha256": "71ce7d678db7fd9ec5aacb4cfd2649e7dfdfb1fd45dc9eccdbde798f2ef44f9a"
+    },
+    "final-lock-drift": {
+      "command": [
+        "/opt/homebrew/bin/python3",
+        "scripts/native/lock-drift.py"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.15,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "9626d0576111e4952dc859ad9616d28bdb5e41d2160c3ed3f624020fe27a7d83"
+    },
+    "final-packaging": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/native/package-macos.test.mjs",
+        "scripts/native/nsis-template.test.mjs",
+        "scripts/native/build.test.mjs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.12,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "c7c669142fceebfbeadbca7520b180801d3cdd29e6b13f57cd9452b996d6f8c7"
+    },
+    "msrv-check": {
+      "command": [
+        "env",
+        "CARGO_TARGET_DIR=target/msrv-m09",
+        "cargo",
+        "+1.85.0",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "-p",
+        "tezbar-host",
+        "-p",
+        "tezbar-update",
+        "-p",
+        "tezbar-ui-model",
+        "--all-features"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 11.7,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "52ffed80cd43be73e448384f61a0d4bc1e5976603531c9ae75aa5cd442c93ad0"
+    },
+    "normal-native-final-03": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 51.72,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "fbfc23885545ec6c0b895559beda37f45f06aaf3d105a46235a5778b87137976"
+    },
+    "normal-native-final-02": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 101,
+      "seconds": 4.57,
+      "inputs_sha256": "5826bf05ba9e9c414c91f017e4319c399bb67feb2b672553249b4a8dc4a87429",
+      "changed_inputs": [],
+      "log_sha256": "b207b35690a32b7ba4bb8d3bc42977399837e879ab59c2b97650d46c91bbfa01"
+    },
+    "updater": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-update",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 2.85,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "1a852cecdbfb4e349ea1c4343f689f5fcdabb08d0898259018fdd681a863d893"
+    },
+    "matched-native": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 43.02,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "eff287b47113e3b718dbc816f47cbba76b019c8f72b0da145a1e54334dd73dff"
+    },
+    "matched-build": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 5.57,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "85b19c953c67ef90332da288e1a6440135f0f6c81f4174c0f5cc4c9af2a528da"
+    },
+    "matched-model": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--lib",
+        "--features",
+        "launcher-models,agent-models",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 3.84,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "c5e9210f5ff9ba41c94c4091e074f5f08b43e1e067ef94a1d4614230c4f1e034"
+    },
+    "bench-native": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders,bench-control",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 54.34,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "71f7360dc64f97447bd5afbc1740da9a0e2ea5559713746df34de7ca441687e0"
+    },
+    "ui": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 4.6,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "96c43acd17219a727abb2bd0cad2c8a7c101fb24c609ad1941b1df0c9c347d86"
+    },
+    "lock-drift": {
+      "command": [
+        "/opt/homebrew/bin/python3",
+        "scripts/native/lock-drift.py"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.15,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "9626d0576111e4952dc859ad9616d28bdb5e41d2160c3ed3f624020fe27a7d83"
+    },
+    "final-msrv-check": {
+      "command": [
+        "env",
+        "CARGO_TARGET_DIR=target/msrv-m09",
+        "cargo",
+        "+1.85.0",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "-p",
+        "tezbar-host",
+        "-p",
+        "tezbar-update",
+        "-p",
+        "tezbar-ui-model",
+        "--all-features"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 1.19,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "f0f0bca3e03f6b2d6f25ae3d5e74889a705b644d8288252274a688382360e67a"
+    },
+    "packaging-node": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/native/package-macos.test.mjs",
+        "scripts/native/nsis-template.test.mjs",
+        "scripts/native/build.test.mjs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 1,
+      "seconds": 0.13,
+      "inputs_sha256": "e24128c4cb8509fc009087fac9ad1b2810028e1eff727d69caaf4770adeec484",
+      "changed_inputs": [],
+      "log_sha256": "3b0c9ec591a36fd3f6ff6d70cc28fe0b613071deb01d57ff24f7d0e1ac9e0502"
+    },
+    "debug-build": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 18.83,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "325885bd7309bf556fb690dd21d81f264461bc7a6edfd9ae6ed0e2ab3cce6ac1"
+    },
+    "final-msrv-updater": {
+      "command": [
+        "env",
+        "CARGO_TARGET_DIR=target/msrv-m09",
+        "cargo",
+        "+1.85.0",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-update",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 1.64,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "61529af972d88968b9c66de7cb6e910792a968099b5954d6b26aba3f2ddcf6d8"
+    },
+    "worker-smoke": {
+      "command": [
+        "pnpm",
+        "exec",
+        "tsx",
+        "scripts/test-extension-worker.ts"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 1.76,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "cb337cf47d3719e4ba24f6b60f3ee867d94732e1d93e392fc8dbfc06c59bf63e"
+    },
+    "release-policy": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/release-policy.test.mjs",
+        "scripts/embedding-runtime-policy.test.mjs",
+        "scripts/macos-signing.test.mjs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.15,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "39a4271fbd0c2f80a764356ef1ef30f0caf3ea3c6648d929875684cf585c314e"
+    },
+    "msrv-model": {
+      "command": [
+        "env",
+        "CARGO_TARGET_DIR=target/msrv-m09",
+        "cargo",
+        "+1.85.0",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui-model",
+        "--all-features",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 3.65,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "df9c7cff9446c23cc9ac403f62f64d1b993029ab5991887d253dec5e30d10c71"
+    },
+    "normal-link-tree": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "tree",
+        "--locked",
+        "--offline",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders",
+        "--edges",
+        "normal"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.28,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "aa9f416a7ae25496406f0dd376b6b1c5bd15696212176657325c84472c436b83"
+    },
+    "typecheck": {
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 4.83,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "1d45c83f8a91ef2d19b755f296f3910c679410026cac1c0b10517b2a930da3bd"
+    },
+    "matched-diff": {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.04,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "core-worker": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extension_worker::tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.34,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "aeb37864ec011a20b612266d0520014978581640d29b6e5645f5359cfdd7f770"
+    },
+    "focused-updater": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "app::update_integration",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 25.48,
+      "inputs_sha256": "70b5268a27f627f7583b2ad9a482e5d09b6465bb89cf185b9668fd6ded6fb08c",
+      "changed_inputs": [],
+      "log_sha256": "d033f0dec5fe6ca0bfa9572daeb1a6bc923174bde1f59bff42c22169bc95a987"
+    },
+    "matched-bench": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders,bench-control",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 36.51,
+      "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+      "changed_inputs": [],
+      "log_sha256": "e394b39ade3989d733ccca1fb918ac0d9e7bba32b4ed4ee34cca160ead49628f"
+    },
+    "typescript": {
+      "command": [
+        "pnpm",
+        "test",
+        "--maxWorkers=2"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 14.8,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "ce86a9420dced1c4b7800a81ec943b8cbe21305c7e2314c759d28c9d8d473dfe"
+    },
+    "packaging-final": {
+      "command": [
+        "node",
+        "--test",
+        "scripts/native/package-macos.test.mjs",
+        "scripts/native/nsis-template.test.mjs",
+        "scripts/native/build.test.mjs"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 0.12,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "6a633b6306f12c649a4f373b9b67e82c0a169e712225a699c2e45541a65b4173"
+    },
+    "normal-check": {
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--features",
+        "runtime-shaders"
+      ],
+      "environment": {
+        "CARGO_BUILD_JOBS": "2",
+        "RUST_TEST_THREADS": "2",
+        "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+        "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+        "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+        "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+      },
+      "exit_code": 0,
+      "seconds": 6.27,
+      "inputs_sha256": "6d0abb6f9caced5034f8c49ae8fc4cc414a679262d1463aa09074736cac8cfe1",
+      "changed_inputs": [],
+      "log_sha256": "7b8bcc82065bd0924882ba56c593fca1a921d9794d69f81b5ffae702ae7f4cce"
+    }
+  },
+  "source_historical_documents_unchanged": 34,
+  "acceptance": false,
+  "m9_root_patch_pending": true,
+  "cargo_ownership": "No Cargo running at handoff; no further source/Cargo work until the root patch is delivered.",
+  "unstaged": true,
+  "committed": false
+}

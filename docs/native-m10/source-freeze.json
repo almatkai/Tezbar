@@ -1,0 +1,85 @@
+{
+  "status": "unexported source-only; NOT compiled/tested/parity-complete",
+  "head": "409dbf3c5950b0065aff900b2906b548660bc264",
+  "branch": "feat/native-gpui-app",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "source": [
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/ime.rs",
+      "sha256": "02a238ecfc07bef89e76b7acec2f9fd65665919bd055d1b87f918e01d268989d",
+      "bytes": 6352
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/input.rs",
+      "sha256": "2dc8a2ff89003f2625ea81b80413988e7c8c111b21d8a384d56ddcc1282bfce2",
+      "bytes": 7087
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/mod.rs",
+      "sha256": "6f4a1570203327d600e960b8acea4a369f456dbaac1508cb0ed1ca318ef01ee8",
+      "bytes": 12710
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/request.rs",
+      "sha256": "57b0b121ced5aea2ea795b9effbd8916c22b4fa320e236be8292de5478597fe2",
+      "bytes": 5080
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/state.rs",
+      "sha256": "975cfaf7efd4f7c55e1f584ce936cad01d54ef1e00ef1f0ec4ceed9870518313",
+      "bytes": 28518
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/tests.rs",
+      "sha256": "cb90eecc37897d35a30f9155a0c0c3b9bf7f92601bb643757a8541ae4e4f42db",
+      "bytes": 23017
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/terminal/view.rs",
+      "sha256": "6c5f23fffe68e8800f4c35aac295565081f0a318bb95e1b505113a0f6e0673d1",
+      "bytes": 16691
+    },
+    {
+      "path": "crates/tezbar-ui/src/terminal_grid.rs",
+      "sha256": "3fee69a9f8ea26cd2f8659fd8174c990a17794019a3327bc5544c6d2f9deab18",
+      "bytes": 26889
+    }
+  ],
+  "rustfmt": {
+    "argv": [
+      "rustfmt",
+      "--check",
+      "--edition",
+      "2024",
+      "--config",
+      "skip_children=true",
+      "apps/tezbar/src/surfaces/terminal/ime.rs",
+      "apps/tezbar/src/surfaces/terminal/input.rs",
+      "apps/tezbar/src/surfaces/terminal/mod.rs",
+      "apps/tezbar/src/surfaces/terminal/request.rs",
+      "apps/tezbar/src/surfaces/terminal/state.rs",
+      "apps/tezbar/src/surfaces/terminal/tests.rs",
+      "apps/tezbar/src/surfaces/terminal/view.rs",
+      "crates/tezbar-ui/src/terminal_grid.rs"
+    ],
+    "exit": 0,
+    "log": "docs/native-m10/source-rustfmt.log",
+    "sha256": "9390c827b79e4298b66ef35b0103fbcaef5f2d064a2aa4559d81db6b49fa3036",
+    "meaning": "syntax/format only, not typecheck"
+  },
+  "cargo_test_build_executed": false,
+  "new_tests_executed": false,
+  "subagents_spawned": false,
+  "source_files_exported_observation": {
+    "crates/tezbar-ui/src/lib.rs": false,
+    "apps/tezbar/src/lib.rs": false
+  },
+  "write_scope": [
+    "apps/tezbar/src/surfaces/terminal/**",
+    "crates/tezbar-ui/src/terminal_grid.rs",
+    "docs/native-m10/**"
+  ],
+  "shared_changes_authored_by_m10": [],
+  "reference_hashes_verified": true,
+  "pending": "Parent release of finite dependency/exports/adapter/App/window seams in integration.md; raw-byte and bounded replay/batch core dependencies; manual/final gates"
+}

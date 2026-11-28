@@ -1,0 +1,188 @@
+{
+  "utc": "2026-11-07T01:12:40.883352+00:00",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "base": "b739b4ebdf90d906f67efa00a4a9c523fdc58f83",
+  "dirty": true,
+  "report": {
+    "path": "docs/native-m08/reviews/OPUS_b739b4e.md",
+    "sha256": "feca773561c9f3c3f571bbe86f102be7b6f98d1002bd3cfdaa912d75b9eff269"
+  },
+  "source_freeze_files": 322,
+  "source_freeze_sha256": "96279b0c923d773c75c953aaeed3d56ecdd4a06f4c79056a0dbde6518d2b6ffb",
+  "source_files": {
+    "Cargo.lock": "b07020a5671873c8385d9174f8dd992af157cc35440138ac3825b1cf8101e517",
+    "apps/tezbar/Cargo.toml": "616d6f3277a26ea9aab3de5cdc3b56f9c1f24ff16e27053f49264a592a60b6d5",
+    "apps/tezbar/src/app.rs": "d9385c9589e80ae3b264ed88c0f2476ca6cea3cf81e321ff662b9a734318dd0a",
+    "apps/tezbar/src/asset_transport.rs": "007e8ec746f391f746c1b1351a59077a7674f6d200317ee2147727b16112eefb",
+    "apps/tezbar/src/asset_transport_tests.rs": "53762863de82662d48bb580c5b60f5fac05f62ba2feecf164eb431b51f0392df",
+    "apps/tezbar/src/surfaces/ai_chat/mod.rs": "fa8ab132ab9e92d24c2a70330d54ce4c8bf12abbd845cb25b7a6fd0dce81ccd0",
+    "apps/tezbar/src/surfaces/ai_chat/runtime.rs": "58987e83505a4ab766698b57ac9b5b6527703b7a5c2fbdb79a81fe96e95827c7",
+    "apps/tezbar/src/surfaces/ai_chat/tests.rs": "d55ceff138e1a963208d8006135539fd9fc76bff9684c55faa3995036c5874d2",
+    "crates/tezbar-core/src/assets.rs": "34bd87b8248bc43ded79f1195cb24fa11542b76d020e4ff3b7ee5c586fa02f81",
+    "crates/tezbar-core/src/assets_windows.rs": "7c57db95f1698139d722662e2a2328bbd5f7f016d955318e5ea1545a8baeb80e",
+    "crates/tezbar-core/src/extensions/asset_scope.rs": "f7b57e88757e06f1bffa1c41470519abd794a243fc7010010c2c90dcd4e50a86",
+    "crates/tezbar-core/src/terminal/pty.rs": "e58388273a44f9e7bec3d5c02fa1b2a32e962d658d118053e3d796c9e9a0a055"
+  },
+  "gates": {
+    "bench-final.log": {
+      "sha256": "768856d636d99ed9d0babf3115825f3470dfdb6a31cbf5d248718b43bdefbfcb",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 324,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "bench-frozen-final.log": {
+      "sha256": "3871437862d740325133e86f920ee1f77841ce1f56d911d7c1129b5d484515a5",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 325,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "build-frozen-final.log": {
+      "sha256": "77fd58b0e33620afbde43c96aaf5a15cfdd595d741d474f73f07c331a4ae80eb",
+      "test_results": []
+    },
+    "check-final.log": {
+      "sha256": "24bdc8ead34228b1da528365a301735d70a0b23ccd5977017f62856a2ab7c854",
+      "test_results": []
+    },
+    "check-frozen-final.log": {
+      "sha256": "3da7dfd44a93aa75e29b81920237fcbc9583734cf050f27af8e77f5a67d95284",
+      "test_results": []
+    },
+    "core-assets-final.log": {
+      "sha256": "1b43712ccbe5a857dca980a348fd669beea969ecb8dca943d72dbdd685cf978c",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "core-msrv-final.log": {
+      "sha256": "d5773fb64e42fd9702b6cb7b5cde7d2d804f71a0a7b78c8085ef2e5c869d795b",
+      "test_results": []
+    },
+    "core-registry-final.log": {
+      "sha256": "aad8b27baaf788d9345dbf763c1dc6b9724ce9c7985d408fb54e015afd777136",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "green-1.log": {
+      "sha256": "63ea3b25f63759faf122fdb1c84425be845c1c45c6da9ba087a561138d62a081",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "green-2.log": {
+      "sha256": "9568ac94783fb42eb0847a617ecc316a160380c832a83d4cbd071dfc3cc0a8f0",
+      "test_results": [
+        {
+          "state": "FAILED",
+          "passed": 11,
+          "failed": 1,
+          "ignored": 0
+        }
+      ]
+    },
+    "legacy-green.log": {
+      "sha256": "cbf6a17bb31030b69b11ee24f3d25a5c9dc930d055a5f97978a23e8685e848ca",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "native-final.log": {
+      "sha256": "1e5eede1aef528e0f2f552265f1d0bf3a774c684e202341b8ddb45123b616f7e",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 323,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "native-frozen-final.log": {
+      "sha256": "4e880b39e814d224af8adeeaf11d0d63de0a3256043ba15bd503aaa4f5ccb8b0",
+      "test_results": [
+        {
+          "state": "ok",
+          "passed": 324,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "normal-tree.log": {
+      "sha256": "b1dfc442ed54f0002b193b757513a299076fb647a16116622bd09bc2a79eb98e",
+      "test_results": []
+    },
+    "red.log": {
+      "sha256": "d975c8c08a0add8163830b201c774f534362f17ac5b6eb24d79e38286b760ab5",
+      "test_results": [
+        {
+          "state": "FAILED",
+          "passed": 5,
+          "failed": 4,
+          "ignored": 0
+        }
+      ]
+    }
+  },
+  "artifact": {
+    "path": "/tmp/tezbar-native-m8-second-repairs/tezbar-normal-preview",
+    "bytes": 206367224,
+    "sha256": "d19f05a2df2b24adf5fad86bfcb5036d6d080ae64b56d23fa73cd30f34d8c451",
+    "metadata": {
+      "version": "0.3.0-beta.7",
+      "source": "b739b4ebdf90d906f67efa00a4a9c523fdc58f83",
+      "dirty": "true",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true,
+      "bench_control": false
+    },
+    "gui_launched": false,
+    "only_execution": "--version",
+    "no_webkit": true,
+    "normal_tree_no_tauri_wry_tao": true
+  },
+  "lock": {
+    "registry_package_versions_and_checksums_unchanged": true,
+    "only_new_edge": "tezbar-native dev dependency sha2 0.10 (already locked)"
+  },
+  "limits": [
+    "Windows-only code and ConPTY fixture not compiled or run on macOS",
+    "No fresh Opus closure yet",
+    "No GUI, live providers, credentials, production profiles, clipboard, GPU or RAM validation",
+    "UI57/models379 unchanged and not rerun in this round"
+  ]
+}

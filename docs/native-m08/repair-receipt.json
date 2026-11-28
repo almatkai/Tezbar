@@ -1,0 +1,357 @@
+{
+  "utc": "2026-11-07T00:16:57.379723+00:00",
+  "head": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+  "branch": "feat/native-gpui-app",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "dirty": true,
+  "staged": false,
+  "source_freeze": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+  "source_inputs": 359,
+  "owned_manifest": "repair-owned-files.json",
+  "owned_source_files": 42,
+  "artifact": {
+    "binary": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/tezbar",
+    "bytes": 206257880,
+    "sha256": "17aeb727fd060dcd31b34e1c8bff98c5614201a3b2c1103b333815a551195e0e",
+    "version": {
+      "version": "0.3.0-beta.7",
+      "source": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+      "dirty": "true",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true,
+      "bench_control": false
+    },
+    "source_freeze": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+    "source_inputs": 359,
+    "dirty": true,
+    "gui_launched": false,
+    "only_binary_execution": "--version (returns before app construction)",
+    "normal_tree_has_tauri_wry_tao": false,
+    "otool_has_webkit": false
+  },
+  "gate_attempts": 33,
+  "gate_results": {
+    "native-final": {
+      "exit": 101,
+      "source": "0f32eae128203efab07893c45b7df3e36a3e50e7711527f87daf642edf28b800",
+      "test_counts": {
+        "passed": 310,
+        "failed": 2,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/native-final.log"
+    },
+    "native-retry": {
+      "exit": 0,
+      "source": "a57e816b4e86ac00190a629eefb6f6d6dd2bef9adf80e9020877e68d8d682c5c",
+      "test_counts": {
+        "passed": 312,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/native-retry.log"
+    },
+    "nb1-red": {
+      "exit": 101,
+      "source": "f50e0a2cf3affb00172f3858fa0838008a8d3badfb720c5592d38a7b2bbb3366",
+      "test_counts": {
+        "passed": 1,
+        "failed": 3,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/nb1-red.log"
+    },
+    "nb1-green": {
+      "exit": 0,
+      "source": "ef59e6c0a64dd68a596adc3dc462026d95157a982ccc5713d960798a3d9ce5b4",
+      "test_counts": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/nb1-green.log"
+    },
+    "settings-final": {
+      "exit": 0,
+      "source": "ef59e6c0a64dd68a596adc3dc462026d95157a982ccc5713d960798a3d9ce5b4",
+      "test_counts": {
+        "passed": 49,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/settings-final.log"
+    },
+    "onboarding-final": {
+      "exit": 0,
+      "source": "ef59e6c0a64dd68a596adc3dc462026d95157a982ccc5713d960798a3d9ce5b4",
+      "test_counts": {
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/onboarding-final.log"
+    },
+    "review-closure-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/review-closure-final.log"
+    },
+    "revision-rejection-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/revision-rejection-final.log"
+    },
+    "native-final-nb1": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 316,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/native-final-nb1.log"
+    },
+    "bench-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 317,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/bench-final.log"
+    },
+    "ui-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 57,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/ui-final.log"
+    },
+    "core-assets-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-assets-final.log"
+    },
+    "core-asset-scope-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-asset-scope-final.log"
+    },
+    "core-history-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-history-final.log"
+    },
+    "core-selection-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-selection-final.log"
+    },
+    "core-stream-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-stream-final.log"
+    },
+    "core-isolated-pty-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-isolated-pty-final.log"
+    },
+    "core-terminal-bridge-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-terminal-bridge-final.log"
+    },
+    "core-terminal-policy-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-terminal-policy-final.log"
+    },
+    "model-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 379,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/model-final.log"
+    },
+    "core-msrv-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/core-msrv-final.log"
+    },
+    "model-msrv-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/model-msrv-final.log"
+    },
+    "core-assets-msrv-final": {
+      "exit": 0,
+      "source": "84313f28287dcc91dd845590ed4d3a53cd0bb2a4aa37081b304b99c946f310ea",
+      "test_counts": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/core-assets-msrv-final.log"
+    },
+    "attachment-queue-final": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/attachment-queue-final.log"
+    },
+    "native-frozen-final": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": {
+        "passed": 316,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/native-frozen-final.log"
+    },
+    "bench-frozen-final": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": {
+        "passed": 317,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "docs/native-m08/repair-logs/bench-frozen-final.log"
+    },
+    "check-final": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/check-final.log"
+    },
+    "build-normal-final": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/build-normal-final.log"
+    },
+    "normal-tree": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/normal-tree.log"
+    },
+    "metadata": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/metadata.log"
+    },
+    "linkage": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/linkage.log"
+    },
+    "normal-version": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/normal-version.log"
+    },
+    "diff-check-final": {
+      "exit": 0,
+      "source": "32ecb7394c511ac9f344203588c21d1be35b38b9cbc2599d3b7b02c8cccdd5b9",
+      "test_counts": null,
+      "log": "docs/native-m08/repair-logs/diff-check-final.log"
+    }
+  },
+  "expected_red": [
+    "native-final (two original final-drain API callers; implementation API repaired, assertions unchanged)",
+    "nb1-red (parent tests-only patch:3 failed,1 passed)"
+  ],
+  "unresolved_local_gate_failures": [],
+  "parent_nb1_exact_after_hashes": {
+    "apps/tezbar/src/surfaces/settings/store.rs": "f1359b7e04c9358de74a05839bdd0708f1288ee93326f6b7536e8b0bd9254873",
+    "apps/tezbar/src/surfaces/settings/tests.rs": "dc0fdaf2d3bc539ac6e8ded567adf9507af9462353a8888ea24ac71610f5c68d",
+    "apps/tezbar/src/surfaces/onboarding.rs": "f3abf4d89fb98591502afc1146c1c374161c185e5d5b541986292120d865161f"
+  },
+  "final_test_only_delta_from_component_freeze": [
+    "apps/tezbar/src/surfaces/ai_chat/tests.rs"
+  ],
+  "component_gate_inputs_unchanged_after_that_delta": true,
+  "remaining_acceptance": [
+    "fresh parent Opus: require zero actionable findings before acceptance",
+    "real Windows handle traversal/symlink/junction/legacy race harness; Mac does not establish Windows pass",
+    "real Windows ConPTY and macOS/Windows IME/AX, GPU, window placement, keepalive/quit manual matrix",
+    "RAM and100-cycle retained-view measurements",
+    "M9/M11 and full migration remain pending"
+  ],
+  "forbidden_actions_performed": false,
+  "model_source_changed": false,
+  "typescript_source_changed": false,
+  "typescript_suites_repeated": false,
+  "subagents_spawned": false
+}

@@ -1,0 +1,3 @@
+Initial final-map assembly failed on a retained case with no rust_test_filter:
+TypeError: 'in <string>' requires string as left operand, not NoneType
+Preserve unmapped cases and count them honestly; only non-null filters can have matching execution evidence.

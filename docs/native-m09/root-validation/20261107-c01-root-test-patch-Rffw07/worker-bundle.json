@@ -1,0 +1,197 @@
+{
+  "prepared": {
+    "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD",
+    "bundle": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources/dist-backend",
+    "seed": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/seed",
+    "workerEntry": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/src/main/extensionWorker/main.ts"
+  },
+  "firstparty_graph": {
+    "src/main/extensionWorker/framing.ts": "5cb589a0d2d5c5e63d1e22c6b47f4b60a21482bca943b140cfec64752423b05c",
+    "src/main/extensionWorker/host.ts": "1006d76af9c6eee74aff897c92fae1861d0d011e142b9cdc42442356aef5567e",
+    "src/main/extensionWorker/services.ts": "27aa655c915ace0f74fe71a23411c428e70419ebb5106980b8030cd7422d870a",
+    "src/shared/extensionRepository.ts": "eca9e562f40ebf95692001e02fb49acb1fd0363b7ec10682a3f9eecd4eb35b90",
+    "src/main/extensionWorker/desktop.ts": "3d9142c2f358a9d13677d9580d6c6975f18e42c9260af4fd4565899f4f77f8c2",
+    "src/main/better-sqlite3-shim.ts": "003285d02b563474ccaabdd3af9daccc82ab8ea0df12a1b212097d81e18a1714",
+    "src/main/extension-sql.ts": "57d05d54c3e6ae526a4c12d0e7253ddcb79f7b3574767fbdd87ec7432eb36ec7",
+    "src/main/extensionWorker/clipboard.ts": "b8ff17943545b6f56e7e8fdbdd419ffd53354de0b8ec9634766063264e0e9c6b",
+    "src/main/extension-confirm-alert.ts": "fb3dc3eeaaddc759b83a6e8e74878f03982d7e1c3c12767bf21a803426f6be11",
+    "src/main/powershell-script.ts": "d3d98fbbe3382a2124bbe9a5b87c3424291cc6a28e52d1614812c6f415cc95c8",
+    "src/main/esbuild-runtime.ts": "cb5139a6127fdae73d061e6e0e7fe1124b0fb3f9c557e338f3fc019ac925e318",
+    "src/main/extensionWorker/windowState.ts": "ad1b617749efea3c5f9d6d457cb0a74106ca644c6ca5d1dda88197a00b181a07",
+    "src/main/extension-platform.ts": "45da9ecd8fbabc99527cf3955c22ab371ba0aa0fcd839a6930c35cffde231db7",
+    "src/main/extension-builder.ts": "eb27592a5faf84872d1bed32438b4032ecec633f66009e6c6ad57b9f25fb2877",
+    "src/main/extension-api.ts": "ae4efa46b600bf12f396c56d3916a43e561bc6101fc78481868afff931a26a1c",
+    "src/main/bun-manager.ts": "069efe2fa96a819e49b2d0de111cc1992bfb4968d94872aeaa73592ca9a490a8",
+    "src/shared/lovedExtensions.ts": "93abc8a2e814dc56b964b205f1ab9d05d77435568c765f59656ee14b6533fb11",
+    "src/main/extension-registry.ts": "a92d43fc79748e6bae7aec81cdb19af03b435c5106aba600d77025624c247606",
+    "src/main/extension-runner.ts": "281930b84b6677c172257c31076ef018a76d44b36187bcb88e4dce19f10aa46c",
+    "src/main/extensions/raycastShim.ts": "3d14e9c0002312455fcdd5008c3bcdb2abee6b4dda26100d605b509ac0271f11",
+    "src/main/extensions/service.ts": "cbecfd493153490b6f29f95725e3723307050117cb82afabfe32717d8089440a",
+    "src/main/extensionWorker/main.ts": "20f0fbd84c739081858c5bde725d8698e4fffc2f56e636fe8f8e9e1bca1b905b"
+  },
+  "resources": {
+    "prepared.json": {
+      "sha256": "ed820c51543430a39de4756b29a14927c4a04c958144ab00c9a100cacc098c7d",
+      "bytes": 415
+    },
+    "resources/dist-backend/extension-worker.js": {
+      "sha256": "272a8ca2a89a954b5109245eb09b878209b4ab9bb85e02121038b48798381039",
+      "bytes": 433582
+    },
+    "resources/dist-backend/extension-worker.js.map": {
+      "sha256": "606058700ccff00ea9fcc135bdb16a0b3648f43d2a151da15cb0dc274017096c",
+      "bytes": 773062
+    },
+    "resources/dist-backend/node_modules/@esbuild/darwin-arm64/README.md": {
+      "sha256": "ee16cb15a2211accccb38f378786bfe48bc5dcfae5db554352424cd710470efa",
+      "bytes": 145
+    },
+    "resources/dist-backend/node_modules/@esbuild/darwin-arm64/bin/esbuild": {
+      "sha256": "6f0e1237f63fa3bc03963e58f0b0be1b9bfacd8f2dc9a3f28483e8f97e4ef2d6",
+      "bytes": 10540722
+    },
+    "resources/dist-backend/node_modules/@esbuild/darwin-arm64/package.json": {
+      "sha256": "177dd15d014df3ef8f61271c7fe490aacfcb7bb377ee6e9aed8171db8ac2b060",
+      "bytes": 382
+    },
+    "resources/dist-backend/node_modules/esbuild/LICENSE.md": {
+      "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681",
+      "bytes": 1069
+    },
+    "resources/dist-backend/node_modules/esbuild/README.md": {
+      "sha256": "6d481cd60ec3c679e5e395f547ab4221147f35642894f6b95a8df38fd25c87bd",
+      "bytes": 175
+    },
+    "resources/dist-backend/node_modules/esbuild/bin/esbuild": {
+      "sha256": "2b06d83aadb4a03505a738d3c38f174b01c08d1ed4210fd2263320b6eebfbe3a",
+      "bytes": 9350
+    },
+    "resources/dist-backend/node_modules/esbuild/install.js": {
+      "sha256": "37fdf9e431a9c2419fe7e939fcd5c8c941b17b00a33a7e452781118d788de918",
+      "bytes": 11747
+    },
+    "resources/dist-backend/node_modules/esbuild/lib/main.d.ts": {
+      "sha256": "161c8e0690c46021506e32fda85956d785b70f309ae97011fd27374c065cac9b",
+      "bytes": 23392
+    },
+    "resources/dist-backend/node_modules/esbuild/lib/main.js": {
+      "sha256": "41abefec8704d24e069532fb38a418905d16f8fee4da88e54ecd65adc71f5507",
+      "bytes": 97214
+    },
+    "resources/dist-backend/node_modules/esbuild/node_modules/.bin/esbuild": {
+      "sha256": "94e83bc57eb84708c3b9ff5484f2aeae088dde29d7ddde6c92d91cc7d0b4b123",
+      "bytes": 1163
+    },
+    "resources/dist-backend/node_modules/esbuild/package.json": {
+      "sha256": "4316bc9a54bbf659d5760f299910d1824045178557e0aea6a1e3c64148fe8a50",
+      "bytes": 3980
+    },
+    "resources/dist-backend/vec0": {
+      "sha256": "bba69b3bcd3d7c543d82b993237b45d4253b6c5c992bc691e362c5ad1e6649e5",
+      "bytes": 161704
+    },
+    "resources/dist-backend/vec0.dylib": {
+      "sha256": "bba69b3bcd3d7c543d82b993237b45d4253b6c5c992bc691e362c5ad1e6649e5",
+      "bytes": 161704
+    },
+    "resources/resources/icons/homebrew.png": {
+      "sha256": "a72720ba68a72179c16b6c7840fa19ae61d891eb1454794d77644f8c15210e1a",
+      "bytes": 19271
+    },
+    "resources/resources/icons/icon.icns": {
+      "sha256": "b4378b818fa51baa9cef58c64a1ae2afba80f9e60bd5d1ac1f8d0f135428b147",
+      "bytes": 608632
+    },
+    "resources/resources/icons/icon.ico": {
+      "sha256": "332ed5f5ba155ce17c876c87991ca02bf87217ddf9d13be98e7fee4fac50ec0e",
+      "bytes": 62550
+    },
+    "resources/resources/icons/icon.png": {
+      "sha256": "308ad89e23eb9d3985bf31ffad637224481d02e3e00dc9cfe8a635ccd8e5fac2",
+      "bytes": 235361
+    },
+    "seed/extensions/m09-native-fixtures/assets/pixel.png": {
+      "sha256": "44966d77ca111eedba05310029028970dfc07ec198ef78cf6e24718b0a86a9b1",
+      "bytes": 70
+    },
+    "seed/extensions/m09-native-fixtures/package.json": {
+      "sha256": "68563491caaaa52df79b9d873e265a8196cf5f5bfdda7a9a33a515a860d16401",
+      "bytes": 2906
+    },
+    "seed/extensions/m09-native-fixtures/src/actions.tsx": {
+      "sha256": "135c57048e46b915f4261162be27499bd8859bd946d0bd9d4ec447deeabd3ef6",
+      "bytes": 1374
+    },
+    "seed/extensions/m09-native-fixtures/src/detail.tsx": {
+      "sha256": "77ea511378f8fed47c8e06678203912b9fc07daaeea4efcde1833193f09db61a",
+      "bytes": 920
+    },
+    "seed/extensions/m09-native-fixtures/src/feedback.tsx": {
+      "sha256": "a6a53cd96fb0fe3fc8d3e0de4b92046184e99c192a6f81371f855a5587a94876",
+      "bytes": 746
+    },
+    "seed/extensions/m09-native-fixtures/src/form.tsx": {
+      "sha256": "ebbe0f71c136f2601c2b844bb648365325ba21c97202c7b6f8c030a1ca457780",
+      "bytes": 1696
+    },
+    "seed/extensions/m09-native-fixtures/src/grid.tsx": {
+      "sha256": "6166ef4c94474e418533370c2113044e5b75a4f716c0e17df0920d586671687a",
+      "bytes": 886
+    },
+    "seed/extensions/m09-native-fixtures/src/invalidation.tsx": {
+      "sha256": "3d9be49bd26da595e50f76151e075c141ea888780b6282a845b30306f1c9c0d7",
+      "bytes": 564
+    },
+    "seed/extensions/m09-native-fixtures/src/list.tsx": {
+      "sha256": "adae7fc47912a0311fc1441edde970b6e5bf2b8292cfe62d967d83aa213b87a6",
+      "bytes": 2431
+    },
+    "seed/extensions/m09-native-fixtures/src/menubar.tsx": {
+      "sha256": "5166702c49877303aeaae13c34e5690f66bf96dd376c45c13b68344b7b9ba8cf",
+      "bytes": 843
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-date.tsx": {
+      "sha256": "54d71d55fdec4e555c4679e1f0cbda9c9ddbaef1088668bfa020a846501d09c9",
+      "bytes": 496
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-menubar-info.tsx": {
+      "sha256": "f2ab1f703d9963b4e57cb04af377c35b14666f53418d0f228cf8c2ab494706b2",
+      "bytes": 307
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-noview-clear.tsx": {
+      "sha256": "0b38cb059512b35179616cf5f551a63d8161806ff7ed181962c82b1a2272cf99",
+      "bytes": 154
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-noview-close.tsx": {
+      "sha256": "7f62685587343ccd972128ab2f9acc84214e60dc869376d5baf7c4392963b940",
+      "bytes": 155
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-noview-plain.tsx": {
+      "sha256": "a07eb0333b4b6dd9995e6537caa1ad311f6cfcc92e29b1ea36cf6491a7df3624",
+      "bytes": 112
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-noview-pref.tsx": {
+      "sha256": "7125588d0d2262dd7a2acfce11db1ad73a7e08d0bed6c59dcfb0933370ed9756",
+      "bytes": 127
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-noview-prefs.tsx": {
+      "sha256": "c2a2d08ec20ff68df2b16127fa05282c0ed7d327abaed694a90b1c2d26d9af34",
+      "bytes": 133
+    },
+    "seed/extensions/m09-native-fixtures/src/probe-push.tsx": {
+      "sha256": "b1c3904ec68410957f16c8179491761da36d365253833dafde7c8a623df01611",
+      "bytes": 604
+    },
+    "seed/extensions/m09-native-fixtures/src/prompts.tsx": {
+      "sha256": "9e76ab79a2891c2274e0c44e38c40fbf8d12df3838176cdadef649bef31dea67",
+      "bytes": 612
+    },
+    "worker-metafile.json": {
+      "sha256": "643343d2600f1daaf9116a4a30b4aba01b092095f8ae9f10560fad67a312e0f1",
+      "bytes": 25885
+    }
+  },
+  "symlinks": [
+    "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-d06CfD/resources/dist-backend/libsqlite3.dylib"
+  ]
+}

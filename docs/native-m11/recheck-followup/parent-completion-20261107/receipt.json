@@ -1,0 +1,43 @@
+{
+  "state": "IMPLEMENTATION_GATES_PASSED_CLEAN_BUILD_AND_INDEPENDENT_REVIEW_PENDING",
+  "base": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+  "selected_worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "gate_owner_receipt": "../validation/20261107-m911/receipt.json",
+  "gate_owner_receipt_preserved": true,
+  "parent_verified_evidence_files": 96,
+  "parent_verified_external_files": 211,
+  "parent_verified_compiled_inputs": 427,
+  "parent_verified_gate_records": 28,
+  "completed_missing_provenance_gate": "provenance.json",
+  "fixture_git_exception": "Git init/add/commit was authorized solely inside fixture-owned mkdtemp repositories; no selected-worktree Git mutation by the test. No permission question remains.",
+  "counts": {
+    "native_normal": 460,
+    "native_bench": 462,
+    "ui": 57,
+    "sdk_los_angeles": 9,
+    "core_inspected": 7,
+    "typescript_passed": 748,
+    "typescript_existing_skipped": 7,
+    "native_node": 14,
+    "cutover_python": 1
+  },
+  "updater_evidence_reused": {
+    "toolchains": [
+      "1.85.0",
+      "1.98.1"
+    ],
+    "passed_each": 43,
+    "existing_ignored_each": 1,
+    "ignored_test": "manual_releases::tests::live_beta_installer_discovery_from_stable_028 (requires GitHub network and a published Beta installer)"
+  },
+  "preserved_dirty_binaries": {
+    "normal": "063f61789082d427e28f53eb1bfcc0cd7c3428e4487bba864c36e7474c63f489",
+    "bench": "6d14eeed460625aa209fc73d6877ed3dd7decc9df398acd1fe3b47749f84e965"
+  },
+  "remaining": [
+    "real local commit and clean linked metadata capture",
+    "fresh independent Opus reviews",
+    "Windows and physical GUI/IME/accessibility/GPU/RAM/signing/profile/updater gates",
+    "native public signed release builder/feed pipeline before held cutover"
+  ]
+}

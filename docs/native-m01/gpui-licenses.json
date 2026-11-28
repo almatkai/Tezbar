@@ -1,0 +1,107 @@
+[
+  {
+    "name": "collections",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "derive_refineable",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_apple",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_ios",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_linux",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_macos",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_macros",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_platform",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_shared_string",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_tokio",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_util",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_web",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_wgpu",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "gpui_windows",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "http_client",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "refineable",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "scheduler",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "sum_tree",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "ztracing",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  },
+  {
+    "name": "ztracing_macro",
+    "source": "git+https://github.com/zed-industries/zed?rev=c84af5b99cbc366d675064e52b23664a015b6e35#c84af5b99cbc366d675064e52b23664a015b6e35",
+    "license": "Apache-2.0"
+  }
+]

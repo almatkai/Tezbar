@@ -1,0 +1,19 @@
+{
+  "previous_freeze": "docs/native-m09/final-source-freeze-05.json",
+  "final_freeze": "docs/native-m09/final-source-freeze-06.json",
+  "changed_files": [
+    "crates/tezbar-ui/src/terminal_grid.rs",
+    "tests/fixtures/extensions/native_harness.rs"
+  ],
+  "changes": "Only Rust 2024 import ordering by rustfmt; full native/bench/UI and check/build rerun at freeze06.",
+  "unchanged_components": [
+    "crates/tezbar-core",
+    "crates/tezbar-ui-model",
+    "src/main",
+    "src/shared",
+    "Cargo.toml",
+    "Cargo.lock",
+    "package.json",
+    "pnpm-lock.yaml"
+  ]
+}

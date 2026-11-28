@@ -1,0 +1,69 @@
+{
+  "source_freeze": "docs/native-m09/final-source-freeze-06.json",
+  "build_gate": "docs/native-m09/gates/frozen-06-debug-build.log",
+  "desktop_execution": false,
+  "artifacts": [
+    {
+      "path": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/tezbar",
+      "bytes": 217320936,
+      "sha256": "e3bb9e913f80890497996c88bdf4132698c623bb91f861839646dda812043aa7",
+      "file": {
+        "command": [
+          "file",
+          "target/debug/tezbar"
+        ],
+        "exit_code": 0,
+        "output": "target/debug/tezbar: Mach-O 64-bit executable arm64\n"
+      },
+      "dylibs": {
+        "command": [
+          "otool",
+          "-L",
+          "target/debug/tezbar"
+        ],
+        "exit_code": 0,
+        "output": "target/debug/tezbar:\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n\t/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices (compatibility version 1.0.0, current version 66.0.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5026.5.4)\n\t/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo (compatibility version 1.2.0, current version 734.4.0)\n\t/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon (compatibility version 2.0.0, current version 170.0.0)\n\t/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit (compatibility version 45.0.0, current version 2685.60.104)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5026.5.4)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n\t/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText (compatibility version 1.0.0, current version 877.4.0)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1195.14.4)\n\t/System/Library/Frameworks/Security.framework/Versions/A/Security (compatibility version 1.0.0, current version 61901.120.67)\n\t/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics (compatibility version 64.0.0, current version 1965.5.1)\n\t/System/Library/Frameworks/UserNotifications.framework/Versions/A/UserNotifications (compatibility version 1.0.0, current version 1.0.0)\n\t/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation (compatibility version 1.0.0, current version 3075.0.8)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 373.2.0)\n\t/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation (compatibility version 1.0.0, current version 2.0.0)\n\t/System/Library/Frameworks/EventKit.framework/Versions/A/EventKit (compatibility version 1.0.0, current version 1934.4.9)\n\t/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices (compatibility version 1.0.0, current version 1226.0.0)\n\t/System/Library/Frameworks/UniformTypeIdentifiers.framework/Versions/A/UniformTypeIdentifiers (compatibility version 1.0.0, current version 709.0.0)\n\t/System/Library/Frameworks/LocalAuthentication.framework/Versions/A/LocalAuthentication (compatibility version 1.0.0, current version 2005.121.1)\n\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)\n\t/System/Library/Frameworks/ColorSync.framework/Versions/A/ColorSync (compatibility version 1.0.0, current version 3813.5.1)\n"
+      },
+      "uuid": {
+        "command": [
+          "dwarfdump",
+          "--uuid",
+          "target/debug/tezbar"
+        ],
+        "exit_code": 0,
+        "output": "UUID: B2CA0BF6-2833-3D3F-AF49-F0A5968D814F (arm64) target/debug/tezbar\n"
+      }
+    },
+    {
+      "path": "/opt/homebrew/Cellar/bun/1.4.0/bin/bun",
+      "bytes": 59815792,
+      "sha256": "f8a7b82772df6491e73c22d05bd682e40a64675de13095741d81ac23d3ab4f2a",
+      "file": {
+        "command": [
+          "file",
+          "/opt/homebrew/Cellar/bun/1.4.0/bin/bun"
+        ],
+        "exit_code": 0,
+        "output": "/opt/homebrew/Cellar/bun/1.4.0/bin/bun: Mach-O 64-bit executable arm64\n"
+      },
+      "dylibs": {
+        "command": [
+          "otool",
+          "-L",
+          "/opt/homebrew/Cellar/bun/1.4.0/bin/bun"
+        ],
+        "exit_code": 0,
+        "output": "/opt/homebrew/Cellar/bun/1.4.0/bin/bun:\n\t/usr/lib/libicucore.A.dylib (compatibility version 1.0.0, current version 78.1.0)\n\t/usr/lib/libresolv.9.dylib (compatibility version 1.0.0, current version 1.0.0)\n\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2100.43.0)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n"
+      },
+      "uuid": {
+        "command": [
+          "dwarfdump",
+          "--uuid",
+          "/opt/homebrew/Cellar/bun/1.4.0/bin/bun"
+        ],
+        "exit_code": 0,
+        "output": "UUID: 3490CD05-2BDB-38D4-A895-E60DFCD7F08A (arm64) /opt/homebrew/Cellar/bun/1.4.0/bin/bun\n"
+      }
+    }
+  ]
+}

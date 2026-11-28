@@ -1,0 +1,30 @@
+{
+  "executable": "/tmp/tezbar-native-m911-validation-20261107-2sefx6og/tezbar-bench-dirty",
+  "sha256": "6d14eeed460625aa209fc73d6877ed3dd7decc9df398acd1fe3b47749f84e965",
+  "captured": {
+    "metadata": {
+      "schema": 2,
+      "version": "0.3.0-beta.7",
+      "sourceCommit": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+      "dirty": true,
+      "benchControl": true,
+      "runtimeShaders": true,
+      "gpuiRev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "rustVersion": "1.98.1"
+    },
+    "sha256": "00f883be2b30a79b395825417b0d58efbfc052f4700107d5a0ec3722460b537b"
+  },
+  "version": {
+    "version": "0.3.0-beta.7",
+    "source": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+    "dirty": "true",
+    "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+    "preview": true,
+    "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+    "runtime_shaders": true,
+    "bench_control": true
+  },
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: aarch64-apple-darwin\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "links": "/tmp/tezbar-native-m911-validation-20261107-2sefx6og/tezbar-bench-dirty:\n\t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 228.0.0)\n\t/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices (compatibility version 1.0.0, current version 66.0.0)\n\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5026.5.4)\n\t/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo (compatibility version 1.2.0, current version 734.4.0)\n\t/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon (compatibility version 2.0.0, current version 170.0.0)\n\t/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit (compatibility version 45.0.0, current version 2685.60.104)\n\t/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 5026.5.4)\n\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)\n\t/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText (compatibility version 1.0.0, current version 877.4.0)\n\t/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore (compatibility version 1.2.0, current version 1195.14.4)\n\t/System/Library/Frameworks/Security.framework/Versions/A/Security (compatibility version 1.0.0, current version 61901.120.67)\n\t/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics (compatibility version 64.0.0, current version 1965.5.1)\n\t/System/Library/Frameworks/Metal.framework/Versions/A/Metal (compatibility version 1.0.0, current version 373.2.0)\n\t/System/Library/Frameworks/UserNotifications.framework/Versions/A/UserNotifications (compatibility version 1.0.0, current version 1.0.0)\n\t/System/Library/Frameworks/CoreLocation.framework/Versions/A/CoreLocation (compatibility version 1.0.0, current version 3075.0.8)\n\t/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation (compatibility version 1.0.0, current version 2.0.0)\n\t/System/Library/Frameworks/EventKit.framework/Versions/A/EventKit (compatibility version 1.0.0, current version 1934.4.9)\n\t/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices (compatibility version 1.0.0, current version 1226.0.0)\n\t/System/Library/Frameworks/UniformTypeIdentifiers.framework/Versions/A/UniformTypeIdentifiers (compatibility version 1.0.0, current version 709.0.0)\n\t/System/Library/Frameworks/LocalAuthentication.framework/Versions/A/LocalAuthentication (compatibility version 1.0.0, current version 2005.121.1)\n\t/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)\n\t/System/Library/Frameworks/ColorSync.framework/Versions/A/ColorSync (compatibility version 1.0.0, current version 3813.5.1)\n",
+  "assertions": "Actual native binary static metadata matches --version types/fields, dirty=true and exact build features; no WebKit/JavaScriptCore. Only --version executed; production dirty/bench refusal never stripped record. No clean/production admission claimed."
+}

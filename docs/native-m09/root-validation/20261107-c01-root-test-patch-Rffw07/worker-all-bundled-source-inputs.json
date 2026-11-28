@@ -1,0 +1,94 @@
+{
+  "src/main/extensionWorker/framing.ts": {
+    "sha256": "5cb589a0d2d5c5e63d1e22c6b47f4b60a21482bca943b140cfec64752423b05c",
+    "bytes": 1102
+  },
+  "src/main/extensionWorker/host.ts": {
+    "sha256": "1006d76af9c6eee74aff897c92fae1861d0d011e142b9cdc42442356aef5567e",
+    "bytes": 1795
+  },
+  "src/main/extensionWorker/services.ts": {
+    "sha256": "27aa655c915ace0f74fe71a23411c428e70419ebb5106980b8030cd7422d870a",
+    "bytes": 827
+  },
+  "src/shared/extensionRepository.ts": {
+    "sha256": "eca9e562f40ebf95692001e02fb49acb1fd0363b7ec10682a3f9eecd4eb35b90",
+    "bytes": 1206
+  },
+  "src/main/extensionWorker/desktop.ts": {
+    "sha256": "3d9142c2f358a9d13677d9580d6c6975f18e42c9260af4fd4565899f4f77f8c2",
+    "bytes": 4449
+  },
+  "src/main/better-sqlite3-shim.ts": {
+    "sha256": "003285d02b563474ccaabdd3af9daccc82ab8ea0df12a1b212097d81e18a1714",
+    "bytes": 3005
+  },
+  "src/main/extension-sql.ts": {
+    "sha256": "57d05d54c3e6ae526a4c12d0e7253ddcb79f7b3574767fbdd87ec7432eb36ec7",
+    "bytes": 417
+  },
+  "src/main/extensionWorker/clipboard.ts": {
+    "sha256": "b8ff17943545b6f56e7e8fdbdd419ffd53354de0b8ec9634766063264e0e9c6b",
+    "bytes": 1496
+  },
+  "src/main/extension-confirm-alert.ts": {
+    "sha256": "fb3dc3eeaaddc759b83a6e8e74878f03982d7e1c3c12767bf21a803426f6be11",
+    "bytes": 1133
+  },
+  "src/main/powershell-script.ts": {
+    "sha256": "d3d98fbbe3382a2124bbe9a5b87c3424291cc6a28e52d1614812c6f415cc95c8",
+    "bytes": 1295
+  },
+  "src/main/esbuild-runtime.ts": {
+    "sha256": "cb5139a6127fdae73d061e6e0e7fe1124b0fb3f9c557e338f3fc019ac925e318",
+    "bytes": 214
+  },
+  "src/main/extensionWorker/windowState.ts": {
+    "sha256": "ad1b617749efea3c5f9d6d457cb0a74106ca644c6ca5d1dda88197a00b181a07",
+    "bytes": 142
+  },
+  "src/main/extension-platform.ts": {
+    "sha256": "45da9ecd8fbabc99527cf3955c22ab371ba0aa0fcd839a6930c35cffde231db7",
+    "bytes": 1814
+  },
+  "src/main/extension-builder.ts": {
+    "sha256": "eb27592a5faf84872d1bed32438b4032ecec633f66009e6c6ad57b9f25fb2877",
+    "bytes": 42199
+  },
+  "src/main/extension-api.ts": {
+    "sha256": "ae4efa46b600bf12f396c56d3916a43e561bc6101fc78481868afff931a26a1c",
+    "bytes": 8490
+  },
+  "src/main/bun-manager.ts": {
+    "sha256": "069efe2fa96a819e49b2d0de111cc1992bfb4968d94872aeaa73592ca9a490a8",
+    "bytes": 11728
+  },
+  "src/shared/lovedExtensions.ts": {
+    "sha256": "93abc8a2e814dc56b964b205f1ab9d05d77435568c765f59656ee14b6533fb11",
+    "bytes": 73432
+  },
+  "src/main/extension-registry.ts": {
+    "sha256": "a92d43fc79748e6bae7aec81cdb19af03b435c5106aba600d77025624c247606",
+    "bytes": 65536
+  },
+  "src/main/extension-runner.ts": {
+    "sha256": "281930b84b6677c172257c31076ef018a76d44b36187bcb88e4dce19f10aa46c",
+    "bytes": 166295
+  },
+  "node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs": {
+    "sha256": "e64ea8da3b464b15ff6842402a6d55c8f1ffbaede6dddef642c282d133daab37",
+    "bytes": 57773
+  },
+  "src/main/extensions/raycastShim.ts": {
+    "sha256": "3d14e9c0002312455fcdd5008c3bcdb2abee6b4dda26100d605b509ac0271f11",
+    "bytes": 15028
+  },
+  "src/main/extensions/service.ts": {
+    "sha256": "cbecfd493153490b6f29f95725e3723307050117cb82afabfe32717d8089440a",
+    "bytes": 27801
+  },
+  "src/main/extensionWorker/main.ts": {
+    "sha256": "20f0fbd84c739081858c5bde725d8698e4fffc2f56e636fe8f8e9e1bca1b905b",
+    "bytes": 6370
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "accessibility",
+    "title": "Input Automation",
+    "summary": "Synthesize keystrokes, control windows, automate UI.",
+    "rationale": "Needed to automate the active app: move windows, click through menus, send keystrokes to focused controls.",
+    "settingsUrl": "ms-settings:privacy",
+    "remediation": "Windows input automation is available automatically for apps running at the same privilege level."
+  },
+  {
+    "id": "input-monitoring",
+    "title": "Input Monitoring",
+    "summary": "Observe keyboard and mouse events globally.",
+    "rationale": "Used for global hotkeys and key-capture flows (e.g. global Alt+Space, keystroke recording).",
+    "settingsUrl": "ms-settings:privacy",
+    "remediation": "Global shortcut and key-state monitoring are available automatically on Windows."
+  },
+  {
+    "id": "calendar",
+    "title": "Calendar",
+    "summary": "Read and create events for calendar-aware commands.",
+    "rationale": "Used by calendar-related extensions and the next-meeting command.",
+    "settingsUrl": "ms-settings:privacy-calendar",
+    "remediation": "Open Settings → Privacy & security → Calendar and allow desktop apps to access your calendar."
+  },
+  {
+    "id": "screen-recording",
+    "title": "Screen Recording",
+    "summary": "Capture screen content for screenshots and window vision.",
+    "rationale": "Needed for screenshot-based flows, window snapshots, and visual automation helpers.",
+    "settingsUrl": "ms-settings:privacy",
+    "remediation": "Desktop apps can capture the screen on Windows without a separate permission."
+  }
+]

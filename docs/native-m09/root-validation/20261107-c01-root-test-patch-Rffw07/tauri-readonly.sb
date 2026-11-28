@@ -1,0 +1,4 @@
+(version 1)
+(allow default)
+(deny file-write* (subpath "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent"))
+(deny network*)

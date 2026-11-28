@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "startHead": "6dbb2875f5486c1ceeabdcbe19a604703f5c9f6a",
+  "acceptedCandidate": false,
+  "productionChanged": false,
+  "goalAchieved": false,
+  "decision": "Reject both native BPE-storage prototypes; production package and application source remain unchanged",
+  "attribution": {
+    "scope": "Diagnostic allocation sizes from malloc_size/counting allocators, not physical-footprint attribution by addition",
+    "bpe": {
+      "bpe_live": 53562400,
+      "bpe_requested": 43658168,
+      "bpe_blocks": 514907,
+      "bpe_heap": 73648,
+      "bpe_chars": 4617565,
+      "bpe_nonvocab_parts": 0,
+      "bpe_buckets": 823117,
+      "tokenizer_model": "gemma4"
+    },
+    "vocab": {
+      "vocab_type": 2,
+      "vocab_count": 262144,
+      "token_chars": 2316295,
+      "token_data_bytes": 12582912,
+      "text_heap": 177728,
+      "key_heap": 177728,
+      "long_strings": 5160,
+      "map_buckets": 411527,
+      "precompiled_capacity": 0,
+      "bpe_ranks": 514906
+    },
+    "pieces": {
+      "piece_objects": 6291456,
+      "piece_heap": 150144,
+      "piece_chars": 2039001
+    },
+    "normalizer": "No precompiled charsmap; tokenizer constructor delta 80 allocated bytes",
+    "stagesPath": "diagnostic-stages.json"
+  },
+  "exactness": {
+    "exhaustiveTokens": 262144,
+    "mergeRanks": 514906,
+    "textCases": 441,
+    "flagCombinationsPerText": 4,
+    "concurrentReaders": 4,
+    "streamSha256": "601b02f2f29feebe34c90bef5903327d5970f931456710869ad6e060affb3650",
+    "freshRaw768AndNormalized256F32": "Equal for Q4/4 threads, short query and 4/8/16 normal input batches in all successful runs",
+    "limits": "Rejected before Q8/all-speed/8192-inference and full-app acceptance; no certification of unexecuted candidate gates"
+  },
+  "checks": {
+    "typecheck": "passed",
+    "typescriptPassed": 752,
+    "typescriptSkipped": 9,
+    "frontend": "passed",
+    "packagePinsPassed": 5,
+    "releasePolicyPassed": 16,
+    "reusedRustPassed": 450,
+    "reusedRustIgnored": 8,
+    "reusedOrderedNativeSignatures": 40,
+    "reusedProductionSourcePins": 573,
+    "reusedModelArtifactPins": 84
+  },
+  "ownership": {
+    "sampledRuntimeIdentities": 32,
+    "survivors": [],
+    "parityProcesses": "All final subprocess.run calls returned 0 and were reaped"
+  },
+  "provenance": {
+    "currentZipSha256": "75698aa84eb35398cee7b3afb6fee7b9bdb1db7a3aedc3cc43af25780100e475",
+    "currentLibllamaSha256": "b459731b73340e3ad888f1b5fec9a26644940976edfc950fbc1bdd11673fecaf",
+    "freshUnchangedControl": {
+      "currentSha256": "b459731b73340e3ad888f1b5fec9a26644940976edfc950fbc1bdd11673fecaf",
+      "rebuiltSha256": "7e0a76abeb349a918fd2074bc10a67868bbbd2398ddc890cd426eb8691dad056",
+      "codeDataSha256": "a313c151439da96ed0a62dd528d83930ec2b42dff2141a5ad511d0e79a855ec4",
+      "onlyDifference": "LC_CODE_SIGNATURE command and ad-hoc signature; filename-derived identifier"
+    },
+    "frozenApps": "Four R7 inventories reverified; no candidate app built",
+    "installedModels": "Q4/Q8 inventories reverified unchanged"
+  },
+  "receipts": {
+    "root": "build/performance-tokenizer-20261030",
+    "manifest": "audit-manifest.json",
+    "manifestSha256": "8984a0f5f0fa348357ab0ac4c9aa83c185113510fb579fe8af0e20f4c952c0da",
+    "artifactCount": 779,
+    "restoration": "restoration-and-reuse.json",
+    "ownership": "ownership-and-runtime-pins.json"
+  },
+  "remaining": {
+    "wholeAppTargets": "Unmet; R7 490.45 -> 376.69 MiB retained family, 98.09 MiB one-fifth target; no new full-app cohort",
+    "nativeBlocker": "Container allocation savings did not become a physical-footprint reduction; reclaimable/dirty allocator ledgers change substantially",
+    "candidateGatesNotReached": [
+      "package integration/pins",
+      "Q8/all-speed/8192 inference matrix",
+      "ordinary and benchmark app rebuild",
+      "full app source/index/background and 90-second retained-model cohort"
+    ]
+  },
+  "limitations": [
+    "Two fresh processes per treatment per candidate; warm/uncontrolled OS/Metal caches",
+    "Footprint is a process ledger; RSS contains shared/clean/reclaimable pages",
+    "No allocator purge, pressure generation, early unload, model/context change or renderer experiment",
+    "Diagnostic probes are excluded from acceptance cohorts; no builds/tests overlap native timings"
+  ],
+  "cohorts": {
+    "arena": {
+      "order": [
+        "current",
+        "candidate",
+        "candidate",
+        "current"
+      ],
+      "summary": {
+        "current": {
+          "readyMs": [
+            3331.02675,
+            2785.278792
+          ],
+          "readyMedianMs": 3058.152771,
+          "firstQueryMs": [
+            15.440832999999543,
+            15.752250000000245
+          ],
+          "warmQueryMedianMs": 6.647437499999853,
+          "firstChunks16Ms": [
+            278.1349999999989,
+            275.56066600000054
+          ],
+          "chunks16MedianMs": 272.05180199999916,
+          "retainedFootprintMiB": [
+            104.26681518554688,
+            104.54804229736328
+          ],
+          "retainedMedianMiB": 104.40742874145508,
+          "finalRssMiB": [
+            372.28125,
+            373.203125
+          ],
+          "finalRssMedianMiB": 372.7421875
+        },
+        "candidate": {
+          "readyMs": [
+            2715.7345,
+            2880.18775
+          ],
+          "readyMedianMs": 2797.961125,
+          "firstQueryMs": [
+            15.757417000001439,
+            15.721249999998577
+          ],
+          "warmQueryMedianMs": 8.448124999999251,
+          "firstChunks16Ms": [
+            278.3791250000007,
+            277.33370800000046
+          ],
+          "chunks16MedianMs": 272.56187500000095,
+          "retainedFootprintMiB": [
+            139.0011215209961,
+            138.4855194091797
+          ],
+          "retainedMedianMiB": 138.7433204650879,
+          "finalRssMiB": [
+            346.40625,
+            345.875
+          ],
+          "finalRssMedianMiB": 346.140625
+        }
+      },
+      "qualified": false,
+      "reason": "Retained physical footprint increases in both fresh candidate processes"
+    },
+    "pooled": {
+      "order": [
+        "current",
+        "candidate",
+        "candidate",
+        "current"
+      ],
+      "summary": {
+        "current": {
+          "readyMs": [
+            3101.699417,
+            2943.280333
+          ],
+          "readyMedianMs": 3022.489875,
+          "firstQueryMs": [
+            15.697750000001065,
+            15.71670899999944
+          ],
+          "warmQueryMedianMs": 7.000270500000738,
+          "firstChunks16Ms": [
+            282.52395799999874,
+            274.1989999999994
+          ],
+          "chunks16MedianMs": 272.69723949999934,
+          "retainedFootprintMiB": [
+            105.86051940917969,
+            104.31371307373047
+          ],
+          "retainedMedianMiB": 105.08711624145508,
+          "finalRssMiB": [
+            374.390625,
+            372.609375
+          ],
+          "finalRssMedianMiB": 373.5
+        },
+        "candidate": {
+          "readyMs": [
+            3360.059959,
+            2891.85625
+          ],
+          "readyMedianMs": 3125.9581045,
+          "firstQueryMs": [
+            15.736583000000692,
+            15.676041000000751
+          ],
+          "warmQueryMedianMs": 6.966083500000053,
+          "firstChunks16Ms": [
+            278.4546249999984,
+            276.7698749999994
+          ],
+          "chunks16MedianMs": 272.32716675000023,
+          "retainedFootprintMiB": [
+            160.82929229736328,
+            161.84491729736328
+          ],
+          "retainedMedianMiB": 161.33710479736328,
+          "finalRssMiB": [
+            368.1875,
+            369.203125
+          ],
+          "finalRssMedianMiB": 368.6953125
+        }
+      },
+      "qualified": false,
+      "reason": "Retained physical footprint increases in both fresh candidate processes"
+    }
+  }
+}

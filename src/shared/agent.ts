@@ -1,15 +1,4 @@
-/**
- * Shared agent types exchanged between the main process (which speaks to
- * the pi coding agent over JSONL RPC) and the renderer HUD.
- *
- * The Stage shape is the one the acceptance spec pins down:
- *   { index, label, status: "running" | "done" | "failed" }
- *
- * Stages are derived by `src/main/agent/loop.ts` from pi's
- * `tool_execution_start` / `tool_execution_end` events (one stage per tool
- * call), plus a final "answered" stage when the agent emits its last
- * assistant message.
- */
+/** Shared native agent events and renderer tool stages. */
 
 export type StageStatus = 'running' | 'done' | 'failed'
 
@@ -21,24 +10,52 @@ export interface Stage {
   status: StageStatus
   /** Optional one-line detail (command stderr, error message, …). */
   detail?: string
+  /** Bounded plain-text tool output, never image/base64 payloads. */
+  output?: string
+  outputTruncated?: boolean
+  toolName?: string
+  durationMs?: number
 }
 
 export type AgentTimelineItem = { type: 'text'; text: string } | { type: 'stage'; stage: Stage }
 
 export interface AgentInputImage {
   type: 'image'
-  /** Raw base64 bytes. Data-URL prefixes are accepted and stripped before RPC. */
+  /** Raw base64 bytes. Data-URL prefixes are accepted and stripped before the request. */
   data: string
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
   width?: number
   height?: number
 }
 
+import type { AgentApprovalMode } from './llmConfig'
+export type { AgentApprovalMode }
+
 export interface AgentRunRequest {
+  /** Client-generated correlation id; lets the UI subscribe before submitting. */
+  runId?: string
   task: string
+  sessionId?: string
+  userTurnId?: string
+  assistantTurnId?: string
+  retry?: boolean
+  priorTurnIds?: string[]
+  priorTurns?: {
+    id: string
+    role: 'user' | 'assistant'
+    text: string
+    error?: string
+    hasImages?: boolean
+  }[]
+  instructions?: string
+  agentProfileId?: string
   images?: AgentInputImage[]
-  /** Existing directory used as the Pi subprocess cwd. */
+  /** Allows text-only runtimes to reject history whose images cannot be represented. */
+  historyHasImages?: boolean
+  /** Existing working directory for agent tools. */
   cwd?: string
+  /** Permission mode for command execution. */
+  approvalMode?: AgentApprovalMode
 }
 
 export type AgentApprovalDecision = 'deny' | 'once' | 'always'
@@ -61,11 +78,15 @@ export type AgentRunEvent =
       title: string
       command: string
       suggestedRule?: string
+      /** False when this runtime only supports one-time approval. */
+      canRemember?: boolean
+      rememberKind?: 'tool' | 'command'
     }
+  | { type: 'approval-expired'; runId: string; approvalId: string }
   | { type: 'done'; runId: string }
   | { type: 'error'; runId: string; message: string }
-  /** One line from the pi subprocess stderr (config, auth, model errors, …). */
-  | { type: 'log'; runId: string; source: 'stderr'; line: string }
+  /** A bounded, source-labelled native diagnostic. */
+  | { type: 'log'; runId: string; source: 'stderr' | 'native'; line: string }
 
 /** IPC channel names. Shared so main + preload + renderer cannot drift. */
 export const AGENT_IPC = {

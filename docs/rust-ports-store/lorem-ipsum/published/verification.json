@@ -1,0 +1,22 @@
+{
+  "release": "https://github.com/almatkai/lorem-ipsum/releases/tag/v0.1.1",
+  "sourceCommit": "04882e143a3ade8b6ace4e598e7bf5c42038ca3b",
+  "publication": "published-prerelease",
+  "dualTargetDownloads": "passed",
+  "policiesAndInventories": "passed",
+  "desktopAcceptance": "pending",
+  "archives": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/lorem-ipsum/releases/download/v0.1.1/lorem-ipsum-aarch64-apple-darwin.zip",
+      "sha256": "42d7e2d5ecba69e0fd580cd942c56d2083b6340c2ddc6ceff0c53fe075e14965",
+      "executable": "bin/tezbar-lorem-ipsum",
+      "executableSha256": "3b21cd31bff3b73316319cbb23514020d893445d7a8f85caacd4219a7b7501e7"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/lorem-ipsum/releases/download/v0.1.1/lorem-ipsum-x86_64-pc-windows-msvc.zip",
+      "sha256": "36cc617556f2fe6c31f464acf2e1b3014805305538f9dd5b01d4c8a44c32918c",
+      "executable": "bin/tezbar-lorem-ipsum.exe",
+      "executableSha256": "069e3b721df8c0891527ffa2e2ab0a651b21178a169b74f879c4995090dd323e"
+    }
+  }
+}

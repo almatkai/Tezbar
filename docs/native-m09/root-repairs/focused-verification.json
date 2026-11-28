@@ -1,0 +1,277 @@
+{
+  "base": "9230bccd945abdf47334d1f2c9832870040bdf71",
+  "author": "root",
+  "source_files": 608,
+  "owned_files": 39,
+  "focused_results": {
+    "native_regressions": {
+      "log": "tezbar-m9-root-regressions-final-12.log",
+      "passed": 15
+    },
+    "real_sdk": {
+      "log": "tezbar-m9-root-sdk-nine-final-10.log",
+      "passed": 9
+    },
+    "date_los_angeles": {
+      "log": "tezbar-m9-root-date-la-final-10.log",
+      "passed": 1
+    },
+    "extension_admission": {
+      "log": "tezbar-m9-root-admission-freeze.log",
+      "passed": 1
+    },
+    "models_198": {
+      "log": "tezbar-m9-root-models-3.log",
+      "passed": 381
+    },
+    "ts_worker_rejecting_host": {
+      "log": "tezbar-m9-root-worker-tests-2.log",
+      "passed": 2
+    }
+  },
+  "typecheck": "tezbar-m9-root-typecheck-2.log",
+  "logs": {
+    "tezbar-m9-root-action-scroll-1.log": {
+      "sha256": "d8fa428bd45cfa98445ae872737c6f79085d1980c96974d5a89635d202465a84",
+      "bytes": 8687
+    },
+    "tezbar-m9-root-admission-freeze.log": {
+      "sha256": "c3799a8f4fc27d67f26e7ff2eea4c0191d695a2facd11028ca5f5d94edcd4a48",
+      "bytes": 224
+    },
+    "tezbar-m9-root-admission.log": {
+      "sha256": "d3ecb81195b5213d0cb0dfe33966d0888c2e53247aad78f98456da3fc626ed86",
+      "bytes": 224
+    },
+    "tezbar-m9-root-check-1.log": {
+      "sha256": "dbd5a2c623a41d65b2d86b8e5919f3d7f1de0fefd5992a79ac2b01d914bb876f",
+      "bytes": 2662
+    },
+    "tezbar-m9-root-check-2.log": {
+      "sha256": "afc84d601e592f4c795585613bcfe8b0b15b554c3ca859ab3a17dae576441478",
+      "bytes": 8693
+    },
+    "tezbar-m9-root-date-la-final-10.log": {
+      "sha256": "8c44d8e970357cec2625870ae47b21466a6c020886533991fd946f160a8c203a",
+      "bytes": 454
+    },
+    "tezbar-m9-root-date-la-final.log": {
+      "sha256": "7c36dd955983242cc23d765a8da810e48c31758cce2e4174e0aa343ccaeb2cde",
+      "bytes": 454
+    },
+    "tezbar-m9-root-date-la.log": {
+      "sha256": "3aae017a891c3b91f18be52521f8609eacd4a7c308ee66b09a0f934842627fba",
+      "bytes": 454
+    },
+    "tezbar-m9-root-format-initial.log": {
+      "sha256": "a114b83ad8dcb676436ed1af02c3e753a752d069e331654e26cc768d608e9999",
+      "bytes": 29185
+    },
+    "tezbar-m9-root-models-1.log": {
+      "sha256": "29eee347a7c3b84462d3c944bc63dfeb0e457896e06de1d7c851f3bd9b5544d9",
+      "bytes": 4419
+    },
+    "tezbar-m9-root-models-2.log": {
+      "sha256": "3e2d58165d2ceabf2920d29381884196f1e8aba5a39a8ff5c3386e6f587a376d",
+      "bytes": 37393
+    },
+    "tezbar-m9-root-models-3.log": {
+      "sha256": "319e664598e57dd36647d755d9f39662ac128e404c17d44c0fbe149ab85c41f3",
+      "bytes": 36750
+    },
+    "tezbar-m9-root-prepare-2.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "tezbar-m9-root-prepare-3.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "tezbar-m9-root-prepare.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "tezbar-m9-root-regressions-1.log": {
+      "sha256": "31bd0d8599cea2a9e8b30d04edc910824edc65265dd1fdfa87b8bad5bef791c7",
+      "bytes": 4489
+    },
+    "tezbar-m9-root-regressions-2.log": {
+      "sha256": "485c90806f32f0e7e1069b62b2e3ff7ad6db7d2f7933fb2a15ef86120e2f0e62",
+      "bytes": 5335
+    },
+    "tezbar-m9-root-regressions-3.log": {
+      "sha256": "fe02200a5484f7a994eaf8f3d89aeee3f600d387951e36e0f8d1cf628e966f54",
+      "bytes": 4803
+    },
+    "tezbar-m9-root-regressions-4.log": {
+      "sha256": "6cb92dabde07dec5d07ddc8060dcabd6837ad28e12f1af5c847636d91e4ac5d5",
+      "bytes": 4538
+    },
+    "tezbar-m9-root-regressions-final-10.log": {
+      "sha256": "050fb9c5b91ce321c5dc5d8478452f75894d3379df1873c3e56ceaea7a4101cc",
+      "bytes": 4537
+    },
+    "tezbar-m9-root-regressions-final-12.log": {
+      "sha256": "e6efd26c1fe47abdc6d5062c3e38c063644e538ffd4062ebdd77d44ce941dc75",
+      "bytes": 4635
+    },
+    "tezbar-m9-root-regressions-final.log": {
+      "sha256": "7f079b86b48c6fb900a9c4a57d54cffe9cc7b63f86830c703f44d0aa43f2e87d",
+      "bytes": 4538
+    },
+    "tezbar-m9-root-regressions-freeze.log": {
+      "sha256": "e2e0606a4acc15a655ad68e845d9fa3f5c0535848816e567e7b6fb1c531e7634",
+      "bytes": 5017
+    },
+    "tezbar-m9-root-sdk-nine-final-10.log": {
+      "sha256": "938568ab5759928c7a8af028adf45ebe895f1fb496a5d23af82b965fdb9547ff",
+      "bytes": 678
+    },
+    "tezbar-m9-root-sdk-nine-final.log": {
+      "sha256": "06ce0041aa79d5f98d662e65d7b197f063f807a8ddab8284f449bf64322628df",
+      "bytes": 678
+    },
+    "tezbar-m9-root-sdk-nine-freeze.log": {
+      "sha256": "bff78e166213535e61e61a50b7e077b23cb7bc2a2799cf5b85a27b51f0323d88",
+      "bytes": 678
+    },
+    "tezbar-m9-root-sdk-nine.log": {
+      "sha256": "c849d87407f1638169e7b26bfb2cd1fdfdae307ce966eac84b0b2962647adc43",
+      "bytes": 1065
+    },
+    "tezbar-m9-root-test-build-1.log": {
+      "sha256": "b074eb06c70d4a6ac013a6ee149435474c5def5f6f64d76b0aab800f9fa85e80",
+      "bytes": 7760
+    },
+    "tezbar-m9-root-test-build-10.log": {
+      "sha256": "844b4f641d61232560d21c4a3c14b765b23f382a7ed2c1aa095373fa01943173",
+      "bytes": 7839
+    },
+    "tezbar-m9-root-test-build-11.log": {
+      "sha256": "9f1f562065e1e69431637624f75c097140d9e43b9bea045ec334c545389a307b",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-12.log": {
+      "sha256": "c3905d9aa6159bdbe6fd4c99bdde793161ee9991d13e0e0a16c59b06c51eeb36",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-2.log": {
+      "sha256": "9f5aa6fabdd4e06357a7cb5bf093ce5a6a6ca74a00844361ce7388af4902aab5",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-3.log": {
+      "sha256": "79e53687b7db46b6264f6d28b51b886f53f799efe7fffa2b42557e5c8ef2d9a8",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-4.log": {
+      "sha256": "a053eacb2796a4f4cf0c770fc2ff0ab6da81de69bad02decec33595fa8b2ca67",
+      "bytes": 7595
+    },
+    "tezbar-m9-root-test-build-5.log": {
+      "sha256": "92ba27a164f5266b693fe8fc2edb463df18acf6a913772d05c2fc46c0c4a5982",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-6.log": {
+      "sha256": "c937978f833605f197b87e43fd347f8d0ef710e84e149f8879c73a3ee6643172",
+      "bytes": 4479
+    },
+    "tezbar-m9-root-test-build-7.log": {
+      "sha256": "2dee034ef4be16abbad539a2da597ffc28440a7ae535929f87cc1789204cd6a7",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-8.log": {
+      "sha256": "769a7eefb5a943caffbe75b8aad63d7aca43c28a83097ae7ef02e67522e4529d",
+      "bytes": 7347
+    },
+    "tezbar-m9-root-test-build-9.log": {
+      "sha256": "b1b05a3af2e445190623bb1daf45be30d650edd80ba38f619227dd53cd1107a9",
+      "bytes": 7346
+    },
+    "tezbar-m9-root-typecheck-1.log": {
+      "sha256": "0a3950b265fa5695f0b91b8b01c5c5745c59fba35adccab2418b74ada6e10d58",
+      "bytes": 123
+    },
+    "tezbar-m9-root-typecheck-2.log": {
+      "sha256": "d6ebc297c109e5ab4d62d46f7d6e93159e0bcd3fefc350d9d039d2249bc5555b",
+      "bytes": 123
+    },
+    "tezbar-m9-root-worker-tests-1.log": {
+      "sha256": "e721040be369c7f5bca264c25502da0b35b1df2a9cd677fd167cb7b86f909a3a",
+      "bytes": 39913
+    },
+    "tezbar-m9-root-worker-tests-2.log": {
+      "sha256": "82d3bb6ee69f9e7645d9ecb61bb79b92c56e2358bebd700ece285e0ec8d4d3bf",
+      "bytes": 39913
+    }
+  },
+  "normal_full_suite": null,
+  "bench_full_suite": null,
+  "clean_pin_build": false,
+  "windows": false,
+  "manual": false,
+  "RAM": null,
+  "acceptance": false,
+  "source_snapshot": "source-freeze.json",
+  "source_before_after_proof": "not claimed for root focused runs; required for follow-up gates",
+  "prepared_fixture": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-UT42j2/prepared.json",
+  "commands": {
+    "build_test_library": [
+      "cargo",
+      "+1.98.1",
+      "test",
+      "--locked",
+      "--offline",
+      "-j2",
+      "-p",
+      "tezbar-native",
+      "--lib",
+      "--features",
+      "runtime-shaders",
+      "review_m9",
+      "--no-run"
+    ],
+    "native_filters": [
+      "review_m9",
+      "surfaces::extension_runtime::real_sdk::sdk_",
+      "m9_admission_tests"
+    ],
+    "native_binary": "target/debug/deps/tezbar_native-9cbf2c86ba66ed07",
+    "native_flags": [
+      "--test-threads=2",
+      "--nocapture"
+    ],
+    "native_env": {
+      "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-UT42j2/prepared.json",
+      "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+      "TZ": "Asia/Almaty"
+    },
+    "date_matrix_TZ": [
+      "Asia/Almaty",
+      "America/Los_Angeles"
+    ],
+    "models": [
+      "cargo",
+      "+1.98.1",
+      "test",
+      "--locked",
+      "--offline",
+      "-j2",
+      "-p",
+      "tezbar-ui-model",
+      "--all-features",
+      "--lib"
+    ],
+    "ts": [
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "src/main/extension-runner-effects.test.ts"
+    ],
+    "typecheck": [
+      "pnpm",
+      "typecheck"
+    ]
+  },
+  "root_app_barrier_followup": "busy extension installs reject quit before any chat/terminal cancellation; actual App test passes"
+}

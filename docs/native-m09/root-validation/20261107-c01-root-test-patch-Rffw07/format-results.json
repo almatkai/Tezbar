@@ -1,0 +1,186 @@
+{
+  "owned": [
+    {
+      "file": "apps/tezbar/src/app.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/app/m8.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/app/m8_tests.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 1
+    },
+    {
+      "file": "apps/tezbar/src/app/m9_review_tests.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": null
+    },
+    {
+      "file": "apps/tezbar/src/core_client.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/host_adapter.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/extension_integration.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/mod.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/presentation.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/command_bar/review_extension_access.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": null
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extension_runtime/images.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extension_runtime/mod.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extension_runtime/preferences.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extension_runtime/review_regressions.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": null
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extension_runtime/tests.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extension_runtime/view.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extensions_store/mod.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extensions_store/tests.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "apps/tezbar/src/surfaces/extensions_store/view.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "crates/tezbar-core/src/extension_worker.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "crates/tezbar-core/src/extensions/process_host.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "crates/tezbar-core/src/host.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "crates/tezbar-ui-model/src/extensions/runtime.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    },
+    {
+      "file": "crates/tezbar-ui-model/src/extensions/runtime/tests.rs",
+      "exit_code": 0,
+      "baseline_9230bcc_exit_code": 0
+    }
+  ],
+  "prior_global_baseline_count": 49,
+  "prior_baseline_files": [
+    "apps/tezbar/src/app/m8_tests.rs",
+    "apps/tezbar/src/lib.rs",
+    "apps/tezbar/src/surfaces/command_bar/task_indicator.rs",
+    "crates/tezbar-core/build.rs",
+    "crates/tezbar-core/src/ai/canonical_tests.rs",
+    "crates/tezbar-core/src/ai/chat.rs",
+    "crates/tezbar-core/src/ai/ext/project.rs",
+    "crates/tezbar-core/src/ai/ext/secrets.rs",
+    "crates/tezbar-core/src/ai/legacy.rs",
+    "crates/tezbar-core/src/ai/mod.rs",
+    "crates/tezbar-core/src/ai/native_tests.rs",
+    "crates/tezbar-core/src/ai/native_tools.rs",
+    "crates/tezbar-core/src/ai/process.rs",
+    "crates/tezbar-core/src/ai/providers/antigravity.rs",
+    "crates/tezbar-core/src/ai/providers/copilot.rs",
+    "crates/tezbar-core/src/ai/runtime/agent.rs",
+    "crates/tezbar-core/src/ai/runtime/store.rs",
+    "crates/tezbar-core/src/ai/runtime/transcript.rs",
+    "crates/tezbar-core/src/ai/tests.rs",
+    "crates/tezbar-core/src/bun.rs",
+    "crates/tezbar-core/src/extensions/catalog.rs",
+    "crates/tezbar-core/src/extensions/command_inputs.rs",
+    "crates/tezbar-core/src/extensions/command_list.rs",
+    "crates/tezbar-core/src/extensions/command_list_tests.rs",
+    "crates/tezbar-core/src/extensions/process.rs",
+    "crates/tezbar-core/src/extensions/process_install.rs",
+    "crates/tezbar-core/src/extensions/registry.rs",
+    "crates/tezbar-core/src/knowledge/db.rs",
+    "crates/tezbar-core/src/knowledge/mod.rs",
+    "crates/tezbar-core/src/knowledge/performance_tests.rs",
+    "crates/tezbar-core/src/knowledge/runtime_bundle.rs",
+    "crates/tezbar-core/src/knowledge/search_cache.rs",
+    "crates/tezbar-core/src/knowledge/semantic_work.rs",
+    "crates/tezbar-core/src/knowledge/semantic_work_tests.rs",
+    "crates/tezbar-core/src/knowledge/tests.rs",
+    "crates/tezbar-core/src/knowledge/text.rs",
+    "crates/tezbar-core/src/launcher/clipboard_native.rs",
+    "crates/tezbar-core/src/launcher/db.rs",
+    "crates/tezbar-core/src/launcher/mod.rs",
+    "crates/tezbar-core/src/launcher/tests.rs",
+    "crates/tezbar-core/src/native_v2_cli.rs",
+    "crates/tezbar-core/src/performance.rs",
+    "crates/tezbar-core/src/terminal_bridge.rs",
+    "crates/tezbar-core/src/tests.rs",
+    "crates/tezbar-core/src/vault/crypto.rs",
+    "crates/tezbar-core/src/vault/mod.rs",
+    "crates/tezbar-core/src/vault/storage.rs",
+    "crates/tezbar-host/src/lib.rs",
+    "crates/tezbar-ui-model/src/chat/tests.rs"
+  ],
+  "actual_owned_overlap": [],
+  "no_source_changes": true,
+  "owned_files_also_in_prior_global_baseline": [
+    "apps/tezbar/src/app/m8_tests.rs"
+  ]
+}

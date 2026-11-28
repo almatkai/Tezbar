@@ -1,0 +1,2779 @@
+{
+  "schemaVersion": 1,
+  "base": "9ff3663342b48ab01be2e56ab30f6d7123b0ced8",
+  "host": {
+    "cpu": "Apple M5 Pro",
+    "ramGiB": 24,
+    "os": "macOS 26.3",
+    "rust": "1.98.0",
+    "build": "release"
+  },
+  "scope": "Native subsystem synthetic benchmarks and empty-profile headless core; not whole-app or inference measurements",
+  "measurements": [
+    {
+      "first_ms": 9.351583,
+      "mean_ms": 8.775676025,
+      "name": "deep.semantic.cold",
+      "p50_ms": 8.744417,
+      "p95_ms": 9.067667,
+      "p99_ms": 9.455084000000001,
+      "results": [
+        {
+          "id": "c00001",
+          "score": 0.4918032786885246,
+          "sourceId": "s00001"
+        },
+        {
+          "id": "c00002",
+          "score": 0.4838709677419355,
+          "sourceId": "s00002"
+        },
+        {
+          "id": "c00003",
+          "score": 0.47619047619047616,
+          "sourceId": "s00003"
+        },
+        {
+          "id": "c00004",
+          "score": 0.46875,
+          "sourceId": "s00004"
+        },
+        {
+          "id": "c00005",
+          "score": 0.46153846153846156,
+          "sourceId": "s00005"
+        },
+        {
+          "id": "c00006",
+          "score": 0.45454545454545453,
+          "sourceId": "s00006"
+        },
+        {
+          "id": "c00007",
+          "score": 0.44776119402985076,
+          "sourceId": "s00007"
+        },
+        {
+          "id": "c00008",
+          "score": 0.4411764705882353,
+          "sourceId": "s00008"
+        },
+        {
+          "id": "c00009",
+          "score": 0.43478260869565216,
+          "sourceId": "s00009"
+        },
+        {
+          "id": "c00010",
+          "score": 0.42857142857142855,
+          "sourceId": "s00010"
+        },
+        {
+          "id": "c00011",
+          "score": 0.4225352112676056,
+          "sourceId": "s00011"
+        },
+        {
+          "id": "c00012",
+          "score": 0.4166666666666667,
+          "sourceId": "s00012"
+        },
+        {
+          "id": "c00013",
+          "score": 0.410958904109589,
+          "sourceId": "s00013"
+        },
+        {
+          "id": "c00014",
+          "score": 0.40540540540540543,
+          "sourceId": "s00014"
+        },
+        {
+          "id": "c00015",
+          "score": 0.4,
+          "sourceId": "s00015"
+        },
+        {
+          "id": "c00016",
+          "score": 0.39473684210526316,
+          "sourceId": "s00016"
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 1.4935829999999999,
+      "mean_ms": 1.367783325,
+      "name": "deep.semantic.warm",
+      "p50_ms": 1.361541,
+      "p95_ms": 1.3983750000000001,
+      "p99_ms": 1.448167,
+      "results": [
+        {
+          "id": "c00001",
+          "score": 0.4918032786885246,
+          "sourceId": "s00001"
+        },
+        {
+          "id": "c00002",
+          "score": 0.4838709677419355,
+          "sourceId": "s00002"
+        },
+        {
+          "id": "c00003",
+          "score": 0.47619047619047616,
+          "sourceId": "s00003"
+        },
+        {
+          "id": "c00004",
+          "score": 0.46875,
+          "sourceId": "s00004"
+        },
+        {
+          "id": "c00005",
+          "score": 0.46153846153846156,
+          "sourceId": "s00005"
+        },
+        {
+          "id": "c00006",
+          "score": 0.45454545454545453,
+          "sourceId": "s00006"
+        },
+        {
+          "id": "c00007",
+          "score": 0.44776119402985076,
+          "sourceId": "s00007"
+        },
+        {
+          "id": "c00008",
+          "score": 0.4411764705882353,
+          "sourceId": "s00008"
+        },
+        {
+          "id": "c00009",
+          "score": 0.43478260869565216,
+          "sourceId": "s00009"
+        },
+        {
+          "id": "c00010",
+          "score": 0.42857142857142855,
+          "sourceId": "s00010"
+        },
+        {
+          "id": "c00011",
+          "score": 0.4225352112676056,
+          "sourceId": "s00011"
+        },
+        {
+          "id": "c00012",
+          "score": 0.4166666666666667,
+          "sourceId": "s00012"
+        },
+        {
+          "id": "c00013",
+          "score": 0.410958904109589,
+          "sourceId": "s00013"
+        },
+        {
+          "id": "c00014",
+          "score": 0.40540540540540543,
+          "sourceId": "s00014"
+        },
+        {
+          "id": "c00015",
+          "score": 0.4,
+          "sourceId": "s00015"
+        },
+        {
+          "id": "c00016",
+          "score": 0.39473684210526316,
+          "sourceId": "s00016"
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "estimated_allocated_bytes": 13212960,
+      "name": "deep.cache",
+      "rows": 10000
+    },
+    {
+      "first_ms": 21.042749999999998,
+      "mean_ms": 20.033636575,
+      "name": "deep.lexical",
+      "p50_ms": 20.022458,
+      "p95_ms": 20.658708,
+      "p99_ms": 21.146458,
+      "results": [
+        {
+          "id": "c00001",
+          "score": 0.9299999999999999,
+          "sourceId": "s00001"
+        },
+        {
+          "id": "c00002",
+          "score": 0.92775,
+          "sourceId": "s00002"
+        },
+        {
+          "id": "c00003",
+          "score": 0.9255,
+          "sourceId": "s00003"
+        },
+        {
+          "id": "c00004",
+          "score": 0.92325,
+          "sourceId": "s00004"
+        },
+        {
+          "id": "c00005",
+          "score": 0.921,
+          "sourceId": "s00005"
+        },
+        {
+          "id": "c00006",
+          "score": 0.91875,
+          "sourceId": "s00006"
+        },
+        {
+          "id": "c00007",
+          "score": 0.9165,
+          "sourceId": "s00007"
+        },
+        {
+          "id": "c00008",
+          "score": 0.91425,
+          "sourceId": "s00008"
+        },
+        {
+          "id": "c00009",
+          "score": 0.912,
+          "sourceId": "s00009"
+        },
+        {
+          "id": "c00010",
+          "score": 0.90975,
+          "sourceId": "s00010"
+        },
+        {
+          "id": "c00011",
+          "score": 0.9075,
+          "sourceId": "s00011"
+        },
+        {
+          "id": "c00012",
+          "score": 0.90525,
+          "sourceId": "s00012"
+        },
+        {
+          "id": "c00013",
+          "score": 0.903,
+          "sourceId": "s00013"
+        },
+        {
+          "id": "c00014",
+          "score": 0.9007499999999999,
+          "sourceId": "s00014"
+        },
+        {
+          "id": "c00015",
+          "score": 0.8985,
+          "sourceId": "s00015"
+        },
+        {
+          "id": "c00016",
+          "score": 0.89625,
+          "sourceId": "s00016"
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 2.2254169999999998,
+      "mean_ms": 2.2708792749999995,
+      "name": "launcher.home",
+      "p50_ms": 1.872334,
+      "p95_ms": 3.382458,
+      "p99_ms": 3.480583,
+      "results": [
+        {
+          "id": "doc:100399",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100398",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100397",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100396",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100395",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100394",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100393",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100392",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100391",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100390",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100389",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100388",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100387",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100386",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100385",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100384",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100383",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100382",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100381",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100380",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100379",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100378",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100377",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100376",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100375",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100374",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100373",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100372",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100371",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100370",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100369",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100368",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100367",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100366",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100365",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100364",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100363",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100362",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100361",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100360",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100359",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100358",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100357",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100356",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100355",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100354",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100353",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100352",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100351",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100350",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100349",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100348",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100347",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100346",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100345",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100344",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100343",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100342",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100341",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100340",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100339",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100338",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100337",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100336",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100335",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100334",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100333",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100332",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100331",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100330",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100329",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100328",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100327",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100326",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100325",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100324",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100323",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100322",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100321",
+          "score": 588.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100320",
+          "score": 588.0,
+          "sourceId": null
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 5.4680420000000005,
+      "mean_ms": 5.148601124999999,
+      "name": "launcher.exact",
+      "p50_ms": 5.138667000000001,
+      "p95_ms": 5.5365,
+      "p99_ms": 5.859458,
+      "results": [
+        {
+          "id": "doc:100001",
+          "score": 1556.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100101",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100091",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100081",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100071",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100061",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100051",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100041",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100031",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100021",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100011",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100009",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100008",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100007",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100006",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100005",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100004",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100003",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100002",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100000",
+          "score": 706.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100159",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100158",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100157",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100156",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100155",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100154",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100153",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100152",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100151",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100150",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100149",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100148",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100147",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100146",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100145",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100144",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100143",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100142",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100141",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100140",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100139",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100138",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100137",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100136",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100135",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100134",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100133",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100132",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100131",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100130",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100129",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100128",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100127",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100126",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100125",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100124",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100123",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100122",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100121",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100120",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100119",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100118",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100117",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100116",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100115",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100114",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100113",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100112",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100111",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100110",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100109",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100108",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100107",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100106",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100105",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100104",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100103",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100102",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100100",
+          "score": 705.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100099",
+          "score": 705.0,
+          "sourceId": null
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 2.945541,
+      "mean_ms": 2.8793821249999993,
+      "name": "launcher.prefix",
+      "p50_ms": 2.857459,
+      "p95_ms": 3.028,
+      "p99_ms": 3.1270000000000002,
+      "results": [
+        {
+          "id": "doc:100159",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100158",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100157",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100156",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100155",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100154",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100153",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100152",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100151",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100150",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100149",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100148",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100147",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100146",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100145",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100144",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100143",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100142",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100141",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100140",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100139",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100138",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100137",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100136",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100135",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100134",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100133",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100132",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100131",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100130",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100129",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100128",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100127",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100126",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100125",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100124",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100123",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100122",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100121",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100120",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100119",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100118",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100117",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100116",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100115",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100114",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100113",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100112",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100111",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100110",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100109",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100108",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100107",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100106",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100105",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100104",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100103",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100102",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100101",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100100",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100099",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100098",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100097",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100096",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100095",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100094",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100093",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100092",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100091",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100090",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100089",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100088",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100087",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100086",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100085",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100084",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100083",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100082",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100081",
+          "score": 1260.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100080",
+          "score": 1260.0,
+          "sourceId": null
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 6.698917000000001,
+      "mean_ms": 6.921318700000002,
+      "name": "launcher.typo",
+      "p50_ms": 6.882041999999999,
+      "p95_ms": 7.42925,
+      "p99_ms": 8.131459000000001,
+      "results": [
+        {
+          "id": "doc:100399",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100398",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100397",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100396",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100395",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100394",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100393",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100392",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100391",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100390",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100389",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100388",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100387",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100386",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100385",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100384",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100383",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100382",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100381",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100380",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100379",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100378",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100377",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100376",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100375",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100374",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100373",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100372",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100371",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100370",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100369",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100368",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100367",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100366",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100365",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100364",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100363",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100362",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100361",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100360",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100359",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100358",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100357",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100356",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100355",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100354",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100353",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100352",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100351",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100350",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100349",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100348",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100347",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100346",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100345",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100344",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100343",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100342",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100341",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100340",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100339",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100338",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100337",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100336",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100335",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100334",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100333",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100332",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100331",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100330",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100329",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100328",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100327",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100326",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100325",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100324",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100323",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100322",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100321",
+          "score": 696.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100320",
+          "score": 696.0,
+          "sourceId": null
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 3.7126669999999997,
+      "mean_ms": 3.5243333999999997,
+      "name": "launcher.keyboard_layout",
+      "p50_ms": 3.5101669999999996,
+      "p95_ms": 3.7750000000000004,
+      "p99_ms": 3.85475,
+      "results": [
+        {
+          "id": "doc:100159",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100158",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100157",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100156",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100155",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100154",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100153",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100152",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100151",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100150",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100149",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100148",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100147",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100146",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100145",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100144",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100143",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100142",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100141",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100140",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100139",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100138",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100137",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100136",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100135",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100134",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100133",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100132",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100131",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100130",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100129",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100128",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100127",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100126",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100125",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100124",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100123",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100122",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100121",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100120",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100119",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100118",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100117",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100116",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100115",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100114",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100113",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100112",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100111",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100110",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100109",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100108",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100107",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100106",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100105",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100104",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100103",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100102",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100101",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100100",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100099",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100098",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100097",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100096",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100095",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100094",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100093",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100092",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100091",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100090",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100089",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100088",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100087",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100086",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100085",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100084",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100083",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100082",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100081",
+          "score": 1245.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100080",
+          "score": 1245.0,
+          "sourceId": null
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 32.913292,
+      "mean_ms": 31.804197950000002,
+      "name": "launcher.file_heavy",
+      "p50_ms": 31.45725,
+      "p95_ms": 32.916583,
+      "p99_ms": 43.477916,
+      "results": [
+        {
+          "id": "doc:159",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:158",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:157",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:156",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:155",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:154",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:153",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:152",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:151",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:150",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:149",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:148",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:147",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:146",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:145",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:144",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:143",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:142",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:141",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:140",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:139",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:138",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:137",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:136",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:135",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:134",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:133",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:132",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:131",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:130",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:129",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:128",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:127",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:126",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:125",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:124",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:123",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:122",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:121",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:120",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:119",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:118",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:117",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:116",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:115",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:114",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:113",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:112",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:111",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:110",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:109",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:108",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:107",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:106",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:105",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:104",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:103",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:102",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:101",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:100",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:99",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:98",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:97",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:96",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:95",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:94",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:93",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:92",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:91",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:90",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:89",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:88",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:87",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:86",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:85",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:84",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:83",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:82",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:81",
+          "score": 750.0,
+          "sourceId": null
+        },
+        {
+          "id": "doc:80",
+          "score": 750.0,
+          "sourceId": null
+        }
+      ],
+      "samples": 40
+    },
+    {
+      "first_ms": 5.89325,
+      "mean_ms": 5.474613599999999,
+      "name": "launcher.no_hit",
+      "p50_ms": 5.411917,
+      "p95_ms": 5.773124999999999,
+      "p99_ms": 5.887417,
+      "results": [],
+      "samples": 40
+    },
+    {
+      "cpu_seconds": 0.024851,
+      "events": 1,
+      "name": "core.idle",
+      "one_core_cpu_percent": 0.08283157022514122,
+      "ready_ms": 6.166917,
+      "rss_after_kib": 21056,
+      "rss_before_kib": 20784,
+      "scope": "headless native core, empty isolated profile; no WebView/model/app enumeration/file watcher",
+      "wall_seconds": 30.001845833
+    }
+  ]
+}

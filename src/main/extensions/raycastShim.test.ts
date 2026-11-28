@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as appsProvider from '../search/providers/appsProvider'
+import * as workerServices from '../extensionWorker/services'
 
 /** We can't import the real `electron` module in a vitest (node) env — it
  *  only exposes the main/renderer APIs when loaded from an Electron
@@ -149,7 +149,7 @@ describe('raycast shim API surface', () => {
   })
 
   it('getApplications returns applications with bundle identifiers', async () => {
-    vi.spyOn(appsProvider, 'listApplications').mockReturnValue([{ name: 'Sample', path: '/Applications/Sample.app', bundleId: 'com.example.Sample' }])
+    vi.spyOn(workerServices, 'listApplications').mockReturnValue([{ name: 'Sample', path: '/Applications/Sample.app', bundleId: 'com.example.Sample' }])
     const api = createRaycastApi(ctx) as Record<string, any>
     const apps = await api.getApplications()
     expect(apps).toEqual([{ name: 'Sample', path: '/Applications/Sample.app', bundleId: 'com.example.Sample' }])
@@ -157,7 +157,7 @@ describe('raycast shim API surface', () => {
 
   it('getFrontmostApplication and getDefaultApplication return expected shapes', async () => {
     const sample = { name: 'Sample', path: '/Applications/Sample.app', bundleId: 'com.example.Sample' }
-    const listApplications = vi.spyOn(appsProvider, 'listApplications').mockReturnValue([sample])
+    const listApplications = vi.spyOn(workerServices, 'listApplications').mockReturnValue([sample])
     const api = createRaycastApi(ctx) as Record<string, any>
     const frontmost = await api.getFrontmostApplication()
     expect(frontmost).toEqual(sample)

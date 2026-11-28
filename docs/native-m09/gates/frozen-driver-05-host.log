@@ -1,0 +1,6 @@
+START core-host-port
+END core-host-port: 0
+START core-status-port
+END core-status-port: 0
+START core-color-formats
+END core-color-formats: 0

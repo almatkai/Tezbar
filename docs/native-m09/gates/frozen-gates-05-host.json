@@ -1,0 +1,87 @@
+{
+  "freeze": "docs/native-m09/final-source-freeze-05.json",
+  "aggregate_sha256": "e0ddcdd504ff0f021b897cba21c35d733453e262cd728fb4c68682a6feaf22d0",
+  "gates": [
+    {
+      "gate": "core-host-port",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "platform::tests::host_",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-05-host-core-host-port.log",
+      "exit_code": 0,
+      "seconds": 0.57,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 593 filtered out; finished in 0.13s"
+      ]
+    },
+    {
+      "gate": "core-status-port",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extensions::process_host::status_port_tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-05-host-core-status-port.log",
+      "exit_code": 0,
+      "seconds": 0.32,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.03s"
+      ]
+    },
+    {
+      "gate": "core-color-formats",
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "instant::color::tests",
+        "--",
+        "--test-threads=2"
+      ],
+      "environment": {},
+      "log": "docs/native-m09/gates/frozen-05-host-core-color-formats.log",
+      "exit_code": 0,
+      "seconds": 0.33,
+      "changed_inputs_before": [],
+      "changed_inputs_after": [],
+      "summaries": [
+        "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 605 filtered out; finished in 0.00s"
+      ]
+    }
+  ]
+}

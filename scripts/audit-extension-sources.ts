@@ -2,7 +2,11 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import ts from 'typescript'
-import { LOVED_EXTENSIONS } from '../src/shared/lovedExtensions'
+import type { ExtensionManifest } from '../src/shared/extensions'
+import lovedCatalog from '../crates/tezbar-core/src/extensions/loved_extensions.json'
+
+// The Rust core owns the recommended-extension list; tooling reads the same JSON.
+const LOVED_EXTENSIONS = lovedCatalog as unknown as ExtensionManifest[]
 
 const root = resolve(process.argv[2] || '/tmp/tezbar-full-catalog-audit')
 const output = process.argv[3] || '/tmp/tezbar-catalog-source-audit.json'

@@ -50,7 +50,7 @@ test('missing or weakened GitHub environment approval rules fail closed', () => 
 })
 
 const base = JSON.parse(
-  readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')
+  readFileSync(new URL('../packaging/legacy-app-policy.json', import.meta.url), 'utf8')
 )
 
 test('a private local preview can start on Stable without enabling unsigned Stable publication', () => {
@@ -192,7 +192,7 @@ test('actual signatures and post-verification artifact hashes are enforced', () 
     )
     writeFileSync(path, 'modified after verification')
     assert.throws(() => validateReceipt(receipt, directory, encodedKey))
-    assert.equal(REQUIRED_PLATFORMS.length, 3)
+    assert.deepEqual(REQUIRED_PLATFORMS, ['windows-x86_64-nsis', 'darwin-aarch64'])
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -228,8 +228,12 @@ test('a complete release requires matching signed receipts for every platform', 
       directory,
       expected
     )
-    assert.equal(Object.keys(complete.platforms).length, 3)
+    assert.equal(Object.keys(complete.platforms).length, 2)
     assert.equal(complete.sourceCommit, expected.sourceCommit)
+    for (const omitted of REQUIRED_PLATFORMS) {
+      assert.throws(() => manifestFromReceipts(receipts.filter(r => r.platform !== omitted), 'notes', encodedKey, directory, expected), /Missing required platform/)
+    }
+    assert.throws(() => validateReceipt({...receipts[1], platform:'darwin-x86_64'}, directory, encodedKey), /Unsupported release platform/)
     assert.throws(() =>
       manifestFromReceipts([...receipts, receipts[0]], 'notes', encodedKey, directory, expected)
     )

@@ -1,0 +1,36 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.0",
+    "test",
+    "--locked",
+    "--offline",
+    "-j2",
+    "-p",
+    "tezbar-update",
+    "--lib",
+    "--",
+    "native::tests::review_m11_recheck_unwritable_bundle_is_refused_before_quit",
+    "--exact",
+    "--test-threads=1"
+  ],
+  "exit": 0,
+  "stable_compiled_inputs": true,
+  "compiled_inputs": {
+    "Cargo.toml": "16f30dd61d94f5f3b3258bd81af0301812d7bed2307a736a28d563546c9eb44c",
+    "Cargo.lock": "edf39d1959abd2fc975efa0148912548a166dd5607cfc85e7b724f22fc2eb5a0",
+    "src-tauri/macos-signing.json": "f3a6eddc5c16979588b37856fc9294d4778e5ab4579d797ca36d36a684e69aeb",
+    "crates/tezbar-update/Cargo.toml": "fa30e0e4628b23146fb32f7c455cc1955568b7ca7e8abaf1765624aad96ca7af",
+    "crates/tezbar-update/src/lib.rs": "e32c7831fab69dc73a7bbec926f336f32ce2aecfa28ce9aa1bdf855adf8fdc96",
+    "crates/tezbar-update/src/manual_releases.rs": "efe75f10003a911c596954456cf43a6481efbd9be4363c0ffdd167f0ca852866",
+    "crates/tezbar-update/src/native.rs": "4002c12e7242d2d3879ec47e79db36308ac5ef665c6b70a0f9be1ba6116ea110",
+    "crates/tezbar-update/src/notes.rs": "f9f5734de8a3af01a8a1fa903730fca07e68dceaa015d82c10d1f296d532aed1",
+    "crates/tezbar-update/src/notes/http.rs": "2b3072ffe2792edf1c6d8462b481779ac52cd1fa285339f7f7e5327c006135b3",
+    "crates/tezbar-update/src/release_channels.rs": "dfbf75d667384976d521387f4bdcca663837f3072bde97b63cfa42891896ab67",
+    "crates/tezbar-update/src/updater_temp.rs": "1f4e520e5ee1f2d255c0ecb6be9d45f4b9a8e30e90b6795dd6ad46719d6fd137",
+    "crates/tezbar-update/tests/fixtures/fixture.pub": "cfc19d81d82a64fdd51f493cf526002ff1b772ff66924ed3b6348a0871328fe5"
+  },
+  "target": "/tmp/tezbar-m9-c01-validation-Rffw07/target-msrv",
+  "seconds": 2.189015625,
+  "log_sha256": "616a89e620bdc23c28aca9aa3dc9ff88182fd86383b81c24dc603917c56ed0c5"
+}

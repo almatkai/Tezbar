@@ -1,0 +1,8 @@
+   Compiling tezbar-update v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-update)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.74s
+     Running unittests src/lib.rs (/tmp/tezbar-m9-c01-validation-Rffw07/target-msrv/debug/deps/tezbar_update-4623b1c58d077652)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+

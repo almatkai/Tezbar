@@ -1,0 +1,20 @@
+START root-bench-panel
+END root-bench-panel: 0
+START normal-native
+END normal-native: 0
+START bench-native
+END bench-native: 0
+START normal-check
+END normal-check: 0
+START debug-build
+END debug-build: 0
+START lock-drift
+END lock-drift: 0
+START diff
+END diff: 0
+START msrv-check
+END msrv-check: 0
+START msrv-model
+END msrv-model: 0
+START msrv-core-stream
+END msrv-core-stream: 0

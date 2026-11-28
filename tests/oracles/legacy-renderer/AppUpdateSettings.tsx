@@ -1,0 +1,277 @@
+import { useCallback, useEffect, useState } from 'react'
+import type { AppUpdateStatus } from '../../../src/shared/updater'
+import {
+  readAutoUpdatePreference,
+  recordUpdateCheck,
+  RELEASES_PAGE_URL,
+  writeAutoUpdatePreference,
+} from '../../../src/shared/updater'
+import { Button } from './ui/primitives'
+import { Markdown } from './ui/Markdown'
+import ReleaseNotesView from './ReleaseNotesView'
+import { CURRENT_APP_VERSION } from './releaseNotes'
+import { UpdateChannelSettings } from './UpdateChannelSettings'
+
+const CURRENT_VERSION = CURRENT_APP_VERSION
+
+type Status = AppUpdateStatus
+
+export function AppUpdateSettings(): JSX.Element {
+  const [releaseNotesVersion, setReleaseNotesVersion] = useState<string | null>(null)
+  const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  const [autoUpdate, setAutoUpdate] = useState<boolean>(() =>
+    readAutoUpdatePreference(window.localStorage)
+  )
+
+  useEffect(() => {
+    let mounted = true
+    void window.tezbar
+      .getUpdateStatus()
+      .then((next) => {
+        if (mounted && next) setStatus(next)
+      })
+      .catch(() => undefined)
+    const off = window.tezbar.onUpdateStatus((next) => {
+      if (mounted && next) setStatus(next)
+    })
+    return () => {
+      mounted = false
+      off()
+    }
+  }, [])
+
+  const check = useCallback(async () => {
+    setStatus({ kind: 'checking' })
+    try {
+      const next = await window.tezbar.checkForUpdates()
+      setStatus(next)
+      try {
+        recordUpdateCheck(window.localStorage)
+      } catch {
+        // ignore
+      }
+    } catch (error) {
+      setStatus({
+        kind: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }, [])
+
+  const install = useCallback(async () => {
+    try {
+      setStatus(await window.tezbar.downloadAndInstallUpdate())
+    } catch (error) {
+      setStatus({
+        kind: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }, [])
+
+  const restart = useCallback(() => {
+    void window.tezbar.restartApp()
+  }, [])
+
+  const openRelease = useCallback((url: string) => {
+    void window.tezbar.openReleasePage(url || RELEASES_PAGE_URL)
+  }, [])
+
+  const busy = status.kind === 'checking' || status.kind === 'downloading'
+
+  if (releaseNotesVersion) {
+    return (
+      <div className="h-[min(480px,65vh)]">
+        <ReleaseNotesView
+          key={releaseNotesVersion}
+          version={releaseNotesVersion}
+          initialNotes={
+            (status.kind === 'available' || status.kind === 'manualAvailable') &&
+            status.version === releaseNotesVersion &&
+            status.notes.trim()
+              ? { version: status.version, body: status.notes, publishedAt: null }
+              : undefined
+          }
+          onBack={() => setReleaseNotesVersion(null)}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <UpdateChannelSettings
+        updateBusy={busy || status.kind === 'ready'}
+        onChannelChanged={check}
+      />
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="rounded-tezbar-chip border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] font-semibold text-ink-2">
+          v{CURRENT_VERSION}
+        </span>
+
+        {status.kind !== 'ready' && (
+          <Button
+            variant="primary"
+            onClick={() => void check()}
+            disabled={busy}
+            className="min-w-[140px]"
+          >
+            {status.kind === 'checking'
+              ? 'Checking…'
+              : status.kind === 'downloading'
+                ? 'Downloading…'
+                : 'Check for Updates'}
+          </Button>
+        )}
+
+        {status.kind === 'available' && (
+          <>
+            <Button variant="primary" onClick={() => void install()}>
+              Download & Install
+            </Button>
+            <Button variant="ghost" onClick={() => setReleaseNotesVersion(status.version)}>
+              What's New
+            </Button>
+          </>
+        )}
+
+        {status.kind === 'manualAvailable' && (
+          <Button variant="ghost" onClick={() => setReleaseNotesVersion(status.version)}>
+            What's New
+          </Button>
+        )}
+
+        {status.kind === 'ready' && (
+          <Button variant="primary" onClick={restart}>
+            Relaunch to Update
+          </Button>
+        )}
+
+        <Button
+          variant="ghost"
+          onClick={() =>
+            openRelease(
+              status.kind === 'manualAvailable'
+                ? status.installerUrl
+                : status.kind === 'available'
+                  ? status.releaseUrl
+                  : RELEASES_PAGE_URL
+            )
+          }
+          title="Download an installer from GitHub Releases"
+        >
+          Download Installer
+        </Button>
+
+        {status.kind === 'error' && (
+          <Button variant="ghost" onClick={() => void check()}>
+            Retry
+          </Button>
+        )}
+      </div>
+
+      <div className="pt-2 border-t border-white/[0.06]">
+        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoUpdate}
+            onChange={(e) => {
+              const next = e.target.checked
+              setAutoUpdate(next)
+              writeAutoUpdatePreference(window.localStorage, next)
+            }}
+            className="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/10 text-accent focus:ring-accent/40"
+          />
+          <div>
+            <span className="block text-[12px] font-medium text-ink-2">
+              Automatically download updates
+            </span>
+            <span className="block text-[11px] leading-snug text-ink-4">
+              Signed updates can download automatically in the background. Releases that require
+              manual installation appear in Settings and your search bar with a download link.
+            </span>
+            <span className="block text-[11px] leading-snug text-ink-4/80 mt-1">
+              Updates follow your selected release channel.
+            </span>
+          </div>
+        </label>
+      </div>
+
+      {status.kind === 'upToDate' && (
+        <p className="text-[12px] text-emerald-300">
+          No newer update is available for your selected channel. Current version: {status.version}.
+        </p>
+      )}
+
+      <Button onClick={() => setReleaseNotesVersion(CURRENT_VERSION)}>
+        What’s New in v{CURRENT_VERSION}
+      </Button>
+      {(status.kind === 'available' || status.kind === 'manualAvailable') && (
+        <div className="rounded-tezbar-row border border-white/10 bg-white/[0.03] p-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[12px] font-semibold text-ink-1">
+              v{status.version} available
+            </span>
+            <span className="text-[11px] text-emerald-300">
+              Update Available
+            </span>
+          </div>
+          {status.kind === 'manualAvailable' && (
+            <p role="status" className="mb-3 text-[12px] leading-relaxed text-ink-2">
+              This release requires manual installation. Choose Download Installer, then install it
+              to replace your current version. Your settings and data stay in place.
+            </p>
+          )}
+          {status.notes.trim() ? (
+            <Markdown text={status.notes} className="max-h-64 overflow-y-auto" />
+          ) : (
+            <p className="text-[11.5px] text-ink-4">No release notes provided.</p>
+          )}
+        </div>
+      )}
+
+      {status.kind === 'downloading' && (
+        <div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="h-full rounded-full bg-accent transition-[width]"
+              style={{
+                width:
+                  status.total && status.total > 0
+                    ? `${Math.round((status.downloaded / status.total) * 100)}%`
+                    : '40%',
+              }}
+            />
+          </div>
+          <p className="mt-1 text-[11px] text-ink-4">
+            {status.total
+              ? `${(status.downloaded / 1024 / 1024).toFixed(1)} / ${(status.total / 1024 / 1024).toFixed(1)} MB`
+              : `${(status.downloaded / 1024 / 1024).toFixed(1)} MB downloaded`}
+          </p>
+        </div>
+      )}
+
+      {status.kind === 'ready' && (
+        <p className="text-[12px] text-emerald-300">
+          v{status.version} downloaded — relaunch to finish installing.
+        </p>
+      )}
+
+      {status.kind === 'error' && (
+        <div className="rounded-tezbar-row border border-rose-500/25 bg-rose-500/10 p-3 space-y-2">
+          <p className="text-[12px] font-medium text-rose-300">
+            Update check failed: {status.message}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => void check()}>
+              Retry
+            </Button>
+            <Button variant="ghost" onClick={() => openRelease(RELEASES_PAGE_URL)}>
+              Open GitHub Releases
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

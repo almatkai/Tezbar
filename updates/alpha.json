@@ -1,17 +1,21 @@
 {
-  "version": "0.2.7",
-  "notes": "## Windows emoji and clipboard fix\n\n- Emoji paste correctly on Windows, including systems using Russian console code pages.\n- Pasting waits for the clipboard write to finish before sending Ctrl+V.\n- Clipboard history preserves emoji and other Unicode text.\n\nThis patch release is for Windows x64.",
-  "pub_date": "2026-10-09T06:17:34.700Z",
+  "version": "0.3.0-beta.16",
+  "channel": "beta",
+  "appIdentifier": "com.tezbar.app",
+  "notes": "# Tezbar 0.3.0-beta.16\n\nColor Picker: dragging on the Color Wheel is smooth again. Every drag step reaches the extension, the marker follows the pointer, and the \"Colour action is unavailable\" banner no longer flashes and shifts the page.\n\nWindow: the launcher window can be resized from extension pages, the Store, Terminal and AI Chat, the same as from the launcher.\n\nThe beta.15 Color Picker 1.0.1 update, extension Back fallback and Notes changes carry forward unchanged.\n",
+  "pub_date": "2026-11-27T06:33:29.602Z",
   "platforms": {
-    "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERPb1AvdzlkWWpiU29WUEkzYUQwVXVJeUNkanRIL1pkUHd2bFVxbTNtc3ZYUjJyaDVxU0lsYyszVTMvc2lkNm5XNTRrRUlodEpLU0p1eUI0WTFDZWdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTI2NjM0CWZpbGU6VGV6YmFyXzAuMi43X3g2NC1zZXR1cC5leGUKdEZhSzNJcU1nTGhyVm5sZU44azNjMTU0RlBDSVpHc2V1dEwvREVGL1ZsZDFFMWJaYndieUtaTW5JdHEza0pCMWdPT3E3U2dPaDVzbTJ3OGNlUnhaRHc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe"
+    "darwin-aarch64": {
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.16/Tezbar_0.3.0-beta.16_aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNEhQTDM3c1gvN2lMV3JHRGlFUk9VMXdsN3lwQjVmWDhJNTl1bDVlZTRVMGtUUHdsdG5DZVMwU1BWd3lWT1VYZnRveS9FQi9EbFdnZTVkOEx3dCtrMFE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NzYwNjY4CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTZfYWFyY2g2NC5hcHAudGFyLmd6CmtvZjR5a1NTbXZzb1FCS05Wdy9ucTBJMDhHeTVXZHlNeVlWUlQ0MXZaZG5nZkxMWTVWT2Q5R20yUCtZYitQQ0h0bC9mZW5EcThKTUVTWVdGeEh0M0NnPT0K"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNERPb1AvdzlkWWpiU29WUEkzYUQwVXVJeUNkanRIL1pkUHd2bFVxbTNtc3ZYUjJyaDVxU0lsYyszVTMvc2lkNm5XNTRrRUlodEpLU0p1eUI0WTFDZWdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxNTI2NjM0CWZpbGU6VGV6YmFyXzAuMi43X3g2NC1zZXR1cC5leGUKdEZhSzNJcU1nTGhyVm5sZU44azNjMTU0RlBDSVpHc2V1dEwvREVGL1ZsZDFFMWJaYndieUtaTW5JdHEza0pCMWdPT3E3U2dPaDVzbTJ3OGNlUnhaRHc9PQo=",
-      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.2.7/Tezbar_0.2.7_x64-setup.exe"
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.16/Tezbar_0.3.0-beta.16_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENUdUp6cW1IR0U1emkzOFpMSWI0eThrU1E2MU5GL2pmSkVTMGRSeDVUYUs0RDZyQWRWMkhINVBleVQ0RW9weE5SM1NrSWZZZ25hSk9OTm1ySkpwZlFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NzYxMTM3CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTZfeDY0LXNldHVwLmV4ZQpzd3VwZHhNRG0waWdxOVNaU1BUUGo3ai9vWmtQZnlvTGJHbm1nVlVSRi9QbGhLYVBQR1Nqakh1dVE2bjlQN1lGOWdqbFo1NzRkRTJOSmxmNlBVSmZEdz09Cg=="
+    },
+    "windows-x86_64-nsis": {
+      "url": "https://github.com/almatkai/Tezbar/releases/download/v0.3.0-beta.16/Tezbar_0.3.0-beta.16_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSODYyT05ERnFkNENUdUp6cW1IR0U1emkzOFpMSWI0eThrU1E2MU5GL2pmSkVTMGRSeDVUYUs0RDZyQWRWMkhINVBleVQ0RW9weE5SM1NrSWZZZ25hSk9OTm1ySkpwZlFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NzYxMTM3CWZpbGU6VGV6YmFyXzAuMy4wLWJldGEuMTZfeDY0LXNldHVwLmV4ZQpzd3VwZHhNRG0waWdxOVNaU1BUUGo3ai9vWmtQZnlvTGJHbm1nVlVSRi9QbGhLYVBQR1Nqakh1dVE2bjlQN1lGOWdqbFo1NzRkRTJOSmxmNlBVSmZEdz09Cg=="
     }
-  },
-  "channel": "stable",
-  "appIdentifier": "com.tezbar.app"
+  }
 }

@@ -1,0 +1,42 @@
+{
+  "kind": "Parent M6/M7 validation before M8/M9 export; fresh independent acceptance still pending",
+  "tested_head": "ba3a227dd3dd4084c9dfaea11759bdd299d297ac",
+  "compiled_input_receipt": "docs/native-m07/final-receipt.json",
+  "verified_inputs": 309,
+  "native": 187,
+  "bench": 188,
+  "shared_ui": 51,
+  "preserved_binary": "/tmp/tezbar-native-m67-frozen-parent-evidence/tezbar-frozen-preview",
+  "binary_sha256": "13b764a11112c2d1897e1a4fe0826cfc13af26c31fd9f11c87070d095c6ed1da",
+  "binary_identity": "Original ba3a227 dirty=true preview build; not relabeled as clean",
+  "source_hashes": {
+    "apps/tezbar/build.rs": "44c0f6fafa94f57240df9488d1beb432c553d39b96acd4a4438dd9938256426f",
+    "apps/tezbar/src/surfaces/command_bar/task_indicator.rs": "e3579af422ed7e6f9d077bddada2948522b8fd480ec6f582102c00bf2894ea3b",
+    "apps/tezbar/src/surfaces/command_bar/utilities_integration.rs": "ccfb4884e824e3497582f3f0bd05280f8264cad64f73f9a91c1bb36f6278c9d4",
+    "apps/tezbar/src/surfaces/utilities/background_tasks.rs": "9a8c5149dcae1918a2eef44cb19f05d3e2fe7051619750624d27d08b24f4861e",
+    "apps/tezbar/src/surfaces/utilities/clipboard.rs": "0467dd3c2b46ae2dc3c66dfc22f95db9fcb050edc7ffe314761ad5f3f922120c",
+    "apps/tezbar/src/surfaces/utilities/emoji.rs": "cdbd905dfd1d5c39a956d1fa192a0d7e4f189e2e5a73ae6be462df56aa5b27ca",
+    "apps/tezbar/src/surfaces/utilities/indexing.rs": "bde63076eaef9448b1b7474e087179ed5a6912cb4d9935b35a8c5dc2943265e8",
+    "apps/tezbar/src/surfaces/utilities/mod.rs": "86fa09848a2779f91e14cb99f2f7733091a639086444202dd332f404570537c8",
+    "apps/tezbar/src/surfaces/utilities/notes.rs": "bd91a088d1b087f777e58315fc8f020a900576d525ac09106a7408e5ee59b906",
+    "apps/tezbar/src/surfaces/utilities/permissions.rs": "32499aa51b27d5bb08bc8409ffd34f6b245dbb2804219fb821adfe2ce5523aca",
+    "apps/tezbar/src/surfaces/utilities/release_notes.rs": "6c53e6b56301835ce4c6512e919846b9672ee7551646feeefa3ba3bce9a2d452",
+    "apps/tezbar/src/surfaces/utilities/request.rs": "27cf5f2d76848a4adc9716cc219af5fba0698c1e45546d162e15a61064379273",
+    "apps/tezbar/src/surfaces/utilities/review_regressions.rs": "940560654a334fbefc80a801327495b52ee1b9ae2ff8f267589f9f1a82dba210",
+    "apps/tezbar/src/surfaces/utilities/snippets.rs": "468a87d904c8d39de3a30a149ed5d70944d8b5cd01fb6b729e37a2fc9c0966c4",
+    "apps/tezbar/src/surfaces/utilities/system_monitor.rs": "f061e2a17603e5a1c6a410184bb45ebf5eec70c71064e3045e0bc76e2df5f251",
+    "apps/tezbar/src/surfaces/utilities/tests.rs": "9d770c093e4d99b8d987e04d2108b28d306725284eec8dc33beefac5ee514132",
+    "apps/tezbar/src/surfaces/utilities/vault.rs": "a6559008e054eb0583cbb56be8bd784f779f4c545f1f592a65cda0d6df64b88a",
+    "apps/tezbar/src/surfaces/utilities/view.rs": "f3c10d48a88f09cbf45f1e2f8d9088ae4fa69935f9dd63d1b1370980094a0a2f",
+    "crates/tezbar-ui-model/src/notes.rs": "2d2f718bea5f04cb0f0df8d2e930eccef6777db2c870d312baee6a0b3f5b9972",
+    "crates/tezbar-ui-model/src/utilities.rs": "e8c87be5645156038e7d747a5719ce2b6452ac0f815767e35ec41626e2e0be24",
+    "crates/tezbar-ui-model/src/utilities/monitor.rs": "03df732f4e06645ca55e7c5e4b61b93aa9a4f6aa598116eac5dcab43b0e60971",
+    "crates/tezbar-ui/src/rich_text.rs": "293da41258c5158922fcb404b6ce78fec745ca166b7bd3ecfb9b6b804ee264f0",
+    "crates/tezbar-ui/src/text_input.rs": "ef9308137aa1234028d3a9eacf1e9741e9d77ae71fff4a80b6422dc334ea77a9"
+  },
+  "limits": [
+    "No M8/M9 compilation at this receipt",
+    "No new visual/platform/IME/AX/GPU/RAM acceptance",
+    "No release/install/push/Actions"
+  ]
+}

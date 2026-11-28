@@ -1,0 +1,21 @@
+[
+  {
+    "files": [
+      "apps/tezbar/src/surfaces/extension_runtime/mod.rs",
+      "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs",
+      "apps/tezbar/src/surfaces/extension_runtime/tests.rs",
+      "apps/tezbar/src/surfaces/terminal/input.rs"
+    ],
+    "edition": "2024",
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "files": [
+      "crates/tezbar-core/src/extension_worker.rs"
+    ],
+    "edition": "2021",
+    "exit": 0,
+    "output": ""
+  }
+]

@@ -1,0 +1,33 @@
+error[E0514]: found crate `serde_json` compiled by an incompatible version of rustc
+ --> /tmp/tezbar-m10-root-repair-20261107/after/apps/tezbar/src/surfaces/terminal/state.rs:6:5
+  |
+6 | use serde_json::{Value, json};
+  |     ^^^^^^^^^^
+  |
+  = note: the following crate versions were found:
+          crate `serde_json` compiled by <unknown rustc version>: /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libserde_json-be31d39740fd487f.rlib
+  = help: please recompile that crate using this compiler (rustc 1.98.1 (48a229cea 2026-09-01)) (consider running `cargo clean` first)
+
+error[E0514]: found crate `base64` compiled by an incompatible version of rustc
+   --> /tmp/tezbar-m10-root-repair-20261107/after/apps/tezbar/src/surfaces/terminal/state.rs:669:13
+    |
+669 |         use base64::{Engine, engine::general_purpose::STANDARD};
+    |             ^^^^^^
+    |
+    = note: the following crate versions were found:
+            crate `base64` compiled by <unknown rustc version>: /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libbase64-f34b6c67d19fb4d5.rlib
+    = help: please recompile that crate using this compiler (rustc 1.98.1 (48a229cea 2026-09-01)) (consider running `cargo clean` first)
+
+error[E0514]: found crate `serde` compiled by an incompatible version of rustc
+ --> /tmp/tezbar-m10-root-repair-20261107/after/apps/tezbar/src/surfaces/terminal/request.rs:2:5
+  |
+2 | use serde::{Deserialize, Serialize};
+  |     ^^^^^
+  |
+  = note: the following crate versions were found:
+          crate `serde` compiled by <unknown rustc version>: /Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libserde-dec815659267ace7.rlib
+  = help: please recompile that crate using this compiler (rustc 1.98.1 (48a229cea 2026-09-01)) (consider running `cargo clean` first)
+
+error: aborting due to 3 previous errors
+
+For more information about this error, try `rustc --explain E0514`.

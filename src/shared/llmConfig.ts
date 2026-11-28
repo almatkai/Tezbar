@@ -14,9 +14,15 @@ export type BuiltInProviderId =
   | 'deepseek'
   | 'antigravity'
 
+export type AgentRuntime = 'auto' | 'native' | 'pi'
+
+export type AgentApprovalMode = 'review' | 'default' | 'auto' | 'turbo'
+
 export type ProviderId = BuiltInProviderId | `custom:${string}`
 
 export type LlmTask = 'chat' | 'search' | 'action' | 'voice'
+
+export type AiProtocol = 'openai-chat' | 'openai-responses' | 'anthropic' | 'gemini' | 'ollama'
 
 export type AiModelCapability = 'vision' | 'thinking' | 'tools'
 
@@ -24,16 +30,19 @@ export type AiProviderModel = {
   id: string
   capabilities: AiModelCapability[]
   contextWindow?: number
-/** When false, the model was added by the user (not returned by live provider
- *  discovery). Provider-catalog REPLACE (copilot) keeps these entries across a
- *  refresh; entries without the flag or with `true` are treated as
- *  provider-owned and are dropped when they disappear from the live catalog. */
+  protocol?: AiProtocol
+  maxTokens?: number
+  /** When false, the model was added by the user (not returned by live provider
+   *  discovery). Provider-catalog REPLACE (copilot) keeps these entries across a
+   *  refresh; entries without the flag or with `true` are treated as
+   *  provider-owned and are dropped when they disappear from the live catalog. */
   discovered?: boolean
   /** When true, the model is hidden from the AI-mode model picker but kept in the Settings list. */
   hiddenFromPicker?: boolean
 }
 
 export type AiProviderConfig = {
+  protocol?: AiProtocol
   apiKey?: string
   baseURL?: string
   openaiCompatibleBaseURL?: string
@@ -43,12 +52,21 @@ export type AiProviderConfig = {
 }
 
 export type CustomAiProvider = {
+  _extensionId?: string
   id: `custom:${string}`
   title: string
   subtitle?: string
+  protocol?: AiProtocol
+  baseURL?: string
+  headers?: Record<string, string | { secret: string }>
 }
 
 export type LlmConfigRecord = {
+  thinking?: boolean
+  reasoningEffort?: 'off' | 'low' | 'medium' | 'high'
+  headerTimeoutSeconds?: number
+  /** Read-only native credential availability; values never contain credentials. */
+  nativeProviderCredentials?: Partial<Record<ProviderId, { hasValue: boolean; source: string }>>
   provider?: ProviderId
   customProviders?: CustomAiProvider[]
   providerConfigs?: Partial<Record<ProviderId, AiProviderConfig>>
@@ -70,6 +88,10 @@ export type LlmConfigRecord = {
   memoryIncludePrivate?: boolean
   aiActionRequirePermission?: boolean
   aiActionRedactionEnabled?: boolean
+  /** Execution permission mode for the AI agent: review (always ask), default (ask sensitive), auto, turbo (never ask, guarded against destructive operations). */
+  agentApprovalMode?: AgentApprovalMode
+  /** Legacy persisted preference. All values use the native Rust runtime. */
+  agentRuntime?: AgentRuntime
   voiceSttModelId?: VoiceModelId
   raymesHotkey?: string
   /** Milliseconds to remember palette UI (e.g. Providers) after hide. Default 60000. Use 0 to always reset. */
@@ -80,7 +102,15 @@ export type LlmConfigRecord = {
   aiModeTimeoutMs?: number
   /** Milliseconds of inactivity before terminal mode returns to the main CommandBar. 0 disables it. */
   terminalModeTimeoutMs?: number
-  settingsInitialTab?: 'general' | 'ai' | 'voice' | 'knowledge' | 'extensions' | 'permissions' | 'storage' | 'advanced'
+  settingsInitialTab?:
+    | 'general'
+    | 'ai'
+    | 'voice'
+    | 'knowledge'
+    | 'extensions'
+    | 'permissions'
+    | 'storage'
+    | 'advanced'
   /** Set once the first-run onboarding tour has been completed or skipped. */
   hasCompletedOnboarding?: boolean
 }

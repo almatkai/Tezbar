@@ -1,0 +1,226 @@
+✔ static metadata capture handles chunk boundaries, duplicates, truncation and missing records without execution (4.607875ms)
+   Compiling version_check v0.9.5
+   Compiling proc-macro2 v1.0.107
+   Compiling generic-array v0.14.7
+   Compiling unicode-ident v1.0.27
+   Compiling quote v1.0.47
+   Compiling typenum v1.20.1
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.191
+   Compiling zmij v1.0.23
+   Compiling syn v3.0.9
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling serde_json v1.0.154
+   Compiling serde v1.0.229
+   Compiling digest v0.10.7
+   Compiling serde_derive v1.0.229
+   Compiling cpufeatures v0.2.17
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling cfg-if v1.0.5
+   Compiling sha2 v0.10.9
+   Compiling tezbar-native v9.8.7-beta.1 (/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-admission-toy-I0mRn7)
+warning: constant `GPUI_REV` is never used
+ --> src/build_metadata.rs:6:11
+  |
+6 | pub const GPUI_REV: &str = "c84af5b99cbc366d675064e52b23664a015b6e35";
+  |           ^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RECORD_LIMIT` is never used
+ --> src/build_metadata.rs:9:7
+  |
+9 | const RECORD_LIMIT: usize = 4096;
+  |       ^^^^^^^^^^^^
+
+warning: method `production` is never used
+  --> src/build_metadata.rs:47:12
+   |
+46 | impl BuildMetadata {
+   | ------------------ method in this implementation
+47 |     pub fn production(&self, version: &str) -> Result<(), String> {
+   |            ^^^^^^^^^^
+
+warning: function `capture` is never used
+  --> src/build_metadata.rs:66:8
+   |
+66 | pub fn capture(path: &Path) -> Result<(BuildMetadata, String), String> {
+   |        ^^^^^^^
+
+warning: function `verify_payload` is never used
+ --> src/bundle_validation.rs:7:8
+  |
+7 | pub fn verify_payload(
+  |        ^^^^^^^^^^^^^^
+
+warning: function `verify_resources` is never used
+  --> src/bundle_validation.rs:39:4
+   |
+39 | fn verify_resources(root: &Path, binary: &BuildMetadata, metadata_sha256: &str) -> Result<(), String> {
+   |    ^^^^^^^^^^^^^^^^
+
+warning: constant `LIMIT` is never used
+ --> src/quit_budget.rs:4:11
+  |
+4 | pub const LIMIT: Duration = Duration::from_secs(8);
+  |           ^^^^^
+
+warning: constant `COMMIT_RESERVE` is never used
+ --> src/quit_budget.rs:5:7
+  |
+5 | const COMMIT_RESERVE: Duration = Duration::from_secs(3);
+  |       ^^^^^^^^^^^^^^
+
+warning: function `commit` is never used
+ --> src/quit_budget.rs:7:8
+  |
+7 | pub fn commit<T>(elapsed: Duration, committed: &Cell<bool>, destructive: impl FnOnce() -> T) -> Result<T, String> {
+  |        ^^^^^^
+
+    Finished `release` profile [optimized] target(s) in 6.42s
+   Compiling tezbar-native v9.8.7-beta.1 (/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-admission-toy-I0mRn7)
+warning: constant `GPUI_REV` is never used
+ --> src/build_metadata.rs:6:11
+  |
+6 | pub const GPUI_REV: &str = "c84af5b99cbc366d675064e52b23664a015b6e35";
+  |           ^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RECORD_LIMIT` is never used
+ --> src/build_metadata.rs:9:7
+  |
+9 | const RECORD_LIMIT: usize = 4096;
+  |       ^^^^^^^^^^^^
+
+warning: method `production` is never used
+  --> src/build_metadata.rs:47:12
+   |
+46 | impl BuildMetadata {
+   | ------------------ method in this implementation
+47 |     pub fn production(&self, version: &str) -> Result<(), String> {
+   |            ^^^^^^^^^^
+
+warning: function `capture` is never used
+  --> src/build_metadata.rs:66:8
+   |
+66 | pub fn capture(path: &Path) -> Result<(BuildMetadata, String), String> {
+   |        ^^^^^^^
+
+warning: function `verify_payload` is never used
+ --> src/bundle_validation.rs:7:8
+  |
+7 | pub fn verify_payload(
+  |        ^^^^^^^^^^^^^^
+
+warning: function `verify_resources` is never used
+  --> src/bundle_validation.rs:39:4
+   |
+39 | fn verify_resources(root: &Path, binary: &BuildMetadata, metadata_sha256: &str) -> Result<(), String> {
+   |    ^^^^^^^^^^^^^^^^
+
+warning: constant `LIMIT` is never used
+ --> src/quit_budget.rs:4:11
+  |
+4 | pub const LIMIT: Duration = Duration::from_secs(8);
+  |           ^^^^^
+
+warning: constant `COMMIT_RESERVE` is never used
+ --> src/quit_budget.rs:5:7
+  |
+5 | const COMMIT_RESERVE: Duration = Duration::from_secs(3);
+  |       ^^^^^^^^^^^^^^
+
+warning: function `commit` is never used
+ --> src/quit_budget.rs:7:8
+  |
+7 | pub fn commit<T>(elapsed: Duration, committed: &Cell<bool>, destructive: impl FnOnce() -> T) -> Result<T, String> {
+  |        ^^^^^^
+
+    Finished `release` profile [optimized] target(s) in 0.29s
+   Compiling tezbar-native v9.8.7-beta.1 (/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-admission-toy-I0mRn7)
+warning: constant `GPUI_REV` is never used
+ --> src/build_metadata.rs:6:11
+  |
+6 | pub const GPUI_REV: &str = "c84af5b99cbc366d675064e52b23664a015b6e35";
+  |           ^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `RECORD_LIMIT` is never used
+ --> src/build_metadata.rs:9:7
+  |
+9 | const RECORD_LIMIT: usize = 4096;
+  |       ^^^^^^^^^^^^
+
+warning: method `production` is never used
+  --> src/build_metadata.rs:47:12
+   |
+46 | impl BuildMetadata {
+   | ------------------ method in this implementation
+47 |     pub fn production(&self, version: &str) -> Result<(), String> {
+   |            ^^^^^^^^^^
+
+warning: function `capture` is never used
+  --> src/build_metadata.rs:66:8
+   |
+66 | pub fn capture(path: &Path) -> Result<(BuildMetadata, String), String> {
+   |        ^^^^^^^
+
+warning: function `verify_payload` is never used
+ --> src/bundle_validation.rs:7:8
+  |
+7 | pub fn verify_payload(
+  |        ^^^^^^^^^^^^^^
+
+warning: function `verify_resources` is never used
+  --> src/bundle_validation.rs:39:4
+   |
+39 | fn verify_resources(root: &Path, binary: &BuildMetadata, metadata_sha256: &str) -> Result<(), String> {
+   |    ^^^^^^^^^^^^^^^^
+
+warning: constant `LIMIT` is never used
+ --> src/quit_budget.rs:4:11
+  |
+4 | pub const LIMIT: Duration = Duration::from_secs(8);
+  |           ^^^^^
+
+warning: constant `COMMIT_RESERVE` is never used
+ --> src/quit_budget.rs:5:7
+  |
+5 | const COMMIT_RESERVE: Duration = Duration::from_secs(3);
+  |       ^^^^^^^^^^^^^^
+
+warning: function `commit` is never used
+ --> src/quit_budget.rs:7:8
+  |
+7 | pub fn commit<T>(elapsed: Duration, committed: &Cell<bool>, destructive: impl FnOnce() -> T) -> Result<T, String> {
+  |        ^^^^^^
+
+    Finished `release` profile [optimized] target(s) in 0.30s
+✔ real production payload and quit-budget sources pass in a private toy crate; optimized binary retains truthful static metadata (14277.628833ms)
+✔ native build arguments cannot request signing/channel/version or partial packaging (0.481625ms)
+✔ assembly refuses source changes (0.093375ms)
+✔ Cargo artifact selection ignores stale paths, dependencies, libraries and tests (1.860125ms)
+    Blocking waiting for file lock on package cache
+   Compiling tezbar-native v0.0.0 (/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-artifact-cargo-xy873I)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.47s
+    Checking tezbar-native v0.0.0 (/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-artifact-cargo-xy873I)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+   Compiling tezbar-native v0.0.0 (/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-artifact-cargo-xy873I)
+error: could not compile `tezbar-native` (bin "tezbar") due to 1 previous error
+✔ real toy Cargo JSON honors a configured triple and CARGO_TARGET_DIR, ignoring a stale non-triple executable (781.333ms)
+✔ inventories reject traversal, collisions, missing provenance and symlink-shaped names (0.622208ms)
+✔ plist preserves production metadata and exact permission strings without LSUIElement (2.324917ms)
+✔ planning refuses installed app paths and invented identities before any I/O (0.287ms)
+✔ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (40.120542ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14325.391833

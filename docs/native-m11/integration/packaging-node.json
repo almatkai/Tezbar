@@ -1,0 +1,23 @@
+{
+  "command": [
+    "node",
+    "--test",
+    "scripts/native/package-macos.test.mjs",
+    "scripts/native/nsis-template.test.mjs",
+    "scripts/native/build.test.mjs"
+  ],
+  "environment": {
+    "CARGO_BUILD_JOBS": "2",
+    "RUST_TEST_THREADS": "2",
+    "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+    "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+    "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+    "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+    "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+  },
+  "exit_code": 1,
+  "seconds": 0.13,
+  "inputs_sha256": "e24128c4cb8509fc009087fac9ad1b2810028e1eff727d69caaf4770adeec484",
+  "changed_inputs": [],
+  "log_sha256": "3b0c9ec591a36fd3f6ff6d70cc28fe0b613071deb01d57ff24f7d0e1ac9e0502"
+}

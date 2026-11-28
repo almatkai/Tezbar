@@ -1,0 +1,657 @@
+{
+  "schema": 1,
+  "tree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "baseline": "409dbf3c5950b0065aff900b2906b548660bc264",
+  "status": "UNEXPORTED_SOURCE_ONLY_NO_ACCEPTANCE",
+  "self_hash_excluded": true,
+  "owned_files": [
+    {
+      "path": "apps/tezbar/src/app/production_launch.rs",
+      "sha256": "5f044e8821a25f84b832ceb587d3857a57285084aaab24d9ed4559647ab1cae4",
+      "bytes": 6791
+    },
+    {
+      "path": "apps/tezbar/src/app/update_integration.rs",
+      "sha256": "4d6f8729d0999d780c1803b978b333268f6fe11dc06fdb233eca5c95d0fa5b42",
+      "bytes": 18677
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/leveldb.rs",
+      "sha256": "46a6268cf3416194a9ecdf50262b11e0eede893caab293e6c033a735a94f35b8",
+      "bytes": 19690
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "sha256": "8355bc895925386b34494b9c2ea1a13a13a82f43f8ed777ef3a3c46a1b0e724f",
+      "bytes": 8269
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/mod.rs",
+      "sha256": "d755264f4570ff5f2acdd46e5f158babd94cfa410ee12c70df25a418743590ad",
+      "bytes": 3859
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/tests.rs",
+      "sha256": "eecdde55c67cd61de416893a9a6ecf637d7dedd7a571b2baa25ecd4dc1e2e5ab",
+      "bytes": 7247
+    },
+    {
+      "path": "apps/tezbar/src/legacy_state/webkit.rs",
+      "sha256": "0b934c40266fa546be79f0aca623084764a1591462a95227602bca66ed1fb7c0",
+      "bytes": 14796
+    },
+    {
+      "path": "docs/native-m11/HANDOFF.md",
+      "sha256": "63ae3c355684d890998d514927d16c3a9703c6f0f27989ddb89ef3497e7bf7a0",
+      "bytes": 13953
+    },
+    {
+      "path": "docs/native-m11/browser-key-map.json",
+      "sha256": "642044223e5e10dea3360996e758c4b7335552fcd70883affea1bd589b409d59",
+      "bytes": 4849
+    },
+    {
+      "path": "docs/native-m11/cleanup-cutover.md",
+      "sha256": "6490a8e45d8169c90537f491b84fffb69f792e809b6f9d7ef6263f8326d16a4d",
+      "bytes": 3121
+    },
+    {
+      "path": "docs/native-m11/cutover-inventory.json",
+      "sha256": "1975d55a4c9f346fc7087debf586df7b8fefb08e8623ea139a661646275069f7",
+      "bytes": 133741
+    },
+    {
+      "path": "docs/native-m11/failed-experiments.txt",
+      "sha256": "0155f05d0245ab9cdf8f29c1f4c13db19205b6fa4ce3bb110ffa192846849e96",
+      "bytes": 1132
+    },
+    {
+      "path": "docs/native-m11/source-case-map.json",
+      "sha256": "4c78300811a82c041f75e42411a61e283357f6a1b337cdffa4878bb23d523dbf",
+      "bytes": 9109
+    },
+    {
+      "path": "docs/native-m11/source-trace.md",
+      "sha256": "5da8b92bea90e537f201b9d18106955f01323080b827ba5c58cec61a2f570a42",
+      "bytes": 7441
+    },
+    {
+      "path": "docs/native-m11/upstream/FileAssociation.nsh",
+      "sha256": "85ce72519d5461b5777f95123176b5536de163abd9a4742f9235453c4ddf56d8",
+      "bytes": 5379
+    },
+    {
+      "path": "docs/native-m11/upstream/LICENSE-APACHE-tauri",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "bytes": 10174
+    },
+    {
+      "path": "docs/native-m11/upstream/LICENSE-MIT-tauri",
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+      "bytes": 1090
+    },
+    {
+      "path": "docs/native-m11/upstream/chromium-local-storage-database.cc",
+      "sha256": "b147ca914185df05022cd00a86bc823ed3fca7a0bd6d15359bd39a30dc91da61",
+      "bytes": 40463
+    },
+    {
+      "path": "docs/native-m11/upstream/chromium-storage-area.cc",
+      "sha256": "dcabfa7b6ed038ce33fee81d9e3a868d4909db5684d7f2ba3a409e2e04e6584d",
+      "bytes": 32918
+    },
+    {
+      "path": "docs/native-m11/upstream/chromium-storage-key.cc",
+      "sha256": "78e3538d3bf8aee0aa3d5fac5339c5d0b5656dc06e7d35f55b0c5ea4f45475d3",
+      "bytes": 35418
+    },
+    {
+      "path": "docs/native-m11/upstream/fetch-failures.txt",
+      "sha256": "5e288549396997edf84ff57f7601047db52b15cd8b7e6f1177dd4fcfa44a8f27",
+      "bytes": 297
+    },
+    {
+      "path": "docs/native-m11/upstream/installer.nsi",
+      "sha256": "ee84148e405adc4d736a46456dd8345a644751bd1f28a335dd7fd833a32d7c3e",
+      "bytes": 31796
+    },
+    {
+      "path": "docs/native-m11/upstream/leveldb-log-format.md",
+      "sha256": "1796ccc965e1ca2fe3479ce7b5bf7afd3afcd9e2c00c5950d6be3fe03b7ffefd",
+      "bytes": 2921
+    },
+    {
+      "path": "docs/native-m11/upstream/leveldb-table-format.md",
+      "sha256": "16f96b651b8ee0a20fbc81da0c76b0e65b7d0981333569e8940770e9a5bc4fc0",
+      "bytes": 3790
+    },
+    {
+      "path": "docs/native-m11/upstream/leveldb-version-edit.cc",
+      "sha256": "ccbf9b13750b2a6ce9ffbda5338c15aefac9aa19c9f01d1cbb1fb3e0563a2d06",
+      "bytes": 6749
+    },
+    {
+      "path": "docs/native-m11/upstream/leveldb-write-batch.cc",
+      "sha256": "426b141167be1929ac22e98fa8314c8a3b2d7733c3507a21781d8ae3875ab70c",
+      "bytes": 4166
+    },
+    {
+      "path": "docs/native-m11/upstream/nsis-mod.rs",
+      "sha256": "90f49793c93d80ab267c09188f40b94fd68542699fdbd278df99512db53e6d8b",
+      "bytes": 29766
+    },
+    {
+      "path": "docs/native-m11/upstream/snap-api.rs",
+      "sha256": "a7048da3a4b76b75e4b3d071ee9959dbf12c5b3a36dabb2f7878513507c80cb9",
+      "bytes": 707
+    },
+    {
+      "path": "docs/native-m11/upstream/snap-metadata.json",
+      "sha256": "04e527e60b1325b8ceaf6ed1faf99d7e62c3e1f3b91ba32c05c7d02e5d808081",
+      "bytes": 1666
+    },
+    {
+      "path": "docs/native-m11/upstream/tauri-cli-v2.11.2-Cargo.lock",
+      "sha256": "045da6ee8370fc701e1d5196469c862c029fb5da47a22862749ea6a0757d67d5",
+      "bytes": 278247
+    },
+    {
+      "path": "docs/native-m11/upstream/urls.json",
+      "sha256": "afd3dceda4192b5183fc5c597b286caa5be794f40e42eea6d7339ff34a1fc1c2",
+      "bytes": 2883
+    },
+    {
+      "path": "docs/native-m11/upstream/utils.nsh",
+      "sha256": "b27b407f886cca738e44e774f15e6b556b43ce52557a7c8891ee4eca7dd8013d",
+      "bytes": 6163
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-core-persistent.cpp",
+      "sha256": "711d226b9f7bc76cb21480db242081ed5e92f6291ab3f024efc9aa2a28f4268d",
+      "bytes": 32930
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-network-storage.cpp",
+      "sha256": "e4ced927d0586fd6ea0ee12f4726c090df3b4d84de1fb2680e7c0bc7e7147195",
+      "bytes": 141617
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-origin.cpp",
+      "sha256": "35c2dbff7625ab81ddffaf219b7c90ddd6e9c1bac154dbf880dfd3946d5ecbc3",
+      "bytes": 35466
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-persistence-coders.cpp",
+      "sha256": "3cd3df60ae3c0c49fbb40c488c4d4c8f94a5c6894a19f17e6235e87cc24536e8",
+      "bytes": 5064
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-persistence-coders.h",
+      "sha256": "6a2ee62f489d73b531ea9112022df634ee33c43271bbae7fd7858d03b94bc9de",
+      "bytes": 12012
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-persistence-decoder.cpp",
+      "sha256": "e9ad28ccb331a261b6d009219dbc2bb77ad251be29bf747e6dae7210ad08a80a",
+      "bytes": 4156
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-sqlite-statement.cpp",
+      "sha256": "b42b5b620e675b2baaa8fe7c0c4fc7999cd50a476845b13c0efca3d44fa821b2",
+      "bytes": 9169
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-sqlite.cpp",
+      "sha256": "d07d7b1c30fd05ab474799db56aad46740a050873a03e58ccc843d70df62f247",
+      "bytes": 22912
+    },
+    {
+      "path": "docs/native-m11/upstream/webkit-storage-utilities.cpp",
+      "sha256": "5fec6366899e87c835b7456c21dee5525f3e11ca62daf4b3ddf380d818d90e55",
+      "bytes": 3286
+    },
+    {
+      "path": "packaging/macos/Info.plist.in",
+      "sha256": "64702c76f0e8b60446718a6b7fd527c137ec0e4e29bf6013cc9ec96513924b40",
+      "bytes": 822
+    },
+    {
+      "path": "packaging/windows/FileAssociation.nsh",
+      "sha256": "85ce72519d5461b5777f95123176b5536de163abd9a4742f9235453c4ddf56d8",
+      "bytes": 5379
+    },
+    {
+      "path": "packaging/windows/LICENSE-APACHE",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "bytes": 10174
+    },
+    {
+      "path": "packaging/windows/LICENSE-MIT",
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+      "bytes": 1090
+    },
+    {
+      "path": "packaging/windows/installer.nsi",
+      "sha256": "6b43fcc03cc61e8e4b203cf54111b90d3c4d3afd679835adde72cb019190f550",
+      "bytes": 28312
+    },
+    {
+      "path": "packaging/windows/utils.nsh",
+      "sha256": "b27b407f886cca738e44e774f15e6b556b43ce52557a7c8891ee4eca7dd8013d",
+      "bytes": 6163
+    },
+    {
+      "path": "scripts/native/nsis-template.test.mjs",
+      "sha256": "528ce0bb0b48ca85fd45e13fb31e55ba72bab7f81a9edc843247d9ca6db9f569",
+      "bytes": 1626
+    },
+    {
+      "path": "scripts/native/package-macos.mjs",
+      "sha256": "e0490ccd76e73ef2cd2add38a86ae6bd705c4f53237ed0d9c163ca1fe48e977f",
+      "bytes": 12848
+    },
+    {
+      "path": "scripts/native/package-macos.test.mjs",
+      "sha256": "1b724f7413a4ed15382b7685c6c95c6b97cecc1f3756033ee3812dde33b31224",
+      "bytes": 1793
+    },
+    {
+      "path": "scripts/native/windows-rehearsal-plan.mjs",
+      "sha256": "7298d9d4e6047c7eb152db7fa98c1dddfbe11fe415f7f8089322a3d9718d1396",
+      "bytes": 2066
+    }
+  ],
+  "read_only_sources": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "83447d02e526f6d853f7443c09ce0aa75f929e1cc3c23df1f2c1cd2a7e2ed7a6",
+      "bytes": 4257,
+      "baseline_sha256": "83447d02e526f6d853f7443c09ce0aa75f929e1cc3c23df1f2c1cd2a7e2ed7a6",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "docs/NATIVE_GPUI_APP_SPEC.md",
+      "sha256": "9814f4fe36cc478b7eff398309f17dc2db8650df194c90a6ed22e3564810a399",
+      "bytes": 89565,
+      "baseline_sha256": "9814f4fe36cc478b7eff398309f17dc2db8650df194c90a6ed22e3564810a399",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "docs/NATIVE_GPUI_PARITY_LEDGER.md",
+      "sha256": "94636bc672301306a50a165599250f94bfee3e0246cf44d876b03d15a86adde1",
+      "bytes": 79859,
+      "baseline_sha256": "94636bc672301306a50a165599250f94bfee3e0246cf44d876b03d15a86adde1",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "docs/MACOS_SIGNING.md",
+      "sha256": "b25a4280cd61da7d04a5ac4f759ebac0cbf5e0701e1c09fff6657c79e0e72017",
+      "bytes": 4364,
+      "baseline_sha256": "b25a4280cd61da7d04a5ac4f759ebac0cbf5e0701e1c09fff6657c79e0e72017",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "sha256": "b1c55c62710fc28847ee016005e07bd6a12d7afdd24b46c81100f4859a2e24ed",
+      "bytes": 2542,
+      "baseline_sha256": "b1c55c62710fc28847ee016005e07bd6a12d7afdd24b46c81100f4859a2e24ed",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src-tauri/tauri.macos.conf.json",
+      "sha256": "2c8d0c8a784492b31d7f984011df831f92444c4944718ed608a8b4c0b832b05a",
+      "bytes": 625,
+      "baseline_sha256": "2c8d0c8a784492b31d7f984011df831f92444c4944718ed608a8b4c0b832b05a",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src-tauri/tauri.windows.conf.json",
+      "sha256": "2f9bb7a30fcc70087d0bec7639737d30dba33092bfad2f22c192ad463cea7da3",
+      "bytes": 491,
+      "baseline_sha256": "2f9bb7a30fcc70087d0bec7639737d30dba33092bfad2f22c192ad463cea7da3",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src-tauri/macos-signing.json",
+      "sha256": "f3a6eddc5c16979588b37856fc9294d4778e5ab4579d797ca36d36a684e69aeb",
+      "bytes": 504,
+      "baseline_sha256": "f3a6eddc5c16979588b37856fc9294d4778e5ab4579d797ca36d36a684e69aeb",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "sha256": "7bdf886980c09b5b6f56697e7e6d6c7c03c510810f37e4908d37cf4c735ec584",
+      "bytes": 2894,
+      "baseline_sha256": "7bdf886980c09b5b6f56697e7e6d6c7c03c510810f37e4908d37cf4c735ec584",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "sha256": "ac240b768f3a04b49e4f0feb1380688fe004fa64fe4d55cc343285b9d0d2b53e",
+      "bytes": 170898,
+      "baseline_sha256": "ac240b768f3a04b49e4f0feb1380688fe004fa64fe4d55cc343285b9d0d2b53e",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src-tauri/runtime/embedding-macos-arm64.json",
+      "sha256": "df3561b331d78f0818ad77da022905a66a0d4269318e47c4642ba32364cf6d1c",
+      "bytes": 6005,
+      "baseline_sha256": "df3561b331d78f0818ad77da022905a66a0d4269318e47c4642ba32364cf6d1c",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "package.json",
+      "sha256": "2c92e74aa7e5721d6ac31eebb4a4a99b8b149cdee9dd437263b8c43b84cc8802",
+      "bytes": 2912,
+      "baseline_sha256": "2c92e74aa7e5721d6ac31eebb4a4a99b8b149cdee9dd437263b8c43b84cc8802",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "sha256": "1268deb243e64b16bfee497812a77138fc5c3f7e5acae078ca0b9b6abefa2074",
+      "bytes": 167952,
+      "baseline_sha256": "1268deb243e64b16bfee497812a77138fc5c3f7e5acae078ca0b9b6abefa2074",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "72da9f9e503464ba7393560f6f51a69fb06be72633d52ae7725fa0ba59dfda22",
+      "bytes": 51,
+      "baseline_sha256": "72da9f9e503464ba7393560f6f51a69fb06be72633d52ae7725fa0ba59dfda22",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "16f30dd61d94f5f3b3258bd81af0301812d7bed2307a736a28d563546c9eb44c",
+      "bytes": 380,
+      "baseline_sha256": "16f30dd61d94f5f3b3258bd81af0301812d7bed2307a736a28d563546c9eb44c",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "5a1f01e44cb5ff32badc4ec7c428760355e30f9f2ea7cb5e3eef764eb571e6a7",
+      "bytes": 211374,
+      "baseline_sha256": "14b8b85155b1d4b00c6faef8d5e7374eff9e4717c4ab18b6895be9308e6b04b6",
+      "baseline_match": false,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/Cargo.toml",
+      "sha256": "2cd4f673626209268569cb32944fadc552c826900f8e56e266d4108c77485488",
+      "bytes": 2278,
+      "baseline_sha256": "697741b416c7b9978b93ecf797355bf047bae46f7d2217d3fe1de061701f2d7d",
+      "baseline_match": false,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/main.rs",
+      "sha256": "283a065e658d4cb734e36965edb613ce7cadf0bc6d74a58243107807286bf673",
+      "bytes": 1192,
+      "baseline_sha256": "283a065e658d4cb734e36965edb613ce7cadf0bc6d74a58243107807286bf673",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/lib.rs",
+      "sha256": "09322a78cfd70c67b681c3df775c8a60a8709c5d00343a8b3b97ae2ae6b7382d",
+      "bytes": 272,
+      "baseline_sha256": "20a321bcb72cdd5d1393f9464d64f0a8cb437590460b66f303abc4635f79aa44",
+      "baseline_match": false,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/app.rs",
+      "sha256": "9a374b1c90894d19eca01f3dff36ed2823b3fa5a2e99e1c1daa665d55fac23d1",
+      "bytes": 68196,
+      "baseline_sha256": "44efc5f0aaa1a94545294e6b3db57013386785858d7809019d766ab97f8251ac",
+      "baseline_match": false,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/events.rs",
+      "sha256": "8cda7ddc1b231d410eb1d0db51954cd0c08955c6b2efd2f7938c5f2d4db909bb",
+      "bytes": 30229,
+      "baseline_sha256": "58445c7c40c97f34de059cb5ece859895b0c86825c277222e4921cbf57f33a79",
+      "baseline_match": false,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/cli.rs",
+      "sha256": "9dda4515bcc4cba1c966a07db1167bd7d22c504bfb208efc4969542209141fe2",
+      "bytes": 7502,
+      "baseline_sha256": "9dda4515bcc4cba1c966a07db1167bd7d22c504bfb208efc4969542209141fe2",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/mod.rs",
+      "sha256": "1730adfbdb740c2ed4d4cd7f70dc680d992f8de9bebbac0771ec47b00c384aff",
+      "bytes": 79150,
+      "baseline_sha256": "95739141c305b9686dd189f2a4597e209112d651459fe76fb4087318dfc181fc",
+      "baseline_match": false,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/command_bar/navigation.rs",
+      "sha256": "caf5dd11117b55a48aa5291a0dcec5539c5148bba3a4f9336e62fd3b061228ad",
+      "bytes": 9999,
+      "baseline_sha256": "caf5dd11117b55a48aa5291a0dcec5539c5148bba3a4f9336e62fd3b061228ad",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/settings/mod.rs",
+      "sha256": "034708f3c7f4650ff285fc680f10aa5bdce37284cbded4ac9896086ee176bc33",
+      "bytes": 80618,
+      "baseline_sha256": "034708f3c7f4650ff285fc680f10aa5bdce37284cbded4ac9896086ee176bc33",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/ui_state.rs",
+      "sha256": "a2cc49263fe5201a684b7e1b89da6cf0decf6eeb2b0b58cd8d6bc56f4699e97d",
+      "bytes": 17293,
+      "baseline_sha256": "a2cc49263fe5201a684b7e1b89da6cf0decf6eeb2b0b58cd8d6bc56f4699e97d",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-ui-model/src/update_policy.rs",
+      "sha256": "3fc73d7ad8deec00035fc8f985625ee6b69808383b02a6ed19a973697a5d212b",
+      "bytes": 3677,
+      "baseline_sha256": "3fc73d7ad8deec00035fc8f985625ee6b69808383b02a6ed19a973697a5d212b",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-host/src/paths.rs",
+      "sha256": "e8a5ad4ddc7ae561e70806e216c06032b5150827b3e12aeecdfdf371d2c7aa33",
+      "bytes": 3051,
+      "baseline_sha256": "e8a5ad4ddc7ae561e70806e216c06032b5150827b3e12aeecdfdf371d2c7aa33",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-core/src/common.rs",
+      "sha256": "d748f6330ee54974459b0427e0e69abb5efd164005753d32f600af5089a9f9f1",
+      "bytes": 10973,
+      "baseline_sha256": "d748f6330ee54974459b0427e0e69abb5efd164005753d32f600af5089a9f9f1",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-core/src/bun.rs",
+      "sha256": "9ee715e2dfa6f768e850cc343baef361dd8405ff5e93ed7507fa98609a76e87c",
+      "bytes": 1173,
+      "baseline_sha256": "9ee715e2dfa6f768e850cc343baef361dd8405ff5e93ed7507fa98609a76e87c",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-core/src/extension_worker.rs",
+      "sha256": "3f05bdb3908ef725dc723afd9987174fe0ad8806d4f29b55e9e111dded91b0d1",
+      "bytes": 22042,
+      "baseline_sha256": "3f05bdb3908ef725dc723afd9987174fe0ad8806d4f29b55e9e111dded91b0d1",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-core/Cargo.toml",
+      "sha256": "eed5213d09c4709ccbf0aee22c2e44560cac75268dd9bf106fd9a711c1e357a6",
+      "bytes": 2068,
+      "baseline_sha256": "eed5213d09c4709ccbf0aee22c2e44560cac75268dd9bf106fd9a711c1e357a6",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-core/src/system/macos-permissions.plist",
+      "sha256": "ba9e6db0baae76d90d95e54cdfd153c639e401419013c0f551c8dc2af0eb6a7c",
+      "bytes": 701,
+      "baseline_sha256": "ba9e6db0baae76d90d95e54cdfd153c639e401419013c0f551c8dc2af0eb6a7c",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-update/src/native.rs",
+      "sha256": "68f2b9a23a23bc3ffc38f1f818b4d43e6b15b7b8875ad97e2e735a8803b70545",
+      "bytes": 36315,
+      "baseline_sha256": "68f2b9a23a23bc3ffc38f1f818b4d43e6b15b7b8875ad97e2e735a8803b70545",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "crates/tezbar-update/src/release_channels.rs",
+      "sha256": "dfbf75d667384976d521387f4bdcca663837f3072bde97b63cfa42891896ab67",
+      "bytes": 10143,
+      "baseline_sha256": "dfbf75d667384976d521387f4bdcca663837f3072bde97b63cfa42891896ab67",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "scripts/build-release.mjs",
+      "sha256": "0694d69262626b0b7bbe14b850a15e050779bb00a33691a1f5d09c8992a1a569",
+      "bytes": 11949,
+      "baseline_sha256": "0694d69262626b0b7bbe14b850a15e050779bb00a33691a1f5d09c8992a1a569",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "scripts/lib/release-policy.mjs",
+      "sha256": "3a364d8c8563121fcbc5a9a9148629091059305fc968d969275f88ea39c28623",
+      "bytes": 5742,
+      "baseline_sha256": "3a364d8c8563121fcbc5a9a9148629091059305fc968d969275f88ea39c28623",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "scripts/lib/macos-signing.mjs",
+      "sha256": "88e24c38149802d6683bb86b09ec39646dd120b1f7851904618fe773738a4782",
+      "bytes": 4583,
+      "baseline_sha256": "88e24c38149802d6683bb86b09ec39646dd120b1f7851904618fe773738a4782",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "scripts/lib/embedding-runtime-policy.mjs",
+      "sha256": "6b8085e1ca59bd50c84eb08e5e4284f8c80adfbe48d5314b5bc3af32f62b9b87",
+      "bytes": 522,
+      "baseline_sha256": "6b8085e1ca59bd50c84eb08e5e4284f8c80adfbe48d5314b5bc3af32f62b9b87",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/App.tsx",
+      "sha256": "46f8d0bf7741a3ea4a955016d96b68781f8d03fb82708452b2cd7f33f08fb45a",
+      "bytes": 31236,
+      "baseline_sha256": "46f8d0bf7741a3ea4a955016d96b68781f8d03fb82708452b2cd7f33f08fb45a",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/CommandBar.tsx",
+      "sha256": "796722e4ec9d45e6d4d0a1ccf41d64cc7007eb8972e034c8476fd9cf2a3f86df",
+      "bytes": 226280,
+      "baseline_sha256": "796722e4ec9d45e6d4d0a1ccf41d64cc7007eb8972e034c8476fd9cf2a3f86df",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/EmojiPickerView.tsx",
+      "sha256": "45254d0d01d386e60756afac976b44750f85c8b29166faabf5a5dafb109721b4",
+      "bytes": 13109,
+      "baseline_sha256": "45254d0d01d386e60756afac976b44750f85c8b29166faabf5a5dafb109721b4",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/currency/currencyPreferences.ts",
+      "sha256": "db66d6baac03bfcb8a39b09a2af5398fcee3464f7c9876b65703580da3e31c2a",
+      "bytes": 4855,
+      "baseline_sha256": "db66d6baac03bfcb8a39b09a2af5398fcee3464f7c9876b65703580da3e31c2a",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/pinnedCommands.ts",
+      "sha256": "41f68568a5b570598a78ca3fe365d70b5165cf77c4a580c227deb21709f94a72",
+      "bytes": 5064,
+      "baseline_sha256": "41f68568a5b570598a78ca3fe365d70b5165cf77c4a580c227deb21709f94a72",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/releaseNotes.ts",
+      "sha256": "4f676f6f1fbb68fa270137e54759602a5643df5ab9e0a26754f7e6fa013149c8",
+      "bytes": 2719,
+      "baseline_sha256": "4f676f6f1fbb68fa270137e54759602a5643df5ab9e0a26754f7e6fa013149c8",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/terminalPreferences.ts",
+      "sha256": "46b1753385797d9ed5dff0bcec18f89512a8da9d81d486c60b7652c4ded66b4d",
+      "bytes": 1351,
+      "baseline_sha256": "46b1753385797d9ed5dff0bcec18f89512a8da9d81d486c60b7652c4ded66b4d",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/renderer/theme.ts",
+      "sha256": "f55fa6d03bbb9dff7bbb3c932005cf65a7dd4bec312a846b384266b1563ae3a7",
+      "bytes": 910,
+      "baseline_sha256": "f55fa6d03bbb9dff7bbb3c932005cf65a7dd4bec312a846b384266b1563ae3a7",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    },
+    {
+      "path": "src/shared/updater.ts",
+      "sha256": "e67e190279dd22e845f26e523565c7dff0380307ea1817495f3772d16d072c76",
+      "bytes": 5006,
+      "baseline_sha256": "e67e190279dd22e845f26e523565c7dff0380307ea1817495f3772d16d072c76",
+      "baseline_match": true,
+      "ownership": "READ_ONLY_IN_M11; active WIP may belong to peers"
+    }
+  ],
+  "source_validation_only": [
+    "rustfmt --edition 2024 and final --check on owned Rust: passed (NOT typecheck)",
+    "node --check on four new mjs: passed (NOT test/runtime)"
+  ],
+  "unrun_all_tests": true,
+  "observed_shared_head": "dd7bc194d335cd33caee45e1ce4d4cc1ef54a9a3"
+}

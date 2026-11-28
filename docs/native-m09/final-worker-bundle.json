@@ -1,0 +1,845 @@
+{
+  "prepared": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+  "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr",
+  "worker_entry": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/src/main/extensionWorker/main.ts",
+  "worker_inputs": {
+    "src/main/extensionWorker/framing.ts": {
+      "bytes": 1102,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/main/extensionWorker/host.ts": {
+      "bytes": 1795,
+      "imports": [
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extensionWorker/services.ts": {
+      "bytes": 827,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/host.ts",
+          "kind": "import-statement",
+          "original": "./host"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/shared/extensionRepository.ts": {
+      "bytes": 1206,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/main/extensionWorker/desktop.ts": {
+      "bytes": 4348,
+      "imports": [
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extensionWorker/host.ts",
+          "kind": "import-statement",
+          "original": "./host"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/better-sqlite3-shim.ts": {
+      "bytes": 3005,
+      "imports": [
+        {
+          "path": "bun:sqlite",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extension-sql.ts": {
+      "bytes": 417,
+      "imports": [
+        {
+          "path": "src/main/better-sqlite3-shim.ts",
+          "kind": "import-statement",
+          "original": "better-sqlite3"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extensionWorker/clipboard.ts": {
+      "bytes": 1496,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extensionWorker/host.ts",
+          "kind": "import-statement",
+          "original": "./host"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extension-confirm-alert.ts": {
+      "bytes": 1133,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/powershell-script.ts": {
+      "bytes": 1295,
+      "imports": [
+        {
+          "path": "node:child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:util",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/esbuild-runtime.ts": {
+      "bytes": 214,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/main/extensionWorker/windowState.ts": {
+      "bytes": 142,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/host.ts",
+          "kind": "import-statement",
+          "original": "./host"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extension-platform.ts": {
+      "bytes": 1814,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/main/extension-builder.ts": {
+      "bytes": 42199,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extension-platform.ts",
+          "kind": "import-statement",
+          "original": "./extension-platform"
+        },
+        {
+          "path": "src/main/esbuild-runtime.ts",
+          "kind": "import-statement",
+          "original": "./esbuild-runtime"
+        },
+        {
+          "path": "src/main/extension-registry.ts",
+          "kind": "import-statement",
+          "original": "./extension-registry"
+        },
+        {
+          "path": "esbuild",
+          "kind": "require-call",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extension-api.ts": {
+      "bytes": 8490,
+      "imports": [
+        {
+          "path": "https",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "http",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/bun-manager.ts": {
+      "bytes": 11728,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        },
+        {
+          "path": "child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "util",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "https",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "http",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "zlib",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/shared/lovedExtensions.ts": {
+      "bytes": 73432,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/main/extension-registry.ts": {
+      "bytes": 65536,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        },
+        {
+          "path": "child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "events",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "zlib",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extension-platform.ts",
+          "kind": "import-statement",
+          "original": "./extension-platform"
+        },
+        {
+          "path": "src/main/extension-builder.ts",
+          "kind": "import-statement",
+          "original": "./extension-builder"
+        },
+        {
+          "path": "src/main/extension-api.ts",
+          "kind": "import-statement",
+          "original": "./extension-api"
+        },
+        {
+          "path": "src/main/bun-manager.ts",
+          "kind": "import-statement",
+          "original": "./bun-manager"
+        },
+        {
+          "path": "src/shared/lovedExtensions.ts",
+          "kind": "import-statement",
+          "original": "../shared/lovedExtensions"
+        },
+        {
+          "path": "src/shared/extensionRepository.ts",
+          "kind": "import-statement",
+          "original": "../shared/extensionRepository"
+        },
+        {
+          "path": "src/main/extensionWorker/services.ts",
+          "kind": "import-statement",
+          "original": "./extensionWorker/services"
+        },
+        {
+          "path": "src/main/extension-builder.ts",
+          "kind": "require-call",
+          "original": "./extension-builder"
+        },
+        {
+          "path": "src/main/extension-builder.ts",
+          "kind": "require-call",
+          "original": "./extension-builder"
+        },
+        {
+          "path": "https",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "http",
+          "kind": "require-call",
+          "external": true
+        },
+        {
+          "path": "crypto",
+          "kind": "require-call",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extension-runner.ts": {
+      "bytes": 164872,
+      "imports": [
+        {
+          "path": "node:async_hooks",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        },
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:fs/promises",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extension-sql.ts",
+          "kind": "import-statement",
+          "original": "./extension-sql"
+        },
+        {
+          "path": "src/main/extensionWorker/clipboard.ts",
+          "kind": "import-statement",
+          "original": "./extensionWorker/clipboard"
+        },
+        {
+          "path": "src/main/extension-confirm-alert.ts",
+          "kind": "import-statement",
+          "original": "./extension-confirm-alert"
+        },
+        {
+          "path": "src/main/powershell-script.ts",
+          "kind": "import-statement",
+          "original": "./powershell-script"
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:http",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:module",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:stream",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:stream/web",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:util",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:v8",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:zlib",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:vm",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/esbuild-runtime.ts",
+          "kind": "import-statement",
+          "original": "./esbuild-runtime"
+        },
+        {
+          "path": "src/main/extensionWorker/services.ts",
+          "kind": "import-statement",
+          "original": "./extensionWorker/services"
+        },
+        {
+          "path": "src/main/extensionWorker/windowState.ts",
+          "kind": "import-statement",
+          "original": "./extensionWorker/windowState"
+        },
+        {
+          "path": "src/main/extension-registry.ts",
+          "kind": "import-statement",
+          "original": "./extension-registry"
+        },
+        {
+          "path": "esbuild",
+          "kind": "dynamic-import",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    },
+    "node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs": {
+      "bytes": 57773,
+      "imports": [],
+      "format": "esm"
+    },
+    "src/main/extensions/raycastShim.ts": {
+      "bytes": 15028,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        },
+        {
+          "path": "node:child_process",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:util",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extensionWorker/services.ts",
+          "kind": "import-statement",
+          "original": "../extensionWorker/services"
+        },
+        {
+          "path": "src/main/extension-confirm-alert.ts",
+          "kind": "import-statement",
+          "original": "../extension-confirm-alert"
+        },
+        {
+          "path": "src/main/powershell-script.ts",
+          "kind": "import-statement",
+          "original": "../powershell-script"
+        },
+        {
+          "path": "src/main/extension-sql.ts",
+          "kind": "import-statement",
+          "original": "../extension-sql"
+        },
+        {
+          "path": "src/main/extensionWorker/clipboard.ts",
+          "kind": "import-statement",
+          "original": "../extensionWorker/clipboard"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extensions/service.ts": {
+      "bytes": 27801,
+      "imports": [
+        {
+          "path": "src/main/extensionWorker/desktop.ts",
+          "kind": "import-statement",
+          "original": "@tezbar/desktop-runtime"
+        },
+        {
+          "path": "node:crypto",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:module",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:path",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:fs",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node:os",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node_modules/.pnpm/fuse.js@7.3.0/node_modules/fuse.js/dist/fuse.mjs",
+          "kind": "import-statement",
+          "original": "fuse.js"
+        },
+        {
+          "path": "src/main/extensions/raycastShim.ts",
+          "kind": "import-statement",
+          "original": "./raycastShim"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/main/extensionWorker/main.ts": {
+      "bytes": 6320,
+      "imports": [
+        {
+          "path": "node:util",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/main/extensionWorker/framing.ts",
+          "kind": "import-statement",
+          "original": "./framing"
+        },
+        {
+          "path": "src/main/extensionWorker/host.ts",
+          "kind": "import-statement",
+          "original": "./host"
+        },
+        {
+          "path": "src/main/extensionWorker/services.ts",
+          "kind": "import-statement",
+          "original": "./services"
+        },
+        {
+          "path": "src/shared/extensionRepository.ts",
+          "kind": "import-statement",
+          "original": "../../shared/extensionRepository"
+        },
+        {
+          "path": "src/main/extension-runner.ts",
+          "kind": "dynamic-import",
+          "original": "../extension-runner"
+        },
+        {
+          "path": "src/main/extension-registry.ts",
+          "kind": "dynamic-import",
+          "original": "../extension-registry"
+        },
+        {
+          "path": "src/main/extensions/service.ts",
+          "kind": "dynamic-import",
+          "original": "../extensions/service"
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "forbidden_core_inputs": [],
+  "production_options": {
+    "platform": "node",
+    "target": "node22",
+    "format": "cjs",
+    "bundle": true,
+    "minify": false,
+    "sourcemap": true,
+    "external": [
+      "esbuild",
+      "fsevents",
+      "bun:sqlite"
+    ]
+  },
+  "resources": [
+    {
+      "path": "prepared.json",
+      "bytes": 415,
+      "sha256": "ae6f9d2236adb0f0606c9bba6802b0a0499907172905d9da063d111173e974ca"
+    },
+    {
+      "path": "resources/dist-backend/extension-worker.js",
+      "bytes": 432155,
+      "sha256": "f29a69bb8082de2ece192e3e36740b720c18bf3eb2d25420db7264985f477433"
+    },
+    {
+      "path": "resources/dist-backend/extension-worker.js.map",
+      "bytes": 770503,
+      "sha256": "38c5064751af7079b2339d3a304abeaac02db3086bdd1e857a9c49f7a0102e72"
+    },
+    {
+      "path": "resources/dist-backend/libsqlite3.dylib",
+      "bytes": 1276320,
+      "sha256": "75feed7151d3e496343ffee9c25960d85188ed99b2ffb1051fe016f912c6c808"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/@esbuild/darwin-arm64/README.md",
+      "bytes": 145,
+      "sha256": "ee16cb15a2211accccb38f378786bfe48bc5dcfae5db554352424cd710470efa"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/@esbuild/darwin-arm64/bin/esbuild",
+      "bytes": 10540722,
+      "sha256": "6f0e1237f63fa3bc03963e58f0b0be1b9bfacd8f2dc9a3f28483e8f97e4ef2d6"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/@esbuild/darwin-arm64/package.json",
+      "bytes": 382,
+      "sha256": "177dd15d014df3ef8f61271c7fe490aacfcb7bb377ee6e9aed8171db8ac2b060"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/LICENSE.md",
+      "bytes": 1069,
+      "sha256": "b40ec5baec7bb34fa5b1c09521fa3cd52d5fad7adafed74932a2010d3612a681"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/README.md",
+      "bytes": 175,
+      "sha256": "6d481cd60ec3c679e5e395f547ab4221147f35642894f6b95a8df38fd25c87bd"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/bin/esbuild",
+      "bytes": 9350,
+      "sha256": "2b06d83aadb4a03505a738d3c38f174b01c08d1ed4210fd2263320b6eebfbe3a"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/install.js",
+      "bytes": 11747,
+      "sha256": "37fdf9e431a9c2419fe7e939fcd5c8c941b17b00a33a7e452781118d788de918"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/lib/main.d.ts",
+      "bytes": 23392,
+      "sha256": "161c8e0690c46021506e32fda85956d785b70f309ae97011fd27374c065cac9b"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/lib/main.js",
+      "bytes": 97214,
+      "sha256": "41abefec8704d24e069532fb38a418905d16f8fee4da88e54ecd65adc71f5507"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/node_modules/.bin/esbuild",
+      "bytes": 1163,
+      "sha256": "94e83bc57eb84708c3b9ff5484f2aeae088dde29d7ddde6c92d91cc7d0b4b123"
+    },
+    {
+      "path": "resources/dist-backend/node_modules/esbuild/package.json",
+      "bytes": 3980,
+      "sha256": "4316bc9a54bbf659d5760f299910d1824045178557e0aea6a1e3c64148fe8a50"
+    },
+    {
+      "path": "resources/dist-backend/vec0",
+      "bytes": 161704,
+      "sha256": "bba69b3bcd3d7c543d82b993237b45d4253b6c5c992bc691e362c5ad1e6649e5"
+    },
+    {
+      "path": "resources/dist-backend/vec0.dylib",
+      "bytes": 161704,
+      "sha256": "bba69b3bcd3d7c543d82b993237b45d4253b6c5c992bc691e362c5ad1e6649e5"
+    },
+    {
+      "path": "resources/resources/icons/homebrew.png",
+      "bytes": 19271,
+      "sha256": "a72720ba68a72179c16b6c7840fa19ae61d891eb1454794d77644f8c15210e1a"
+    },
+    {
+      "path": "resources/resources/icons/icon.icns",
+      "bytes": 608632,
+      "sha256": "b4378b818fa51baa9cef58c64a1ae2afba80f9e60bd5d1ac1f8d0f135428b147"
+    },
+    {
+      "path": "resources/resources/icons/icon.ico",
+      "bytes": 62550,
+      "sha256": "332ed5f5ba155ce17c876c87991ca02bf87217ddf9d13be98e7fee4fac50ec0e"
+    },
+    {
+      "path": "resources/resources/icons/icon.png",
+      "bytes": 235361,
+      "sha256": "308ad89e23eb9d3985bf31ffad637224481d02e3e00dc9cfe8a635ccd8e5fac2"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/assets/pixel.png",
+      "bytes": 70,
+      "sha256": "44966d77ca111eedba05310029028970dfc07ec198ef78cf6e24718b0a86a9b1"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/package.json",
+      "bytes": 1238,
+      "sha256": "f77c2f0820be6096b5dba043116d06ff8150bf20817e21e9911ed488b179f7d5"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/actions.tsx",
+      "bytes": 1374,
+      "sha256": "135c57048e46b915f4261162be27499bd8859bd946d0bd9d4ec447deeabd3ef6"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/detail.tsx",
+      "bytes": 920,
+      "sha256": "77ea511378f8fed47c8e06678203912b9fc07daaeea4efcde1833193f09db61a"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/feedback.tsx",
+      "bytes": 746,
+      "sha256": "a6a53cd96fb0fe3fc8d3e0de4b92046184e99c192a6f81371f855a5587a94876"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/form.tsx",
+      "bytes": 1696,
+      "sha256": "ebbe0f71c136f2601c2b844bb648365325ba21c97202c7b6f8c030a1ca457780"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/grid.tsx",
+      "bytes": 886,
+      "sha256": "6166ef4c94474e418533370c2113044e5b75a4f716c0e17df0920d586671687a"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/invalidation.tsx",
+      "bytes": 564,
+      "sha256": "3d9be49bd26da595e50f76151e075c141ea888780b6282a845b30306f1c9c0d7"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/list.tsx",
+      "bytes": 2431,
+      "sha256": "adae7fc47912a0311fc1441edde970b6e5bf2b8292cfe62d967d83aa213b87a6"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/menubar.tsx",
+      "bytes": 843,
+      "sha256": "5166702c49877303aeaae13c34e5690f66bf96dd376c45c13b68344b7b9ba8cf"
+    },
+    {
+      "path": "seed/extensions/m09-native-fixtures/src/prompts.tsx",
+      "bytes": 612,
+      "sha256": "9e76ab79a2891c2274e0c44e38c40fbf8d12df3838176cdadef649bef31dea67"
+    },
+    {
+      "path": "worker-metafile.json",
+      "bytes": 25885,
+      "sha256": "b85d88981954915f7b2ae5d3c7a844c3825be53f3282fa628fbcef640a48121f"
+    }
+  ]
+}

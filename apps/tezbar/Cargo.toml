@@ -1,0 +1,60 @@
+[package]
+name = "tezbar-native"
+version = "0.3.0-beta.16"
+edition = "2024"
+rust-version = "1.98.1"
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "tezbar"
+path = "src/main.rs"
+
+[features]
+default = []
+runtime-shaders = ["gpui_platform/runtime_shaders"]
+bench-control = []
+
+[dependencies]
+alacritty_terminal = { version = "=0.26.0", default-features = false }
+tezbar-core = { path = "../../crates/tezbar-core" }
+tezbar-host = { path = "../../crates/tezbar-host" }
+tezbar-update = { path = "../../crates/tezbar-update" }
+tezbar-ui-model = { path = "../../crates/tezbar-ui-model", features = ["launcher-models", "agent-models"] }
+tezbar-ui = { path = "../../crates/tezbar-ui" }
+anyhow = "1"
+chrono = "0.4"
+base64 = "0.22"
+log = { version = "0.4", features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff"] }
+resvg = "=0.46.0"
+simplecss = "=0.2.2"
+svgtypes = "=0.16.2"
+raw-window-handle = "0.6"
+rusqlite = { version = "=0.32.1", default-features = false }
+snap = { version = "=1.1.1", default-features = false }
+global-hotkey = "=0.8.0"
+tray-icon = { version = "=0.23.1", default-features = false }
+muda = { version = "=0.19.2", default-features = false }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35", default-features = false, features = ["font-kit"] }
+gpui_tokio = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+proc-macro-crate = "=2.0.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSApplication", "NSWindow", "NSRunningApplication", "NSScreen", "NSView", "NSPanel"] }
+objc2-foundation = "0.3.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
+
+[dev-dependencies]
+tempfile = "3.27"
+gpui = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35", features = ["test-support"] }

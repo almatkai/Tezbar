@@ -1,0 +1,10 @@
+{
+  "path": "/tmp/tezbar-m810-root-repair-20261107/tezbar-debug-preview",
+  "sha256": "5ec21f899c2fbd77b4be59c73795b653e1d13d4d993e532aea88646ef9381f79",
+  "bytes": 220390904,
+  "metadata": "{\"version\":\"0.3.0-beta.7\",\"source\":\"151df162a884ec5369f5602fffbc7385566698ef\",\"dirty\":\"true\",\"rustc_commit\":\"48a229ceaefd4985c50990b14116b6d856af0985\",\"preview\":true,\"gpui_rev\":\"c84af5b99cbc366d675064e52b23664a015b6e35\",\"runtime_shaders\":true,\"bench_control\":false}",
+  "source": "151df16 + M810 root repairs; dirty",
+  "GUI_launch": false,
+  "only_execution": "--version",
+  "no_WebKit_JavaScriptCore": true
+}

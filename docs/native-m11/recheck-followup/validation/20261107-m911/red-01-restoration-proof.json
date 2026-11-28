@@ -1,0 +1,19 @@
+{
+  "state": "COMPILE_OR_LIST_FAILURE_NOT_REGRESSION_RED",
+  "meaningful_regression_red": false,
+  "list_exit": 101,
+  "restoration": {
+    "crates/tezbar-core/src/extension_worker.rs": {
+      "expected_implementation_sha256": "8867dddbce7512a7f2c03ffdc100fab434578514406915907a76e5bd74719e33",
+      "restored_sha256": "8867dddbce7512a7f2c03ffdc100fab434578514406915907a76e5bd74719e33",
+      "restored": true
+    },
+    "crates/tezbar-core/src/extensions/process_host.rs": {
+      "expected_implementation_sha256": "7c56c5dbfeb6195284bae2211358b46e5f6a1cbcad956bc53ee66b5564047032",
+      "restored_sha256": "7c56c5dbfeb6195284bae2211358b46e5f6a1cbcad956bc53ee66b5564047032",
+      "restored": true
+    }
+  },
+  "whole_tree_restored": true,
+  "restored_aggregate": "dc3220ad914ffc33c52c6273d36cc9d82b0ee0f16d0494d73a9e3dae164de40d"
+}

@@ -1,0 +1,179 @@
+{
+  "status": "linked actual App/Launcher/shared-asset cases; frozen final gate evidence recorded in composition-gates-02.json",
+  "existing_27_native_tests": "Original first-gate tests.rs/core_loopback.rs unchanged; all 27 test names occur in the full normal and bench logs. Original first-gate hashes/logs remain historical.",
+  "cases": [
+    {
+      "ledger": [
+        "C-01"
+      ],
+      "fixture": "boot_payloads_keep_exact_identity_and_every_fresh_nonce",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-01",
+        "C-02"
+      ],
+      "fixture": "actual_launcher_prompt_mounts_once_acknowledges_and_retains_across_return",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-02",
+        "C-03",
+        "C-09"
+      ],
+      "fixture": "persistent_events_reach_hidden_run_and_approval_without_switching_active_owner",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-04",
+        "C-06",
+        "C-13",
+        "W-13"
+      ],
+      "fixture": "quit_disposes_once_failed_persist_remains_owned_and_retry_saves_same_turn",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-03",
+        "C-32"
+      ],
+      "fixture": "actual_chat_uses_parent_footer_entity_and_hide_stops_its_polling",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-11",
+        "C-12",
+        "C-21"
+      ],
+      "fixture": "same_retained_entity_rejects_previous_mount_effect_before_host_io",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-11"
+      ],
+      "fixture": "actual_gpui_clipboard_payload_preserves_canonical_bytes_and_mime",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-11"
+      ],
+      "fixture": "clipboard_atomic_batch_rejects_empty_text_unsupported_and_five_images",
+      "state": "passed in frozen full normal+bench native logs"
+    },
+    {
+      "ledger": [
+        "C-01",
+        "C-03",
+        "C-09",
+        "C-18"
+      ],
+      "fixture": "actual_navigation_screen_resume_back_and_footer_use_fresh_identity",
+      "state": "passed in frozen full normal+bench native logs",
+      "assertions": "Repeated screen capture, retained resume/approval, launcher history status and typed footer resume route; no UI run replay."
+    },
+    {
+      "ledger": [
+        "C-09",
+        "C-19",
+        "C-31"
+      ],
+      "fixture": "shared_picker_and_config_payload_events_change_next_snapshot_without_approving",
+      "state": "passed in frozen full normal+bench native logs",
+      "assertions": "Same SettingsStore picker writes through actual core config; next runSelection snapshot and no approvalMode; mode edits leave approval pending; persistent config event triggers refresh."
+    },
+    {
+      "ledger": [
+        "C-04",
+        "C-13",
+        "W-13"
+      ],
+      "fixture": "dispose_cancels_hung_auxiliary_read_and_waits_only_for_mutation_jobs",
+      "state": "passed in frozen full normal+bench native logs",
+      "assertions": "Hung auxiliary future drop observed; run canceled once; save drain completes without waiting for auxiliary I/O."
+    },
+    {
+      "ledger": [
+        "C-12",
+        "C-21",
+        "K-04"
+      ],
+      "fixture": "actual_app_review_settings_routes_exact_source_cwd_nonce_and_retains_chat",
+      "state": "passed in frozen full normal+bench native logs",
+      "assertions": "Actual App rejects stale Review before B activation, forwards exact cwd once through retained M7 Settings AI tab, preserves ChatView/run and releases stale chooser lease."
+    },
+    {
+      "ledger": [
+        "C-11",
+        "C-12"
+      ],
+      "fixture": "actual_app_dialog_late_choice_and_clipboard_ticket_never_attach_to_b",
+      "state": "passed in frozen full normal+bench native logs",
+      "assertions": "Actual App native prompt through TestPlatform: late A choice rejected, current choice accepted via real core asset reader, DialogLease release, fake clipboard future canceled across navigation."
+    },
+    {
+      "ledger": [
+        "C-04",
+        "C-13",
+        "W-13"
+      ],
+      "fixture": "actual_app_quit_save_failure_cancels_shutdown_then_fresh_retry_is_durable",
+      "state": "passed in frozen full normal+bench native logs",
+      "assertions": "Actual App quit barrier cancels shutdown on failed append; retains entity; fresh retry performs no second Cancel and reaches core shutdown."
+    },
+    {
+      "ledger": [
+        "C-06",
+        "C-09",
+        "K-19",
+        "K-20",
+        "K-21",
+        "K-22",
+        "K-31"
+      ],
+      "fixture": "actual_launcher_input_actions_focus_and_ime_do_not_fall_through_search",
+      "state": "passed in frozen full normal+bench native logs",
+      "assertions": "Actual GPUI input and key down/up through Launcher: marked composition, Shift Enter, one send, focused native approval, Stop/New; search input remains untouched."
+    }
+  ],
+  "asset_fixtures": {
+    "state": "passed: native asset_transport 7; core assets-filter 10 (includes existing system/voice cases), registry scope 2; exact filters/counts in gate JSON",
+    "source": [
+      "crates/tezbar-core/src/assets.rs",
+      "crates/tezbar-core/src/extensions/asset_scope.rs",
+      "apps/tezbar/src/asset_transport_tests.rs"
+    ],
+    "assertions": [
+      "lazy client",
+      "HTTPS/credential/redirect policy",
+      "status/encoding/source stream bounds",
+      "drop cancellation and slot release",
+      "strict data URI",
+      "file bounds and symlink escape",
+      "canonical registry identity/uninstall",
+      "forged scope/effect mismatch",
+      "PNG/JPEG/WebP/GIF/TIFF/SVG decoding",
+      "variant and decode header allocation limits",
+      "M5 strict PNG compatibility",
+      "separate 8 MiB source versus preview limit",
+      "Scoped open denies removal or nested/final symlink replacement after authorization",
+      "Small raster originals never upscale",
+      "Malformed raster/SVG and zero variant never upload",
+      "Strict Markdown data URI admission, removal and existing weak-ticket generation fixture"
+    ]
+  },
+  "remaining": [
+    "Independent fresh Opus review / parent acceptance and commit",
+    "Windows compilation and native platform/race acceptance",
+    "Physical IME/AX/VoiceOver/Narrator, manual desktop/GPU/RAM measurements",
+    "M9/M10 remain unexported; no full migration acceptance"
+  ],
+  "ledger_rows_closed": [],
+  "mapping_policy": "Ledger IDs point to demonstrated subsets only; no full originating case or row is closed. Shared footer identity is not a pixel-geometry acceptance claim. Chooser/clipboard cases cover attachment/source fences, not physical capture/clipboard acceptance."
+}

@@ -42,6 +42,8 @@ See [GitHub environment protection](https://docs.github.com/en/actions/how-tos/d
 
 ## Release procedure
 
+For every macOS build, first follow [macOS signing continuity](MACOS_SIGNING.md). Alpha/Beta native-signing exceptions never permit a hash-bound ad-hoc app identity. The certificate requirement must remain stable across updates; the Tauri updater signature verifies a different layer.
+
 1. Add reviewed notes at `docs/releases/<version>.md` in the selected source branch. Review the complete diff and commit list relative to `origin/main`. Keep release-channel changes independent from optional embedding-model changes.
 2. Merge the exact approved changes into `main` before a Stable release. Alpha/Beta may use a separately reviewed feature/release ref. The pipeline rejects `dev` as a named source and rejects Stable commits outside `origin/main` history.
 3. Manually run **Reviewed channel release** with the channel, exact version, and reviewed source ref/commit. Refs are resolved once to an exact commit; every build and test checks out that commit. Nothing publishes on push, tag, or PR merge.

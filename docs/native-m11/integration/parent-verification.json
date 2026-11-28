@@ -1,0 +1,13 @@
+{
+  "source_files_verified": 597,
+  "owned_files_verified": 40,
+  "log_hashes_verified": 45,
+  "historical_failed_gates_preserved": [
+    "normal-native-final",
+    "packaging-node-02",
+    "normal-native-final-02",
+    "packaging-node"
+  ],
+  "acceptance": false,
+  "m9_repairs_pending": true
+}

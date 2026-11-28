@@ -6,12 +6,14 @@ export default defineConfig({
     alias: {
       '@tezbar/desktop-runtime': resolve(__dirname, 'src/main/desktop-runtime.ts'),
       'better-sqlite3': resolve(__dirname, 'src/main/better-sqlite3-node-shim.ts'),
-      '@earendil-works/pi-ai': resolve(__dirname, 'src/main/agent/pi-ai-test-shim.ts'),
     },
   },
   test: {
+    // Each worker loads a TS/React runtime and some spawn esbuild/PowerShell.
+    // Bound concurrent integration processes instead of oversubscribing Windows.
+    maxWorkers: process.platform === 'win32' ? 2 : undefined,
     globalSetup: ['scripts/vitest-global-setup.ts'],
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'tests/oracles/**/*.test.ts'],
   },
 })

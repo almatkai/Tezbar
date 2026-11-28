@@ -1,0 +1,19 @@
+{
+  "head": "0228b4fa289d5fce78bc3cf179575c4011c59f7c",
+  "function_sha256": "8fe43dad7ad3a4741a71d1f4625107c1eac624e6ba4507d08e820fa6bf39f137",
+  "source_sha256": "465395a364e9b54ed1aa9189ab19261d61e37e43f94c3027cd486c0781dd5c3d",
+  "compile_command": [
+    "/Users/almat/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc",
+    "--edition=2024",
+    "--test",
+    "/tmp/tezbar-css-bound-followup-20261109/red.rs",
+    "-o",
+    "/tmp/tezbar-css-bound-followup-20261109/red-tests",
+    "-L",
+    "dependency=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps",
+    "--extern",
+    "resvg=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libresvg-72e0428f81ac455e.rlib",
+    "--extern",
+    "simplecss=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libsimplecss-6ff443fc4bbbb94f.rlib"
+  ]
+}

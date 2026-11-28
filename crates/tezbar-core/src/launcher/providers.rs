@@ -1,0 +1,1216 @@
+use super::{
+    db::Database,
+    stores::{document, read_or},
+    text,
+};
+use crate::common::{now_ms, CoreContext, CoreResult};
+use notify::Watcher;
+use serde_json::{json, Value};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+#[cfg_attr(windows, allow(dead_code))]
+pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args).kill_on_drop(true);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let out = tokio::time::timeout(std::time::Duration::from_secs(timeout), cmd.output())
+        .await
+        .map_err(|_| format!("{program} timed out"))?
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().into());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+#[cfg(target_os = "macos")]
+#[path = "bundle_metadata.rs"]
+mod bundle_metadata;
+
+pub async fn bundle_id(path: &str) -> Value {
+    #[cfg(target_os = "macos")]
+    {
+        let path = Path::new(path).join("Contents/Info.plist");
+        return tokio::task::spawn_blocking(move || {
+            let path = if path.is_absolute() {
+                path
+            } else {
+                std::env::current_dir().ok()?.join(path)
+            };
+            bundle_metadata::read(&path)
+        })
+        .await
+        .ok()
+        .flatten()
+        .map(Value::String)
+        .unwrap_or(Value::Null);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Value::Null
+    }
+}
+pub async fn applications(ctx: &CoreContext) -> CoreResult {
+    let home = ctx.paths.home_dir.clone();
+    let mut apps = tokio::task::spawn_blocking(move || {
+        let mut out = vec![];
+        let mut seen = HashSet::new();
+        #[cfg(target_os = "macos")]
+        let roots = vec![
+            PathBuf::from("/Applications"),
+            PathBuf::from("/Applications/Utilities"),
+            PathBuf::from("/System/Applications"),
+            PathBuf::from("/System/Applications/Utilities"),
+            PathBuf::from("/System/Library/CoreServices/Applications"),
+            // CoreServices contains background agents, not an application catalog.
+            // Finder is the user-facing bundle outside its Applications directory.
+            PathBuf::from("/System/Library/CoreServices/Finder.app"),
+            home.join("Applications"),
+        ];
+        #[cfg(target_os = "windows")]
+        let roots = vec![
+            PathBuf::from(std::env::var("ProgramData").unwrap_or("C:\\ProgramData".into()))
+                .join("Microsoft/Windows/Start Menu/Programs"),
+            PathBuf::from(
+                std::env::var("APPDATA")
+                    .unwrap_or_else(|_| home.join("AppData/Roaming").to_string_lossy().into()),
+            )
+            .join("Microsoft/Windows/Start Menu/Programs"),
+        ];
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        let roots = vec![
+            home.join(".local/share/applications"),
+            PathBuf::from("/usr/share/applications"),
+        ];
+        for root in roots {
+            for entry in walkdir::WalkDir::new(root)
+                .max_depth(if cfg!(windows) { 12 } else { 1 })
+                .into_iter()
+                .filter_map(Result::ok)
+            {
+                let path = entry.path();
+                let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                if !(if cfg!(target_os = "macos") {
+                    ext == "app"
+                } else if cfg!(windows) {
+                    ext.eq_ignore_ascii_case("lnk")
+                } else {
+                    ext == "desktop"
+                }) {
+                    continue;
+                }
+                let name = path
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned();
+                if seen.insert(name.to_lowercase()) {
+                    out.push(json!({"name":name,"path":path}));
+                }
+            }
+        }
+        out
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    // The shell Apps folder (what Get-StartApps listed), enumerated in-process.
+    #[cfg(target_os = "windows")]
+    if let Ok(Ok(s)) = tokio::task::spawn_blocking(crate::windows_shell::start_apps_json).await {
+        let _ = merge_windows_start_apps(&mut apps, &s);
+    }
+    #[cfg(target_os = "macos")]
+    for app in &mut apps {
+        let id = bundle_id(app["path"].as_str().unwrap_or("")).await;
+        if !id.is_null() {
+            app["bundleId"] = id;
+        }
+    }
+    apps.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    Ok(json!(apps))
+}
+pub fn app_documents(apps: &[Value]) -> Vec<Value> {
+    app_documents_at(apps, now_ms())
+}
+/// Windows app rows read "Start Menu › Folder" or "Windows app" instead of a raw
+/// `.lnk` path or `shell:AppsFolder\…!App` identifier.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_app_subtitle(path: &str) -> String {
+    if path.starts_with("shell:AppsFolder\\") {
+        return "Windows app".into();
+    }
+    let normalized = path.replace('/', "\\");
+    let lower = normalized.to_lowercase();
+    const PROGRAMS: &str = "\\start menu\\programs\\";
+    let Some(at) = lower.find(PROGRAMS) else {
+        return "Application".into();
+    };
+    let relative = &normalized[at + PROGRAMS.len()..];
+    match relative.rsplit_once('\\') {
+        Some((folder, _)) if !folder.is_empty() => {
+            format!("Start Menu \u{203a} {}", folder.replace('\\', " \u{203a} "))
+        }
+        _ => "Start Menu".into(),
+    }
+}
+// Refresh time is used only when the indexed payload actually changes.
+pub(super) fn app_documents_at(apps: &[Value], now: u64) -> Vec<Value> {
+    apps.iter()
+        .filter_map(|a| {
+            let name = a["name"].as_str()?;
+            let path = a["path"].as_str()?;
+            let subtitle = if cfg!(windows) {
+                windows_app_subtitle(path)
+            } else {
+                path.to_owned()
+            };
+            let mut d = document(
+                &format!("app:{path}"),
+                "applications",
+                name,
+                &subtitle,
+                &format!("{name} {path} {}", text::aliases(name).join(" ")),
+                json!({"type":"open-app","appName":name,"appPath":path}),
+                now,
+            );
+            d["sourcePath"] = json!(path);
+            d["_syntheticUpdatedAt"] = json!(true);
+            Some(d)
+        })
+        .collect()
+}
+const SURFACE_DUPLICATES: &[&str] = &["open-snippets", "open-vault"];
+pub fn command_documents(native: &[Value]) -> Vec<Value> {
+    command_documents_at(native, now_ms())
+}
+pub(super) fn command_documents_at(native: &[Value], now: u64) -> Vec<Value> {
+    let mut out = vec![];
+    for d in native {
+        let Some(id) = d["id"].as_str() else { continue };
+        if ["open-emoji-picker", "open-quick-notes"].contains(&id) {
+            continue;
+        }
+        // Execution refuses macOS-only scripts; never offer them. Ids routed to a built-in
+        // native surface (System Monitor) never reach that refusal and stay available.
+        if d["macOnly"] == true
+            && !cfg!(target_os = "macos")
+            && crate::native_command_surface(id).is_none()
+        {
+            continue;
+        }
+        out.push(document(
+            &format!("native:{id}"),
+            "native-command",
+            d["title"].as_str().unwrap_or(id),
+            d["subtitle"].as_str().unwrap_or(""),
+            &format!(
+                "{} {} {} {} {}",
+                d["title"].as_str().unwrap_or(""),
+                d["subtitle"].as_str().unwrap_or(""),
+                d["category"].as_str().unwrap_or(""),
+                d["keywords"]
+                    .as_array()
+                    .map(|a| a
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(" "))
+                    .unwrap_or_default(),
+                // Slash aliases of the built-in rows these replace (see SURFACE_DUPLICATES).
+                match id {
+                    "open-snippets" => "/snippets",
+                    "open-vault" => "/vault",
+                    _ => "",
+                }
+            ),
+            json!({"type":"run-native-command","commandId":id}),
+            now,
+        ));
+    }
+    // Only native rows actually offered (macOS-only ones may have been skipped above).
+    let native_ids: std::collections::HashSet<String> = out
+        .iter()
+        .filter_map(|d| d["id"].as_str()?.strip_prefix("native:").map(str::to_owned))
+        .collect();
+    for (id, title, subtitle, keywords) in [
+        (
+            "open-settings",
+            "Open Settings",
+            "Tezbar settings",
+            "settings preferences /settings",
+        ),
+        (
+            "open-indexing",
+            "Indexing Status",
+            "Knowledge index · progress, storage, and indexed files",
+            "indexing index knowledge status progress files storage cache /indexing",
+        ),
+        (
+            "open-extensions-settings",
+            "Extensions",
+            "Settings · Extensions tab",
+            "extensions raycast /extensions",
+        ),
+        (
+            "open-extensions",
+            if cfg!(windows) {
+                "Loved Extensions"
+            } else {
+                "Extensions Store"
+            },
+            if cfg!(windows) {
+                "Browse Tezbar-recommended GitHub extensions"
+            } else {
+                "Browse and install extensions"
+            },
+            "store extension store extensions store raycast store /store",
+        ),
+        (
+            "open-snippets",
+            "Open Snippets",
+            "Tezbar snippets",
+            "snippets text snippets /snippets",
+        ),
+        (
+            "open-vault",
+            "Open Vault",
+            "Tezbar secure vault for credentials, passwords, and secret keys",
+            "vault secrets passwords keys credentials ssh tokens /vault",
+        ),
+        (
+            "open-notes",
+            "Open Notes",
+            "Tezbar quick notes",
+            "notes quick notes /notes",
+        ),
+        (
+            "start-onboarding",
+            "Start Onboarding",
+            "Walk through Tezbar setup again",
+            "onboarding setup welcome tour get started intro /onboarding",
+        ),
+        (
+            "open-emoji-picker",
+            "Open Emoji Picker",
+            "Tezbar emoji picker",
+            "emoji symbols /emoji",
+        ),
+        (
+            "check-for-updates",
+            "Check for Updates",
+            "Check for new Tezbar updates",
+            "update updates check for updates upgrade version обновление обновы /update",
+        ),
+    ] {
+        // Snippets and Vault also come from the native catalog (which the home screen
+        // recommends); a second built-in row of the same surface is a duplicate.
+        if SURFACE_DUPLICATES.contains(&id) && native_ids.contains(id) {
+            continue;
+        }
+        out.push(document(
+            &format!("command:{id}"),
+            "commands",
+            title,
+            subtitle,
+            &format!("{title} {subtitle} {keywords}"),
+            json!({"type":"invoke-command","commandId":id}),
+            now,
+        ));
+    }
+    for d in &mut out {
+        d["_syntheticUpdatedAt"] = json!(true);
+    }
+    out
+}
+pub fn extension_documents(commands: &[Value], config: &Value) -> Vec<Value> {
+    commands.iter().filter_map(|c|{
+        let ext=c["extensionId"].as_str().map(str::to_owned).or_else(||c["extName"].as_str().map(|s|if s.starts_with("raycast."){s.to_owned()}else{format!("raycast.{s}")}))?;
+        let name=c["commandName"].as_str().or_else(||c["cmdName"].as_str()).or_else(||c["name"].as_str())?;
+        let title=c["title"].as_str().unwrap_or(name);let id=c["launcher"]["id"].as_str().map(str::to_owned).unwrap_or_else(||format!("extcmd:{ext}:{name}"));if config["disabledCommands"][&id]==true{return None}
+        let subtitle=c["extensionName"].as_str().or_else(||c["extensionTitle"].as_str()).unwrap_or(&ext);
+        let keywords=c["keywords"].as_array().map(|a|a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" ")).unwrap_or_default();
+        let icon_path = c["iconPath"].as_str().or_else(|| c["icon"].as_str());
+        let mut d=document(&id,"extensions",title,subtitle,&format!("{title} {name} {ext} {subtitle} {} {keywords} {}",c["description"].as_str().unwrap_or(""),config["commandAliases"][&id].as_str().unwrap_or("")),json!({"type":"run-extension-command","extensionId":ext,"commandName":name,"title":title,"launcher":c["launcher"],"iconPath":icon_path,"commandArgumentDefinitions":c.get("commandArgumentDefinitions").unwrap_or(&c["argumentDefinitions"])}),c["installedAt"].as_u64().unwrap_or(now_ms()));
+        d["popularity"]=c["downloadCount"].clone();
+        if !c["iconDataUrl"].is_null() {
+            d["iconDataUrl"] = c["iconDataUrl"].clone();
+        }
+        Some(d)
+    }).collect()
+}
+const SKIP: &[&str] = &[
+    "node_modules",
+    ".git",
+    ".next",
+    ".cache",
+    "Library",
+    "build",
+    "coverage",
+    "dist",
+    "out",
+    "target",
+];
+fn skipped(path: &Path) -> bool {
+    path.components()
+        .any(|c| SKIP.contains(&c.as_os_str().to_string_lossy().as_ref()))
+}
+fn allowed(path: &Path) -> bool {
+    !skipped(path)
+        && [
+            "", "md", "txt", "json", "yaml", "yml", "ts", "tsx", "js", "jsx", "go", "py", "rs",
+            "swift", "pdf", "png", "jpg",
+        ]
+        .contains(
+            &path
+                .extension()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase()
+                .as_str(),
+        )
+}
+fn file_mtime(path: &Path) -> Option<u64> {
+    if !allowed(path) {
+        return None;
+    }
+    let metadata = path.metadata().ok()?;
+    if !metadata.is_file() {
+        return None;
+    }
+    Some(
+        metadata
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_millis() as u64,
+    )
+}
+pub fn file_document(path: &Path) -> Option<Value> {
+    file_document_at(path, file_mtime(path)?)
+}
+fn file_document_at(path: &Path, mtime: u64) -> Option<Value> {
+    let p = path.to_string_lossy();
+    let title = path.file_name()?.to_string_lossy();
+    let mut d = document(
+        &format!("file:{p}"),
+        "files",
+        &title,
+        &p,
+        &format!("{title} {p}"),
+        json!({"type":"open-file","path":p}),
+        mtime,
+    );
+    d["sourcePath"] = json!(p);
+    d["sourceMtime"] = json!(mtime);
+    Some(d)
+}
+pub fn roots(ctx: &CoreContext) -> Vec<PathBuf> {
+    ["Desktop", "Documents", "Downloads", "Pictures"]
+        .iter()
+        .map(|p| ctx.paths.home_dir.join(p))
+        .collect()
+}
+pub async fn scan(ctx: CoreContext, db: Database, stop: Arc<AtomicBool>) -> Result<(), String> {
+    let scan_roots = roots(&ctx);
+    // Unchanged files need neither JSON/token construction nor a per-row SQL
+    // UPSERT. Keep counting them toward the existing scan limits below.
+    let indexed = db.file_versions().await?;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(2);
+    let scanning = tokio::task::spawn_blocking(move || {
+        let mut batch = vec![];
+        let mut count = 0;
+        let mut visited = 0;
+        'scan: for root in scan_roots {
+            for entry in walkdir::WalkDir::new(root)
+                .follow_links(false)
+                .into_iter()
+                .filter_entry(|e| !SKIP.contains(&e.file_name().to_string_lossy().as_ref()))
+                .filter_map(Result::ok)
+            {
+                if stop.load(Ordering::Relaxed) {
+                    return;
+                }
+                visited += 1;
+                if visited > 300_000 {
+                    break 'scan;
+                }
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                if let Some(mtime) = file_mtime(entry.path()) {
+                    count += 1;
+                    if indexed.get(entry.path()) != Some(&mtime) {
+                        if let Some(d) = file_document_at(entry.path(), mtime) {
+                            batch.push(d);
+                        }
+                    }
+                }
+                if batch.len() >= 400 {
+                    if tx.blocking_send(std::mem::take(&mut batch)).is_err() {
+                        return;
+                    }
+                }
+                if count >= 75000 {
+                    break;
+                }
+            }
+            if count >= 75000 {
+                break;
+            }
+        }
+        if !batch.is_empty() {
+            let _ = tx.blocking_send(batch);
+        }
+    });
+    while let Some(batch) = rx.recv().await {
+        while ctx.foreground_active() {
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+        }
+        db.upsert(batch, vec![]).await?;
+    }
+    scanning.await.map_err(|e| e.to_string())?;
+    let candidates=db.call(|c|{let mut stmt=c.prepare("SELECT id,source_path FROM documents WHERE category='files' AND source_path IS NOT NULL LIMIT 75000").map_err(|e|e.to_string())?;let rows=stmt.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?))).map_err(|e|e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e|e.to_string())?;Ok(json!(rows))}).await?;
+    let managed = roots(&ctx);
+    let deleted = tokio::task::spawn_blocking(move || {
+        candidates
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| {
+                let id = v[0].as_str()?;
+                let p = Path::new(v[1].as_str()?);
+                if managed.iter().any(|root| p.starts_with(root))
+                    && matches!(p.try_exists(), Ok(false))
+                {
+                    Some(id.to_owned())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    db.call(move |c| {
+        let tx = c.transaction().map_err(|e| e.to_string())?;
+        for id in deleted {
+            tx.execute("DELETE FROM documents WHERE id=?", [id])
+                .map_err(|e| e.to_string())?;
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(Value::Null)
+    })
+    .await?;
+    Ok(())
+}
+// Shared with the synthetic watcher/reconciliation tests; no OS watcher needed.
+pub(super) fn queue_watch_event(
+    mut event: notify::Result<notify::Event>,
+    tx: &tokio::sync::mpsc::Sender<notify::Result<notify::Event>>,
+    overflow: &AtomicBool,
+    wake: &tokio::sync::Notify,
+) {
+    match &mut event {
+        Ok(e) => {
+            // Loss-of-events signals must survive even when their paths would
+            // otherwise be ignored. Reconciliation recovers the whole index.
+            if e.need_rescan() {
+                overflow.store(true, Ordering::Release);
+                wake.notify_one();
+                return;
+            }
+            if matches!(e.kind, notify::EventKind::Access(_)) {
+                return;
+            }
+            // Filter before the bounded queue: build/git/cache churn in a
+            // watched root must not overflow into repeated full file scans.
+            let had_paths = !e.paths.is_empty();
+            e.paths.retain(|p| !skipped(p));
+            if had_paths && e.paths.is_empty() {
+                return;
+            }
+        }
+        Err(_) => {
+            overflow.store(true, Ordering::Release);
+            wake.notify_one();
+            return;
+        }
+    }
+    if tx.try_send(event).is_err() {
+        overflow.store(true, Ordering::Release);
+        wake.notify_one();
+    }
+}
+
+pub(super) enum WatchWork {
+    Event(notify::Result<notify::Event>),
+    Reconcile,
+    Stopped,
+}
+
+// OS-free inbox boundary used by the native watcher and deterministic tests.
+pub(super) async fn wait_watch_work(
+    rx: &mut tokio::sync::mpsc::Receiver<notify::Result<notify::Event>>,
+    stop: &AtomicBool,
+    overflow: &AtomicBool,
+    wake: &tokio::sync::Notify,
+) -> WatchWork {
+    loop {
+        // Register BEFORE inspecting persistent state: notify_waiters does not
+        // retain a permit when shutdown races with entering this wait.
+        let changed = wake.notified();
+        tokio::pin!(changed);
+        changed.as_mut().enable();
+        if stop.load(Ordering::Acquire) {
+            return WatchWork::Stopped;
+        }
+        if overflow.swap(false, Ordering::AcqRel) {
+            return WatchWork::Reconcile;
+        }
+        tokio::select! {
+            event = rx.recv() => return match event { Some(event) => WatchWork::Event(event), None => WatchWork::Stopped },
+            _ = &mut changed => {},
+        }
+    }
+}
+
+pub async fn watch(
+    ctx: CoreContext,
+    db: Database,
+    stop: Arc<AtomicBool>,
+    scanning: Arc<tokio::sync::Mutex<()>>,
+    wake: Arc<tokio::sync::Notify>,
+) {
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(256);
+    let overflow = Arc::new(AtomicBool::new(false));
+    let dirty = overflow.clone();
+    let event_wake = wake.clone();
+    let mut watcher = match notify::recommended_watcher(move |e: notify::Result<notify::Event>| {
+        queue_watch_event(e, &tx, &dirty, &event_wake);
+    }) {
+        Ok(w) => w,
+        Err(e) => {
+            log::warn!("File watcher: {e}");
+            return;
+        }
+    };
+    for root in roots(&ctx) {
+        if let Err(e) = watcher.watch(&root, notify::RecursiveMode::Recursive) {
+            log::debug!("Watch {}: {e}", root.display());
+        }
+    }
+    loop {
+        let event = match wait_watch_work(&mut rx, &stop, &overflow, &wake).await {
+            WatchWork::Stopped => return,
+            WatchWork::Event(Ok(event)) => event,
+            WatchWork::Event(Err(e)) => {
+                log::debug!("File watch event: {e}");
+                overflow.store(true, Ordering::Release);
+                continue;
+            }
+            WatchWork::Reconcile => {
+                let _guard = scanning.lock().await;
+                if let Err(e) = scan(ctx.clone(), db.clone(), stop.clone()).await {
+                    log::warn!("File watcher rescan: {e}");
+                }
+                continue;
+            }
+        };
+        let mut scan_dirs = matches!(
+            event.kind,
+            notify::EventKind::Create(_)
+                | notify::EventKind::Modify(notify::event::ModifyKind::Name(_))
+        );
+        let mut paths = event.paths;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        while let Ok(event) = rx.try_recv() {
+            match event {
+                Ok(e) => {
+                    scan_dirs |= matches!(
+                        e.kind,
+                        notify::EventKind::Create(_)
+                            | notify::EventKind::Modify(notify::event::ModifyKind::Name(_))
+                    );
+                    paths.extend(e.paths);
+                }
+                Err(_) => overflow.store(true, Ordering::Release),
+            }
+        }
+        paths.sort();
+        paths.dedup();
+        let _scan_guard = scanning.lock().await;
+        let (upserts, deleted) = match tokio::task::spawn_blocking(move || {
+            let mut docs = vec![];
+            let mut deleted = vec![];
+            for p in paths {
+                if scan_dirs && p.is_dir() {
+                    for e in walkdir::WalkDir::new(&p)
+                        .follow_links(false)
+                        .into_iter()
+                        .filter_entry(|e| !SKIP.contains(&e.file_name().to_string_lossy().as_ref()))
+                        .filter_map(Result::ok)
+                        .take(75000)
+                    {
+                        if docs.len() >= 75000 {
+                            break;
+                        }
+                        if e.file_type().is_file() {
+                            if let Some(d) = file_document(e.path()) {
+                                docs.push(d)
+                            }
+                        }
+                    }
+                    continue;
+                }
+                if let Some(d) = file_document(&p) {
+                    docs.push(d)
+                } else if !p.exists() {
+                    deleted.push(format!("file:{}", p.display()))
+                }
+            }
+            (docs, deleted)
+        })
+        .await
+        {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let _ = db.upsert(upserts, vec![]).await;
+        let _ = db
+            .call(move |c| {
+                let tx = c.transaction().map_err(|e| e.to_string())?;
+                for id in deleted {
+                    delete_watched_path(&tx, &id)?;
+                }
+                tx.commit().map_err(|e| e.to_string())?;
+                Ok(Value::Null)
+            })
+            .await;
+    }
+}
+// Keep the exact-id arm and file-only subtree arm together, backed by the
+// (category, source_path) index. Deleted directories cannot be checked by allowed().
+pub(super) const WATCHER_DELETE_SQL: &str = "DELETE FROM documents WHERE id=?1 OR (category='files' AND source_path>=?2 AND source_path<?3)";
+pub(super) fn delete_watched_path(db: &rusqlite::Connection, id: &str) -> Result<usize, String> {
+    let path = id.trim_start_matches("file:");
+    let separator = std::path::MAIN_SEPARATOR;
+    db.execute(
+        WATCHER_DELETE_SQL,
+        rusqlite::params![
+            id,
+            format!("{path}{separator}"),
+            format!("{path}{}", char::from_u32(separator as u32 + 1).unwrap()),
+        ],
+    )
+    .map_err(|e| e.to_string())
+}
+pub fn resolve(home: &Path, input: &str) -> PathBuf {
+    let input = input
+        .trim()
+        .strip_suffix("/...")
+        .or_else(|| input.trim().strip_suffix("\\..."))
+        .map(|s| format!("{s}{}", std::path::MAIN_SEPARATOR))
+        .unwrap_or_else(|| input.trim().into());
+    if input == "~" || input == "/" || input.is_empty() {
+        return home.into();
+    }
+    if let Some(s) = input.strip_prefix("~/") {
+        return home.join(s);
+    }
+    if input.starts_with('/')
+        && ![
+            "/Users/",
+            "/Volumes/",
+            "/private/",
+            "/tmp/",
+            "/var/",
+            "/System/",
+            "/Library/",
+            "/Applications/",
+        ]
+        .iter()
+        .any(|p| input.starts_with(p))
+        && input != "/Users"
+        && input != "/Volumes"
+        && input != "/Applications"
+    {
+        return home.join(input.trim_start_matches('/'));
+    }
+    let p = PathBuf::from(input);
+    if p.is_absolute() {
+        p
+    } else {
+        home.join(p)
+    }
+}
+fn display(home: &Path, path: &Path) -> String {
+    path.strip_prefix(home)
+        .map(|p| {
+            if p.as_os_str().is_empty() {
+                "~".into()
+            } else {
+                // `~/` paths read with one separator style on every platform.
+                format!("~/{}", p.display()).replace('\\', "/")
+            }
+        })
+        .unwrap_or_else(|_| path.to_string_lossy().into())
+}
+/// Dot-files are hidden everywhere; Windows also hides by attribute (e.g. `NTUSER.DAT`,
+/// `desktop.ini` and the legacy `Application Data` junctions that deny listing).
+fn hidden_entry(entry: &std::fs::DirEntry) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const HIDDEN: u32 = 0x2;
+        const SYSTEM: u32 = 0x4;
+        entry
+            .metadata()
+            .is_ok_and(|m| m.file_attributes() & (HIDDEN | SYSTEM) != 0)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = entry;
+        false
+    }
+}
+fn slash(home: &Path, path: &Path, dir: bool) -> String {
+    let mut s = path
+        .strip_prefix(home)
+        .map(|p| format!("/{}", p.display()))
+        .unwrap_or_else(|_| path.to_string_lossy().into());
+    if dir && !s.ends_with('/') {
+        s.push('/')
+    }
+    s.replace('\\', "/")
+}
+pub fn usage_keys(path: &Path) -> Vec<String> {
+    let p = path.to_string_lossy();
+    let parent = path.parent().unwrap_or(path).to_string_lossy();
+    if path.is_dir() {
+        vec![format!("folder:{p}"), format!("sibling-folder:{parent}")]
+    } else {
+        let mut keys = vec![format!("parent:{parent}")];
+        if let Some(ext) = path.extension() {
+            let ext = ext.to_string_lossy().to_lowercase();
+            keys.push(format!("parent-ext:{parent}:.{ext}"));
+            keys.push(format!("ext:.{ext}"));
+        }
+        keys
+    }
+}
+pub fn complete(ctx: &CoreContext, query: &str, apps: &[Value]) -> CoreResult {
+    let home = &ctx.paths.home_dir;
+    let launchpad = query.trim_start().starts_with('`');
+    let trimmed_query = query.trim_end();
+    let trimmed_target = resolve(home, trimmed_query);
+    let mut target = resolve(home, query);
+    let mut term = if launchpad {
+        query.trim_start().trim_start_matches('`').trim().to_owned()
+    } else {
+        String::new()
+    };
+    let mut app_mode = false;
+    if query.ends_with(' ') && (target.exists() || trimmed_target.exists()) {
+        if trimmed_target.exists() {
+            target = trimmed_target;
+        }
+        app_mode = true;
+    } else if !target.exists() {
+        for (i, c) in query.char_indices().rev() {
+            if c == ' ' {
+                let before = resolve(home, query[..i].trim_end());
+                if before.exists() {
+                    target = before;
+                    term = query[i + 1..].trim().into();
+                    app_mode = true;
+                    break;
+                }
+            }
+        }
+    }
+    let applications_directory = target == Path::new("/Applications")
+        || target == Path::new("/System/Applications")
+        || target == Path::new("/System/Applications/Utilities")
+        || target == home.join("Applications");
+    if launchpad || app_mode || applications_directory {
+        let usage = read_or(
+            &ctx.paths.data_dir.join("open-with-usage.json"),
+            json!({"version":1,"keys":{},"aliases":{}}),
+        )?;
+        let alias = app_term(&term);
+        let mut matching: Vec<_> = apps
+            .iter()
+            .filter(|app| {
+                let name = app["name"].as_str().unwrap_or("");
+                app_matches(name, &term) || usage["aliases"][&alias][name].is_object()
+            })
+            .collect();
+        matching.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+        if !app_mode {
+            if !launchpad {
+                matching.truncate(50)
+            }
+            return Ok(json!(matching.into_iter().enumerate().map(|(i,app)|{let path=app["path"].as_str().unwrap_or("");json!({"id":format!("path-installed-app:{path}"),"title":app["name"],"subtitle":display(home,Path::new(path)),"kind":"application","badge":"Application","value":path,"path":path,"appPath":path,"appName":app["name"],"applicationAction":"open","score":2000-i as i64})}).collect::<Vec<_>>()));
+        }
+        let mut recommendations: Vec<(String, f64, u64)> = vec![];
+        for app in &matching {
+            let name = app["name"].as_str().unwrap_or("");
+            let mut score = 0.;
+            for (i, key) in usage_keys(&target).iter().enumerate() {
+                let entry = &usage["keys"][key][name];
+                let count = entry["count"].as_f64().unwrap_or(0.);
+                if count > 0. {
+                    let age = now_ms().saturating_sub(entry["lastUsedAt"].as_u64().unwrap_or(0))
+                        as f64
+                        / 86_400_000.;
+                    score += count
+                        * if i == 0 {
+                            5.
+                        } else if i == 1 {
+                            3.
+                        } else {
+                            1.
+                        }
+                        + (14. - age).max(0.);
+                }
+            }
+            let learned = &usage["aliases"][&alias][name];
+            let alias_count = learned["count"].as_u64().unwrap_or(0);
+            if score > 0. || alias_count > 0 {
+                recommendations.push((
+                    name.to_owned(),
+                    if alias_count > 0 {
+                        1_000_000. + alias_count as f64
+                    } else {
+                        score
+                    },
+                    learned["lastUsedAt"].as_u64().unwrap_or(0),
+                ));
+            }
+        }
+        recommendations.sort_by(|a, b| {
+            b.1.total_cmp(&a.1)
+                .then_with(|| b.2.cmp(&a.2))
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        recommendations.truncate(5);
+        let make_item = |app: &Value, index: usize, recommended: bool| {
+            let path = app["path"].as_str().unwrap_or("");
+            let name = app["name"].as_str().unwrap_or("");
+            let section = if recommended {
+                "recommended"
+            } else {
+                "applications"
+            };
+            json!({"id":format!("path-app:{section}:{path}"),"title":name,"subtitle":format!("Open {} with {name}",display(home,&target)),"kind":"application","section":section,"badge":if recommended{"Recommended"}else{"Open With"},"value":format!("{} {name}",slash(home,&target,false)),"path":target,"appPath":path,"appName":name,"applicationAction":"open-with","score":if recommended{4000-index as i64}else{1000-index as i64}})
+        };
+        let mut out = vec![];
+        for (name, _, _) in &recommendations {
+            if let Some(app) = matching.iter().find(|a| a["name"] == name.as_str()) {
+                out.push(make_item(app, out.len(), true));
+            }
+        }
+        let default = json!({"id":format!("path-default:{}",target.display()),"title":format!("Open in {}",default_app(&target)),"subtitle":format!("Open {}",display(home,&target)),"kind":"application","section":"default","badge":"Default","value":format!("{} ",slash(home,&target,false)),"path":target,"applicationAction":"open-with","score":2000});
+        let recommended_len = out.len();
+        if term.trim().is_empty() {
+            out.push(default.clone());
+        }
+        for app in matching {
+            if out.len() >= 49 {
+                break;
+            }
+            let name = app["name"].as_str().unwrap_or("");
+            if !recommendations.iter().any(|(n, _, _)| n == name) {
+                out.push(make_item(
+                    app,
+                    out.len() - recommended_len - usize::from(term.trim().is_empty()),
+                    false,
+                ));
+            }
+        }
+        if !term.trim().is_empty() {
+            out.push(default);
+        }
+        return Ok(json!(out));
+    }
+    let (directory, prefix) = if target.is_dir() {
+        (target, String::new())
+    } else {
+        (
+            target.parent().unwrap_or(home).into(),
+            target
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase(),
+        )
+    };
+    let mut out = vec![];
+    if query.trim() == "/" {
+        let visits = read_or(
+            &ctx.paths.data_dir.join("directory-visits.json"),
+            json!({"version":1,"visits":{}}),
+        )?;
+        for (i, (p, _score)) in recommendations(&visits["visits"], home)
+            .into_iter()
+            .take(5)
+            .enumerate()
+        {
+            let path = Path::new(&p);
+            out.push(json!({"id":format!("path-recommended:{p}"),"title":path.file_name().unwrap_or_default().to_string_lossy(),"subtitle":display(home,path),"kind":"directory","section":"recommended","badge":"Recommended","value":slash(home,path,true),"path":p,"score":5000-i as i64}));
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(&directory) {
+        for e in entries.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') || hidden_entry(&e) || !name.to_lowercase().contains(&prefix) {
+                continue;
+            }
+            let path = e.path();
+            let Ok(kind) = e.file_type() else { continue };
+            let is_dir = kind.is_dir() || (kind.is_symlink() && path.is_dir());
+            let is_file = kind.is_file() || (kind.is_symlink() && path.is_file());
+            if !is_dir && !is_file {
+                continue;
+            }
+            if out.iter().any(|i| i["path"].as_str() == path.to_str()) {
+                continue;
+            }
+            out.push(json!({"id":format!("path:{}",path.display()),"title":name,"subtitle":display(home,&path),"kind":if is_dir{"directory"}else{"file"},"value":slash(home,&path,is_dir),"path":path,"score":(if is_dir{1000}else{500})+if name.to_lowercase()==prefix{1000}else if name.to_lowercase().starts_with(&prefix){100}else{0}}));
+        }
+    }
+    out.sort_by(|a, b| {
+        b["score"]
+            .as_i64()
+            .cmp(&a["score"].as_i64())
+            .then_with(|| a["title"].as_str().cmp(&b["title"].as_str()))
+    });
+    out.truncate(50);
+    Ok(json!(out))
+}
+pub fn recommendations(visits: &Value, home: &Path) -> Vec<(String, f64)> {
+    let Some(visits) = visits.as_object() else {
+        return vec![];
+    };
+    let valid: Vec<_> = visits
+        .iter()
+        .filter(|(p, v)| {
+            Path::new(p).is_absolute()
+                && v["count"].as_u64().unwrap_or(0) > 0
+                && v["lastVisitedAt"].is_number()
+        })
+        .collect();
+    let mut siblings = std::collections::HashMap::<String, usize>::new();
+    for (p, _) in &valid {
+        if let Some(parent) = Path::new(p).parent() {
+            *siblings.entry(parent.to_string_lossy().into()).or_default() += 1
+        }
+    }
+    let mut merged = std::collections::HashMap::<String, f64>::new();
+    for (p, v) in valid {
+        let parent = Path::new(p)
+            .parent()
+            .unwrap_or(Path::new(p))
+            .to_string_lossy();
+        let path = if siblings.get(parent.as_ref()).copied().unwrap_or(0) >= 3
+            && Path::new(parent.as_ref()) != home
+        {
+            parent.into_owned()
+        } else {
+            p.clone()
+        };
+        if Path::new(&path) == home || !Path::new(&path).is_dir() {
+            continue;
+        }
+        let age =
+            now_ms().saturating_sub(v["lastVisitedAt"].as_u64().unwrap_or(0)) as f64 / 86_400_000.;
+        *merged.entry(path).or_default() +=
+            v["count"].as_f64().unwrap_or(0.) * 10. + (14. - age).max(0.);
+    }
+    let mut ranked: Vec<_> = merged.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let mut out: Vec<(String, f64)> = vec![];
+    for (p, s) in ranked {
+        if !out.iter().any(|(strong, _)| {
+            p.starts_with(&format!("{strong}/")) || strong.starts_with(&format!("{p}/"))
+        }) {
+            out.push((p, s))
+        }
+    }
+    out
+}
+
+pub fn app_term(s: &str) -> String {
+    s.to_lowercase()
+        .replace('&', "and")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
+}
+fn app_matches(name: &str, term: &str) -> bool {
+    let term = app_term(term);
+    if term.is_empty() {
+        return true;
+    }
+    let acronym: String = name
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter_map(|s| s.chars().next())
+        .collect::<String>()
+        .to_lowercase();
+    app_term(name).contains(&term)
+        || acronym.contains(&term)
+        || text::aliases(name)
+            .iter()
+            .any(|a| app_term(a).contains(&term))
+}
+fn default_app(p: &Path) -> &'static str {
+    if p.is_dir() {
+        return if cfg!(windows) {
+            "File Explorer"
+        } else {
+            "Finder"
+        };
+    }
+    let ext = p
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_lowercase();
+    if [
+        "png", "jpg", "jpeg", "gif", "heic", "webp", "tiff", "bmp", "pdf",
+    ]
+    .contains(&ext.as_str())
+    {
+        return "Preview";
+    }
+    if ["mov", "mp4", "m4v", "avi", "mkv", "m2ts", "mts"].contains(&ext.as_str())
+        || (ext == "ts"
+            && regex::Regex::new(r"(?i)\b(movie|movies|video|videos)\b")
+                .unwrap()
+                .is_match(&p.parent().unwrap_or(p).to_string_lossy()))
+    {
+        return "QuickTime Player";
+    }
+    "Default App"
+}
+
+#[cfg(any(windows, test))]
+pub fn merge_windows_start_apps(apps: &mut Vec<Value>, raw: &str) -> Result<(), String> {
+    let v: Value = serde_json::from_str(raw).map_err(|e| e.to_string())?;
+    let items = v.as_array().cloned().unwrap_or_else(|| vec![v]);
+    for item in items {
+        if let (Some(name), Some(id)) = (item["Name"].as_str(), item["AppID"].as_str()) {
+            let name = name.trim();
+            let id = id.trim();
+            if !name.is_empty()
+                && !id.is_empty()
+                && !apps.iter().any(|app| {
+                    app["name"]
+                        .as_str()
+                        .unwrap_or("")
+                        .eq_ignore_ascii_case(name)
+                })
+            {
+                apps.push(
+                    json!({"name":name,"path":format!("shell:AppsFolder\\{id}"),"windowsAppId":id}),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod windows_path_tests {
+    use super::*;
+
+    #[test]
+    fn home_relative_browsing_hides_attribute_hidden_entries_and_uses_forward_slashes() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(home.path().join("Desktop").join("Project")).unwrap();
+        let hidden = home.path().join("Desktop").join("desktop.ini");
+        std::fs::write(&hidden, "").unwrap();
+        let wide: Vec<u16> = hidden
+            .as_os_str()
+            .encode_wide_lossless()
+            .chain(std::iter::once(0))
+            .collect();
+        // FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM, as Explorer creates desktop.ini.
+        assert_ne!(
+            unsafe { windows_sys::Win32::Storage::FileSystem::SetFileAttributesW(wide.as_ptr(), 0x6) },
+            0
+        );
+        assert_eq!(resolve(home.path(), "/Desktop/"), home.path().join("Desktop/"));
+        let names: Vec<_> = std::fs::read_dir(home.path().join("Desktop"))
+            .unwrap()
+            .flatten()
+            .filter(|e| !hidden_entry(e))
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["Project"]);
+        assert_eq!(
+            display(home.path(), &home.path().join("Desktop").join("Project")),
+            "~/Desktop/Project"
+        );
+        assert_eq!(
+            slash(home.path(), &home.path().join("Desktop").join("Project"), true),
+            "/Desktop/Project/"
+        );
+    }
+
+    #[test]
+    fn windows_app_rows_name_their_start_menu_folder_not_the_shortcut_path() {
+        assert_eq!(
+            windows_app_subtitle(r"C:\ProgramData\Microsoft/Windows/Start Menu/Programs\Administrative Tools\Resource Monitor.lnk"),
+            "Start Menu \u{203a} Administrative Tools"
+        );
+        assert_eq!(
+            windows_app_subtitle(r"C:\Users\me\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Zed.lnk"),
+            "Start Menu"
+        );
+        assert_eq!(
+            windows_app_subtitle(r"shell:AppsFolder\Microsoft.WindowsCamera_8wekyb3d8bbwe!App"),
+            "Windows app"
+        );
+        assert_eq!(windows_app_subtitle(r"D:\Tools\tool.exe"), "Application");
+    }
+
+    trait EncodeWide {
+        fn encode_wide_lossless(&self) -> std::vec::IntoIter<u16>;
+    }
+    impl EncodeWide for std::ffi::OsStr {
+        fn encode_wide_lossless(&self) -> std::vec::IntoIter<u16> {
+            use std::os::windows::ffi::OsStrExt;
+            self.encode_wide().collect::<Vec<_>>().into_iter()
+        }
+    }
+}
+
+#[cfg(test)]
+mod surface_duplicate_tests {
+    use super::*;
+    #[test]
+    fn each_surface_command_is_offered_once() {
+        let native: Vec<Value> = serde_json::from_str(include_str!("../system/native-windows.json")).unwrap();
+        let docs = command_documents_at(&native, 1);
+        for surface in ["open-vault", "open-snippets"] {
+            let rows: Vec<_> = docs
+                .iter()
+                .filter(|d| d["id"].as_str().is_some_and(|id| id.ends_with(&format!(":{surface}"))))
+                .collect();
+            assert_eq!(rows.len(), 1, "{surface}: {rows:#?}");
+        }
+        let vault = docs.iter().find(|d| d["id"] == "native:open-vault").unwrap();
+        assert!(vault["tokens"].as_str().unwrap().contains("/vault"));
+        // Without the native catalog the built-in rows remain.
+        let bare = command_documents_at(&[], 1);
+        assert!(bare.iter().any(|d| d["id"] == "command:open-vault"));
+    }
+}

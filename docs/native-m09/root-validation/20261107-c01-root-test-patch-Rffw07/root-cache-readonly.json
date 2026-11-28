@@ -1,0 +1,6 @@
+{
+  "tracked_nonincremental_cache_paths": 312893,
+  "changed": [],
+  "comparison": "size, mtime_ns, inode; root incremental excluded from traversal and never copied or used",
+  "root_cache_written": false
+}

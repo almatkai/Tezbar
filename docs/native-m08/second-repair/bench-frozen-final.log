@@ -1,0 +1,467 @@
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `validate_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:16:8
+   |
+16 | pub fn validate_images(
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+
+warning: function `save` is never used
+  --> crates/tezbar-core/src/ai/runtime/store.rs:52:8
+   |
+52 | pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
+   |        ^^^^
+
+warning: methods `gemma_pending`, `gemma_save`, `gemma_clear`, `gemma_has`, `gemma_counts`, and `vector_backfill` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1219:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1219 |     pub fn gemma_pending(&self, roots: &[String], limit: usize) -> Result<Vec<Value>, String> {
+     |            ^^^^^^^^^^^^^
+...
+1246 |     pub fn gemma_save(&mut self, chunks: &[Value], vectors: &[Vec<f64>]) -> Result<usize, String> {
+     |            ^^^^^^^^^^
+...
+1301 |     pub fn gemma_clear(&self) -> Result<(), String> {
+     |            ^^^^^^^^^^^
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+...
+1354 |     pub fn vector_backfill(&self) -> Result<bool, String> {
+     |            ^^^^^^^^^^^^^^^
+
+warning: constant `REVISION` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:32:7
+   |
+32 | const REVISION: &str = runtime_models::Q8.revision;
+   |       ^^^^^^^^
+
+warning: constant `MODEL_FILE` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:33:7
+   |
+33 | const MODEL_FILE: &str = runtime_models::Q8.file;
+   |       ^^^^^^^^^^
+
+warning: constant `MODEL_SHA` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:34:7
+   |
+34 | const MODEL_SHA: &str = runtime_models::Q8.sha256;
+   |       ^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/tezbar-core/src/knowledge/runtime.rs:217:12
+    |
+216 | impl Runtime {
+    | ------------ associated function in this implementation
+217 |     pub fn new(ctx: CoreContext) -> Self {
+    |            ^^^
+
+warning: function `output` is never used
+  --> crates/tezbar-core/src/launcher/providers.rs:17:14
+   |
+17 | pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+   |              ^^^^^^
+
+warning: `tezbar-core` (lib) generated 12 warnings (run `cargo fix --lib -p tezbar-core` to apply 3 suggestions)
+   Compiling tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+warning: variant `Open` is never constructed
+  --> apps/tezbar/src/surfaces/ai_chat/mod.rs:85:5
+   |
+49 | pub(crate) enum Action {
+   |                 ------ variant in this enum
+...
+85 |     Open(String),
+   |     ^^^^
+   |
+   = note: `Action` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `scroll` is never read
+   --> apps/tezbar/src/surfaces/ai_chat/mod.rs:165:5
+    |
+ 97 | pub struct ChatView {
+    |            -------- field in this struct
+...
+165 |     scroll: ScrollHandle,
+    |     ^^^^^^
+
+warning: method `snapshot_summary` is never used
+   --> apps/tezbar/src/surfaces/terminal/state.rs:979:12
+    |
+104 | impl State {
+    | ---------- method in this implementation
+...
+979 |     pub fn snapshot_summary(&self) -> Value {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: `tezbar-native` (lib test) generated 3 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.75s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_native-0f22a533c1dfc8fb)
+
+running 325 tests
+test app::m10::tests::host_url_scheme_is_finite ... ok
+test app::m7_tests::close_barrier_keeps_latest_failure_and_waits_for_all_parent_writes ... ok
+test app::m7_tests::review_failed_start_gate_stays_decided_when_the_core_recovers ... ok
+test app::m7_tests::review_layout_changes_coalesce_without_leaving_active_barrier_tickets ... ok
+test app::m7_tests::settings_preferences_use_the_launcher_atomic_owner_and_retry_real_file_failure ... ok
+test app::m7_tests::boot_gate_mounts_without_a_launcher_flash_and_finish_is_source_fenced ... ok
+test app::m8::tests::actual_app_quit_save_failure_cancels_shutdown_then_fresh_retry_is_durable ... ok
+test app::m8::tests::actual_app_review_settings_routes_exact_source_cwd_nonce_and_retains_chat ... ok
+test app::m8::tests::actual_gpui_clipboard_payload_preserves_canonical_bytes_and_mime ... ok
+test app::m8::tests::actual_app_dialog_late_choice_and_clipboard_ticket_never_attach_to_b ... ok
+test app::m8::tests::clipboard_atomic_batch_rejects_empty_text_unsupported_and_five_images ... ok
+test app::m8::tests::actual_launcher_input_actions_focus_and_ime_do_not_fall_through_search ... ok
+test app::m8::tests::repair_actual_app_append_failure_then_resume_send_approve_quit ... ok
+test app::m8::tests::repair_actual_app_layout_failure_preserves_live_approval ... ok
+test app::m8::tests::repair_actual_app_settings_failure_preserves_live_approval ... ok
+test app::m8::tests::review_m7_failed_core_start_delivers_pending_settings_once ... ok
+test app::m8::tests::review_m7_queued_zoom_is_applied_before_settings_refresh ... ok
+test asset_transport::tests::decoder_accepts_actual_sdk_rasters_and_bounds_variants ... ok
+test asset_transport::tests::decoder_checks_header_allocation_before_upload_and_keeps_m5_strict ... ok
+test asset_transport::tests::malformed_raster_svg_and_zero_variant_never_upload ... ok
+test asset_transport::tests::real_client_denies_forged_scope_and_effect_mismatch_without_host_or_network ... ok
+test asset_transport::tests::chat_source_budget_is_independent_of_asset_preview_budget ... ok
+test asset_transport::tests::real_client_uses_registry_identity_and_same_core_service ... ok
+test asset_transport::tests::repair_svg_reference_expansion_is_bounded_before_usvg_and_icons_render ... ok
+test asset_transport::tests::review_n1_css_filter_routes_and_excess_layers_are_refused ... ok
+test asset_transport::tests::review_n1_marker_expansion_is_refused_before_usvg ... ok
+test asset_transport::tests::review_n1_geometry_source_and_segment_work_are_bounded ... ok
+test asset_transport::tests::svg_uses_locked_renderer_with_no_file_or_nested_data_resolver ... ok
+test bench_control::tests::authentication_compares_full_token ... ok
+test cli::tests::desktop_integration_requires_explicit_opt_in ... ok
+test cli::tests::explicit_paths_no_production_defaults ... ok
+test cli::tests::nested_profile_symlink_rejected ... ok
+test asset_transport::tests::review_n4_legacy_registry_icon_reaches_real_client_for_both_spellings ... ok
+test core_client::request_owner_tests::cancelling_waiter_keeps_admitted_core_work_owned_and_bounded ... ok
+test cli::tests::resources_source_must_match ... ok
+test core_client::tests::owner_cancellation_and_stale_replies ... ok
+test events::capture_lease_tests::cancellation_after_capture_reply_send_still_restores ... ok
+test events::lease_admission_repair_tests::live_lease_admission_and_reserved_releases_are_both_bounded ... ok
+test events::repair_tests::hidden_live_subscriber_receives_and_unknown_output_is_not_retained ... ok
+test events::repair_tests::hidden_owned_channel_is_independent_and_drop_releases_producer ... ok
+test events::repair_tests::lease_release_bypasses_full_control_queue_with_bounded_ownership ... ok
+test core_client::shutdown_repair_tests::shutdown_consumes_join_error_and_timeout_keeps_same_owner ... ok
+test events::shutdown_queue_repair_tests::closing_owned_queues_releases_two_flooding_workers_before_shutdown_drain ... ok
+test events::tests::activation_and_status_are_coalesced ... ok
+test events::tests::closed_relay_cannot_wake_or_replay_effect ... ok
+test events::tests::output_backpressure_preserves_bytes_and_wakes_on_drain ... ok
+test host_adapter::tests::preview_cannot_register_production_launcher_accelerators ... ok
+test surfaces::ai_chat::references::decode_repair_tests::actual_blocking_decodes_hold_four_slots_across_three_release_cycles ... ok
+test events::repair_tests::two_worker_two_producer_flood_control_and_quit_remain_live ... ok
+test surfaces::ai_chat::tests::attachment_batch_rolls_back_deduplicates_and_core_sized_payload_is_admitted ... ok
+test surfaces::ai_chat::tests::actual_dispose_fences_preparation_but_hide_keeps_running ... ok
+test surfaces::ai_chat::tests::base64_padding_and_full_core_image_budget_are_checked_separately_from_preview ... ok
+test surfaces::ai_chat::tests::capture_failure_unlocks_and_stale_failure_cannot_erase_new_capture ... ok
+test surfaces::ai_chat::tests::background_approval_never_focuses_mode_does_not_approve_allow_click_once ... ok
+test surfaces::ai_chat::tests::capture_host_completion_is_fenced_by_revision_navigation_hide_and_once ... ok
+test surfaces::ai_chat::tests::clear_real_wire_covers_more_than_history_limit_and_failed_clear_repersists_dirty ... ok
+test surfaces::ai_chat::tests::composer_shift_enter_ime_and_native_allow_enter_have_separate_activation ... ok
+test surfaces::ai_chat::tests::constructor_and_repeat_nonce_do_no_work_and_submit_runs_once ... ok
+test surfaces::ai_chat::tests::config_mode_write_does_not_overwrite_another_owners_chat_selection ... ok
+test surfaces::ai_chat::tests::core_loopback::finite_adapter_runs_loopback_and_persists_metadata_without_desktop_services ... ok
+test surfaces::ai_chat::tests::core_loopback::real_core_clear_covers_over_200_rows_and_tombstones_preparing_owner ... ok
+test surfaces::ai_chat::tests::document_image_update_emits_one_host_ticket_and_hide_fences_decode ... ok
+test surfaces::ai_chat::tests::delayed_config_delete_clear_and_stop_never_append_or_start ... ok
+test surfaces::ai_chat::tests::done_overtakes_failed_individual_delete_and_background_durable_write_is_returned ... ok
+test surfaces::ai_chat::tests::exact_eight_mib_attachment_matches_canonical_input_size ... ok
+test surfaces::ai_chat::tests::historical_image_uses_exact_canonical_read_and_navigation_rejects_late_result ... ok
+test surfaces::ai_chat::tests::failed_background_persistence_remains_owned_and_retry_saves_the_same_turn ... ok
+test surfaces::ai_chat::tests::late_history_does_not_replace_typed_draft_and_prompt_args_never_autosend ... ok
+test surfaces::ai_chat::tests::native_a11y_shows_approval_and_scrubs_known_provider_diagnostics ... ok
+test surfaces::ai_chat::tests::native_projection_preserves_stream_text_stage_text_and_replaces_stage_in_place ... ok
+test surfaces::ai_chat::tests::huge_tool_output_keeps_chronological_canonical_identity_context ... ok
+test surfaces::ai_chat::tests::preparation_freezes_cwd_model_and_cannot_start_after_delete ... ok
+test surfaces::ai_chat::tests::replayed_nonce_after_different_navigation_does_no_io ... ok
+test surfaces::ai_chat::tests::repair_prepared_append_is_durable_work_and_attachment_queue_refusals_settle ... ok
+test surfaces::ai_chat::tests::review_n2_failed_user_append_refuses_quit_and_restores_draft ... ok
+test surfaces::ai_chat::tests::retry_loads_canonical_user_reuses_assistant_and_never_sends_empty_image_ids ... ok
+test surfaces::ai_chat::tests::review_n2_preparation_waits_for_cancelled_quit_before_starting_once ... ok
+test surfaces::ai_chat::tests::review_n2_reentered_quit_refences_deferred_preparation ... ok
+test surfaces::ai_chat::tests::run_wire_keeps_minimal_unsaved_context_and_metadata_no_rendered_stage_payload ... ok
+test surfaces::ai_chat::tests::review_n2_successful_quit_drops_prepared_run_without_provider_cost ... ok
+test surfaces::ai_chat::tests::streams_background_and_stop_persists_partial_exact_metadata ... ok
+test surfaces::command_bar::chat_integration::tests::actual_chat_uses_parent_footer_entity_and_hide_stops_its_polling ... ok
+test surfaces::command_bar::chat_integration::tests::actual_launcher_prompt_mounts_once_acknowledges_and_retains_across_return ... ok
+test surfaces::command_bar::chat_integration::tests::boot_payloads_keep_exact_identity_and_every_fresh_nonce ... ok
+test surfaces::command_bar::chat_integration::tests::dispose_cancels_hung_auxiliary_read_and_waits_only_for_mutation_jobs ... ok
+test surfaces::command_bar::chat_integration::tests::actual_navigation_screen_resume_back_and_footer_use_fresh_identity ... ok
+test surfaces::command_bar::chat_integration::tests::quit_disposes_once_failed_persist_remains_owned_and_retry_saves_same_turn ... ok
+test surfaces::command_bar::chat_integration::tests::persistent_events_reach_hidden_run_and_approval_without_switching_active_owner ... ok
+test surfaces::command_bar::chat_integration::tests::same_retained_entity_rejects_previous_mount_effect_before_host_io ... ok
+test surfaces::command_bar::navigation::tests::full_route_inbox_rejects_new_work_without_dropping_admitted_routes ... ok
+test surfaces::command_bar::navigation::tests::pending_routes_are_preserved_per_surface_and_in_order ... ok
+test surfaces::command_bar::navigation::tests::repeated_pending_updates_coalesce_and_command_never_consumes_admission ... ok
+test surfaces::command_bar::navigation::tests::update_actions_have_a_separate_ordered_monotonic_owner ... ok
+test surfaces::command_bar::review_tests::model_config_read_failure_does_not_block_durable_launcher_drain ... ok
+test surfaces::command_bar::review_tests::quit_retries_current_launcher_state_after_transient_save_failure ... ok
+test surfaces::command_bar::review_tests::successful_model_save_cannot_clear_a_failed_launcher_state_save ... ok
+test surfaces::command_bar::settings_integration_tests::failed_picker_retry_cannot_replace_newer_selection_or_independent_state_error ... ok
+test surfaces::command_bar::settings_integration_tests::indexing_to_knowledge_settings_close_resumes_the_same_indexing_entity ... ok
+test surfaces::command_bar::settings_integration_tests::peer_read_failure_cannot_acknowledge_a_picker_before_its_held_write ... ok
+test surfaces::command_bar::settings_integration_tests::settings_task_override_and_header_picker_share_one_owner_queue ... ok
+test surfaces::command_bar::task_indicator::tests::ready_update_and_identity_actions_are_available_in_command_footer ... ok
+test surfaces::command_bar::task_indicator::tests::task_footer_polls_only_while_mounted_with_active_and_idle_cadence ... ok
+test surfaces::command_bar::terminal_integration::tests::quit_refusal_retains_exact_entity_and_cleanup_can_retry ... ok
+test surfaces::command_bar::chat_integration::tests::shared_picker_and_config_payload_events_change_next_snapshot_without_approving ... ok
+test surfaces::command_bar::tests::ai_history_does_not_replace_home_while_reopen_refresh_is_pending ... ok
+test surfaces::command_bar::tests::ai_submit_preserves_prompt_and_directory_through_typed_navigation ... ok
+test surfaces::command_bar::tests::alt_slot_runs_persisted_pin_absent_from_current_results_once ... ok
+test surfaces::command_bar::tests::answer_stream_uses_preinstalled_subscription_and_hide_discards_updates ... ok
+test surfaces::command_bar::terminal_integration::tests::retained_launcher_actual_navigation_events_panel_and_back ... ok
+test surfaces::command_bar::tests::backend_epoch_retires_native_form_and_answer_owners ... ok
+test surfaces::command_bar::tests::argument_escape_retires_declared_filter_and_late_contribution_owner ... ok
+test surfaces::command_bar::tests::canonical_surface_shortcuts_have_typed_destinations ... ok
+test surfaces::command_bar::tests::committed_input_coalesces_to_one_latest_search ... ok
+test surfaces::command_bar::tests::cached_ai_history_paints_on_reentry_before_its_new_request_completes ... ok
+test surfaces::command_bar::tests::composition_start_cancels_pending_enter_before_result_arrives ... ok
+test surfaces::command_bar::tests::deep_recommendation_is_model_backed_and_enters_hidden_prefix_mode ... ok
+test surfaces::command_bar::tests::directory_submit_resolves_before_navigation_and_records_visit ... ok
+test surfaces::command_bar::tests::directory_terminal_sentinel_prompt_and_ai_escape_preserve_native_payload ... ok
+test surfaces::command_bar::tests::failed_start_retry_keeps_editable_input_and_emits_only_retry_intent ... ok
+test surfaces::command_bar::tests::currency_uses_mocked_core_rates_and_current_owner ... ok
+test surfaces::command_bar::tests::inline_argument_ime_escape_and_terminal_defaults_enter_keep_their_owners ... ok
+test surfaces::command_bar::tests::model_selection_uses_fresh_model_write_owner_and_blocks_submit_until_saved ... ok
+test surfaces::command_bar::tests::native_action_variants_keep_the_canonical_execute_envelope ... ok
+test surfaces::command_bar::tests::native_answer_tokens_coalesce_to_one_frame_revision ... ok
+test surfaces::command_bar::tests::native_argument_dropdown_keeps_default_and_submits_wire_value_not_title ... ok
+test surfaces::command_bar::tests::native_argument_fields_validate_and_tab_without_executing ... ok
+test surfaces::command_bar::tests::native_command_ids_route_and_record_usage_once ... ok
+test surfaces::command_bar::tests::native_enter_executes_once_and_failure_keeps_input ... ok
+test surfaces::command_bar::tests::native_grid_arrows_and_pin_picker_have_authoritative_identity ... ok
+test surfaces::command_bar::tests::native_path_sections_keep_row_height_and_keyboard_identity ... ok
+test surfaces::command_bar::tests::icon_requests_follow_virtual_viewport_past_initial_cap_and_stop_while_idle ... ok
+test surfaces::command_bar::tests::native_result_menu_quicklook_uses_clicked_row_and_list_scroll_keeps_selection ... ok
+test surfaces::command_bar::tests::password_result_expires_and_releases_document_text ... ok
+test surfaces::command_bar::tests::path_tab_records_visit_and_fences_completion ... ok
+test surfaces::command_bar::tests::off_query_saved_pin_preserves_title_category_and_declared_argument_form ... ok
+test surfaces::command_bar::tests::pending_enter_expires_at_one_second_before_async_result ... ok
+test surfaces::command_bar::tests::pin_activation_uses_saved_action_when_live_row_has_same_id ... ok
+test surfaces::command_bar::tests::pin_drag_requires_six_pixels_reorders_and_unpins_outside ... ok
+test surfaces::command_bar::tests::picker_search_provider_preview_ime_hidden_selection_and_setup_guard ... ok
+test surfaces::command_bar::tests::presentation_uses_current_os_locale_for_currency_date_relative_and_count ... ok
+test surfaces::command_bar::tests::provider_preview_survives_earlier_config_reply ... ok
+test surfaces::command_bar::tests::pinned_argument_form_supersedes_earlier_pending_enter ... ok
+test surfaces::command_bar::tests::queued_old_owner_and_legacy_events_cannot_change_replacement_answer ... ok
+test surfaces::command_bar::tests::query_recall_respects_top_boundary_and_ai_pin_shortcut_is_inert ... ok
+test surfaces::command_bar::tests::real_input_composition_hide_reopen_and_stale_click ... ok
+test surfaces::command_bar::tests::render_is_pure_and_result_element_exposes_native_accessibility ... ok
+test surfaces::command_bar::tests::review_cancelled_quit_and_update_keep_the_current_query_usable ... ok
+test surfaces::command_bar::tests::review_deep_search_row_retains_live_model_and_pin_activation ... ok
+test surfaces::command_bar::tests::review_directory_ai_prompt_preserves_greater_than ... ok
+test surfaces::command_bar::tests::review_hotkey_failed_result_does_not_open_runtime ... ok
+test surfaces::command_bar::tests::review_hotkey_no_view_does_not_hijack_next_open ... ok
+test surfaces::command_bar::tests::review_hotkey_view_result_keeps_runtime_handoff ... ok
+test surfaces::command_bar::tests::review_delivered_settings_and_placeholder_routes_retire_admission ... ok
+test surfaces::command_bar::tests::review_optional_only_arguments_execute_without_a_form ... ok
+test surfaces::command_bar::tests::review_pin_click_after_reorder_runs_on_first_click ... ok
+test surfaces::command_bar::tests::review_quit_completion_releases_its_ticket_after_results_refresh ... ok
+test surfaces::command_bar::tests::saved_note_pin_preserves_note_id_and_quit_command_only_emits_explicit_intent ... ok
+test surfaces::command_bar::tests::sentinels_have_hidden_prefix_and_two_step_escape ... ok
+test surfaces::command_bar::tests::starting_core_preserves_latest_text_and_searches_once_when_ready ... ok
+test surfaces::command_bar::tests::terminal_session_controls_use_core_channels_and_persist_defaults ... ok
+test surfaces::command_bar::tests::typed_command_return_retires_directory_ticket_and_clears_answer_resources ... ok
+test surfaces::command_bar::tests::update_actions_are_status_driven_and_downloading_is_inert ... ok
+test surfaces::command_bar::tests::update_command_activation_uses_current_status_not_saved_row_id ... ok
+test surfaces::command_bar::tests::vault_copy_checks_unlock_then_copies_without_replaying_effects ... ok
+test surfaces::command_bar::tests::wire_activation_keeps_identity_and_one_based_rank ... ok
+test surfaces::command_bar::utilities_integration_tests::parent_utility_back_restores_command_input_and_stops_the_hidden_surface ... ok
+test surfaces::command_bar::utilities_integration_tests::parent_utility_hide_and_show_resume_the_same_native_note_editor ... ok
+test surfaces::command_bar::tests::review_icon_frame_tracks_the_latest_generation ... ok
+test surfaces::command_bar::utilities_integration_tests::parent_utility_quit_drain_retries_notes_without_corrupting_state_error_owner ... ok
+test surfaces::command_bar::utilities_integration_tests::parent_utility_routes_mount_native_content_and_ack_each_admitted_intent ... ok
+test surfaces::onboarding::rerecord_regressions::review_nb1_onboarding_rerecord_shows_the_accepted_shortcut ... ok
+test surfaces::command_bar::utilities_integration_tests::parent_utility_paste_uses_one_canonical_core_effect ... ok
+test surfaces::onboarding::review_regressions::review_rejection_belongs_to_its_revision_not_a_later_finish ... ok
+test surfaces::onboarding::review_regressions::review_conflicting_shortcut_does_not_block_finish_or_skip ... ok
+test surfaces::onboarding::tests::late_initialization_cannot_replace_a_new_native_shortcut ... ok
+test surfaces::onboarding::tests::native_finish_failure_retains_surface_and_retry_is_durable ... ok
+test surfaces::onboarding::tests::native_practice_path_completion_is_scoped_and_never_opens_files ... ok
+test surfaces::onboarding::tests::native_practice_uses_real_calculator_and_windows_omits_permission_step ... ok
+test surfaces::settings::tests::actual_text_input_provider_edit_is_scoped_and_survives_initial_read ... ok
+test surfaces::settings::tests::ai_extension_import_review_and_command_edit_preserve_secret_refs ... ok
+test surfaces::settings::tests::alias_failure_followed_by_peer_alias_preserves_both_intents ... ok
+test surfaces::settings::tests::all_eight_native_tabs_hydrate_without_writes_and_live_navigation ... ok
+test surfaces::settings::tests::cancellation_ticket_is_not_held_behind_an_unrelated_hung_operation ... ok
+test surfaces::settings::tests::cancelled_native_waiter_does_not_cancel_owned_write ... ok
+test surfaces::settings::tests::cancelled_oauth_start_cannot_open_a_late_browser ... ok
+test surfaces::settings::tests::close_drain_rechecks_config_edits_admitted_during_parent_persistence ... ok
+test surfaces::settings::tests::close_failure_retry_uses_real_store_and_keeps_secrets_out_of_errors ... ok
+test surfaces::settings::tests::copilot_signin_save_failure_is_an_effect_barrier ... ok
+test surfaces::settings::tests::failed_setter_retry_cannot_replace_a_newer_successful_value_or_replay_auth ... ok
+test surfaces::settings::tests::finite_request_diagnostics_redact_all_payloads ... ok
+test surfaces::settings::tests::invalid_draft_blocks_close_until_corrected ... ok
+test surfaces::onboarding::tests::boot_gate_retries_once_then_fails_open ... ok
+test surfaces::settings::tests::knowledge_mutation_completion_belongs_to_retained_tab ... ok
+test surfaces::settings::tests::native_saved_secret_uses_only_opaque_scoped_slot_and_clears_password ... ok
+test surfaces::settings::tests::native_tab_keyboard_roles_and_password_control_use_shared_semantics ... ok
+test surfaces::settings::tests::production_discovery_uses_fresh_models_and_keeps_peer_selection ... ok
+test surfaces::settings::tests::production_queue_retries_do_not_resurrect_removed_provider_or_lose_recreation ... ok
+test surfaces::settings::tests::native_voice_selects_uninstalled_models_and_keeps_downloads_independent ... ok
+test surfaces::settings::tests::review_choices_reflect_hydrated_values_and_readable_details ... ok
+test surfaces::settings::tests::project_review_handoff_coalesces_ui_nonce_and_uses_core_review_identity ... ok
+test surfaces::settings::tests::review_closure_confirmation_sheet_occludes_footer_controls ... ok
+test surfaces::settings::tests::review_closure_dropped_barrier_releases_its_shortcut_rejection_claim ... ok
+test surfaces::settings::tests::review_closure_field_labels_preserve_familiar_acronyms ... ok
+test surfaces::settings::tests::review_closure_rejected_shortcut_does_not_discard_an_already_queued_signin ... ok
+test surfaces::settings::tests::review_closure_settings_rejection_during_inflight_save_is_reported_and_does_not_cancel_next_action ... ok
+test surfaces::settings::tests::review_closure_validation_error_is_not_a_retryable_durable_save ... ok
+test surfaces::settings::tests::review_executor_failure_keeps_inflight_edit_retryable ... ok
+test surfaces::settings::tests::review_failed_operational_delete_is_retryable_but_never_dischargeable ... ok
+test surfaces::settings::tests::review_followup_does_not_wait_for_unrelated_download ... ok
+test surfaces::settings::tests::review_function_key_range_requires_exact_f1_through_f24 ... ok
+test surfaces::settings::tests::review_hidden_settings_and_idle_ai_release_the_tick_task ... ok
+test surfaces::settings::tests::review_nb1_another_owners_shortcut_cannot_consume_the_rejection ... ok
+test surfaces::settings::tests::review_nb1_replacement_supersedes_an_already_recorded_rejection ... ok
+test surfaces::settings::tests::review_nb1_rerecorded_shortcut_does_not_inherit_abandoned_rejection ... ok
+test surfaces::settings::tests::review_owner_drain_cannot_strand_behind_an_exiting_pump ... ok
+test surfaces::settings::tests::review_peer_durable_failure_does_not_cancel_own_save_or_signin ... ok
+test surfaces::settings::tests::review_plain_f_key_is_not_a_global_shortcut ... ok
+test surfaces::settings::tests::review_repeated_failed_operations_exhaust_admission ... ok
+test surfaces::settings::tests::review_scale_stepper_uses_each_click_before_parent_save_returns ... ok
+test surfaces::settings::tests::review_successful_toggle_reports_failure_after_unrelated_operation_failed ... ok
+test surfaces::settings::tests::review_tab_switch_hides_unresolved_durable_failure ... ok
+test surfaces::settings::tests::review_unrelated_failed_operation_blocks_copilot_signin ... ok
+test surfaces::settings::tests::settings_and_onboarding_share_fresh_canonical_provider_ownership ... ok
+test surfaces::settings::tests::settings_window_acknowledges_before_failed_drain_and_keeps_same_content ... ok
+test surfaces::settings::tests::settled_picker_owner_does_not_wait_for_an_unrelated_held_download ... ok
+test surfaces::settings::tests::signin_clicked_during_a_slow_save_waits_once_and_freezes_its_provider ... ok
+test surfaces::settings::tests::task_override_uses_typed_fresh_map_and_preserves_peer_task ... ok
+test surfaces::terminal::tests::actual_gpui_focus_key_dispatch_resize_and_key_up_do_not_duplicate ... ok
+test surfaces::terminal::tests::arrow_down_is_explicit_and_clamps ... ok
+test surfaces::terminal::tests::both_listeners_before_create_with_metadata_once ... ok
+test surfaces::terminal::tests::bounded_pre_attach_overflow_recovers_from_durable_snapshot ... ok
+test surfaces::terminal::tests::command_control_numbers_select_through_controller ... ok
+test surfaces::terminal::tests::compact_macos_home_preserves_path_tail ... ok
+test surfaces::terminal::tests::compact_non_user_paths_unchanged ... ok
+test surfaces::terminal::tests::compact_windows_home_matches_display_format ... ok
+test surfaces::terminal::tests::data_exit_before_attach_is_not_lost_or_reordered ... ok
+test surfaces::terminal::tests::defaults_validate_without_creating_another_settings_owner ... ok
+test surfaces::terminal::tests::detach_is_not_delete_and_pin_persistence_is_typed ... ok
+test surfaces::terminal::tests::disappearance_clears_selection ... ok
+test surfaces::terminal::tests::explicit_cwd_accepts_posix_drive_and_unc ... ok
+test surfaces::terminal::tests::explicit_cwd_rejects_relative_paths ... ok
+test surfaces::terminal::tests::explicit_selection_no_implicit_first ... ok
+test surfaces::terminal::tests::gpui_hide_settings_retains_grid_selection_and_stops_blink ... ok
+test surfaces::terminal::tests::gpui_key_interception_uses_terminal_owner ... ok
+test surfaces::terminal::tests::gpui_native_ime_commit_copy_url_and_dispose_use_fake_host ... ok
+test surfaces::terminal::tests::gpui_readonly_render_never_starts_transport ... ok
+test surfaces::terminal::tests::key_sequences_app_interception_and_bracketed_paste ... ok
+test surfaces::terminal::tests::labels_directory_and_separator ... ok
+test surfaces::terminal::tests::labels_use_directory_tail ... ok
+test surfaces::terminal::tests::labels_use_shell_autocomplete_not_typed_prefix ... ok
+test surfaces::terminal::tests::large_unicode_paste_is_atomically_admitted_in_core_sized_chunks ... ok
+test surfaces::terminal::tests::null_attach_has_no_summary_write ... ok
+test surfaces::terminal::tests::option_symbols_and_bare_numbers_are_text ... ok
+test surfaces::terminal::tests::ordered_stream_repeated_bytes_slow_replay_utf8_vt_and_generation_fences ... ok
+test surfaces::terminal::tests::raw_mouse_bytes_and_atomic_whole_paste_no_prefix ... ok
+test surfaces::terminal::tests::repair_quit_preparation_preserves_terminal_and_resumes_binary_input ... ok
+test surfaces::terminal::tests::replay_historical_queries_suppressed_live_queries_answered_and_expiry_recovers ... ok
+test surfaces::terminal::tests::replay_preserves_after_snapshot ... ok
+test surfaces::terminal::tests::replay_preserves_unrelated ... ok
+test surfaces::terminal::tests::replay_startup_deduplicates ... ok
+test surfaces::terminal::tests::restore_same_identity_no_legacy_command_execution ... ok
+test surfaces::terminal::tests::sgr_mouse_motion_release_and_modifier_table ... ok
+test surfaces::terminal::tests::stale_attach_cwd_and_config_cannot_transfer_selection ... ok
+test surfaces::terminal::tests::stale_create_and_dispose_detach_without_delete ... ok
+test surfaces::terminal::tests::stale_paste_fence_does_not_write_to_new_session ... ok
+test surfaces::terminal::tests::windows_directory_label_relative_to_home ... ok
+test surfaces::terminal::tests::zoom_domains_and_escape_sentinel ... ok
+test surfaces::utilities::tests::background_actions_are_typed_and_hidden_owner_does_not_poll ... ok
+test surfaces::utilities::tests::background_host_update_ready_is_actionable_and_idle_has_no_badge ... ok
+test surfaces::utilities::tests::cancelled_release_and_vault_auth_cannot_cross_navigation ... ok
+test surfaces::utilities::tests::canonical_wire_shapes_and_redacted_diagnostics ... ok
+test surfaces::utilities::tests::clipboard_native_lazy_image_decodes_wire_object_and_releases_on_hide ... ok
+test surfaces::utilities::tests::clipboard_native_selection_secret_boundary_and_one_restore ... ok
+test surfaces::utilities::tests::delayed_note_create_and_save_update_store_owner_without_stealing_selection ... ok
+test surfaces::utilities::tests::delayed_restore_cannot_hide_or_navigate_new_surface ... ok
+test surfaces::utilities::tests::emoji_native_grid_persists_recent_and_emits_single_ordered_hide_paste ... ok
+test surfaces::utilities::tests::explicit_drain_retries_failed_note_once_and_reports_new_failure ... ok
+test surfaces::utilities::tests::indexing_filter_paging_fences_and_native_open_wire ... ok
+test surfaces::utilities::tests::monitor_hidden_stops_polling_and_stale_reply_cannot_change_view ... ok
+test surfaces::utilities::tests::native_collapsed_bold_types_formatted_run_and_undo_restores_caret ... ok
+test surfaces::utilities::tests::native_delete_confirmation_cannot_transfer_to_new_selection ... ok
+test surfaces::utilities::tests::native_note_list_continuation_and_bounded_model_undo_roundtrip ... ok
+test surfaces::utilities::tests::native_paste_is_plain_safe_and_note_owned ... ok
+test surfaces::utilities::tests::native_rich_backspace_delete_join_preserves_run_styles_and_undo_html ... ok
+test surfaces::utilities::tests::native_rich_range_replace_and_empty_list_enter_keep_canonical_html ... ok
+test surfaces::utilities::tests::notes_real_rich_ime_format_save_failure_retry_and_identity ... ok
+test surfaces::utilities::tests::permissions_native_action_lock_refresh_and_accessible_status ... ok
+test surfaces::utilities::tests::qr_preview_copy_and_export_are_worker_owned_and_selection_scoped ... ok
+test surfaces::utilities::tests::release_exact_version_native_enter_full_markdown_error_and_retry ... ok
+test surfaces::utilities::tests::retired_note_native_ime_handler_cannot_commit_into_new_note ... ok
+test surfaces::utilities::tests::review_backspace_identical_styled_text_and_delete_paragraph_boundary ... ok
+test surfaces::utilities::tests::review_current_build_contains_its_actual_nonempty_release_notes ... ok
+test surfaces::utilities::tests::review_empty_paragraph_projection_line_count ... ok
+test surfaces::utilities::tests::review_enter_in_note_editor_does_not_copy_note ... ok
+test surfaces::utilities::tests::review_enter_then_type ... ok
+test surfaces::utilities::tests::review_forward_delete_bold_char_before_identical_plain_char ... ok
+test surfaces::utilities::tests::review_ime_commit_into_empty_paragraph_uses_its_native_block_owner ... ok
+test surfaces::utilities::tests::review_invalid_snippet_form_does_not_block_quit_drain ... ok
+test surfaces::utilities::tests::review_list_enter_then_type ... ok
+test surfaces::utilities::tests::review_monitor_formats_native_rows_and_notes_cache_summary_and_date ... ok
+test surfaces::utilities::tests::review_new_release_navigation_opens_current_not_last_historical ... ok
+test surfaces::utilities::tests::review_png_base64_is_strict_and_labels_match_product_terms ... ok
+test surfaces::utilities::tests::review_reopening_forms_releases_field_subscriptions ... ok
+test surfaces::utilities::tests::review_type_into_empty_note ... ok
+test surfaces::utilities::tests::review_vault_save_then_hide_still_deletes_clipboard_source ... ok
+test surfaces::utilities::tests::snippet_create_actual_id_cancel_and_delete_confirmation ... ok
+test surfaces::utilities::tests::structural_helper_preserves_nested_list_neighbors_and_inline_styles ... ok
+test surfaces::utilities::tests::vault_clipboard_draft_auth_save_cleanup_uses_synthetic_wire ... ok
+test surfaces::utilities::tests::vault_icon_picker_source_registry_filter_keyboard_default_and_escape ... ok
+test surfaces::utilities::tests::vault_native_copy_checks_status_auth_cancel_and_error_without_secret_wire ... ok
+test windows::native::coordinate_tests::physical_snapshots_keep_negative_monitor_origins_and_dpi ... ok
+test windows::persistence::monitor_repair_tests::cross_monitor_snapshot_owns_current_identity_scale_size_and_zoom ... ok
+test windows::persistence::repair_tests::transient_failure_keeps_writer_alive_and_drain_retries_latest ... ok
+test windows::persistence::tests::serial_snapshots_keep_latest_position_without_overwriting_other_settings ... ok
+test windows::settings_close::tests::acknowledged_drain_does_not_expire ... ok
+test windows::settings_close::tests::failures_retain_window_and_stale_completions_cannot_close_retry ... ok
+test windows::settings_close::tests::unacknowledged_bootstrap_falls_back_after_three_seconds ... ok
+test windows::snap::tests::ended_drag_discards_dwell ... ok
+test windows::snap::tests::stationary_center_acquires_after_host_dwell ... ok
+test windows::terminal_sessions::tests::panel_tracks_parent_and_minimum ... ok
+test windows::termination::tests::save_failure_replies_no_and_can_retry ... ok
+test windows::termination::tests::two_native_quits_queue_once_and_reentry_is_immediate_after_drain ... ok
+test windows::tests::dialog_and_panel_suppress_blur ... ok
+test windows::tests::visibility_timers_are_generation_fenced ... ok
+test surfaces::settings::tests::review_closure_alias_racing_pump_exit_is_durable_for_both_owners ... ok
+
+test result: ok. 325 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.73s
+

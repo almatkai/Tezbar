@@ -1,0 +1,1292 @@
+{
+  "schema_version": 1,
+  "lane": "native-m08",
+  "source_cases": [
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 161,
+      "title": "keeps an unsaved background response available when persistence fails",
+      "parameters": null,
+      "inherited_controller_filter": "background_runs_and_unsaved_persistence_stay_with_owner",
+      "native_filters": [
+        "failed_background_persistence_remains_owned_and_retry_saves_the_same_turn"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 177,
+      "title": "reloads a settled background conversation from saved history after releasing its live owner",
+      "parameters": null,
+      "inherited_controller_filter": "settled_persisted_conversation_reloads_after_owner_release",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 192,
+      "title": "stop persists partial text and terminal stage state with no active approval",
+      "parameters": null,
+      "inherited_controller_filter": "stop_preserves_partial_and_terminal_stage_and_ignores_late_events",
+      "native_filters": [
+        "streams_background_and_stop_persists_partial_exact_metadata"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 218,
+      "title": "successful retry replaces the failed persisted assistant id",
+      "parameters": null,
+      "inherited_controller_filter": "retry_reuses_assistant_id_and_canonical_stored_user",
+      "native_filters": [
+        "retry_loads_canonical_user_reuses_assistant_and_never_sends_empty_image_ids"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 238,
+      "title": "keeps A output and persistence out of B, even while B starts its own run",
+      "parameters": null,
+      "inherited_controller_filter": "background_runs_and_unsaved_persistence_stay_with_owner",
+      "native_filters": [
+        "streams_background_and_stop_persists_partial_exact_metadata"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 261,
+      "title": "preserves an active approval when resuming its conversation",
+      "parameters": null,
+      "inherited_controller_filter": "persistent_approval_capability_and_expiry",
+      "native_filters": [
+        "background_approval_never_focuses_mode_does_not_approve_allow_click_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 295,
+      "title": "honors approval persistence capability %s for controls and shortcuts",
+      "parameters": "false",
+      "inherited_controller_filter": "persistent_approval_capability_and_expiry",
+      "native_filters": [
+        "background_approval_never_focuses_mode_does_not_approve_allow_click_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 295,
+      "title": "honors approval persistence capability %s for controls and shortcuts",
+      "parameters": "true",
+      "inherited_controller_filter": "persistent_approval_capability_and_expiry",
+      "native_filters": [
+        "background_approval_never_focuses_mode_does_not_approve_allow_click_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 295,
+      "title": "honors approval persistence capability %s for controls and shortcuts",
+      "parameters": "undefined",
+      "inherited_controller_filter": "persistent_approval_capability_and_expiry",
+      "native_filters": [
+        "background_approval_never_focuses_mode_does_not_approve_allow_click_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 338,
+      "title": "mode changes leave destructive approval pending and expired cards disappear",
+      "parameters": null,
+      "inherited_controller_filter": "approval_resume_focus_enter_deny_and_mode_independence",
+      "native_filters": [
+        "background_approval_never_focuses_mode_does_not_approve_allow_click_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 374,
+      "title": "starts fresh on every launcher new-chat event, including the real caller nonce contract",
+      "parameters": null,
+      "inherited_controller_filter": "boot_nonce_dedup_and_nonced_new_chat",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 389,
+      "title": "honors repeat screen and resume nonces while mounted",
+      "parameters": null,
+      "inherited_controller_filter": "boot_nonce_dedup_and_nonced_new_chat",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 398,
+      "title": "keeps a composer submission when initial history resolves late",
+      "parameters": null,
+      "inherited_controller_filter": "late_history_list_does_not_change_owner_or_followup_context",
+      "native_filters": [
+        "late_history_does_not_replace_typed_draft_and_prompt_args_never_autosend"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 413,
+      "title": "ignores stale initialization after a different boot",
+      "parameters": null,
+      "inherited_controller_filter": "late_history_does_not_clobber_composer_or_new_boot",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 424,
+      "title": "discards a capture that completes after navigation",
+      "parameters": null,
+      "inherited_controller_filter": "captures_are_deduplicated_and_navigation_hide_fenced",
+      "native_filters": [
+        "capture_host_completion_is_fenced_by_revision_navigation_hide_and_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 436,
+      "title": "deduplicates capture shortcuts and prevents stale cleanup overwriting a newer capture",
+      "parameters": null,
+      "inherited_controller_filter": "captures_are_deduplicated_and_navigation_hide_fenced",
+      "native_filters": [
+        "capture_failure_unlocks_and_stale_failure_cannot_erase_new_capture"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 468,
+      "title": "continues hidden runs and publishes background approval status while viewing a different chat",
+      "parameters": null,
+      "inherited_controller_filter": "persistent_approval_capability_and_expiry",
+      "native_filters": [
+        "background_approval_never_focuses_mode_does_not_approve_allow_click_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 499,
+      "title": "keeps cwd and image with their owner if config preparation finishes after starting a new chat",
+      "parameters": null,
+      "inherited_controller_filter": "preparation_keeps_cwd_and_images_with_original_owner",
+      "native_filters": [
+        "preparation_freezes_cwd_model_and_cannot_start_after_delete"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 518,
+      "title": "discards capture results after hiding the surface",
+      "parameters": null,
+      "inherited_controller_filter": "captures_are_deduplicated_and_navigation_hide_fenced",
+      "native_filters": [
+        "capture_host_completion_is_fenced_by_revision_navigation_hide_and_once"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 529,
+      "title": "cancels and unsubscribes all retained streams only on actual unmount",
+      "parameters": null,
+      "inherited_controller_filter": "hidden_runs_and_background_approval_survive_until_actual_unmount",
+      "native_filters": [
+        "actual_dispose_fences_preparation_but_hide_keeps_running"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 544,
+      "title": "prevents resurrection on delete of a running conversation when native done overtakes the delete reply",
+      "parameters": null,
+      "inherited_controller_filter": "done_overtakes_delete_without_resurrection_and_failed_delete_recovers",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 563,
+      "title": "recovers a running conversation when deletion fails after a done event",
+      "parameters": null,
+      "inherited_controller_filter": "failed_delete_returns_every_dirty_persistence_intent_and_fences_tokens",
+      "native_filters": [
+        "done_overtakes_failed_individual_delete_and_background_durable_write_is_returned"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 582,
+      "title": "does not resume a deleted conversation from its retained owner",
+      "parameters": null,
+      "inherited_controller_filter": "done_overtakes_delete_without_resurrection_and_failed_delete_recovers",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 590,
+      "title": "repeats unnonced launcher commands through App while the real chat stays mounted",
+      "parameters": null,
+      "inherited_controller_filter": "background_runs_and_unsaved_persistence_stay_with_owner",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 724,
+      "title": "selects a profile before the first turn and labels remembered extension tools",
+      "parameters": null,
+      "inherited_controller_filter": "background_runs_and_unsaved_persistence_stay_with_owner",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 775,
+      "title": "delete during send preparation must not start a native run for the deleted session",
+      "parameters": null,
+      "inherited_controller_filter": "deletion_during_preparation_never_launches_and_failure_allows_fresh_send",
+      "native_filters": [
+        "delayed_config_delete_clear_and_stop_never_append_or_start",
+        "preparation_freezes_cwd_model_and_cannot_start_after_delete"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 795,
+      "title": "delete during retry preparation must not start a native retry for the deleted session",
+      "parameters": null,
+      "inherited_controller_filter": "delete_during_retry_preparation_cannot_start_and_failed_delete_restores_prompt",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 825,
+      "title": "invalidates the old preparation and allows a fresh send after failed deletion",
+      "parameters": null,
+      "inherited_controller_filter": "deletion_during_preparation_never_launches_and_failure_allows_fresh_send",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/ownership.test.ts",
+      "source_sha256": "3e64ff5dcec04641392987b9bdee1197556e98784e14154b3cd1fb62cf9edd39",
+      "line": 846,
+      "title": "does not launch after an in-flight chat append completes during deletion",
+      "parameters": null,
+      "inherited_controller_filter": "deletion_during_preparation_never_launches_and_failure_allows_fresh_send",
+      "native_filters": [
+        "preparation_freezes_cwd_model_and_cannot_start_after_delete"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 54,
+      "title": "handles events before the IPC response and keeps canonical text and successful tool output",
+      "parameters": null,
+      "inherited_controller_filter": "canonical_answer_and_stage_order_and_thinking_redaction",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 82,
+      "title": "makes start failures visible and leaves a retryable error instead of a blank running state",
+      "parameters": null,
+      "inherited_controller_filter": "retry_reuses_assistant_id_and_canonical_stored_user",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 91,
+      "title": "preserves partial output on stop, cancels only its own run, and ignores late events",
+      "parameters": null,
+      "inherited_controller_filter": "stop_preserves_partial_and_terminal_stage_and_ignores_late_events",
+      "native_filters": [
+        "streams_background_and_stop_persists_partial_exact_metadata"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 119,
+      "title": "finalizes interrupted steps and clears approvals before storing a stopped run",
+      "parameters": null,
+      "inherited_controller_filter": "stop_preserves_partial_and_terminal_stage_and_ignores_late_events",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 154,
+      "title": "reuses the assistant message id on retry so saved history is updated rather than duplicated",
+      "parameters": null,
+      "inherited_controller_filter": "retry_reuses_assistant_id_and_canonical_stored_user",
+      "native_filters": [
+        "retry_loads_canonical_user_reuses_assistant_and_never_sends_empty_image_ids"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 173,
+      "title": "rejects tool-only completion rather than silently displaying an empty assistant message",
+      "parameters": null,
+      "inherited_controller_filter": "tool_only_done_rejected_and_start_timeout_visible",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 191,
+      "title": "replays typed stage updates through the same SDK message state used by the real UI",
+      "parameters": null,
+      "inherited_controller_filter": "canonical_answer_and_stage_order_and_thinking_redaction",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 215,
+      "title": "exercises a provider failure without a network request or a fabricated success answer",
+      "parameters": null,
+      "inherited_controller_filter": "failed_start_id_and_provider_failure_are_visible_and_retryable",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/transport.test.ts",
+      "source_sha256": "b37434dcf3de1b065702760593f3997e5f121d729056451eb7402214aba67448",
+      "line": 224,
+      "title": "sends prior turn identities and fallback text separately from the new message",
+      "parameters": null,
+      "inherited_controller_filter": "retry_reuses_assistant_id_and_canonical_stored_user",
+      "native_filters": [
+        "run_wire_keeps_minimal_unsaved_context_and_metadata_no_rendered_stage_payload"
+      ],
+      "coverage": "partial-native-adapter",
+      "native_verification": "passed-target-subset-2026-11-07",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/streaming.test.ts",
+      "source_sha256": "8fa9800020218c5017c011746e2ed699f303ccd1832c667d2c4c1c7b5f3c5d4e",
+      "line": 35,
+      "title": "coalesces bursty agent deltas and caps commits to the configured frame rate",
+      "parameters": null,
+      "inherited_controller_filter": "frame_coalescing_force_flush_and_follow_output",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/streaming.test.ts",
+      "source_sha256": "8fa9800020218c5017c011746e2ed699f303ccd1832c667d2c4c1c7b5f3c5d4e",
+      "line": 60,
+      "title": "can flush the latest state immediately and cancel stale scheduled work",
+      "parameters": null,
+      "inherited_controller_filter": "frame_coalescing_force_flush_and_follow_output",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/streaming.test.ts",
+      "source_sha256": "8fa9800020218c5017c011746e2ed699f303ccd1832c667d2c4c1c7b5f3c5d4e",
+      "line": 82,
+      "title": "follows output only while the reader remains near the latest content",
+      "parameters": null,
+      "inherited_controller_filter": "frame_coalescing_force_flush_and_follow_output",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/timeline.test.ts",
+      "source_sha256": "e6c0ed308cc967531632a73d44bf05c9b1ba745ac5d243b6fa56eca44d40848b",
+      "line": 10,
+      "title": "appends to the trailing text item and starts a new one after a stage",
+      "parameters": null,
+      "inherited_controller_filter": "timeline_three_source_cases_keep_stage_updates_in_place",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/timeline.test.ts",
+      "source_sha256": "e6c0ed308cc967531632a73d44bf05c9b1ba745ac5d243b6fa56eca44d40848b",
+      "line": 26,
+      "title": "updates an existing stage in place, never moving it above later text",
+      "parameters": null,
+      "inherited_controller_filter": "timeline_three_source_cases_keep_stage_updates_in_place",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/timeline.test.ts",
+      "source_sha256": "e6c0ed308cc967531632a73d44bf05c9b1ba745ac5d243b6fa56eca44d40848b",
+      "line": 40,
+      "title": "keeps real execution order: stage → text → stage lands after the text",
+      "parameters": null,
+      "inherited_controller_filter": "timeline_three_source_cases_keep_stage_updates_in_place",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/historyCache.test.ts",
+      "source_sha256": "0f5d3c0eea2854a6f9b67ef943c897f5b811f8d341cf0f798531458ed2d500e7",
+      "line": 25,
+      "title": "starts empty so the first launch still shows a loading state",
+      "parameters": null,
+      "inherited_controller_filter": "history_cache_distinguishes_never_loaded_empty_and_retained_rows",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/historyCache.test.ts",
+      "source_sha256": "0f5d3c0eea2854a6f9b67ef943c897f5b811f8d341cf0f798531458ed2d500e7",
+      "line": 29,
+      "title": "hands the last known list to a remounted launcher",
+      "parameters": null,
+      "inherited_controller_filter": "history_cache_distinguishes_never_loaded_empty_and_retained_rows",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/historyCache.test.ts",
+      "source_sha256": "0f5d3c0eea2854a6f9b67ef943c897f5b811f8d341cf0f798531458ed2d500e7",
+      "line": 38,
+      "title": "keeps an empty result distinct from never having loaded",
+      "parameters": null,
+      "inherited_controller_filter": "history_cache_distinguishes_never_loaded_empty_and_retained_rows",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/renderer/agentChat/model.test.ts",
+      "source_sha256": "5924e86936ec95914529cf013109d6b3b68b21bff13b2922ad655bf090bfaa54",
+      "line": 5,
+      "title": "distinguishes a slow backend from an empty history",
+      "parameters": null,
+      "inherited_controller_filter": "history_loading_empty_and_title",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 5,
+      "title": "correctly detects emoji strings",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 16,
+      "title": "generates CPU and compiler diagnostic meta for CPU queries",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 24,
+      "title": "generates sports meta for Messi queries",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 30,
+      "title": "generates sports meta for Ronaldo queries",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 36,
+      "title": "generates coding meta for coding queries",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 42,
+      "title": "cleans boilerplate question phrases in English and Russian",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 58,
+      "title": "generates meta for MCP and API key queries from user prompts",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/chatMeta.test.ts",
+      "source_sha256": "a615ee57bd4263ff84f46621fa12524cdb3c484f1981ad15296cbabfbcce9434",
+      "line": 68,
+      "title": "maps both legacy emojis and kind strings to solid squircle launcher kinds",
+      "parameters": null,
+      "inherited_controller_filter": "chat_meta_eight_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/llmErrors.test.ts",
+      "source_sha256": "5731d8e3d9255f70a10b0c8f76ff09772c8d0d06534ec6b1f6841935c8dcc8b8",
+      "line": 5,
+      "title": "turns model mismatch response bodies into an actionable message",
+      "parameters": null,
+      "inherited_controller_filter": "llm_error_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/llmErrors.test.ts",
+      "source_sha256": "5731d8e3d9255f70a10b0c8f76ff09772c8d0d06534ec6b1f6841935c8dcc8b8",
+      "line": 14,
+      "title": "extracts JSON API messages without displaying response payloads",
+      "parameters": null,
+      "inherited_controller_filter": "llm_error_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/llmErrors.test.ts",
+      "source_sha256": "5731d8e3d9255f70a10b0c8f76ff09772c8d0d06534ec6b1f6841935c8dcc8b8",
+      "line": 23,
+      "title": "turns model startup failures into a concise action",
+      "parameters": null,
+      "inherited_controller_filter": "llm_error_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/llmErrors.test.ts",
+      "source_sha256": "5731d8e3d9255f70a10b0c8f76ff09772c8d0d06534ec6b1f6841935c8dcc8b8",
+      "line": 32,
+      "title": "explains a background service disconnect without raw transport jargon: %s",
+      "parameters": "'Failed to write to backend runner process; recovery is in progress'",
+      "inherited_controller_filter": "llm_error_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/llmErrors.test.ts",
+      "source_sha256": "5731d8e3d9255f70a10b0c8f76ff09772c8d0d06534ec6b1f6841935c8dcc8b8",
+      "line": 32,
+      "title": "explains a background service disconnect without raw transport jargon: %s",
+      "parameters": "'Backend runner is still recovering'",
+      "inherited_controller_filter": "llm_error_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/llmErrors.test.ts",
+      "source_sha256": "5731d8e3d9255f70a10b0c8f76ff09772c8d0d06534ec6b1f6841935c8dcc8b8",
+      "line": 32,
+      "title": "explains a background service disconnect without raw transport jargon: %s",
+      "parameters": "'Backend runner stopped before replying'",
+      "inherited_controller_filter": "llm_error_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/llmErrors.test.ts",
+      "source_sha256": "5731d8e3d9255f70a10b0c8f76ff09772c8d0d06534ec6b1f6841935c8dcc8b8",
+      "line": 42,
+      "title": "preserves a labelled native error",
+      "parameters": null,
+      "inherited_controller_filter": "llm_error_source_cases",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 10,
+      "title": "treats custom provider with baseUrl as configured even without apiKey",
+      "parameters": null,
+      "inherited_controller_filter": "custom_base_url_without_key_is_configured",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 24,
+      "title": "treats openai-compatible provider with baseUrl as configured without apiKey",
+      "parameters": null,
+      "inherited_controller_filter": "compatible_base_url_without_key_is_configured",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 37,
+      "title": "requires apiKey for cloud providers like openai or anthropic",
+      "parameters": null,
+      "inherited_controller_filter": "cloud_requires_key",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 48,
+      "title": "does not infer Antigravity or OpenCode authentication from a model list",
+      "parameters": null,
+      "inherited_controller_filter": "native_accounts_not_inferred_from_models",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 66,
+      "title": "removes legacy context capability while preserving context window size",
+      "parameters": null,
+      "inherited_controller_filter": "removes_legacy_context_capability_preserving_window",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 82,
+      "title": "keeps hand-added models whose id matches a sibling provider default",
+      "parameters": null,
+      "inherited_controller_filter": "hand_added_sibling_model_ids_are_kept",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 97,
+      "title": "does not resurrect a recommended model the user removed",
+      "parameters": null,
+      "inherited_controller_filter": "empty_list_does_not_resurrect_recommended_model",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 102,
+      "title": "dedupes and drops blank ids",
+      "parameters": null,
+      "inherited_controller_filter": "model_ids_are_trimmed_deduped_and_blanks_dropped",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    },
+    {
+      "source": "src/shared/aiProviders.test.ts",
+      "source_sha256": "1a6c8716a76023d861fa84b6dde0ffc95272400e7f84f817c61d313e13a6a91e",
+      "line": 112,
+      "title": "infers both vision and thinking for GPT 6 families",
+      "parameters": null,
+      "inherited_controller_filter": "gpt_six_capabilities",
+      "native_filters": [],
+      "coverage": "inherited-controller-only",
+      "native_verification": "not-demonstrated-in-native-target",
+      "remaining": "Only the explicitly listed owned assertions are demonstrated. Remaining originating case assertions, real App composition, platform accessibility and independent review are open."
+    }
+  ],
+  "owned_assertions": {
+    "constructor_and_repeat_nonce_do_no_work_and_submit_runs_once": [
+      "construction sends zero requests",
+      "duplicate Boot::Submit nonce produces exactly one agent:run",
+      "immutable runSelection contains provider/model; approvalMode omitted"
+    ],
+    "streams_background_and_stop_persists_partial_exact_metadata": [
+      "A stream never changes B draft/response",
+      "stop stores Partial A hidden and Stopped by you",
+      "one cancel, frozen responseMeta, late answer ignored"
+    ],
+    "preparation_freezes_cwd_model_and_cannot_start_after_delete": [
+      "A retains fixture model/cwd after B switches other",
+      "delete during held append produces no second run"
+    ],
+    "capture_host_completion_is_fenced_by_revision_navigation_hide_and_once": [
+      "typed revision rejects picker completion",
+      "two capture actions produce one request",
+      "navigation/hide discard results",
+      "ticket consumed once and removal works"
+    ],
+    "background_approval_never_focuses_mode_does_not_approve_allow_click_once": [
+      "background owner focus remains Composer",
+      "resume gives actual Allow focus",
+      "Turbo sends no approval",
+      "Always capability denied; two Once actions send once",
+      "peer credential/task override unchanged"
+    ],
+    "clear_real_wire_covers_more_than_history_limit_and_failed_clear_repersists_dirty": [
+      "real chat:clear deletes240 saved rows",
+      "done during failed clear persists retained response",
+      "successful clear retires active owner"
+    ],
+    "late_history_does_not_replace_typed_draft_and_prompt_args_never_autosend": [
+      "held history load leaves typed draft and empty transcript",
+      "required arg blocks resolution",
+      "resolved prompt becomes editable draft; no run",
+      "ReviewProject handoff carries cwd and nonce"
+    ],
+    "run_wire_keeps_minimal_unsaved_context_and_metadata_no_rendered_stage_payload": [
+      "priorTurnIds kept separately from minimal text/error/hasImages",
+      "no stages in fallback",
+      "no approvalMode policy pin"
+    ],
+    "retry_loads_canonical_user_reuses_assistant_and_never_sends_empty_image_ids": [
+      "first run sends one image",
+      "retry task loaded from canonical durable user",
+      "same assistant id, no copied history image data",
+      "persisted assistant not duplicated; completed retry rejected"
+    ],
+    "composer_shift_enter_ime_and_native_allow_enter_have_separate_activation": [
+      "marked composition Enter produces no run and keeps composition",
+      "Shift Enter inserts newline; Enter outside composition sends",
+      "composer Enter never approves; focused Allow once down/up approves once"
+    ],
+    "huge_tool_output_keeps_chronological_canonical_identity_context": [
+      "10 runs x70 stages x32KiB =21.875MiB accumulated tool output",
+      "follow-up sends chronological last16 canonical IDs and zero clean fallback bodies",
+      "agent:run wire <4096 bytes; visible projection bounded after eviction"
+    ],
+    "config_mode_write_does_not_overwrite_another_owners_chat_selection": [
+      "peer other model survives Auto mode change",
+      "global mode is Auto"
+    ],
+    "finite_adapter_runs_loopback_and_persists_metadata_without_desktop_services": [
+      "real AiCore Ollama local HTTP request/answer and native request wire",
+      "canonical USER-turn image bytes; wrong session/assistant/tombstone unavailable; invalid index error",
+      "no desktop service calls; task-private directories"
+    ],
+    "document_image_update_emits_one_host_ticket_and_hide_fences_decode": [
+      "content update emits one typed host request",
+      "render emits zero additional requests",
+      "bounded decoded texture installed and released on hide"
+    ],
+    "native_projection_preserves_stream_text_stage_text_and_replaces_stage_in_place": [
+      "native row projection follows production TimelineItem text-stage-text ranges",
+      "updated stage remains in original row"
+    ],
+    "native_a11y_shows_approval_and_scrubs_known_provider_diagnostics": [
+      "TestWindow full AccessKit tree explicitly unavailable; failed original probe retained",
+      "actual production approval element role/name, button roles/names and Message multiline options",
+      "production diagnostics and persisted response error redact synthetic provider key; no OS AX claim"
+    ],
+    "failed_background_persistence_remains_owned_and_retry_saves_the_same_turn": [
+      "failed append retains background dirty response",
+      "resume skips stale history replacement",
+      "Retry saving stores same assistant identity"
+    ],
+    "delayed_config_delete_clear_and_stop_never_append_or_start": [
+      "holding actual config completion then delete/clear/stop results in zero append and zero run"
+    ],
+    "replayed_nonce_after_different_navigation_does_no_io": [
+      "Boot Submit nonce replay after B activation produces zero further requests and retains B"
+    ],
+    "capture_failure_unlocks_and_stale_failure_cannot_erase_new_capture": [
+      "capture error clears busy capture; older A result cannot clear newer B capture"
+    ],
+    "attachment_batch_rolls_back_deduplicates_and_core_sized_payload_is_admitted": [
+      "failed second image rolls back first payload; duplicate bytes use same descriptor",
+      "4MiB encoded input admitted; >4 image batch rejected atomically"
+    ],
+    "historical_image_uses_exact_canonical_read_and_navigation_rejects_late_result": [
+      "chat:image exact sessionId/turnId/index; empty payload pool for descriptors",
+      "late A image after B navigation cannot attach or upload; no agent run"
+    ],
+    "done_overtakes_failed_individual_delete_and_background_durable_write_is_returned": [
+      "done A retained during failed delete and persisted only after delete_result; B remains active"
+    ],
+    "actual_dispose_fences_preparation_but_hide_keeps_running": [
+      "hide does not cancel run; actual dispose cancels once and saves hidden partial",
+      "dispose during config preparation never appends or starts"
+    ],
+    "base64_padding_and_full_core_image_budget_are_checked_separately_from_preview": [
+      "STANDARD padding/unused bits rejected; >2MiB decoded source supported"
+    ],
+    "exact_eight_mib_attachment_matches_canonical_input_size": [
+      "8MiB source decodes; 8MiB+1 rejects"
+    ],
+    "real_core_clear_covers_over_200_rows_and_tombstones_preparing_owner": [
+      "240 real SQLite sessions; chat:list capped200; single clear removes all",
+      "not-yet-appended owner tombstoned; late append returns ok:false; no desktop calls"
+    ]
+  },
+  "ledger_scope": [
+    {
+      "id": "C-01",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-02",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-03",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-04",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-05",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-06",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-07",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-08",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-09",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-10",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-11",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-12",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-13",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-14",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-15",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-16",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-17",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-18",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-19",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-20",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-21",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-22",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-23",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-24",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-25",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-26",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-27",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-28",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-29",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-30",
+      "owner": "M7-settings",
+      "status": "external-M7",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-31",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-32",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-33",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    },
+    {
+      "id": "C-34",
+      "owner": "M8-chat",
+      "status": "partial-native-target-passed",
+      "note": "No primary parity ledger row is closed by this source map."
+    }
+  ],
+  "manual_acceptance": [
+    "App navigation/nonces and real event routing",
+    "VoiceOver on macOS / Narrator on Windows",
+    "OS IME and platform focus",
+    "GPU textures and RAM/latency",
+    "screenshots/manual clipboard and real permissions",
+    "live paid providers and authenticated MCP excluded"
+  ],
+  "status": "parent-exported; first-gate check passed; 27 native target passed; own compiled source frozen for parent App/Launcher composition",
+  "execution": {
+    "head": "0c3dbea17b4681fb55887470c23897009420dc18",
+    "toolchain": "1.98.1",
+    "jobs": 2,
+    "locked": true,
+    "offline": true,
+    "passed_filters": [
+      "actual_dispose_fences_preparation_but_hide_keeps_running",
+      "attachment_batch_rolls_back_deduplicates_and_core_sized_payload_is_admitted",
+      "background_approval_never_focuses_mode_does_not_approve_allow_click_once",
+      "base64_padding_and_full_core_image_budget_are_checked_separately_from_preview",
+      "capture_failure_unlocks_and_stale_failure_cannot_erase_new_capture",
+      "capture_host_completion_is_fenced_by_revision_navigation_hide_and_once",
+      "clear_real_wire_covers_more_than_history_limit_and_failed_clear_repersists_dirty",
+      "composer_shift_enter_ime_and_native_allow_enter_have_separate_activation",
+      "config_mode_write_does_not_overwrite_another_owners_chat_selection",
+      "constructor_and_repeat_nonce_do_no_work_and_submit_runs_once",
+      "delayed_config_delete_clear_and_stop_never_append_or_start",
+      "document_image_update_emits_one_host_ticket_and_hide_fences_decode",
+      "done_overtakes_failed_individual_delete_and_background_durable_write_is_returned",
+      "exact_eight_mib_attachment_matches_canonical_input_size",
+      "failed_background_persistence_remains_owned_and_retry_saves_the_same_turn",
+      "finite_adapter_runs_loopback_and_persists_metadata_without_desktop_services",
+      "historical_image_uses_exact_canonical_read_and_navigation_rejects_late_result",
+      "huge_tool_output_keeps_chronological_canonical_identity_context",
+      "late_history_does_not_replace_typed_draft_and_prompt_args_never_autosend",
+      "native_a11y_shows_approval_and_scrubs_known_provider_diagnostics",
+      "native_projection_preserves_stream_text_stage_text_and_replaces_stage_in_place",
+      "preparation_freezes_cwd_model_and_cannot_start_after_delete",
+      "real_core_clear_covers_over_200_rows_and_tombstones_preparing_owner",
+      "replayed_nonce_after_different_navigation_does_no_io",
+      "retry_loads_canonical_user_reuses_assistant_and_never_sends_empty_image_ids",
+      "run_wire_keeps_minimal_unsaved_context_and_metadata_no_rendered_stage_payload",
+      "streams_background_and_stop_persists_partial_exact_metadata"
+    ],
+    "log": "docs/native-m08/logs/native-05.log",
+    "full_app": "pending-parent-composition",
+    "opus_review": "pending-parent"
+  }
+}

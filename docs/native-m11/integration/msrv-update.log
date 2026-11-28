@@ -1,0 +1,83 @@
+   Compiling libc v0.2.186
+   Compiling idna v1.0.3
+   Compiling form_urlencoded v1.2.2
+   Compiling url v2.5.4
+   Compiling errno v0.3.14
+   Compiling parking_lot_core v0.9.12
+   Compiling signal-hook-registry v1.4.8
+   Compiling parking_lot v0.12.5
+   Compiling socket2 v0.6.4
+   Compiling mio v1.2.1
+   Compiling rustix v1.1.4
+   Compiling tokio v1.52.3
+   Compiling core-foundation v0.10.1
+   Compiling getrandom v0.4.2
+   Compiling security-framework-sys v2.17.0
+   Compiling security-framework v3.7.0
+   Compiling tempfile v3.27.0
+   Compiling native-tls v0.2.18
+   Compiling hyper v1.10.1
+   Compiling hyper-util v0.1.20
+   Compiling tokio-native-tls v0.3.1
+   Compiling tower v0.5.3
+   Compiling memchr v2.8.2
+   Compiling simd-adler32 v0.3.9
+   Compiling miniz_oxide v0.8.9
+   Compiling tokio-util v0.7.18
+   Compiling serde_json v1.0.150
+   Compiling tower-http v0.6.11
+   Compiling hyper-tls v0.6.0
+   Compiling xattr v1.6.1
+   Compiling filetime v0.2.29
+   Compiling reqwest v0.13.4
+   Compiling tar v0.4.46
+   Compiling flate2 v1.1.9
+   Compiling minisign-verify v0.2.5
+   Compiling tezbar-update v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-update)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.06s
+     Running unittests src/lib.rs (target/msrv-m09/debug/deps/tezbar_update-266a52d7caf16f55)
+
+running 40 tests
+test manual_releases::tests::live_beta_installer_discovery_from_stable_028 ... ignored, Requires GitHub network access and a published Beta installer
+test manual_releases::tests::does_not_downgrade_or_offer_another_platforms_installer ... ok
+test manual_releases::tests::rejects_drafts_wrong_channels_and_noncanonical_downloads ... ok
+test manual_releases::tests::stable_028_on_beta_discovers_the_manual_gemma_beta ... ok
+test manual_releases::tests::selects_the_highest_eligible_version_even_when_listing_order_differs ... ok
+test native::lifecycle_tests::download_cancellation_guard_clears_the_busy_state ... ok
+test native::lifecycle_tests::failed_public_discovery_never_claims_up_to_date_and_network_error_is_retained ... ok
+test native::lifecycle_tests::atomic_swap_keeps_old_bundle_for_relaunch_and_rolls_back_failures ... ok
+test native::lifecycle_tests::invalid_signed_identity_is_not_hidden_by_manual_release_fallback ... ok
+test native::lifecycle_tests::in_flight_channel_changes_are_rejected_without_changing_preferences ... ok
+test native::m11_tests::one_lazy_http_client_captured_local_download_ready_reset_and_retry ... ok
+test native::tests::bundle_paths_reject_traversal_absolute_and_other_products ... ok
+test native::tests::constructor_is_inert_and_installer_arguments_preserve_required_flags ... ok
+test native::tests::feed_keeps_identity_channels_and_platform_fallback ... ok
+test native::tests::actual_minisign_fixture_rejects_tamper_before_archive_extraction ... ok
+test native::tests::nsis_relaunch_arguments_preserve_spaces_slashes_quotes_and_trailing_backslashes ... ok
+test native::tests::verified_fixture_stages_only_within_owned_temp_and_never_installs ... ok
+test notes::http::tests::declared_and_streamed_oversize_are_bounded ... ok
+test native::tests::inline_mac_requirement_is_enforced_by_codesign ... ok
+test notes::http::tests::only_the_model_exact_tag_endpoint_and_accept_are_allowed ... ok
+test notes::http::tests::invalid_utf8_is_refused_and_redirects_are_not_followed ... ok
+test notes::http::tests::response_is_complete_utf8_and_non_success_is_not_a_note ... ok
+test notes::tests::close_cancels_and_stale_reply_cannot_reopen ... ok
+test notes::tests::exact_tag_preserves_markdown ... ok
+test notes::tests::existing_before_tracking ... ok
+test notes::tests::fresh_install_records_version ... ok
+test notes::tests::installed_notes_without_network ... ok
+test notes::tests::missing_installed_notes_never_substitute_remote ... ok
+test notes::tests::missing_release_is_error ... ok
+test notes::tests::rejects_wrong_version ... ok
+test notes::tests::upgrade_unread_until_dismissed ... ok
+test release_channels::tests::a_validly_signed_release_still_needs_the_correct_app_identity ... ok
+test release_channels::tests::all_channels_share_the_app_identity_and_normal_builds_default_to_stable ... ok
+test release_channels::tests::release_eligibility_is_not_inferred_from_version_precedence_alone ... ok
+test release_channels::tests::three_way_selection_survives_upgrades_and_corruption_fails_closed ... ok
+test updater_temp::tests::isolated_temp_dir_check ... ok
+test updater_temp::tests::unavailable_cache_returns_an_error_without_changing_temp_directory ... ok
+test updater_temp::tests::updater_handles_missing_inherited_temp_dir ... ok
+test updater_temp::tests::updater_handles_temp_dir_deleted_after_launch ... ok
+test notes::http::tests::timeout_covers_a_body_that_stops_after_headers ... ok
+
+test result: ok. 39 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.16s
+

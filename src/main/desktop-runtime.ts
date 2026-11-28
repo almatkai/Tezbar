@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-function-type */
-// Runtime-neutral desktop services used by the Tauri backend sidecar.
+// Development/test desktop adapter for extension tooling. Production workers
+// use extensionWorker/desktop.ts and forward desktop requests to the Rust host.
 import { extname, join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
@@ -656,3 +657,5 @@ export const systemPreferences = {
     return false
   },
 }
+
+export async function extensionControl(_sessionId: string, _kind: 'close' | 'preferences' | 'clear-search' | 'hud', _message?: string, _source = 0, _run?: { request: string; extensionId: string }): Promise<void> { throw new Error('Extension control requires the native worker host') }

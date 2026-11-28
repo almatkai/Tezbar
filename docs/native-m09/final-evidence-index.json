@@ -1,0 +1,933 @@
+{
+  "kind": "Read-only evidence index; excludes its own recursive hash",
+  "source_aggregate_sha256": "185165ded66563538834c524d72dbf0cf04bd966486997a6010004ec9b0dcfa4",
+  "files": [
+    {
+      "path": "docs/native-m09/asset-parent-api.md",
+      "bytes": 5083,
+      "sha256": "7bef3cbf02b50b9cacd0588270dbcd78b515072a2543199466e65be14552efb4"
+    },
+    {
+      "path": "docs/native-m09/asset-parent-final.json",
+      "bytes": 1332,
+      "sha256": "bbc9787e81194e9401d481667f9f1a250e81d2f8c9f9ef164e6b76e7273631bb"
+    },
+    {
+      "path": "docs/native-m09/asset-parent-source-draft.json",
+      "bytes": 770,
+      "sha256": "9e43a852ba4d9f51ff3378c499cd8320f23c3565f29ecfbfe66de6194db752b8"
+    },
+    {
+      "path": "docs/native-m09/completion.md",
+      "bytes": 10192,
+      "sha256": "c6e5c98715d69e068cf60c1506b84b7b1c79479665d294c1672f2ca5aaf9183a"
+    },
+    {
+      "path": "docs/native-m09/failed-experiments.txt",
+      "bytes": 1370,
+      "sha256": "2d3e68404f3abb0ccba363b54496d2dd708e1d1d418b9ef32b079ff055bfbad1"
+    },
+    {
+      "path": "docs/native-m09/final-api.md",
+      "bytes": 7582,
+      "sha256": "202b405f4351da00e5959618176f206c526a1f031e5678ed4f5e400a2bd0698b"
+    },
+    {
+      "path": "docs/native-m09/final-binary-metadata.json",
+      "bytes": 5092,
+      "sha256": "7472fca69cb4a6bc87213ebb663ff627edacf9e43b95cb2c591796007f6c8117"
+    },
+    {
+      "path": "docs/native-m09/final-dependency-audit.json",
+      "bytes": 103840,
+      "sha256": "09ba6b9b3e6d05f8791e5604ed6e8506f04a87526513cdcbf5d68fc4d06fdb25"
+    },
+    {
+      "path": "docs/native-m09/final-gate-summary.json",
+      "bytes": 38431,
+      "sha256": "7b874617d3853ea48fcfbc2a3b1007afad739503bab0765221b2e32cdd536bbc"
+    },
+    {
+      "path": "docs/native-m09/final-owned-source-files.json",
+      "bytes": 19910,
+      "sha256": "76557ec01ed216ecc2b731f0e8b2e7302d91d01373924b3b6d11a17fe32a87e7"
+    },
+    {
+      "path": "docs/native-m09/final-source-case-map.json",
+      "bytes": 170063,
+      "sha256": "442d1be6fc0c9abdb4664f449760efb5fe84f7f686d632bb03ba63efc9f227ff"
+    },
+    {
+      "path": "docs/native-m09/final-source-freeze-01.json",
+      "bytes": 55115,
+      "sha256": "7e5ed9b577bf768d35295685231f959748e8dc310b8fe2a68202523e5b3aec34"
+    },
+    {
+      "path": "docs/native-m09/final-source-freeze-02.json",
+      "bytes": 55115,
+      "sha256": "2e963da14335bc70092645339e814188cf2c58eb9e459073dd1c4b84a1924086"
+    },
+    {
+      "path": "docs/native-m09/final-source-freeze-03.json",
+      "bytes": 55115,
+      "sha256": "c7015d2e7dfe72581c2bf19ffa22a69ad4f7e72c0688912ab5077d88190664b1"
+    },
+    {
+      "path": "docs/native-m09/final-source-freeze-04.json",
+      "bytes": 55115,
+      "sha256": "fd2aa6e9c2b04923b75085b8b1ca9244acdd2eba43ee8483514a921bccf4c400"
+    },
+    {
+      "path": "docs/native-m09/final-source-freeze-05.json",
+      "bytes": 55115,
+      "sha256": "7db9c60dcb71b318788e7afe348ec64faaa8d8a388ac664c7c92ec08350681f2"
+    },
+    {
+      "path": "docs/native-m09/final-source-freeze-06.json",
+      "bytes": 55115,
+      "sha256": "fae5098da54aa307c0d156c24112f5178d79e827aec45f81c0ee8517ce7146ad"
+    },
+    {
+      "path": "docs/native-m09/final-worker-bundle.json",
+      "bytes": 23517,
+      "sha256": "05db3d5f6e77cb540cfaf0b67e42ca1d37976737fbd771dce4dc8868c920c306"
+    },
+    {
+      "path": "docs/native-m09/gates/01-first-check.log",
+      "bytes": 5384,
+      "sha256": "52b28a38e571587314b7fe580135de6227cb3a663d944584bb9506d6d8c9d67b"
+    },
+    {
+      "path": "docs/native-m09/gates/02-check.log",
+      "bytes": 27837,
+      "sha256": "6924abd59e85b040b26fc70fa1a6383868985b3f6cdd3c8a37c7e1f6605a3b7e"
+    },
+    {
+      "path": "docs/native-m09/gates/03-check.log",
+      "bytes": 5885,
+      "sha256": "a5d2c17b10a9802634732d0962bc202f21b3ee975475955d774d9b95d4f65c09"
+    },
+    {
+      "path": "docs/native-m09/gates/04-prepare.log",
+      "bytes": 90,
+      "sha256": "87123cbe1bdd848313b06582ad53042121d5dac3774e87c76ab970456bd292b5"
+    },
+    {
+      "path": "docs/native-m09/gates/05-check.log",
+      "bytes": 5841,
+      "sha256": "b5f263c6840db1739b9b231f3f543822b62e4164b62d4f0161da855064260a23"
+    },
+    {
+      "path": "docs/native-m09/gates/06-check.log",
+      "bytes": 4751,
+      "sha256": "bce4c147031def6c5d807d67ed4e1c0575fc802168a8bc406ab436965173e0ca"
+    },
+    {
+      "path": "docs/native-m09/gates/07-native-extensions.log",
+      "bytes": 13472,
+      "sha256": "f2692380e219371061d5cd0b3d90b9fc89b9f87cfbc67b1b069fe12ddd8fa382"
+    },
+    {
+      "path": "docs/native-m09/gates/08-prepare.log",
+      "bytes": 90,
+      "sha256": "3e4d52233ef4ff97500f63de72b348addc5ad2005c81337c07b98bd1bbb4ee5f"
+    },
+    {
+      "path": "docs/native-m09/gates/09-real-sdk.log",
+      "bytes": 9733,
+      "sha256": "b3be63f14d2c6a7091e8179b64f65a72eb9c61e459abf2a5e3b2878aee354fc9"
+    },
+    {
+      "path": "docs/native-m09/gates/10-prepare.log",
+      "bytes": 90,
+      "sha256": "530fee506d244e66196f6f35361da7f79f44bd902c8a89649344b1288ee7150b"
+    },
+    {
+      "path": "docs/native-m09/gates/11-extensions.log",
+      "bytes": 10112,
+      "sha256": "16438d55fa0663e8b0c517990e342d1aa09b2857be78f5de3a95450a39d6f896"
+    },
+    {
+      "path": "docs/native-m09/gates/12-prepare.log",
+      "bytes": 90,
+      "sha256": "6aa1094fa6db2c3ebb0d14e33efaa4ec879ef3ca2f49a98c305cb9760e90e3f1"
+    },
+    {
+      "path": "docs/native-m09/gates/13-extensions.log",
+      "bytes": 2005,
+      "sha256": "7c600c62c88a18858ac3dc06b34b5caabfdb60054a55c711319fd22e15251da6"
+    },
+    {
+      "path": "docs/native-m09/gates/14-prepare.log",
+      "bytes": 90,
+      "sha256": "5ab75e218e5889a082592789ea8923a77a3fda3e6fedb0f827e1ae39cd31fa8e"
+    },
+    {
+      "path": "docs/native-m09/gates/15-extensions.log",
+      "bytes": 10254,
+      "sha256": "148d04133a97044516d07daf8879aa9e8e74ee99797d016f07fe1cd478d97bc2"
+    },
+    {
+      "path": "docs/native-m09/gates/16-root-patch-application.json",
+      "bytes": 3048,
+      "sha256": "b6d45f76aea5404a313cf0617fc5accce7aaa3337ec44eb86d5ba0faf51585e6"
+    },
+    {
+      "path": "docs/native-m09/gates/17-root-terminal.log",
+      "bytes": 11643,
+      "sha256": "750e2778664e5acbb75ed4efcf073dbccbc3aa1e5ee8d0a3091dd58dfa11906a"
+    },
+    {
+      "path": "docs/native-m09/gates/18-typecheck-red.log",
+      "bytes": 1218,
+      "sha256": "3a65a52832d1337ed38a55609422f45f7371b9580b3a1c3072c158d1154e6d36"
+    },
+    {
+      "path": "docs/native-m09/gates/19-ts-main.log",
+      "bytes": 53,
+      "sha256": "df774b697ad4cb3ba9bd232c65efd8fd3ba3bc70a14e64bfd2f5ac9b9083e005"
+    },
+    {
+      "path": "docs/native-m09/gates/20-desktop-boundary.log",
+      "bytes": 2222,
+      "sha256": "1ee6632ee0117b9fcec2fe73ff9bb0adf43d3ec17cf7a39ef001222e136ce20c"
+    },
+    {
+      "path": "docs/native-m09/gates/21-ts-main.log",
+      "bytes": 53,
+      "sha256": "381d5881777549ed88c591fedfd787a040834aa6f5dd94d09d34cb2ac88d8ed9"
+    },
+    {
+      "path": "docs/native-m09/gates/22-check.log",
+      "bytes": 15366,
+      "sha256": "d48497a6d7bfd2d6442afbc8325d3c316f753d82464dee71f20006c1281cfc65"
+    },
+    {
+      "path": "docs/native-m09/gates/23-root-terminal.log",
+      "bytes": 11592,
+      "sha256": "f1636cd3b43abd24645a4f23d91666a4a84e1d0545df91199e4232c899e080d7"
+    },
+    {
+      "path": "docs/native-m09/gates/24-27-root-results.json",
+      "bytes": 1557,
+      "sha256": "ae353902ccd7c14797adf7c32dd250801a39dc70c6291e525292d442846a585e"
+    },
+    {
+      "path": "docs/native-m09/gates/24-root-focused.log",
+      "bytes": 7295,
+      "sha256": "66facc259c85a91065bb5f308fdeeb194d0b54ef1cd6d85ea953f0fbacd98987"
+    },
+    {
+      "path": "docs/native-m09/gates/25-root-focused.log",
+      "bytes": 6857,
+      "sha256": "291e24c1764a20a52467680acfa83d379465828b1100197a47dee825fd411cc1"
+    },
+    {
+      "path": "docs/native-m09/gates/26-root-focused.log",
+      "bytes": 6881,
+      "sha256": "9fe6b4fc06b1ec42537450abf702c65abec180d92317010043334ee51a1caa62"
+    },
+    {
+      "path": "docs/native-m09/gates/27-root-core-stream.log",
+      "bytes": 2374,
+      "sha256": "cde077be4d8db9444d8b111593db0e7e79f4e3916cf5ee160f3a74023153aa4c"
+    },
+    {
+      "path": "docs/native-m09/gates/28-prepare.log",
+      "bytes": 90,
+      "sha256": "962139cc0e53796c3e528c461522b78d432146ad1c814cd91bdfe71e6edb9ac4"
+    },
+    {
+      "path": "docs/native-m09/gates/29-extensions.log",
+      "bytes": 11704,
+      "sha256": "f6fef5bb182cba4b7547f492adf796a114e07734aedacb49677076425122aaaf"
+    },
+    {
+      "path": "docs/native-m09/gates/30-extensions.log",
+      "bytes": 9831,
+      "sha256": "de6657541cf14a1b774131dfd1626f199e119b69ad8859352c2b75a7b21ab294"
+    },
+    {
+      "path": "docs/native-m09/gates/31-extensions.log",
+      "bytes": 9647,
+      "sha256": "8655c3eed6842b327f2e7da2e1cf4fbc9b47456d3311299e5ba038a1363d5edf"
+    },
+    {
+      "path": "docs/native-m09/gates/32-ts-main.log",
+      "bytes": 53,
+      "sha256": "381d5881777549ed88c591fedfd787a040834aa6f5dd94d09d34cb2ac88d8ed9"
+    },
+    {
+      "path": "docs/native-m09/gates/33-prepare.log",
+      "bytes": 90,
+      "sha256": "6325897d180b3c5f8b5497e4de2fc64327015af227c4d52590ae8952c9d3c2a7"
+    },
+    {
+      "path": "docs/native-m09/gates/34-extension-integration.log",
+      "bytes": 10472,
+      "sha256": "4fab1b05ab7218bde05226ad86607d97d4fad12ac7886cbd4b4cc3f1cafba68a"
+    },
+    {
+      "path": "docs/native-m09/gates/35-worker-smoke.log",
+      "bytes": 266,
+      "sha256": "646b33e193396bb5a967d3f0438d004597a0b06049621a3ce20402eb8d8ac6a8"
+    },
+    {
+      "path": "docs/native-m09/gates/36-check.log",
+      "bytes": 7629,
+      "sha256": "35d7baa86b63967cef24c3ff132b1e85625fca52fee4ec50bb7ea515f991ce0b"
+    },
+    {
+      "path": "docs/native-m09/gates/37-prepare.log",
+      "bytes": 90,
+      "sha256": "bc81d965315eba2449ec84a312906eb67ed6371cd64b1891e0e1f3f4387716d8"
+    },
+    {
+      "path": "docs/native-m09/gates/38-integration.log",
+      "bytes": 1743,
+      "sha256": "d8f510c9e793e38b4d7acef01444d4fab50d43a40e42695b2cd4ba4fcfdd4a49"
+    },
+    {
+      "path": "docs/native-m09/gates/39-model-extensions.log",
+      "bytes": 4264,
+      "sha256": "3014cf65af1e8cdba695f810a07b045e7c5d9c2c5eda91c1f92fbf9f77db7d13"
+    },
+    {
+      "path": "docs/native-m09/gates/40-prepare.log",
+      "bytes": 90,
+      "sha256": "62dc976600884cc15c3b2a1fd9cacec445708a45da1589cf6f0e2711addf507e"
+    },
+    {
+      "path": "docs/native-m09/gates/41-integration.log",
+      "bytes": 5074,
+      "sha256": "1b0133ff1410cf88546ba23263d25e1e18e442194bc81f13c77e72f81d739ab1"
+    },
+    {
+      "path": "docs/native-m09/gates/42-integration.log",
+      "bytes": 2308,
+      "sha256": "33fc2a89f5f97ebf8dc7dd9ba1a49342504c0ba91acdd5f2f23ebf0944c47844"
+    },
+    {
+      "path": "docs/native-m09/gates/43-integration.log",
+      "bytes": 10472,
+      "sha256": "94ac789c07abcd70c855fc0dd87723ba704141bbabcb77872471220fa165a5ab"
+    },
+    {
+      "path": "docs/native-m09/gates/44-final-targeted.log",
+      "bytes": 10477,
+      "sha256": "41be894e2d1186b5b79913ecbd7805e68a683ad1cec6f98b8ecb273b9c4ee6e4"
+    },
+    {
+      "path": "docs/native-m09/gates/45-fmt-red.log",
+      "bytes": 359762,
+      "sha256": "244691a1d68e071d519386c345963b18f47f8865347d1a57dae01ca88a1a8606"
+    },
+    {
+      "path": "docs/native-m09/gates/46-formatted-files.json",
+      "bytes": 2518,
+      "sha256": "b998fd523d4d4636aa63162f2aee3f46d6a655172b8b73a3a9346da28304a15b"
+    },
+    {
+      "path": "docs/native-m09/gates/47-targeted-final.log",
+      "bytes": 10543,
+      "sha256": "98461ca2dfd6a078beed7a74f24d955144d20af00632df91838583a238ea5195"
+    },
+    {
+      "path": "docs/native-m09/gates/48-targeted-final.log",
+      "bytes": 7126,
+      "sha256": "de019d92049a2abe71268c8b0c7b1157c2d893506db4ff274b77406adc6e6089"
+    },
+    {
+      "path": "docs/native-m09/gates/49-retained.log",
+      "bytes": 6602,
+      "sha256": "bf63525f262aa000e724516aed813c7c957f0c0b5272022e7be398611bdd7bf6"
+    },
+    {
+      "path": "docs/native-m09/gates/50-owned-format.log",
+      "bytes": 84,
+      "sha256": "572449e33789335e0a1ff5dbf9d335141496488ec52a0ccdfca0906ede5f7b8a"
+    },
+    {
+      "path": "docs/native-m09/gates/51-root-bench-before.json",
+      "bytes": 455,
+      "sha256": "48514a0c67e6d2a1f43910623f95ef9321de487f18ff76fd60e82b1a75895d5a"
+    },
+    {
+      "path": "docs/native-m09/gates/52-root-bench-after.json",
+      "bytes": 511,
+      "sha256": "295a80f7cb385def0b50b083ca2e4dc2ca5c5c0be7efc7e0bab4401968969dd5"
+    },
+    {
+      "path": "docs/native-m09/gates/53-worker-repair-targeted.log",
+      "bytes": 96999,
+      "sha256": "69d0c6dccd8e5a678e751e95d548cf74ac5448cf80d1acf21fe61b2c48e48277"
+    },
+    {
+      "path": "docs/native-m09/gates/54-prepare.log",
+      "bytes": 90,
+      "sha256": "796b5e93ea24e5f47ccd5ba3142f8b16b52bec125f917a46fa40060238dded0f"
+    },
+    {
+      "path": "docs/native-m09/gates/55-final-owned-fmt.json",
+      "bytes": 12833,
+      "sha256": "4747005e5edbe91382783e8a7b6271637a14b0e23b4dcdf22db27a4e71de93fe"
+    },
+    {
+      "path": "docs/native-m09/gates/55-final-owned-fmt.log",
+      "bytes": 5741,
+      "sha256": "7c8ec71ef21a2a0127698e7d9f1168eab95c93063f27d739de84ea96d277d4b5"
+    },
+    {
+      "path": "docs/native-m09/gates/56-color-flow.patch",
+      "bytes": 7132,
+      "sha256": "b1cd04e6d3fb0b6548694d3a1c7f90b361bd2665b4785ec9b357f650fdf4b956"
+    },
+    {
+      "path": "docs/native-m09/gates/57-color-flow.log",
+      "bytes": 6592,
+      "sha256": "ab5044ae857518e51f404af6809422c9b5d8ff3836f941422f6d85058d5969c2"
+    },
+    {
+      "path": "docs/native-m09/gates/58-reused-component-inputs.json",
+      "bytes": 838,
+      "sha256": "a06c620460b3feb4eb008065b2f3fb587ae8aa1f5da73f2bd9f6e43160c59e1f"
+    },
+    {
+      "path": "docs/native-m09/gates/59-map-audit-red.log",
+      "bytes": 259,
+      "sha256": "976c60038cae45accd335d1352f164faa86f855bcf5d9ba9bac4969d22fa4182"
+    },
+    {
+      "path": "docs/native-m09/gates/60-final-map-audit.log",
+      "bytes": 203,
+      "sha256": "64e71f4a60e16ba47e35870247ebd783fb16c58fc6b8a2fbd23e233a73fc12f4"
+    },
+    {
+      "path": "docs/native-m09/gates/61-62-final-format.json",
+      "bytes": 13391,
+      "sha256": "9efa637b03904d843a284467855e13e4aa73c04ed57a1f7b3ef710643bd5ddaf"
+    },
+    {
+      "path": "docs/native-m09/gates/61-final-owned-fmt.log",
+      "bytes": 7507,
+      "sha256": "de5cc3920a1eaded67ba1fc70b01478cbf7da61834c9d2784d237062a987f577"
+    },
+    {
+      "path": "docs/native-m09/gates/62-global-fmt.log",
+      "bytes": 109918,
+      "sha256": "64d6ed9625d7e4b13adb93063b10334301fe07edc9055e13884e3a5df426e5ce"
+    },
+    {
+      "path": "docs/native-m09/gates/63-temp-cleanup.json",
+      "bytes": 4006,
+      "sha256": "d70b08656ec43540cea9e590c689cb3f2e2b16be52a0b1d1c175d072832449de"
+    },
+    {
+      "path": "docs/native-m09/gates/64-final-format-boundary.json",
+      "bytes": 572,
+      "sha256": "60d51be6bd6bceba89aca2a6d02c8aa69f9c9b484bebcefcd9f269e1141926a7"
+    },
+    {
+      "path": "docs/native-m09/gates/65-final-owned-fmt.json",
+      "bytes": 9875,
+      "sha256": "c55e06e29e188fa669f6e36384c8e6785914dad971fa1f71837c4f6961b0d85d"
+    },
+    {
+      "path": "docs/native-m09/gates/65-final-owned-fmt.log",
+      "bytes": 5741,
+      "sha256": "c3e703e81d625da3ba464184ad15be29662f3a2d5afc0bcf31b33f2e7b4c53d1"
+    },
+    {
+      "path": "docs/native-m09/gates/66-final-map-audit.log",
+      "bytes": 203,
+      "sha256": "64e71f4a60e16ba47e35870247ebd783fb16c58fc6b8a2fbd23e233a73fc12f4"
+    },
+    {
+      "path": "docs/native-m09/gates/67-original-evidence-preservation.json",
+      "bytes": 1000,
+      "sha256": "153521f84515417974d76848ac7cb15effa689137ebc6e7c33d62aeaac9e3256"
+    },
+    {
+      "path": "docs/native-m09/gates/68-final-global-fmt.json",
+      "bytes": 10832,
+      "sha256": "040dd369a054ce9ea223e2b119c0c70f7580e10db2af74e5eddf2067ea11d3b4"
+    },
+    {
+      "path": "docs/native-m09/gates/68-final-global-fmt.log",
+      "bytes": 107978,
+      "sha256": "1ec7c10fddb010af2a4e1bd35afddbe8d611b1f2686defa8154185262c18a641"
+    },
+    {
+      "path": "docs/native-m09/gates/69-final-state.json",
+      "bytes": 4990,
+      "sha256": "bd0993dc55770807fa3537a57a38a8793742429e09a792ef961b2e03d563475d"
+    },
+    {
+      "path": "docs/native-m09/gates/final-formatted-files.json",
+      "bytes": 2582,
+      "sha256": "e802dc3c6dc4952c44336b2ed24091264b356615286ea4299cb7702d935c61bc"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-01-model-extension-regressions.log",
+      "bytes": 8906,
+      "sha256": "dd96454ccd8f5d3f07f66905902c51843c280c462e5f324370e6e9f15fb105c0"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-01-normal-native.log",
+      "bytes": 42912,
+      "sha256": "bec2212dc7beea764d96926d5dfcc0d73095d5c8e1603d80c2e610654d0dffc3"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-02-model-extension-regressions.log",
+      "bytes": 8653,
+      "sha256": "c9d8887f35c6770c5c398dbd947b40763e6ec592abf9a370b8c970b3a1eac003"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-02-normal-native.log",
+      "bytes": 4169,
+      "sha256": "6fa8370208d034c2417bc2a7dbef348861c5d65508923cd610f297fdca48bb86"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-bench-native.log",
+      "bytes": 5745,
+      "sha256": "a7390cdb2abca57cc93bc2a01a5706f73168886c9eab0f0f47ef38f2f72e72a3"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-channel-audit.log",
+      "bytes": 6636,
+      "sha256": "e12b68d2d8b06502b90dfada3b149b3ec76d11f624565b5d3d02d8cff5e025ce"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-core-assets.log",
+      "bytes": 2452,
+      "sha256": "6bbba35e9d14ae03808a470b1aa2536dac2ad85cc4d954e95528d05b0e14fdc1"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-core-desktop.log",
+      "bytes": 2099,
+      "sha256": "a94a0959f3f24d4881af8f559fd17db6a65944179e35e7d4530a7e3bc4753b4d"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-core-registry-scopes.log",
+      "bytes": 2108,
+      "sha256": "c87fc0cf1599c40eab44c1df6c2510ae2ffd74447bf2a260adca0aa79c493749"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-core-status-shapes.log",
+      "bytes": 2404,
+      "sha256": "c894561e3768723a498ce71207062cd503e77fa685ce11469656fcda65ac1100"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-core-worker-unit.log",
+      "bytes": 2180,
+      "sha256": "0fabdf4853165961458b7cf3c2d3642b483a0895ec8b1691e8db36d8af4d2c94"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-model-all.log",
+      "bytes": 36500,
+      "sha256": "da3e6c1e9fb84452f3349c7cc61831824b42662e13adad8c6ee01383c1104e6c"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-model-extension-regressions.log",
+      "bytes": 8653,
+      "sha256": "5f24b7a4869846980d67c206bbb6fccd5e1780d00ead4c4a93a5c1baf85b581c"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-normal-native.log",
+      "bytes": 42332,
+      "sha256": "44fab10b65d7fb8eecddc4e10b9c751dfc7f82b4461cfa0ff0697cfe65edd40b"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-rust-bun-smoke.log",
+      "bytes": 1981,
+      "sha256": "320891217144a19995d479285be9cf03bdaa7999704b7a6abb243a745e0c97a6"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-typecheck.log",
+      "bytes": 123,
+      "sha256": "c7582fcc774cd4075ed3acae9fbcf73caf84312eb50adfd1c4b802af61a8cbfc"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-typescript.log",
+      "bytes": 137325,
+      "sha256": "5aeaf835b7a82ee3ffa777c5c5edf2988232065c0cfa63379062256fd9c1a689"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-03-ui.log",
+      "bytes": 8999,
+      "sha256": "6ebeba2be39bc26fcfea5a46b3a3e8db3b6ca5f58430e5478d26b17427e7335f"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-bench-native.log",
+      "bytes": 42500,
+      "sha256": "8c2eb5cde4b5d0e6949ab545497f41444b3dab8f6999902acc9f05bf0eb9255f"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-channel-audit.log",
+      "bytes": 6636,
+      "sha256": "0f388bbdf0c3bf7280d7245c3ee01bff37cd4a38d0d4cf987c47260fd295cff4"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-core-assets.log",
+      "bytes": 2707,
+      "sha256": "c844ab577087c5d80a8d2befe2d1f103eb08ae75764fcc9a9902c3505c444516"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-core-desktop.log",
+      "bytes": 2099,
+      "sha256": "a7f60933b5db9ca23dc19fca12d79bcb1cd23b451da51b0996dfd0cc390a2cef"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-core-registry-scopes.log",
+      "bytes": 2108,
+      "sha256": "76f3482fd267eeefbb88efd6c37f649b5ead565c9f8094f10943e53b226e04ca"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-core-root-stream.log",
+      "bytes": 2374,
+      "sha256": "aa9548565e676cc275d852ddc07b8935316df36fe4e0c958b1db1e51067fbcda"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-core-status-shapes.log",
+      "bytes": 2404,
+      "sha256": "2b594ab1aa514c9be5f5f61917055907fd5cb8d945383e6256e2ddbf98ee2a97"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-core-worker-unit.log",
+      "bytes": 2180,
+      "sha256": "0e07af9f65fb115aeebd3b7ef535519a3b6298ba0fab41e4b8d1f0b194f9e66b"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-debug-build.log",
+      "bytes": 7137,
+      "sha256": "ec81041c0461cad094e462cca71b4b668c2a39688a99492a819e987388f78cbe"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-lock-drift.log",
+      "bytes": 258,
+      "sha256": "4b212afcea0ef5ede0bf51accd36bf4a0b3b80d67b44c959ff1a9f09ffdbeb45"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-metadata.log",
+      "bytes": 2545988,
+      "sha256": "8e65986c354396e2318ec117dd3acb55c33588e74374def7452ec2c3cd31d9b8"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-model-all.log",
+      "bytes": 36500,
+      "sha256": "e8e12477ba967dfed1d8125b66906e25788d2554c0a0116d7f5332d5698a7e12"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-model-extension-regressions.log",
+      "bytes": 8653,
+      "sha256": "802a0dc93a466645b4fc960d8c11247edad561a976dfe92dc84cf3d81047dd92"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-normal-check.log",
+      "bytes": 8105,
+      "sha256": "42da167ab34523dd4d09a347c693befbed3b8ed38e428b97c571fd5ba7ade7cb"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-normal-native.log",
+      "bytes": 42331,
+      "sha256": "df3f2852adb74f0d723af87c5ee0c21d78edd7f6c817f85454aae45a641912be"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-root-bench-panel.log",
+      "bytes": 6659,
+      "sha256": "4b890b5b45efc5a871c27090540eef80a70c4c9e3210b0445b2d7143112d5ca8"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-rust-bun-smoke.log",
+      "bytes": 1981,
+      "sha256": "cd7268f322e84ca4a8be91f41820c3d1d72356d0d7aab0ea9a2d6f28fff53b49"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-tree.log",
+      "bytes": 61154,
+      "sha256": "b1dfc442ed54f0002b193b757513a299076fb647a16116622bd09bc2a79eb98e"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-typecheck.log",
+      "bytes": 123,
+      "sha256": "d6ebc297c109e5ab4d62d46f7d6e93159e0bcd3fefc350d9d039d2249bc5555b"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-typescript.log",
+      "bytes": 170377,
+      "sha256": "71c57b258bb8d4989d2e5836f6dee0ccb9410b9edd98d9cad62add50db76d35b"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-ui.log",
+      "bytes": 8628,
+      "sha256": "f7bd92a5799e349a7bf05d3ee69035ae38e336fdd86f89747e83d7ea5c92db12"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-04-worker-smoke.log",
+      "bytes": 266,
+      "sha256": "c485a9684c641889eca11a16d34ce48ccc46767e8581d038207666c00a6b35d1"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-bench-native.log",
+      "bytes": 42613,
+      "sha256": "0c070eb1f27fd9cf3ac1849c200b55f857970dda81fd38a01eb762dd75650020"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-debug-build.log",
+      "bytes": 6644,
+      "sha256": "a98dcdcb452d7e112ea3a79df23ff477470e63e1c8842931f80bc6dbbc5cef61"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-diff.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-host-core-color-formats.log",
+      "bytes": 1888,
+      "sha256": "a202b187578ae4ea22d0c25b11e257791e019decb97b5540d032afb2df74f02f"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-host-core-host-port.log",
+      "bytes": 2973,
+      "sha256": "3b2b213fc6e1a4d3c5f856c1ebd0aa55ada377cb14671da58f98df9a1800112c"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-host-core-status-port.log",
+      "bytes": 2015,
+      "sha256": "f48fe029eb4c9625ad3b41075e396e13060d070909080bfd7509fc078b554198"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-lock-drift.log",
+      "bytes": 228053,
+      "sha256": "fa8c988f4c57478fd8bb548581aefb988885a83a9218fa6e88de81f99a92c341"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-msrv-check.log",
+      "bytes": 12579,
+      "sha256": "cf79877046677da95ff3c759cdd17e6bfc62f40a7ddfafa3549030efbd249d36"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-msrv-core-stream.log",
+      "bytes": 2761,
+      "sha256": "846a35ffa66751c1dbe47e77cf20c83104038983929245e752d6435a58451c21"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-msrv-model.log",
+      "bytes": 44485,
+      "sha256": "c7e8d1d85c36d41fa5d1de18550db02993868403bd43599249bd09189a2d98d4"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-normal-check.log",
+      "bytes": 6644,
+      "sha256": "3de92832eb851c055d29e432775cad804603e4ee4897dea5471934217264aecf"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-normal-native.log",
+      "bytes": 42444,
+      "sha256": "86bd54a2ef716b679e598b89faf27c4cc6c2fc16df9bc221e9aea4d2f4ed17ef"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-05-root-bench-panel.log",
+      "bytes": 6659,
+      "sha256": "df5ad24ff137b1e5031ddb0bdda8702993d0e10150edfed407303217c7380047"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-06-bench-native.log",
+      "bytes": 42613,
+      "sha256": "fb2335b04d9c423fa87ddb173651dd28dfd06c691d4253d5ddb20a5f470c95c6"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-06-color-core-color-formats.log",
+      "bytes": 2067,
+      "sha256": "414b91ad84104d3f77aacd409c558c52cca098dd889eb08a422fe6b3f0a6b0d2"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-06-debug-build.log",
+      "bytes": 6762,
+      "sha256": "0244369aed74688ab4b578ebdea3629a7e07e625dd2e5e9ca2c2b2e50d92fa8a"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-06-diff.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-06-normal-check.log",
+      "bytes": 6762,
+      "sha256": "aadfde9f427726b11355c73e44a6d993b3d7d4119bb7e43ad6e9164b0618bcba"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-06-normal-native.log",
+      "bytes": 42563,
+      "sha256": "af1b001a15a9fc7e1b02860c986c42ebfa89d51731941617303cb828b359cbbd"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-06-ui.log",
+      "bytes": 8746,
+      "sha256": "c4d6daa2a4e929814ee16492749e24857e752d4c7626abbdea5cb2d5f097bf6a"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-01.log",
+      "bytes": 112,
+      "sha256": "1b8234947a4bb780d48f043230476abeca55cb1b267ddbf14c846052f677c7bb"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-02.log",
+      "bytes": 112,
+      "sha256": "1b8234947a4bb780d48f043230476abeca55cb1b267ddbf14c846052f677c7bb"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-03-independent.log",
+      "bytes": 433,
+      "sha256": "6c4786b37b1c1da6597e41500cab8d09d06ad400420d60952632e33d1abc7e19"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-03.log",
+      "bytes": 151,
+      "sha256": "c112da5dd0241c60e99aca3897d07d03973a28e1dde6b1e4732ed7649e631516"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-04.log",
+      "bytes": 880,
+      "sha256": "0a18a4cedc090fb5b371785edf1565f2f711f5f63ee69ae369fc1bf4cd3bc7ff"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-05-host.log",
+      "bytes": 141,
+      "sha256": "e95668a166cff25baf215465110178b4c9cc16587c349d7b98bfe63f6d3d15fe"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-05.log",
+      "bytes": 378,
+      "sha256": "40e14acfbc5ab03bf3667c1d9d104b03c2972b29900269c73d5172b777af3685"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-06-color.log",
+      "bytes": 51,
+      "sha256": "07621e25bb49588fbba12e3d923265c36b74c823691d3ba51052ad4a3e1cfe2b"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-driver-06.log",
+      "bytes": 198,
+      "sha256": "9ccf292b7cc46de5d518c63a9a765f187ad486ee2552c6c82f0e4226ffef35e9"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-01.json",
+      "bytes": 3203,
+      "sha256": "c3d235b0a7e03230a040b8205a1dddd84515fea6bcc4b7caf6f8814bfecd7a89"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-02.json",
+      "bytes": 1986,
+      "sha256": "1aadd444881a46343f509bbaf2a33e6d4f4bf2704e8684669cdc4a6a3a881c10"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-03-independent.json",
+      "bytes": 10058,
+      "sha256": "8c5e008f5b9fd937fd8e6d65c5a0bd1bd720c226a1972ee9e748e78c8ad66f6b"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-03-native.json",
+      "bytes": 3974,
+      "sha256": "b7b14973581fe277c915cf6d2e866c3798d73b5b0d15e9a2264288fd56fe40cf"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-03.json",
+      "bytes": 3974,
+      "sha256": "b7b14973581fe277c915cf6d2e866c3798d73b5b0d15e9a2264288fd56fe40cf"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-04.json",
+      "bytes": 20239,
+      "sha256": "9910aa41affca8ff6041265d2f7a55bd529decc4da8df1068ea22970d64060db"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-05-host.json",
+      "bytes": 2422,
+      "sha256": "535ef0b9b38fcef9cda3b1dbcfea83ce46c8c7da8c9400082ec333922d8a8fbf"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-05.json",
+      "bytes": 10272,
+      "sha256": "24c4fb49a958abab6851384a2427b20c1d8a7f7ba0745c0f8de0ab3c199514dc"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-06-color.json",
+      "bytes": 964,
+      "sha256": "a68593d65ffb703440e2460ce5de41e4fa31c3d42b2bb883f319fa134f280226"
+    },
+    {
+      "path": "docs/native-m09/gates/frozen-gates-06.json",
+      "bytes": 6298,
+      "sha256": "3633235ba2280a14b4f04bb813ed11228a9fd9e6b56ec736cbaab24b7863282e"
+    },
+    {
+      "path": "docs/native-m09/integration.md",
+      "bytes": 11253,
+      "sha256": "42f72000e22e0fc4f2a673a91ba638db5e9042b06b43dd4cb22de228941e8fdb"
+    },
+    {
+      "path": "docs/native-m09/parent-contracts.md",
+      "bytes": 1418,
+      "sha256": "e3dfd93df088b01068e7720c303d37d35189f154f36356ee639b6d16915added"
+    },
+    {
+      "path": "docs/native-m09/parent-os-fixture-contract.md",
+      "bytes": 3606,
+      "sha256": "a7b9c17be0eac9aa7317d89738209dde762da296385bacabad62a0e2db9257d1"
+    },
+    {
+      "path": "docs/native-m09/run-gates.py",
+      "bytes": 7295,
+      "sha256": "5f98d88319d8725e61a3c80a86d1845c90a7f08701d997ff1e34606ff1cf77ce"
+    },
+    {
+      "path": "docs/native-m09/source-audit.json",
+      "bytes": 517,
+      "sha256": "0474d05dc85a3cc3fcc6927fd79149b6f6e376ef5204046556fcb1c894d8ddb0"
+    },
+    {
+      "path": "docs/native-m09/source-case-map.json",
+      "bytes": 123935,
+      "sha256": "b1ea1a8752d00a321af6dc9c5d60f5bbccb5ab731837d82e7d47d941b8b9ed48"
+    },
+    {
+      "path": "docs/native-m09/source-freeze-pregate.json",
+      "bytes": 5583,
+      "sha256": "8fb5b92a7f8d0072caa6c4c197366b8bf4e2fad8465b81b8b119b6f49e67ca67"
+    },
+    {
+      "path": "docs/native-m09/verification.md",
+      "bytes": 6537,
+      "sha256": "fb653437bab12cf99dfdd13074d646b4a62312ffd713548697f78204eac1f0b2"
+    },
+    {
+      "path": "docs/native-m09/write-final-map.py",
+      "bytes": 5218,
+      "sha256": "e92907517b787205805a29564f4a5b1ad2ee5d7b8cac162a89f41c4d9bc24f65"
+    },
+    {
+      "path": "docs/native-m10/reviews/tezbar-gpui-m10-opus-b739b4e.md",
+      "bytes": 26271,
+      "sha256": "3e358161ce8d033d4170a8e57378d47ca36f3ddd72af132b6a93af92b3f7fb5a"
+    }
+  ],
+  "external_root_patch_inputs": [
+    {
+      "path": "/tmp/tezbar-m10-root-repair-20261107/m10-root-repairs.patch",
+      "sha256": "9a5e55541bb55db73ac56b22359b3270758eedac582a144121ed9cc8a795a9bd",
+      "bytes": 54571
+    },
+    {
+      "path": "/tmp/tezbar-m10-root-repair-20261107/compile-corrections-v2.patch",
+      "sha256": "3a5de7d82be74ed60393646914b3d42d41b9be1f37c5e096ec07c04d7fd6eff1",
+      "bytes": 3264
+    },
+    {
+      "path": "/tmp/tezbar-m10-root-repair-20261107/bench-wire-v3.patch",
+      "sha256": "a5f277ddb0c88d2d51c79ec33419e0813b4e6b35a3008b5f13fea9dff0a52aba",
+      "bytes": 3283
+    }
+  ]
+}

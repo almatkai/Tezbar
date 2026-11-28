@@ -1,0 +1,19 @@
+{
+  "command": [
+    "rustc",
+    "+1.98.1",
+    "--edition",
+    "2024",
+    "-O",
+    "/tmp/tezbar-m810-root-repair-20261107/svg_probe.rs",
+    "--extern",
+    "image=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libimage-ad45edcb0dbe761e.rlib",
+    "--extern",
+    "resvg=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/libresvg-72e0428f81ac455e.rlib",
+    "-L",
+    "dependency=/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps",
+    "-o",
+    "/tmp/tezbar-m810-root-repair-20261107/svg-probe"
+  ],
+  "exit": 0
+}

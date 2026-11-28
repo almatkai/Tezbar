@@ -1,0 +1,37 @@
+{
+  "kind": "M7 initial parent compile input freeze; not final acceptance",
+  "utc": "2026-11-06T11:59:34.500662+00:00",
+  "head": "6d2f7df3d30c6698dd3a34478a3e297076747ae8",
+  "files": {
+    "apps/tezbar/src/app.rs": "64537046bbbe7ffac5a60b4a01eb450f1c29b584e2e1ee0ea3b35b3192eaaf45",
+    "apps/tezbar/src/app/m7.rs": "391acefa9dbc1408c8110643653c8a08965e16df6894e13659e53398017ca1c5",
+    "apps/tezbar/src/app/m7_tests.rs": "f8a2438c3ac17a8cd541897d417bd19e2c3b69736111946ba7ab2e9aeaf0024b",
+    "apps/tezbar/src/core_client.rs": "a6e5717392afd0180c80344951723ce3761c19d4f9e0f1d898fb3d2a3bcd9f6e",
+    "apps/tezbar/src/events.rs": "58445c7c40c97f34de059cb5ece859895b0c86825c277222e4921cbf57f33a79",
+    "apps/tezbar/src/lib.rs": "b8617f6ededadf1b2870234dc0422705a814e966975783408c15805ab0aacad2",
+    "apps/tezbar/src/settings_transport.rs": "44ae549796f9cb13f5d6bd4a7cd36f72faa228906fac3acd0646616dbe75adb5",
+    "apps/tezbar/src/surfaces/command_bar/interactions.rs": "b11d407088e1c3e5093aa5061b12a48e9ee6d4a82c4bb8a3c5650a37119e8ca2",
+    "apps/tezbar/src/surfaces/command_bar/mod.rs": "7540647531e2bbbc03d9ccdcc88bf77c7d4a390c5b881c782db8bdec1fd94f2f",
+    "apps/tezbar/src/surfaces/command_bar/settings_integration.rs": "91512983ee7b2104f99d334840ffad1cecce41dcc0e09861fbbc3d6cbfab8b6b",
+    "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs": "f1e76f28c27fd8383e353993aa0f234b4a5a32f34ab399f8c9b66ffb6892efcc",
+    "apps/tezbar/src/surfaces/command_bar/view.rs": "4ec649cc53bc7ef1762bb1068b5c96d008391b8348b44cc824db3e9655cd6ad9",
+    "apps/tezbar/src/surfaces/mod.rs": "ad10d60bdba3c32df16dd5b5240cfcc0985571a2b7d796ff6cff1bacb40e2d72",
+    "apps/tezbar/src/surfaces/onboarding.rs": "7b663e00fc175be7ce658e538c9f65fc2bf7c5ecb727e0cedbf19040018b36cb",
+    "apps/tezbar/src/surfaces/settings/barrier.rs": "fcb5df4db6b4ec3c36691b043ccc121c8def0e770a06a3679835c33a41ef8360",
+    "apps/tezbar/src/surfaces/settings/contributions.rs": "70863768e7a5de222a3b0e9d155fb8506c44f03db347a03f877ddb7c8a8e1a96",
+    "apps/tezbar/src/surfaces/settings/mod.rs": "f19f4191afc4389a149c5f3cec84578b2fa01109cc5cce10e790cd296bae0291",
+    "apps/tezbar/src/surfaces/settings/request.rs": "d9a708d3aeda72cc8e3a2989f99d5aa06653bc924b470220d3f40f04e56c3d8c",
+    "apps/tezbar/src/surfaces/settings/store.rs": "acd3dc0bb9cd60757f8ff1291b30a63f719eb29ee7f7f773cdfcaae5ba785f75",
+    "apps/tezbar/src/surfaces/settings/tests.rs": "bcb95c24ec41211d65da73813ae62f7511ebf4fb8b866d4d2db3effafcf288b5",
+    "apps/tezbar/src/surfaces/settings/view.rs": "20e5f931688ae83a353554ac9c470e50142898d8ca349077a6c257c70c6abf1f",
+    "apps/tezbar/src/windows/settings.rs": "59a2630831075135d0e766ab40bb045ace62395b8be5db7ba1829d63964cdc59"
+  },
+  "coowned": [
+    "apps/tezbar/src/surfaces/command_bar/mod.rs",
+    "apps/tezbar/src/surfaces/command_bar/view.rs"
+  ],
+  "limits": [
+    "Parent M6 source and M8 unexported source are outside this receipt.",
+    "This is a source snapshot, not a passing build/test receipt."
+  ]
+}

@@ -20,18 +20,28 @@ describe('formatLlmErrorMessage', () => {
     ).toBe('Gemini request failed (401): API key is invalid.')
   })
 
-  it('turns pi model startup failures into a concise action', () => {
+  it('turns model startup failures into a concise action', () => {
     const raw =
-      'pi exited before finishing:\nWarning: No models match pattern "tezbar/deepseek-v4-pro"\nError: Model "tezbar/deepseek-v4-pro" not found.'
+      'Native model: startup failed:\nWarning: No models match pattern "tezbar/deepseek-v4-pro"\nError: Model "tezbar/deepseek-v4-pro" not found.'
 
     expect(formatLlmErrorMessage(raw)).toBe(
       'The selected model "tezbar/deepseek-v4-pro" is unavailable. Choose another model in AI settings and try again.'
     )
   })
 
-  it('does not expose raw pi diagnostics for an unknown startup failure', () => {
-    expect(formatLlmErrorMessage('pi exited before finishing:\ninternal stack detail')).toBe(
-      'The agent stopped before it could finish. Check the selected model in AI settings and try again.'
+  it.each([
+    'Failed to write to backend runner process; recovery is in progress',
+    'Backend runner is still recovering',
+    'Backend runner stopped before replying',
+  ])('explains a background service disconnect without raw transport jargon: %s', (raw) => {
+    expect(formatLlmErrorMessage(raw)).toBe(
+      'The background service disconnected. Tezbar is reconnecting. Wait a moment, then try again. Your message has been kept.'
+    )
+  })
+
+  it('preserves a labelled native error', () => {
+    expect(formatLlmErrorMessage('Native model: response incomplete')).toBe(
+      'Native model: response incomplete'
     )
   })
 })

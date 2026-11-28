@@ -1,0 +1,77 @@
+{
+  "owned_pids_killed": [],
+  "temporary_outputs": [
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-1Qfg3z",
+      "prepared_log": "docs/native-m09/gates/04-prepare.log",
+      "worker_sha256": "3b2a8df50caf3dfcfafe8a8b786921d320054d662eb5f9ad45e7362296a3fe7f",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JxbM1b",
+      "prepared_log": "docs/native-m09/gates/08-prepare.log",
+      "worker_sha256": "3b2a8df50caf3dfcfafe8a8b786921d320054d662eb5f9ad45e7362296a3fe7f",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-J3Dt07",
+      "prepared_log": "docs/native-m09/gates/10-prepare.log",
+      "worker_sha256": "0f9e1862c591a864681140ff988d2482d9abd5bdcdc01747cf75d196289d488d",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-12WgmX",
+      "prepared_log": "docs/native-m09/gates/12-prepare.log",
+      "worker_sha256": "537db91b33f4a549358493ea5246a07f8a5787ed6d996ec492f03608d1d4d37a",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-NrxwAW",
+      "prepared_log": "docs/native-m09/gates/14-prepare.log",
+      "worker_sha256": "b2eedeff36cdd82c5b82cfdc18d7441fa863da7668748904768c33461e5628c4",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-ynKkhF",
+      "prepared_log": "docs/native-m09/gates/28-prepare.log",
+      "worker_sha256": "778dabab0d35350e46d02af36097e72979db29f08b28db2b50c419ef17402f72",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-kWVfRS",
+      "prepared_log": "docs/native-m09/gates/33-prepare.log",
+      "worker_sha256": "c489901fa53f2d3e1ad6186d4bc924a234c5ebf7460ef713362a49831cdc824c",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-PhnTfU",
+      "prepared_log": "docs/native-m09/gates/37-prepare.log",
+      "worker_sha256": "5632b5ed22019ab68aa2a59ef4c890421a56cac199ed25e8b9282c1ab4dac54b",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-ZJ8gJh",
+      "prepared_log": "docs/native-m09/gates/40-prepare.log",
+      "worker_sha256": "5632b5ed22019ab68aa2a59ef4c890421a56cac199ed25e8b9282c1ab4dac54b",
+      "live_owned_processes": [],
+      "result": "removed exact task-owned temporary bundle/seed directory"
+    },
+    {
+      "owned": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr",
+      "prepared_log": "docs/native-m09/gates/54-prepare.log",
+      "worker_sha256": "f29a69bb8082de2ece192e3e36740b720c18bf3eb2d25420db7264985f477433",
+      "live_owned_processes": [],
+      "result": "retained one final private production bundle/seed for reproducibility"
+    }
+  ],
+  "retained_bundle": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr",
+  "note": "No broad process kill or directory glob deletion. Test profiles are individually owned by Fixture and removed after core shutdown."
+}

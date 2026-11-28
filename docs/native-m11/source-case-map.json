@@ -1,0 +1,270 @@
+{
+  "status": "ALL_SOURCE_FIXTURES_UNRUN",
+  "count": 25,
+  "tests": [
+    {
+      "file": "apps/tezbar/src/app/production_launch.rs",
+      "line": 120,
+      "case": "production_paths_and_shutdown_are_exact_without_reading_a_profile",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/app/production_launch.rs",
+      "line": 150,
+      "case": "windows_local_data_cache_logs_resources_and_config_are_byte_identical",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/app/update_integration.rs",
+      "line": 414,
+      "case": "preview_rejects_network_install_channel_and_retains_real_status",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/app/update_integration.rs",
+      "line": 436,
+      "case": "one_unpolled_operation_repeated_nonces_backpressure_and_cancellation_generation",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/app/update_integration.rs",
+      "line": 467,
+      "case": "installer_url_requires_exact_portable_manual_status_and_preferences_use_ui_owner",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 112,
+      "case": "current_manifest_live_tables_log_sequence_tombstones_and_immutability",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 141,
+      "case": "newer_table_beats_older_log_and_other_origin_is_never_imported",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 162,
+      "case": "checksum_torn_log_missing_live_table_and_unknown_compression_fail_closed",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 193,
+      "case": "oversized_snappy_declaration_is_rejected_before_decompression",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 209,
+      "case": "encoding_tags_utf16_latin1_invalid_and_deleted_invalid_value",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 230,
+      "case": "manifest_deleted_tables_and_unknown_tags_are_not_salvaged",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/leveldb_tests.rs",
+      "line": 239,
+      "case": "logical_key_encoding_variants_cannot_resurrect_a_newer_tombstone",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 13,
+      "case": "malformed_values_defaults_boolean_theme_timeouts_and_all_browser_keys",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 39,
+      "case": "pins_limit_and_order_reuse_existing_normalizer",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 51,
+      "case": "existing_native_even_defaults_unknown_fields_and_failed_write_retry_win",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 86,
+      "case": "sqlite_fixture_bytes_utf16_corruption_wal_and_read_only_immutability",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 116,
+      "case": "cache_payloads_are_rebuilt_and_partial_transport_does_not_set_marker",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 134,
+      "case": "failed_atomic_write_does_not_record_marker_and_retry_uses_same_plan",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/tests.rs",
+      "line": 155,
+      "case": "every_reachable_browser_key_maps_to_the_existing_state_without_a_second_model",
+      "status": "UNRUN"
+    },
+    {
+      "file": "apps/tezbar/src/legacy_state/webkit.rs",
+      "line": 356,
+      "case": "binary_client_origin_checks_top_and_client_no_substrings_or_extra_data",
+      "status": "UNRUN"
+    },
+    {
+      "file": "scripts/native/nsis-template.test.mjs",
+      "line": 6,
+      "case": "locked template delta removes only bootstrap and retains all installer contracts",
+      "status": "UNRUN"
+    },
+    {
+      "file": "scripts/native/nsis-template.test.mjs",
+      "line": 14,
+      "case": "rehearsal proposal contains no executable commands and names disposable context",
+      "status": "UNRUN"
+    },
+    {
+      "file": "scripts/native/package-macos.test.mjs",
+      "line": 7,
+      "case": "inventories reject traversal, collisions, missing provenance and symlink-shaped names",
+      "status": "UNRUN"
+    },
+    {
+      "file": "scripts/native/package-macos.test.mjs",
+      "line": 13,
+      "case": "plist preserves production metadata and exact permission strings without LSUIElement",
+      "status": "UNRUN"
+    },
+    {
+      "file": "scripts/native/package-macos.test.mjs",
+      "line": 21,
+      "case": "planning refuses installed app paths and invented identities before any I/O",
+      "status": "UNRUN"
+    }
+  ],
+  "ledger_rows": {
+    "P-01": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-02": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-03": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-04": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-05": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-06": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-07": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-08": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-09": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-10": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-11": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-12": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-13": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-14": {
+      "draft": "legacy_state/{mod,webkit,leveldb}.rs",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "P-15": {
+      "draft": "production_launch.rs (native layout paths unchanged)",
+      "status": "SOURCE_ONLY_NOT_ACCEPTED"
+    },
+    "ST-09": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "ST-25": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "ST-31": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "L-27": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "Y-04": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "Y-05": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "Y-06": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "Y-17": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "Q-01": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "Q-02": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    },
+    "W-13": {
+      "draft": "app/{update_integration,production_launch}.rs; scripts/native; packaging",
+      "status": "INTEGRATION_AND_PLATFORM_GATES_PENDING"
+    }
+  },
+  "required_later": [
+    "export/dependencies/typecheck on Mac and Windows",
+    "run every listed source fixture",
+    "real disposable storage fixtures and WAL retry",
+    "NSIS context/plugin compilation and disposable hive rehearsal",
+    "Tauri-to-GPUI signed updater rehearsal",
+    "AX/IME/RAM/full Opus"
+  ]
+}

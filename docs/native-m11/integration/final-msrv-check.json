@@ -1,0 +1,35 @@
+{
+  "command": [
+    "env",
+    "CARGO_TARGET_DIR=target/msrv-m09",
+    "cargo",
+    "+1.85.0",
+    "check",
+    "--locked",
+    "--offline",
+    "-j2",
+    "-p",
+    "tezbar-core",
+    "-p",
+    "tezbar-host",
+    "-p",
+    "tezbar-update",
+    "-p",
+    "tezbar-ui-model",
+    "--all-features"
+  ],
+  "environment": {
+    "CARGO_BUILD_JOBS": "2",
+    "RUST_TEST_THREADS": "2",
+    "TEZBAR_M09_BUN": "/opt/homebrew/bin/bun",
+    "TEZBAR_TEST_BUN": "/opt/homebrew/bin/bun",
+    "TEZBAR_M09_PREPARED": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/prepared.json",
+    "TEZBAR_TEST_RESOURCES": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources",
+    "TEZBAR_TEST_WORKER_BUNDLE": "/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-m09-fixtures-JsMHGr/resources/dist-backend/extension-worker.js"
+  },
+  "exit_code": 0,
+  "seconds": 1.19,
+  "inputs_sha256": "9c440cef4e9df817636d94d9c8cba03dbcc628f2987f7aad89ed0154c8a3b8eb",
+  "changed_inputs": [],
+  "log_sha256": "f0f0bca3e03f6b2d6f25ae3d5e74889a705b644d8288252274a688382360e67a"
+}

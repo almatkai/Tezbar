@@ -1,0 +1,41 @@
+use std::io::{self,BufRead,Write};
+fn main(){
+ #[cfg(unix)] if std::env::args().any(|a|a=="hold-stderr") {std::thread::sleep(std::time::Duration::from_secs(30));return;}
+ #[cfg(unix)] if std::env::args().any(|a|a=="escape-stderr") {
+  use std::os::unix::process::CommandExt;
+  let mut cmd=std::process::Command::new(std::env::current_exe().unwrap());
+  cmd.arg("hold-stderr").stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null());
+  unsafe {cmd.pre_exec(|| {extern "C" {fn setsid()->i32;} if setsid()<0 {return Err(std::io::Error::last_os_error());}Ok(())});}
+  let child=cmd.spawn().unwrap();std::fs::write(std::env::var("ESCAPED_PID").unwrap(),child.id().to_string()).unwrap();
+  eprint!("escaped stderr final cause");return;
+ }
+
+ if let Ok(path)=std::env::var("FIXTURE_START_MARKER"){std::fs::write(path,"started").unwrap();}
+ let legacy=std::env::args().any(|a|a=="legacy" || a=="silent");
+ if std::env::args().any(|a|a=="startup-error") { for n in 0..40 {eprintln!("traceback frame {n}: {}", "preamble ".repeat(20));} eprint!("fixture module missing {}", std::env::var("FIXTURE_TOKEN").unwrap_or_default());std::process::exit(42); }
+ let notify=std::env::args().any(|a|a=="notify");let mut revised=false;
+ for line in io::stdin().lock().lines(){let line=line.unwrap();
+  let Some(start)=line.find("\"id\":\"").map(|i|i+6) else{continue};let id=line[start..].split('"').next().unwrap();
+  let result=if line.contains("server/discover"){if std::env::args().any(|a|a=="silent"){continue;}if legacy{println!("{{\"jsonrpc\":\"2.0\",\"id\":\"{id}\",\"error\":{{\"code\":-32601,\"message\":\"Method not found\"}}}}");io::stdout().flush().unwrap();continue}else{r#"{"capabilities":{"tools":{},"prompts":{},"resources":{}}}"#.to_string()}}
+  else if line.contains("initialize"){r#"{"protocolVersion":"2025-11-25","capabilities":{"tools":{},"prompts":{},"resources":{}},"instructions":"Fixture instructions"}"#.into()}
+  else if line.contains("tools/list"){let tools=r#"{"tools":[{"name":"echo","description":"Echo fixture","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false},"annotations":{"readOnlyHint":true}}]}"#;if revised{tools.replace("Echo fixture","Revised fixture")}else{tools.into()}}
+  else if line.contains("prompts/list"){r#"{"prompts":[{"name":"hello","arguments":[] }]}"#.into()}
+  else if line.contains("resources/templates/list"){r#"{"resourceTemplates":[]}"#.into()}
+  else if line.contains("resources/list"){r#"{"resources":[]}"#.into()}
+  else if line.contains("prompts/get"){r#"{"messages":[{"role":"user","content":{"type":"text","text":"fixture draft"}}]}"#.into()}
+  else if line.contains("tools/call"){
+   if std::env::var("SECRET_MARKER").is_ok(){panic!("ambient secret inherited")}
+   if let Ok(path)=std::env::var("FIXTURE_MARKER"){writeln!(std::fs::OpenOptions::new().create(true).append(true).open(path).unwrap(),"called").unwrap();}
+   if std::env::args().any(|a|a=="slow") {
+    let release=std::env::var("FIXTURE_RELEASE").unwrap();let deadline=std::time::Instant::now()+std::time::Duration::from_secs(20);
+    while !std::path::Path::new(&release).exists() {if std::time::Instant::now()>deadline{panic!("fixture release timeout")}std::thread::sleep(std::time::Duration::from_millis(10));}
+   }
+   if std::env::args().any(|a|a=="crash"){std::process::exit(3)}
+   if std::env::args().any(|a|a=="flood"){for _ in 0..65{println!("fixture non-JSON stdout");}io::stdout().flush().unwrap();std::thread::sleep(std::time::Duration::from_secs(30));}
+   let secret=std::env::var("FIXTURE_TOKEN").unwrap_or_default();eprintln!("fixture {secret}");
+   format!(r#"{{"content":[{{"type":"text","text":"fixture 🦀 {secret}"}}]}}"#)
+  }else{r#"{}"#.into()};
+  println!("{{\"jsonrpc\":\"2.0\",\"id\":\"{id}\",\"result\":{result}}}");io::stdout().flush().unwrap();
+  if notify && line.contains("tools/call") {revised=true;println!(r#"{{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}}"#);io::stdout().flush().unwrap();}
+ }
+}

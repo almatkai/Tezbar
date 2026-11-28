@@ -1,0 +1,753 @@
+//! Asset effects are capabilities, not authorization to access arbitrary files.
+//! Parent supplies ONE shared bounded decoder/transport; this module never opens a client.
+use gpui::RenderImage;
+use std::{collections::BTreeSet, future::Future, path::PathBuf, pin::Pin, sync::Arc};
+use tezbar_ui_model::extensions::images::{Effect, Source};
+mod status_icons;
+pub(crate) use status_icons::resolve_icon as resolve_status_icon;
+
+pub type AssetFuture<T> = Pin<Box<dyn Future<Output = Result<T, String>> + Send>>;
+#[derive(Clone)]
+pub struct AssetScope {
+    /// Canonical installed root, obtained from core registry (never an extension prop).
+    pub extension_root: PathBuf,
+    pub allowed_legacy: BTreeSet<PathBuf>,
+}
+pub struct AssetResult {
+    pub image: Arc<RenderImage>,
+    /// Decoded allocation size, not compressed HTTP/file length.
+    pub decoded_bytes: usize,
+}
+pub trait ExtensionAssets: Send + Sync + 'static {
+    fn scope(&self, extension_id: String) -> AssetFuture<AssetScope>;
+    fn load_catalog(&self, _source: Source, _effect: Effect) -> AssetFuture<AssetResult> {
+        Box::pin(async { Err("Catalog image transport is unavailable".into()) })
+    }
+    /// Process Fetch/ReadFile/DecodeData/ResolveAppPath from production ImageCache.
+    /// Canonicalize ReadFile and root again at read time; deny symlink escapes.
+    /// HTTPS credentials/redirect downgrade denied; 2 MiB encoded AND decoded cap,
+    /// max_width from effect, finite timeout. Dropping future cancels read/decode.
+    /// Release is executed on GPUI's thread by the owner, never here.
+    fn load(&self, scope: AssetScope, source: Source, effect: Effect) -> AssetFuture<AssetResult>;
+    fn load_variant(
+        &self,
+        scope: AssetScope,
+        source: Source,
+        effect: Effect,
+        _max_width: u32,
+    ) -> AssetFuture<AssetResult> {
+        self.load(scope, source, effect)
+    }
+    fn load_catalog_variant(
+        &self,
+        source: Source,
+        effect: Effect,
+        _max_width: u32,
+    ) -> AssetFuture<AssetResult> {
+        self.load_catalog(source, effect)
+    }
+}
+
+// Store artwork has no installed package root. The shared parent transport may
+// implement this finite HTTPS-only capability using the SAME fetch/decode queue.
+// Its default is explicit unavailability, never an arbitrary filesystem scope.
+
+use crate::core_client::{CoreClient, Request, RequestAdapter};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use serde_json::{Value, json};
+use tezbar_core::assets::{ASSET_BYTES, CHAT_SOURCE_BYTES, DEADLINE, data_uri};
+
+impl ExtensionAssets for CoreClient {
+    fn scope(&self, id: String) -> AssetFuture<AssetScope> {
+        installed_scope(self.0.clone(), id)
+    }
+    fn load(&self, scope: AssetScope, source: Source, effect: Effect) -> AssetFuture<AssetResult> {
+        self.load_variant(scope, source, effect, 640)
+    }
+    fn load_catalog(&self, source: Source, effect: Effect) -> AssetFuture<AssetResult> {
+        self.load_catalog_variant(source, effect, 640)
+    }
+    fn load_variant(
+        &self,
+        scope: AssetScope,
+        source: Source,
+        effect: Effect,
+        max_width: u32,
+    ) -> AssetFuture<AssetResult> {
+        self.load_asset(Some(scope), source, effect, max_width)
+    }
+    fn load_catalog_variant(
+        &self,
+        source: Source,
+        effect: Effect,
+        max_width: u32,
+    ) -> AssetFuture<AssetResult> {
+        self.load_asset(None, source, effect, max_width)
+    }
+}
+/// Registry capability shared by the UI adapter and native status resolver.
+/// Cloning NativeCore here creates no request/lifecycle/admission owners.
+fn installed_scope(core: Arc<tezbar_core::NativeCore>, id: String) -> AssetFuture<AssetScope> {
+    Box::pin(async move {
+        let scope = tokio::task::spawn_blocking(move || core.extensions.asset_scope(&id))
+            .await
+            .map_err(|_| "Installed image scope is unavailable".to_string())??;
+        Ok(AssetScope {
+            extension_root: scope.root().into(),
+            allowed_legacy: scope.allowed_legacy().clone(),
+        })
+    })
+}
+/// One authorization/transport/decode path, backed by the existing core service.
+/// Only application-icon effects need an existing shared request adapter; status
+/// assets pass None and cannot acquire that desktop capability.
+fn load_asset(
+    core: Arc<tezbar_core::NativeCore>,
+    application_icons: Option<CoreClient>,
+    scope: Option<AssetScope>,
+    source: Source,
+    effect: Effect,
+    width: u32,
+) -> AssetFuture<AssetResult> {
+    Box::pin(async move {
+        // Source/effect must agree. Effects do not confer arbitrary file authority.
+        let bytes = match (source, effect) {
+            (
+                Source::Remote(source),
+                Effect::Fetch {
+                    url,
+                    max_bytes,
+                    max_width,
+                    ..
+                },
+            ) if source == url => {
+                if max_width != width {
+                    return Err("Image variant changed".into());
+                }
+                core.assets.remote(&url, max_bytes.min(ASSET_BYTES)).await?
+            }
+            (
+                Source::Data(source),
+                Effect::DecodeData {
+                    data, max_bytes, ..
+                },
+            ) if source == data => data_uri(&data, max_bytes.min(ASSET_BYTES))?,
+            (
+                Source::File(source),
+                Effect::ReadFile {
+                    path, max_bytes, ..
+                },
+            ) if source == path => {
+                let scope = scope.ok_or("Catalog images have no file capability")?;
+                let registry = core.clone();
+                let registered = tokio::task::spawn_blocking(move || {
+                    let registered = registry
+                        .extensions
+                        .asset_scope_for_root(&scope.extension_root)?;
+                    if registered.allowed_legacy() != &scope.allowed_legacy {
+                        return Err("Installed image scope changed".into());
+                    }
+                    Ok::<_, String>(registered)
+                })
+                .await
+                .map_err(|_| "Installed image scope is unavailable".to_string())??;
+                core.assets
+                    .local(&registered, &path, max_bytes.min(ASSET_BYTES))
+                    .await?
+            }
+            (
+                Source::AppPath {
+                    extension_id: source_id,
+                    path: source,
+                },
+                Effect::ResolveAppPath {
+                    extension_id,
+                    path,
+                    max_width,
+                    ..
+                },
+            ) if source_id == extension_id
+                && source == path
+                && max_width == width
+                && scope.is_some() =>
+            {
+                let scope = scope.unwrap();
+                let registry = core.clone();
+                let registered = tokio::task::spawn_blocking(move || {
+                    registry.extensions.asset_scope(&extension_id)
+                })
+                .await
+                .map_err(|_| "Installed image scope is unavailable".to_string())??;
+                if registered.root() != scope.extension_root
+                    || registered.allowed_legacy() != &scope.allowed_legacy
+                {
+                    return Err("Installed image scope changed".into());
+                }
+                let client = application_icons
+                    .as_ref()
+                    .ok_or("Application icon capability is unavailable")?;
+                let value = RequestAdapter::send(
+                    client,
+                    Request::AssetIcon {
+                        kind: "application".into(),
+                        path: path.to_string_lossy().into_owned(),
+                    },
+                )
+                .await?;
+                data_uri(
+                    value.as_str().ok_or("Application icon is unavailable")?,
+                    ASSET_BYTES,
+                )?
+            }
+            _ => return Err("Image request capability does not match its source".into()),
+        };
+        decode_admitted(&core, bytes, width).await
+    })
+}
+async fn decode_admitted(
+    core: &tezbar_core::NativeCore,
+    bytes: Vec<u8>,
+    width: u32,
+) -> Result<AssetResult, String> {
+    tokio::time::timeout(DEADLINE, async {
+        let permit = core.assets.decode_permit().await?;
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            decode_asset(&bytes, width)
+        })
+        .await
+        .map_err(|_| "Image decoding failed".to_string())?
+    })
+    .await
+    .map_err(|_| "Image decoding timed out".to_string())?
+}
+impl CoreClient {
+    fn load_asset(
+        &self,
+        scope: Option<AssetScope>,
+        source: Source,
+        effect: Effect,
+        width: u32,
+    ) -> AssetFuture<AssetResult> {
+        load_asset(
+            self.0.clone(),
+            Some(self.clone()),
+            scope,
+            source,
+            effect,
+            width,
+        )
+    }
+    /// Chat Markdown has remote/data authority, never an arbitrary extension/file scope.
+    pub(crate) fn document_image(&self, source: String) -> AssetFuture<Vec<u8>> {
+        let core = self.0.clone();
+        Box::pin(async move {
+            if source.starts_with("data:") {
+                data_uri(&source, CHAT_SOURCE_BYTES)
+            } else {
+                core.assets.remote(&source, CHAT_SOURCE_BYTES).await
+            }
+        })
+    }
+    /// Paths originate only from GPUI's host dialog. Batch admission is atomic at ChatView.
+    pub(crate) fn chosen_chat_images(&self, paths: Vec<PathBuf>) -> AssetFuture<Vec<Value>> {
+        let core = self.0.clone();
+        Box::pin(async move {
+            if paths.len() > 4 {
+                return Err("Choose at most four images".into());
+            }
+            let mut result = Vec::new();
+            for path in paths {
+                let bytes = core.assets.chosen_image(&path).await?;
+                result.push(chat_image_payload(
+                    bytes,
+                    path.file_name().and_then(|n| n.to_str()).map(str::to_owned),
+                )?);
+            }
+            Ok(result)
+        })
+    }
+}
+/// Validate header metadata without allocating a full preview. Source admission is
+/// independent from the smaller thumbnail budget and accepts the canonical 8 MiB.
+pub(crate) fn chat_image_payload(bytes: Vec<u8>, name: Option<String>) -> Result<Value, String> {
+    if bytes.len() > CHAT_SOURCE_BYTES {
+        return Err("Image exceeds 8 MiB".into());
+    }
+    let format = image::guess_format(&bytes).map_err(|_| "Unsupported chat image")?;
+    let mime = match format {
+        image::ImageFormat::Png => "image/png",
+        image::ImageFormat::Jpeg => "image/jpeg",
+        image::ImageFormat::WebP => "image/webp",
+        _ => return Err("Choose PNG, JPEG or WebP images".into()),
+    };
+    let (width, height) = image::ImageReader::with_format(std::io::Cursor::new(&bytes), format)
+        .into_dimensions()
+        .map_err(|_| "Invalid image header")?;
+    Ok(
+        json!({"data": STANDARD.encode(bytes), "mimeType":mime,"name":name,"width":width,"height":height}),
+    )
+}
+/// First frame only. These RenderImages own decoded bytes, never an independent GPU cache.
+/// The calling model lease/cache performs all GPU release on GPUI's thread.
+fn decode_asset(bytes: &[u8], width: u32) -> Result<AssetResult, String> {
+    if bytes.len() > ASSET_BYTES || !(1..=980).contains(&width) {
+        return Err("Image exceeds asset bounds".into());
+    }
+    let rgba = decode_preview(bytes, width, ASSET_BYTES, ASSET_BYTES)?;
+    let decoded_bytes = rgba.as_raw().len();
+    Ok(AssetResult {
+        image: Arc::new(RenderImage::new(vec![image::Frame::new(rgba)])),
+        decoded_bytes,
+    })
+}
+/// Shared M8 preview decoder; source admission remains independently capped at 8 MiB.
+/// Call only from the existing fenced off-thread decode lane, never Render.
+pub(crate) fn decode_chat_preview(bytes: &[u8]) -> Option<image::RgbaImage> {
+    decode_preview(bytes, 1024, CHAT_SOURCE_BYTES, 4 * 1024 * 1024).ok()
+}
+fn decode_preview(
+    bytes: &[u8],
+    width: u32,
+    source_limit: usize,
+    decoded_limit: usize,
+) -> Result<image::RgbaImage, String> {
+    if bytes.len() > source_limit {
+        return Err("Image exceeds source limit".into());
+    }
+    let max = width.min(((decoded_limit / 4) as f64).sqrt().floor() as u32);
+    let prefix = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes);
+    let svg = prefix.iter().copied().find(|b| !b.is_ascii_whitespace()) == Some(b'<');
+    let rgba = if svg {
+        decode_svg(bytes, max)?
+    } else {
+        let format = image::guess_format(bytes).map_err(|_| "Unsupported image format")?;
+        if !matches!(
+            format,
+            image::ImageFormat::Png
+                | image::ImageFormat::Jpeg
+                | image::ImageFormat::WebP
+                | image::ImageFormat::Gif
+                | image::ImageFormat::Tiff
+        ) {
+            return Err("Unsupported image format".into());
+        }
+        let mut header = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
+        let mut header_limits = image::Limits::default();
+        header_limits.max_image_width = Some(16384);
+        header_limits.max_image_height = Some(16384);
+        header_limits.max_alloc = Some(128 * 1024 * 1024);
+        header.limits(header_limits);
+        let (w, h) = header
+            .into_dimensions()
+            .map_err(|_| "Invalid image header")?;
+        if w == 0
+            || h == 0
+            || w > 16384
+            || h > 16384
+            || u64::from(w) * u64::from(h) * 4 > 128 * 1024 * 1024
+        {
+            return Err("Image exceeds decode allocation limit".into());
+        }
+        let mut reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(16384);
+        limits.max_image_height = Some(16384);
+        limits.max_alloc = Some(128 * 1024 * 1024);
+        reader.limits(limits);
+        let decoded = reader.decode().map_err(|_| "Image could not be decoded")?;
+        let mut rgba = decoded.thumbnail(w.min(max), h.min(max)).into_rgba8();
+        tezbar_ui::image_cache::rgba_to_bgra(rgba.as_mut());
+        rgba
+    };
+    if rgba.as_raw().is_empty() || rgba.as_raw().len() > decoded_limit {
+        return Err("Decoded image exceeds image limit".into());
+    }
+    Ok(rgba)
+}
+
+fn decode_svg(bytes: &[u8], width: u32) -> Result<image::RgbaImage, String> {
+    let (tree, w, h, scale) = svg_tree(bytes, width)?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h).ok_or("Invalid SVG size")?;
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    let mut pixels = pixmap.take();
+    // tiny-skia is premultiplied; GPUI's RenderImage contract is straight BGRA.
+    for p in pixels.chunks_exact_mut(4) {
+        let a = p[3] as u32;
+        if a != 0 {
+            for c in &mut p[..3] {
+                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+            }
+        }
+        p.swap(0, 2);
+    }
+    let rgba = image::RgbaImage::from_raw(w, h, pixels).ok_or("Invalid SVG pixels")?;
+    Ok(rgba)
+}
+
+/// Admit an SVG before rasterization, including transient offscreen memory.
+fn svg_tree(bytes: &[u8], width: u32) -> Result<(resvg::usvg::Tree, u32, u32, f32), String> {
+    if bytes.iter().filter(|b| **b == b'<').count() > 8192 {
+        return Err("SVG exceeds node budget".into());
+    }
+    svg_preflight(bytes)?;
+    let options = resvg::usvg::Options {
+        image_href_resolver: resvg::usvg::ImageHrefResolver {
+            resolve_data: Box::new(|_, _, _| None),
+            resolve_string: Box::new(|_, _| None),
+        },
+        ..Default::default()
+    };
+    let tree = resvg::usvg::Tree::from_data(bytes, &options).map_err(|_| "Invalid SVG image")?;
+    let size = tree.size();
+    let max = width as f32;
+    let scale = (max / size.width()).min(max / size.height()).min(1.);
+    let w = (size.width() * scale).ceil().max(1.) as u32;
+    let h = (size.height() * scale).ceil().max(1.) as u32;
+    struct Budget {
+        nodes: usize,
+        layers: usize,
+        segments: usize,
+        dashes: usize,
+        max_w: f64,
+        max_h: f64,
+        live_limit: f64,
+    }
+    fn distance(a: resvg::tiny_skia::Point, b: resvg::tiny_skia::Point) -> f64 {
+        ((a.x as f64 - b.x as f64).powi(2) + (a.y as f64 - b.y as f64).powi(2)).sqrt()
+    }
+    fn path_budget(path: &resvg::usvg::Path, b: &mut Budget) -> Result<(), String> {
+        use resvg::tiny_skia::PathSegment::*;
+        let dashed = path.stroke().and_then(|s| s.dasharray());
+        let mut at = resvg::tiny_skia::Point::from_xy(0., 0.);
+        let mut start = at;
+        let mut length = 0.;
+        let mut contours = 0usize;
+        for segment in path.data().segments() {
+            b.segments = b
+                .segments
+                .checked_sub(1)
+                .ok_or("SVG exceeds geometry budget")?;
+            match segment {
+                MoveTo(p) => {
+                    at = p;
+                    start = p;
+                    contours += 1;
+                }
+                LineTo(p) => {
+                    length += distance(at, p);
+                    at = p;
+                }
+                QuadTo(c, p) => {
+                    length += distance(at, c) + distance(c, p);
+                    at = p;
+                }
+                CubicTo(c1, c2, p) => {
+                    length += distance(at, c1) + distance(c1, c2) + distance(c2, p);
+                    at = p;
+                }
+                Close => {
+                    length += distance(at, start);
+                    at = start;
+                }
+            }
+        }
+        if let Some(dashes) = dashed {
+            if dashes.len() > 1024 {
+                return Err("SVG exceeds dash pattern budget".into());
+            }
+            let period = dashes.iter().map(|v| *v as f64).sum::<f64>();
+            if !period.is_finite() || period <= 0. {
+                return Err("Invalid SVG dash period".into());
+            }
+            // tiny-skia expands dashes in path coordinates before transformation.
+            // Bezier control polygons bound arc length; round each contour up.
+            let estimate =
+                (length / period + (contours as f64)).ceil() * dashes.len().div_ceil(2) as f64;
+            if !estimate.is_finite() || estimate > b.dashes as f64 {
+                return Err("SVG exceeds expanded dash budget".into());
+            }
+            b.dashes -= estimate.ceil() as usize;
+        }
+        Ok(())
+    }
+    fn budget(
+        g: &resvg::usvg::Group,
+        parent: resvg::tiny_skia::Transform,
+        live: f64,
+        depth: usize,
+        auxiliary: bool,
+        b: &mut Budget,
+    ) -> Result<(), String> {
+        if depth > 64 {
+            return Err("SVG exceeds render depth".into());
+        }
+        if !g.filters().is_empty() {
+            return Err("SVG filters are unsupported".into());
+        }
+        // Complex clip/mask sub-layers have independent coordinate systems and
+        // allocate full parent scratch canvases. This preview subset fails
+        // closed for those; ordinary paths in one clip/mask remain supported.
+        if g.clip_path().is_some_and(|c| c.clip_path().is_some())
+            || g.mask().is_some_and(|m| m.mask().is_some())
+        {
+            return Err("SVG exceeds nested mask budget".into());
+        }
+        let ts = parent.pre_concat(g.transform());
+        let mut live = live;
+        if g.should_isolate() {
+            b.layers = b
+                .layers
+                .checked_sub(1)
+                .ok_or("SVG exceeds isolated layer budget")?;
+            if auxiliary {
+                return Err("SVG exceeds mask layer budget".into());
+            }
+            let bounds = g
+                .layer_bounding_box()
+                .transform(ts)
+                .ok_or("Invalid SVG layer bounds")?;
+            let area = (bounds.width().ceil() as f64 + 4.).min(b.max_w)
+                * (bounds.height().ceil() as f64 + 4.).min(b.max_h);
+            // Child RGBA layers coexist with this RGBA layer, but are freed before
+            // resvg applies this group's clip/mask. Its scratch is RGBA + alpha
+            // (1.25 areas); reserve 1.5 with margin only at this group's own peak.
+            live += area;
+            let scratch = if g.clip_path().is_some() || g.mask().is_some() {
+                1.5 * area
+            } else {
+                0.
+            };
+            if !live.is_finite() || live + scratch > b.live_limit {
+                return Err("SVG exceeds simultaneous layer memory budget".into());
+            }
+        }
+        for node in g.children() {
+            b.nodes = b.nodes.checked_sub(1).ok_or("SVG exceeds render budget")?;
+            if let resvg::usvg::Node::Path(path) = node {
+                path_budget(path, b)?;
+            }
+            if let resvg::usvg::Node::Group(child) = node {
+                budget(child, ts, live, depth + 1, auxiliary, b)?;
+            }
+            let mut result = Ok(());
+            node.subroots(|root| {
+                if result.is_ok() {
+                    result = budget(root, ts, live, depth + 1, true, b);
+                }
+            });
+            result?;
+        }
+        Ok(())
+    }
+    let mut b = Budget {
+        nodes: 8192,
+        layers: 64,
+        segments: 16384,
+        dashes: 65536,
+        max_w: w as f64 * 5.,
+        max_h: h as f64 * 5.,
+        live_limit: 4. * (w as f64 + 4.) * (h as f64 + 4.),
+    };
+    budget(
+        tree.root(),
+        resvg::tiny_skia::Transform::from_scale(scale, scale),
+        0.,
+        0,
+        false,
+        &mut b,
+    )?;
+    Ok((tree, w, h, scale))
+}
+
+// usvg re-exports this already-locked XML parser. Count expanded reference work
+// BEFORE usvg expands <use>, then count the actual render tree before rasterization.
+// Namespace prefixes/comments cannot disguise amplifiers from the XML parser.
+fn svg_preflight(bytes: &[u8]) -> Result<(), String> {
+    use resvg::usvg::roxmltree::{Document, Node, NodeId};
+    let text = std::str::from_utf8(bytes).map_err(|_| "Invalid SVG XML")?;
+    let doc = Document::parse(text).map_err(|_| "Invalid SVG XML")?;
+    let mut ids = std::collections::HashMap::new();
+    let mut geometry_bytes = 256 * 1024usize;
+    let mut stylesheet_bytes = 32 * 1024usize;
+    let mut stylesheet_selectors = 1024usize;
+    let mut stylesheets = Vec::new();
+    let mut attribute_scan_bytes = 1usize;
+    let mut inline_declaration_bytes = 0usize;
+    fn declaration_bytes(d: &simplecss::Declaration<'_>) -> usize {
+        // usvg copies values into per-element attributes. marker expands to
+        // three attributes; font resets thirteen and sets up to six more.
+        let copies = match d.name {
+            "marker" => 3,
+            "font" => 20,
+            _ => 1,
+        };
+        d.value.len().saturating_add(64).saturating_mul(copies)
+    }
+    fn style_budget(text: &str, bytes: &mut usize, selectors: &mut usize) -> Result<(), String> {
+        *bytes = bytes
+            .checked_sub(text.len())
+            .ok_or("SVG stylesheet exceeds byte budget")?;
+        *selectors = selectors
+            .checked_sub(text.bytes().filter(|b| matches!(*b, b'{' | b',')).count())
+            .ok_or("SVG stylesheet exceeds selector budget")?;
+        Ok(())
+    }
+
+    for n in doc.descendants().filter(|n| n.is_element()) {
+        // Attribute lookup scans names, and ~= (including .class) scans the
+        // entire value. Charge each selector step for the largest such scan.
+        attribute_scan_bytes = attribute_scan_bytes.max(n.attributes().fold(1usize, |sum, a| {
+            sum.saturating_add(a.name().len())
+                .saturating_add(a.value().len())
+                .saturating_add(1)
+        }));
+        if n.tag_name().name() == "style" {
+            for text in n
+                .children()
+                .filter(|c| c.is_text())
+                .filter_map(|c| c.text())
+            {
+                style_budget(text, &mut stylesheet_bytes, &mut stylesheet_selectors)?;
+            }
+            if n.attribute("type").is_none_or(|t| t == "text/css") {
+                if let Some(text) = n.text() {
+                    stylesheets.push(text);
+                }
+            }
+        }
+        for attr in n.attributes().filter(|a| a.name() == "style") {
+            style_budget(
+                attr.value(),
+                &mut stylesheet_bytes,
+                &mut stylesheet_selectors,
+            )?;
+            inline_declaration_bytes = inline_declaration_bytes.max(
+                simplecss::DeclarationTokenizer::from(attr.value())
+                    .fold(0usize, |sum, d| sum.saturating_add(declaration_bytes(&d))),
+            );
+        }
+        if n.attribute("stroke-dasharray")
+            .is_some_and(|a| a.len() > 4096)
+        {
+            return Err("SVG exceeds dash source budget".into());
+        }
+        // Bound path allocation before usvg constructs geometry. Element count
+        // alone does not constrain a single d/points attribute with many vertices.
+        for attr in n
+            .attributes()
+            .filter(|a| matches!(a.name(), "d" | "points"))
+        {
+            geometry_bytes = geometry_bytes
+                .checked_sub(attr.value().len())
+                .ok_or("SVG exceeds geometry source budget")?;
+        }
+        if let Some(id) = n.attribute("id") {
+            if ids.insert(id, n).is_some() {
+                return Err("Duplicate SVG id".into());
+            }
+        }
+        // Patterns/filters recursively amplify raster work beyond node count.
+        // Fail closed for this preview subset; gradients and ordinary icons work.
+        if matches!(n.tag_name().name(), "filter" | "pattern" | "marker") {
+            return Err("SVG paint amplifier is unsupported".into());
+        }
+    }
+    fn cost<'a>(
+        n: Node<'a, 'a>,
+        ids: &std::collections::HashMap<&'a str, Node<'a, 'a>>,
+        memo: &mut std::collections::HashMap<NodeId, usize>,
+        path: &mut Vec<NodeId>,
+    ) -> Result<usize, String> {
+        if let Some(v) = memo.get(&n.id()) {
+            return Ok(*v);
+        }
+        if path.len() >= 64 || path.contains(&n.id()) {
+            return Err("SVG reference cycle/depth".into());
+        }
+        path.push(n.id());
+        let mut total = 1usize;
+        for c in n.children().filter(|n| n.is_element()) {
+            total = total.saturating_add(cost(c, ids, memo, path)?);
+            if total > 8192 {
+                return Err("SVG exceeds expansion budget".into());
+            }
+        }
+        if n.tag_name().name() == "use" {
+            for a in n.attributes().filter(|a| a.name() == "href") {
+                let id = a
+                    .value()
+                    .strip_prefix('#')
+                    .ok_or("External SVG reference denied")?;
+                let target = ids.get(id).ok_or("Missing SVG reference")?;
+                total = total.saturating_add(cost(*target, ids, memo, path)?);
+            }
+        }
+        if total > 8192 {
+            return Err("SVG exceeds expansion budget".into());
+        }
+        path.pop();
+        memo.insert(n.id(), total);
+        Ok(total)
+    }
+    let elements = cost(
+        doc.root_element(),
+        &ids,
+        &mut Default::default(),
+        &mut Vec::new(),
+    )?;
+    // Match the same stylesheet parser as usvg, before its selector matcher runs.
+    // Every descendant combinator can backtrack across all ancestors. Include
+    // expanded <use> work, not only source nodes, in the matching-work ceiling.
+    let depth = doc
+        .descendants()
+        .filter(|n| n.is_element())
+        .map(|n| n.ancestors().filter(|n| n.is_element()).count())
+        .max()
+        .unwrap_or(1)
+        .saturating_add(1);
+    let mut sheet = simplecss::StyleSheet::new();
+    for text in stylesheets {
+        sheet.parse_more(text);
+    }
+    let declaration_copies = sheet
+        .rules
+        .iter()
+        .flat_map(|rule| &rule.declarations)
+        .fold(inline_declaration_bytes, |sum, d| {
+            sum.saturating_add(declaration_bytes(d))
+        });
+    // Every rule may match every expanded node; inline styles in a referenced
+    // subtree are also repeated for <use>. Refuse before usvg copies any values.
+    if elements.saturating_mul(declaration_copies) > 8 * 1024 * 1024 {
+        return Err("SVG stylesheet exceeds declaration copy budget".into());
+    }
+    let mut remaining = 1usize << 22;
+    for rule in &sheet.rules {
+        let selector = rule.selector.to_string();
+        // Display emits one space per descendant combinator, but does not
+        // escape attribute quotes. Re-tokenizing can silently stop early, so
+        // always use the whitespace upper bound. Spaces inside values or other
+        // combinators only over-count. Bytes also bound selector-step count.
+        let branches = selector
+            .bytes()
+            .filter(u8::is_ascii_whitespace)
+            .fold(1usize, |n, _| n.saturating_mul(depth));
+        let work = elements
+            .saturating_mul(selector.len())
+            .saturating_mul(branches)
+            .saturating_mul(attribute_scan_bytes);
+        remaining = remaining
+            .checked_sub(work)
+            .ok_or("SVG stylesheet exceeds matching work budget")?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "asset_transport_tests.rs"]
+mod tests;

@@ -1,0 +1,492 @@
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `validate_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:16:8
+   |
+16 | pub fn validate_images(
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+
+warning: function `save` is never used
+  --> crates/tezbar-core/src/ai/runtime/store.rs:52:8
+   |
+52 | pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
+   |        ^^^^
+
+warning: methods `gemma_pending`, `gemma_save`, `gemma_clear`, `gemma_has`, `gemma_counts`, and `vector_backfill` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1219:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1219 |     pub fn gemma_pending(&self, roots: &[String], limit: usize) -> Result<Vec<Value>, String> {
+     |            ^^^^^^^^^^^^^
+...
+1246 |     pub fn gemma_save(&mut self, chunks: &[Value], vectors: &[Vec<f64>]) -> Result<usize, String> {
+     |            ^^^^^^^^^^
+...
+1301 |     pub fn gemma_clear(&self) -> Result<(), String> {
+     |            ^^^^^^^^^^^
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+...
+1354 |     pub fn vector_backfill(&self) -> Result<bool, String> {
+     |            ^^^^^^^^^^^^^^^
+
+warning: constant `REVISION` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:32:7
+   |
+32 | const REVISION: &str = runtime_models::Q8.revision;
+   |       ^^^^^^^^
+
+warning: constant `MODEL_FILE` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:33:7
+   |
+33 | const MODEL_FILE: &str = runtime_models::Q8.file;
+   |       ^^^^^^^^^^
+
+warning: constant `MODEL_SHA` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:34:7
+   |
+34 | const MODEL_SHA: &str = runtime_models::Q8.sha256;
+   |       ^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/tezbar-core/src/knowledge/runtime.rs:217:12
+    |
+216 | impl Runtime {
+    | ------------ associated function in this implementation
+217 |     pub fn new(ctx: CoreContext) -> Self {
+    |            ^^^
+
+warning: function `output` is never used
+  --> crates/tezbar-core/src/launcher/providers.rs:17:14
+   |
+17 | pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+   |              ^^^^^^
+
+warning: `tezbar-core` (lib) generated 12 warnings (run `cargo fix --lib -p tezbar-core` to apply 3 suggestions)
+   Compiling tezbar-ui-model v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-ui-model)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.46s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_ui_model-3b7dd06d02baa548)
+
+running 381 tests
+test chat::tests::boot_nonce_dedup_and_nonced_new_chat ... ok
+test chat::tests::failed_capture_unlocks_only_its_request_and_can_be_retried ... ok
+test chat::tests::captures_are_deduplicated_and_navigation_hide_fenced ... ok
+test chat::tests::deletion_during_preparation_never_launches_and_failure_allows_fresh_send ... ok
+test chat::tests::background_approval_never_focuses_and_resume_requires_real_ack ... ok
+test chat::tests::approval_resume_focus_enter_deny_and_mode_independence ... ok
+test chat::tests::core_normalized_floating_usage_is_accepted ... ok
+test chat::tests::delete_during_retry_preparation_cannot_start_and_failed_delete_restores_prompt ... ok
+test chat::tests::background_runs_and_unsaved_persistence_stay_with_owner ... ok
+test chat::tests::canonical_answer_and_stage_order_and_thinking_redaction ... ok
+test chat::tests::each_failed_turn_persistence_is_retained_independently ... ok
+test chat::tests::failed_preparation_has_recoverable_input_error_and_canonical_images ... ok
+test chat::tests::failed_delete_returns_every_dirty_persistence_intent_and_fences_tokens ... ok
+test chat::tests::clear_admits_hidden_dirty_and_running_owners_and_recovers_failed_write ... ok
+test chat::tests::done_overtakes_delete_without_resurrection_and_failed_delete_recovers ... ok
+test chat::tests::failed_start_id_and_provider_failure_are_visible_and_retryable ... ok
+test chat::tests::frame_coalescing_force_flush_and_follow_output ... ok
+test chat::tests::hidden_runs_and_background_approval_survive_until_actual_unmount ... ok
+test chat::tests::history_cache_distinguishes_never_loaded_empty_and_retained_rows ... ok
+test chat::tests::history_loading_empty_and_title ... ok
+test chat::tests::late_history_does_not_clobber_composer_or_new_boot ... ok
+test chat::tests::late_history_list_does_not_change_owner_or_followup_context ... ok
+test chat::tests::manual_attachment_admission_is_owned_deduplicated_and_atomic ... ok
+test chat::tests::preparation_keeps_cwd_and_images_with_original_owner ... ok
+test chat::tests::prompt_resolution_is_draft_owned_and_turn_deletion_is_confirmed ... ok
+test chat::tests::resolved_default_selection_belongs_to_preparation_not_later_picker ... ok
+test chat::tests::persistent_approval_capability_and_expiry ... ok
+test chat::tests::retry_reuses_assistant_id_and_canonical_stored_user ... ok
+test chat::tests::response_meta_is_frozen_and_core_wire_roundtrips_optional_fields ... ok
+test chat::tests::settled_persisted_conversation_reloads_after_owner_release ... ok
+test chat::tests::stop_preserves_partial_and_terminal_stage_and_ignores_late_events ... ok
+test chat::tests::timeline_three_source_cases_keep_stage_updates_in_place ... ok
+test chat::tests::tool_only_done_rejected_and_start_timeout_visible ... ok
+test chat::tests::unsaved_fallback_is_typed_and_older_retry_rejects_later_context ... ok
+test extensions::catalog::tests::installed_artwork_and_legacy_icon_normalization ... ok
+test extensions::catalog::tests::commands_only_in_native_metadata_are_appended ... ok
+test chat::tests::wire_events_roundtrip_preserves_ids ... ok
+test extensions::catalog::tests::installed_javascript_overrides_native_metadata_and_missing_rows_filter ... ok
+test chat::tests::one_hundred_settled_surface_cycles_release_background_owners ... ok
+test extensions::catalog::tests::github_url_search_does_not_query_store ... ok
+test chat::tests::large_stage_payload_retains_canonical_context_ids ... ok
+test chat::tests::reopened_large_history_keeps_last16_context_and_image_flags ... ok
+test extensions::catalog::tests::native_and_raycast_twins_stay_independent ... ok
+test extensions::catalog::tests::mixed_runtime_counts_and_unavailable_status ... ok
+test extensions::catalog::tests::native_local_import_and_malformed_acquisition_cannot_remote_install ... ok
+test extensions::catalog::tests::pagination_selection_progress_and_errors ... ok
+test extensions::catalog::tests::runtime_claims_require_complete_current_platform_metadata ... ok
+test extensions::catalog::tests::latest_dated_checks_and_platform_order ... ok
+test extensions::catalog::tests::stale_loads_are_ignored_and_commit_atomically ... ok
+test extensions::catalog::tests::visible_event_refresh_coalesces_hides_and_recovers_on_show ... ok
+test extensions::forms::tests::controlled_updates_are_authoritative ... ok
+test extensions::forms::tests::field_errors_required_and_file_constraints ... ok
+test extensions::forms::tests::acknowledgement_then_server_reset ... ok
+test extensions::forms::tests::initialize_new_drop_removed_and_changed_types ... ok
+test extensions::forms::tests::rebuilt_arrays_compare_by_value ... ok
+test extensions::forms::tests::submit_key_table_and_repeat_ime_matrix ... ok
+test extensions::forms::tests::sdk_defaults_and_submit_only_validation_errors_allow_corrected_resubmit ... ok
+test extensions::forms::tests::preferences_keep_command_scopes_and_partition ... ok
+test extensions::forms::tests::submit_only_defaults_keep_draft_while_changed_server_defaults_reset ... ok
+test extensions::images::tests::app_lookup_after_unmount_is_released ... ok
+test extensions::forms::tests::wheel_waits_for_all_coordinate_acknowledgements ... ok
+test extensions::images::tests::app_icon_scope_includes_extension_and_path ... ok
+test extensions::images::tests::catalog_selection_clears_resolved_app_before_dispatch ... ok
+test extensions::images::tests::coalesces_inflight_and_peeks_only_owned_ready_handles ... ok
+test extensions::images::tests::failed_empty_unavailable_app_lookups_keep_current_catalog_fallback ... ok
+test extensions::images::tests::late_app_lookup_before_or_after_current_completion_cannot_replace_selection ... ok
+test extensions::images::tests::late_image_cannot_replace_new_acquisition ... ok
+test extensions::images::tests::failed_or_oversize_image_has_placeholder_and_retries_with_new_token ... ok
+test extensions::images::tests::local_data_glyph_and_remote_policy ... ok
+test extensions::images::tests::missing_failed_catalog_icon_recovers_on_different_selection ... ok
+test chat::tests::llm_error_source_cases ... ok
+test extensions::images::tests::selected_remote_lease_never_exposes_previous_handle ... ok
+test extensions::images::tests::variant_isolation_and_idle_releases_all ... ok
+test extensions::images::tests::windows_drive_and_unc_paths_require_authorization_before_url_parsing ... ok
+test extensions::images::tests::one_hundred_mount_hide_cycles_release_image_handles ... ok
+test extensions::runtime::tests::action_shortcut_panel_filter_and_submit ... ok
+test extensions::images::tests::oversized_resource_rejected_and_cache_bounded ... ok
+test extensions::runtime::tests::adaptive_grid_colors_and_effects_are_emitted_once ... ok
+test extensions::runtime::tests::callback_ids_are_session_owned_and_latest_reply_wins ... ok
+test extensions::runtime::tests::all_worker_node_kinds_roundtrip_and_validate ... ok
+test extensions::runtime::tests::hidden_invalidations_wait_and_resume_once ... ok
+test extensions::runtime::tests::cumulative_records_never_execute_host_actions ... ok
+test extensions::runtime::tests::legacy_polling_coalesces_and_disposal_stops ... ok
+test extensions::runtime::tests::review_m9_client_filter_keeps_pending_action_token_and_server_search_retires_it ... ok
+test extensions::runtime::tests::client_filter_and_server_search_are_distinct ... ok
+test extensions::runtime::tests::navigation_push_pop_and_back_callback ... ok
+test extensions::runtime::tests::stable_selection_reorder_removal_and_pagination ... ok
+test extensions::runtime::tests::static_views_only_refresh_for_new_owned_invalidations ... ok
+test extensions::runtime::tests::no_view_and_legacy_records_never_replay_long_clipboard_file_open_or_scripts ... ok
+test extensions::runtime::tests::submit_guard_releases_on_view_no_view_failure_and_ignores_replaced_session ... ok
+test extensions::runtime::tests::wire_rejects_unknown_and_oversize_or_duplicate_fields ... ok
+test knowledge_settings::tests::actual_legacy_download_stays_cancellable_during_integrity_flag ... ok
+test knowledge_settings::tests::all_four_mutation_timeout_variants_ignore_late_rejection ... ok
+test knowledge_settings::tests::authoritative_weights_override_download_totals ... ok
+test knowledge_settings::tests::cancel_accessible_name_includes_download ... ok
+test knowledge_settings::tests::all_pending_accessible_names_match_visible_verb_and_variant ... ok
+test knowledge_settings::tests::cancel_supersedes_hung_operation_but_cannot_clear_unknown_barrier ... ok
+test knowledge_settings::tests::core_wire_variant_positions_and_root_mutations ... ok
+test knowledge_settings::tests::counts_do_not_change_live_transition ... ok
+test knowledge_settings::tests::enable_installed_prefers_standard_without_download ... ok
+test knowledge_settings::tests::download_focus_moves_to_cancel_in_same_row ... ok
+test knowledge_settings::tests::counts_only_for_selected_index_variant ... ok
+test knowledge_settings::tests::failed_reconcile_keeps_lock_until_explicit_refresh ... ok
+test knowledge_settings::tests::failed_refresh_preserves_snapshot_controls_and_downloads ... ok
+test knowledge_settings::tests::failed_tab_read_cannot_replace_cancel_mutation_owner ... ok
+test knowledge_settings::tests::focus_never_lands_on_new_destructive_remove ... ok
+test knowledge_settings::tests::late_mutation_after_unmount_is_consumed ... ok
+test knowledge_settings::tests::hung_initial_load_is_bounded_and_late_result_ignored ... ok
+test knowledge_settings::tests::late_switch_resolve_and_reject_after_reconciliation ... ok
+test knowledge_settings::tests::legacy_startup_and_integrity_are_attributed_and_sanitized ... ok
+test knowledge_settings::tests::legacy_variant_argument_contract ... ok
+test knowledge_settings::tests::legacy_verification_is_not_download_or_cancel ... ok
+test knowledge_settings::tests::legacy_variants_and_weights ... ok
+test knowledge_settings::tests::missing_failed_and_unattributed_errors_never_claim_healthy_semantics ... ok
+test knowledge_settings::tests::model_action_focus_does_not_steal_deliberate_destination ... ok
+test knowledge_settings::tests::mutation_snapshot_invalidates_older_read ... ok
+test knowledge_settings::tests::mutation_ownership_survives_tab_switches_and_stale_results ... ok
+test knowledge_settings::tests::only_available_compact_can_enable_without_download ... ok
+test knowledge_settings::tests::pause_resume_and_selection_have_distinct_effects ... ok
+test knowledge_settings::tests::polling_is_serial_and_quiet_and_failure_requires_retry ... ok
+test knowledge_settings::tests::post_timeout_read_barrier_is_after_synchronous_read_completion ... ok
+test knowledge_settings::tests::progress_below_one_hundred_and_unknown_total ... ok
+test knowledge_settings::tests::refresh_supersedes_initial_and_rejection ... ok
+test knowledge_settings::tests::remove_does_not_auto_select_other_variant ... ok
+test knowledge_settings::tests::separate_progress_and_unknown_totals ... ok
+test knowledge_settings::tests::speed_and_switch_control_stay_focusable_but_inert_through_timeout ... ok
+test knowledge_settings::tests::structured_verification_both_variants_has_no_cancel_or_download ... ok
+test knowledge_settings::tests::switch_timeout_reverts_selection_and_requires_fresh_read ... ok
+test knowledge_settings::tests::tab_exit_unmount_and_obsolete_loads ... ok
+test knowledge_settings::tests::structured_authoritative_weight_bytes_and_file_labels ... ok
+test knowledge_settings::tests::unknown_loading_and_no_actions_before_snapshot ... ok
+test knowledge_settings::tests::trigger_is_focusable_inert_and_double_activation_blocked ... ok
+test knowledge_settings::tests::unrelated_mutation_and_old_poll_do_not_reconcile ... ok
+test knowledge_settings::tests::unsupported_models_have_no_actions ... ok
+test knowledge_settings::tests::variant_failure_isolation_and_alert_order_dedup ... ok
+test knowledge_settings::tests::verifying_repair_focus_falls_back_to_own_row ... ok
+test knowledge_settings::tests::visibility_refreshes_once_and_pauses_polling ... ok
+test knowledge_settings::tests::zero_roots_only_after_success ... ok
+test launcher::cache_tests::candidates_merge_stable_identity_and_ephemeral_bound ... ok
+test launcher::controller::composition_ownership_repair::opus_ime_cancels_deferred_enter_before_async_result ... ok
+test launcher::controller::mode_tests::explicit_saved_pin_retires_deferred_enter_before_search_reply ... ok
+test launcher::controller::mode_tests::ai_history_cache_is_separate_from_home_and_pending_previews_have_no_click_authority ... ok
+test launcher::controller::mode_tests::handled_local_activation_preserves_live_query_and_rejects_stale_ticket ... ok
+test launcher::controller::mode_tests::hide_interrupts_ime_and_backend_restart_does_not_block ... ok
+test launcher::controller::mode_tests::rejected_saved_pin_preserves_deferred_enter ... ok
+test launcher::controller::mode_tests::mode_switch_cancels_normal_ownership_and_respects_ai_sentinel ... ok
+test launcher::controller::opus_repairs::opus_h1_ai_enter_submits_until_history_deliberately_selected ... ok
+test launcher::controller::opus_repairs::opus_h1_empty_chat_terminal_command_session_and_ime ... ok
+test launcher::controller::opus_repairs::opus_m1_invalidation_payload_deep_hidden_and_cache ... ok
+test launcher::controller::opus_repairs::opus_h1_directory_resolution_is_once_owned_and_error_preserves_draft ... ok
+test launcher::controller::opus_repairs::opus_m3_all_hides_reset_input_composition_and_mode ... ok
+test launcher::controller::opus_repairs::opus_m2_backend_retires_activation_and_stale_completion_cannot_unlock_new ... ok
+test launcher::cache_tests::cached_queries_are_bounded_and_current_exact_wins ... ok
+test launcher::controller::opus_repairs::opus_m4_one_utf16_unit_has_local_authority_and_stale_click_fails ... ok
+test launcher::controller::opus_repairs::opus_note_rows_emit_typed_navigation_identity ... ok
+test launcher::controller::tests::ime_search_errors_and_activation_owner ... ok
+test launcher::controller::tests::saved_pin_has_its_own_activation_authority_and_uses_normal_tickets ... ok
+test launcher::controller::refreshed_selection_repair::opus_ai_history_selection_cannot_transfer_to_refreshed_first_row ... ok
+test launcher::controller::tests::saved_pin_respects_composition_and_keeps_typed_note_identity ... ok
+test launcher::controller::tests::stale_generation_and_click_never_execute_preview ... ok
+test launcher::escape_tests::two_step_escape_keeps_hidden_mode_sentinels ... ok
+test launcher::notes_row_tests::home_unchanged_after_read ... ok
+test launcher::notes_row_tests::no_duplicate_release_notes ... ok
+test launcher::notes_row_tests::recognizes_only_unmodified_space ... ok
+test launcher::notes_row_tests::searchable_after_read ... ok
+test launcher::notes_row_tests::unread_notes_first_ahead_of_updater ... ok
+test launcher::notes_row_tests::unrelated_file_deep_app_queries_unchanged ... ok
+test launcher::preview_tests::preview_navigation_starts_at_selection ... ok
+test launcher::preview_tests::returns_only_previewable_file_paths ... ok
+test launcher::preview_tests::sole_result_needs_no_navigation ... ok
+test launcher::preview_tests::toggle_deep_navigation_state ... ok
+test launcher::session::tests::click_on_stale_rows_never_queues_a_different_result ... ok
+test launcher::session::tests::enter_waits_for_exact_generation_and_never_replays ... ok
+test launcher::session::tests::late_activation_releases_ownership_without_clobbering_new_session ... ok
+test launcher::session::tests::latest_pending_coalesces_without_extending_deadline ... ok
+test launcher::session::tests::parent_review_enter_deadline_does_not_depend_on_callback_order ... ok
+test launcher::session::tests::selection_stops_at_edges_and_resets_for_new_results ... ok
+test launcher::session::tests::timeout_and_hide_drop_deferred_activation ... ok
+test extensions::runtime::tests::sliding_50_records_and_identical_new_notices_are_sequence_owned ... ok
+test launcher::ts_cases::ts_000_gives_ai_mode_priority_over_slash_path_completion_after_double_space ... ok
+test launcher::ts_cases::ts_002_preserves_regular_ai_activation_when_two_spaces_are_trailing ... ok
+test launcher::ts_cases::ts_001_keeps_ai_mode_active_and_searches_chats_after_typing_beyond_the_double_space_switch ... ok
+test launcher::ts_cases::ts_004_preserves_leading_space_ai_prompts_without_treating_them_as_directories ... ok
+test launcher::ts_cases::ts_006_retains_numeric_input_filtering_and_range_validation ... ok
+test launcher::ts_cases::ts_013_preserves_ai_mode_when_normalizing_a_recalled_prompt ... ok
+test launcher::ts_cases::ts_010_prefers_a_literal_match_over_an_equally_relevant_corrected_match ... ok
+test launcher::ts_cases::ts_012_records_a_submitted_launcher_query_without_surrounding_whitespace ... ok
+test launcher::ts_cases::ts_009_preserves_literal_russian_matches_and_supports_the_reverse_layout ... ok
+test launcher::ts_cases::ts_007_puts_the_matching_app_and_extension_surface_above_generic_files ... ok
+test launcher::ts_cases::ts_011_does_not_carry_an_unrelated_high_score_result_into_a_typed_query ... ok
+test launcher::ts_cases::ts_005_returns_null_boot_for_empty_ai_mode_prompt_so_newchat_can_be_opened ... ok
+test launcher::ts_cases::ts_003_does_not_treat_an_ordinary_internal_double_space_query_as_ai_mode ... ok
+test launcher::ts_cases::ts_016_only_recalls_the_last_query_after_arrowup_reaches_the_top_search_result ... ok
+test launcher::ts_cases::ts_017_leaves_arrowdown_for_result_navigation ... ok
+test launcher::ts_cases::ts_014_leaves_terminal_commands_to_terminal_history ... ok
+test launcher::ts_cases::ts_018_never_recalls_a_launcher_query_from_deep_search_mode ... ok
+test launcher::ts_cases::ts_019_safely_parses_persisted_history ... ok
+test launcher::ts_cases::ts_020_treats_a_leading_bang_as_deep_search_and_removes_it_from_the_indexed_query ... ok
+test launcher::ts_cases::ts_023_recommends_deep_search_for_weak_partial_matches_and_ignores_synthetic_rows ... ok
+test launcher::ts_cases::ts_022_accepts_a_complete_metadata_match ... ok
+test launcher::ts_cases::ts_021_does_not_change_the_backend_query_for_trailing_whitespace ... ok
+test launcher::ts_cases::ts_008_matches_corrected_layouts_in_the_first_frame_without_unrelated_cached_results ... ok
+test launcher::ts_cases::ts_015_keeps_only_the_latest_query ... ok
+test launcher::ts_cases::ts_025_still_accepts_a_substantial_reverse_prefix_metadata_match ... ok
+test launcher::ts_cases::ts_026_builds_an_immediate_recommendation_above_weak_local_candidates ... ok
+test launcher::ts_cases::ts_034_recognizes_the_real_visual_studio_code_name_for ... ok
+test launcher::ts_cases::ts_033_recognizes_the_real_visual_studio_code_name_for_code ... ok
+test launcher::ts_cases::ts_035_does_not_recommend_deep_search_when_local_metadata_is_already_close ... ok
+test launcher::ts_cases::ts_027_keeps_a_matching_app_ahead_of_deep_search_for ... ok
+test launcher::ts_cases::ts_036_corrects_russian_keys_to_english_without_discarding_the_literal_query ... ok
+test launcher::ts_cases::ts_032_recognizes_the_real_visual_studio_code_name_for_vs ... ok
+test launcher::ts_cases::ts_029_keeps_a_matching_app_ahead_of_deep_search_for_chrome ... ok
+test launcher::ts_cases::ts_028_keeps_a_matching_app_ahead_of_deep_search_for ... ok
+test launcher::ts_cases::ts_024_does_not_treat_short_path_fragments_as_a_match_for_a_punctuated_unicode_query ... ok
+test launcher::ts_cases::ts_031_recognizes_the_real_visual_studio_code_name_for ... ok
+test launcher::ts_cases::ts_030_recognizes_the_real_visual_studio_code_name_for_vs_code ... ok
+test launcher::ts_cases::ts_037_also_corrects_english_keys_to_russian ... ok
+test launcher::ts_cases::ts_038_retains_already_correct_words_in_mixed_layout_input ... ok
+test launcher::ts_cases::ts_040_does_not_expand_empty_numeric_or_punctuation_only_queries ... ok
+test launcher::ts_cases::ts_039_handles_russian_letter_keys_on_punctuation_positions ... ok
+test launcher::ts_cases::ts_042_recognizes_visual_studio_code_by_the_alias_vs_code ... ok
+test launcher::ts_cases::ts_043_recognizes_visual_studio_code_by_the_alias_vscode ... ok
+test launcher::ts_cases::ts_041_keeps_real_russian_and_english_queries_as_the_first_choice ... ok
+test launcher::ts_cases::ts_044_recognizes_visual_studio_code_by_the_alias ... ok
+test launcher::ts_cases::ts_045_recognizes_google_chrome_by_the_alias ... ok
+test launcher::ts_cases::ts_047_recognizes_discord_by_the_alias ... ok
+test launcher::ts_cases::ts_050_does_not_inherit_object_keys_or_add_aliases_to_unknown_applications ... ok
+test launcher::ts_cases::ts_048_recognizes_safari_by_the_alias ... ok
+test launcher::ts_cases::ts_049_matches_complete_name_tokens_including_partial_typing_without_dropping_terms ... ok
+test launcher::ts_cases::ts_046_recognizes_telegram_by_the_alias ... ok
+test notes::editor_tests::lists_continue_and_styles_toggle ... ok
+test notes::legacy_html_compatibility_tests::legacy_entities_are_decoded_once_with_html_numeric_rules ... ok
+test notes::legacy_html_compatibility_tests::self_closing_legacy_breaks_remain_line_breaks ... ok
+test notes::partial_style_test::unformats_only_selected_text_preserving_outer_block ... ok
+test notes::selection_tests::rich_undo_and_redo_restore_the_selection_owned_by_the_same_patch ... ok
+test notes::selection_tests::selection_history_stays_with_its_note_and_invalid_metadata_rolls_back ... ok
+test router::tests::new_item_routing ... ok
+test router::tests::parent_review_update_commands_share_current_status_dispatch ... ok
+test router::tests::parent_review_settings_command_selects_general ... ok
+test router::tests::timeout_resets_on_activity_and_zero_disables ... ok
+test settings::contributions::repair_tests::ambiguous_or_tampered_secret_placeholders_are_rejected ... ok
+test notes::selection_tests::failed_and_selection_only_changes_never_create_content_history ... ok
+test settings::contributions::revision_tests::newer_instruction_draft_survives_older_save_acknowledgement ... ok
+test settings::contributions::secret_slots::tests::agent_and_provider_edits_send_only_the_changed_field_with_saved_refs ... ok
+test settings::contributions::repair_tests::edits_and_reorders_rehydrate_opaque_refs_by_stable_identity ... ok
+test settings::contributions::tests::enable_requires_test_and_review_and_hides_secret_refs ... ok
+test settings::contributions::tests::import_preview_does_not_test_or_enable ... ok
+test settings::contributions::secret_slots::tests::same_label_slots_keep_exact_connection_and_provider_namespaces ... ok
+test settings::contributions::tests::instructions_survive_reload_and_secrets_are_write_only ... ok
+test settings::contributions::tests::stale_replies_cannot_replace_state_and_reset_is_explicit ... ok
+test settings::providers::tests::empty_list_does_not_resurrect_recommended_model ... ok
+test settings::providers::tests::cloud_requires_key ... ok
+test settings::providers::tests::custom_base_url_without_key_is_configured ... ok
+test settings::providers::tests::compatible_base_url_without_key_is_configured ... ok
+test settings::providers::tests::native_accounts_not_inferred_from_models ... ok
+test settings::providers::tests::removes_legacy_context_capability_preserving_window ... ok
+test settings::rejection_regressions::rejected_choice_does_not_stamp_saved_state_or_replay_an_older_failure ... ok
+test settings::tests::close_failure_blocks_and_acknowledged_has_no_deadline ... ok
+test settings::tests::core_catalog_single_source ... ok
+test settings::tests::contributed_provider_records_are_not_persisted ... ok
+test settings::tests::device_save_failure_and_cancellation_fence_polling ... ok
+test settings::tests::dirty_hydration_and_stale_tokens_do_not_write ... ok
+test settings::tests::explicit_recreation_can_activate_provider_again ... ok
+test settings::providers::tests::model_ids_are_trimmed_deduped_and_blanks_dropped ... ok
+test settings::providers::tests::gpt_six_capabilities ... ok
+test settings::tests::discovery_merges_fresh_models_peer_removals_metadata_and_selection ... ok
+test settings::providers::tests::hand_added_sibling_model_ids_are_kept ... ok
+test settings::tests::only_unacknowledged_close_has_three_second_fallback ... ok
+test settings::tests::failed_creation_preserves_a_later_api_key_edit ... ok
+test settings::tests::external_active_and_per_field_changes_survive ... ok
+test settings::tests::failed_definition_retries_before_its_dependent_field_write ... ok
+test settings::tests::failure_counts_are_unique_intents_and_scoped_to_the_requested_owner ... ok
+test settings::tests::provider_reload_isolation_and_discovery_preserves_metadata ... ok
+test settings::tests::optional_discovery_failure_does_not_block_close ... ok
+test settings::tests::stale_definition_update_cannot_recreate_but_explicit_create_can ... ok
+test settings::tests::t_r1_removing_interim_fallback_uses_final_list ... ok
+test settings::tests::retired_activation_cannot_target_deleted_provider_on_retry ... ok
+test settings::tests::t_r1_rapid_removal_and_explicit_choice ... ok
+test settings::tests::stale_owner_cannot_activate_deleted_provider ... ok
+test settings::tests::t_r2_failed_removal_preserves_peer_credentials_on_retry ... ok
+test settings::tests::t_r3_explicit_recreation_has_new_revision ... ok
+test settings::tests::t_r2_removal_supersedes_retired_failure ... ok
+test settings::tests::t_r3_repeated_retry_cannot_resurrect_deleted_provider ... ok
+test settings::tests::t_r7_signin_waits_for_success_and_preserves_peer_records ... ok
+test settings::tests::t_r4_retries_are_deduplicated_and_keep_newer_failed_removal ... ok
+test settings::tests::t_r6_all_writes_merge_only_owned_ids ... ok
+test settings::tests::t_r5_newer_field_and_activation_success_win ... ok
+test notes::legacy_html_compatibility_tests::named_legacy_entities_keep_their_visible_text ... ok
+test notes::opus_repairs::opus_empty_note_copy ... ok
+test notes::tests::save_completion_stays_with_owner_and_revision ... ok
+test notes::tests::html_subset_preserves_formatting_and_strips_active_content ... ok
+test notes::tests::cross_run_edit_format_and_undo ... ok
+test notes::opus_repairs::opus_html_structural_tokens ... ok
+test terminal::tests::default_validation_and_data_fencing ... ok
+test terminal::legacy_repair_tests::legacy_rows_default_optional_fields_without_losing_unknown_metadata ... ok
+test settings::tests::task_overrides_merge_fresh_peers_and_retry_never_reverts_newer_task_selection ... ok
+test terminal::tests::option_and_bare_numbers_are_not_shortcuts ... ok
+test terminal::tests::replay_deduplicates_snapshot ... ok
+test notes::editor_tests::title_summary_and_nested_input_bounds ... ok
+test terminal::tests::selection_is_explicit_and_down_clamps ... ok
+test terminal::tests::shortcut_command_and_control_numbers ... ok
+test terminal::wire_tests::restore_uses_same_identity_and_never_executes_legacy_command ... ok
+test terminal::wire_tests::selection_down_disappearance_and_restore ... ok
+test terminal::wire_tests::transport_waits_for_both_listeners_once ... ok
+test ui_state::tests::allows_regular_commands_and_extensions ... ok
+test ui_state::tests::appends_new_pin_to_bottom ... ok
+test ui_state::tests::appends_third_pin_as_slot_3 ... ok
+test ui_state::tests::assigns_1_based_sequential_slot_numbers ... ok
+test terminal::tests::labels_and_autocomplete ... ok
+test notes::opus_html_fixtures::opus_jsdom_office_webkit_structural_reference ... ok
+test ui_state::tests::all_browser_keys_import_validation_existing_state_wins ... ok
+test ui_state::tests::caps_pins_at_max_pinned_commands ... ok
+test ui_state::tests::empty_or_corrupt_storage ... ok
+test ui_state::tests::explicit_insert_index ... ok
+test ui_state::tests::formats_slot_shortcut_keys ... ok
+test ui_state::tests::missing_dragged_id_is_unchanged ... ok
+test ui_state::tests::moves_item_and_normalizes_slots ... ok
+test ui_state::tests::opus_legacy_pins_numeric_null_and_trimmed_recents ... ok
+test terminal::tests::paths_are_cross_platform ... ok
+test ui_state::tests::parent_review_native_state_defaults_only_missing_fields ... ok
+test ui_state::tests::parses_digit_keys_into_slot_numbers ... ok
+test ui_state::tests::rejects_calculator_color_and_deep_results ... ok
+test ui_state::tests::theme_recognizes_preferences ... ok
+test ui_state::tests::pins_storage_roundtrip ... ok
+test ui_state::tests::theme_resolves_explicit_preferences ... ok
+test ui_state::tests::theme_resolves_system_preferences ... ok
+test update_policy::tests::checks_again_once_the_interval_has_elapsed ... ok
+test update_policy::tests::checks_when_never_checked_before ... ok
+test update_policy::tests::checks_when_the_previous_timestamp_is_invalid ... ok
+test update_policy::tests::does_not_match_empty_query_for_uptodate_when_not_checked_in_current_window ... ok
+test update_policy::tests::does_not_match_unrelated_queries ... ok
+test update_policy::tests::does_not_promote_idle_status ... ok
+test update_policy::tests::does_not_promote_uptodate_once_the_window_has_reopened_not_in_active_check_window ... ok
+test update_policy::tests::downgrades_score_for_uptodate_when_downgraded ... ok
+test update_policy::tests::explains_waiting_for_a_newer_release_after_opting_out_of_a_prerelease ... ok
+test update_policy::tests::keeps_uptodate_status_when_checked_within_12_hours ... ok
+test update_policy::tests::matches_empty_query_for_urgent_update_notifications ... ok
+test update_policy::tests::matches_when_user_types_update_keywords_for_uptodate ... ok
+test update_policy::tests::preserves_non_uptodate_statuses_unchanged ... ok
+test update_policy::tests::preserves_top_score_when_not_downgraded_or_for_urgent_updates ... ok
+test update_policy::tests::promotes_uptodate_immediately_after_checking_in_the_current_window ... ok
+test update_policy::tests::promotes_urgent_update_notifications_regardless_of_window_session ... ok
+test update_policy::tests::reads_and_writes_auto_update_preference ... ok
+test update_policy::tests::returns_false_when_12_hours_have_elapsed ... ok
+test update_policy::tests::returns_false_when_never_checked ... ok
+test update_policy::tests::returns_false_when_timestamp_is_in_the_future ... ok
+test update_policy::tests::returns_false_when_timestamp_is_nan ... ok
+test update_policy::tests::returns_null_when_unset_or_corrupt ... ok
+test update_policy::tests::returns_true_only_for_available_ready_and_downloading_states ... ok
+test update_policy::tests::returns_true_when_checked_within_12_hours ... ok
+test update_policy::tests::reverts_uptodate_status_to_idle_after_12_hours_have_elapsed ... ok
+test update_policy::tests::skips_the_check_when_the_interval_has_not_elapsed ... ok
+test update_policy::tests::round_trips_the_timestamp ... ok
+test update_policy::tests::uses_stable_as_the_recommended_channel_and_explains_shared_alpha_data ... ok
+test utilities::auto_refresh_tests::monitor_auto_refresh_toggle_keeps_snapshot_and_manual_refresh ... ok
+test utilities::cache_tests::bounds_bytes_replacement_deletion_clear ... ok
+test utilities::cache_tests::evicts_least_recently_used_including_cached_misses ... ok
+test utilities::lifecycle_tests::indexing_pages_reject_old_filter_and_retry_error ... ok
+test utilities::lifecycle_tests::secure_clipboard_never_enters_conversion ... ok
+test utilities::monitor::tests::byte_rate_uptime_and_missing_data_match_the_source_display ... ok
+test utilities::opus_repairs::opus_clipboard_file_negative_preview_filter_clamp ... ok
+test utilities::lifecycle_tests::emoji_visible_grid_identity_and_hide_paste_order ... ok
+test utilities::opus_repairs::opus_clipboard_transform_is_off_thread_and_selection_owned ... ok
+test utilities::tests::clipboard_filter_order_and_conversion_ownership ... ok
+test utilities::opus_repairs::opus_snippet_late_create_cannot_adopt_into_different_draft ... ok
+test utilities::opus_repairs::opus_snippet_create_adopts_id_for_newer_revision_and_unicode_uniqueness ... ok
+test utilities::tests::draft_revision_and_errors_remain_owned ... ok
+test utilities::tests::readonly_and_confirmed_delete ... ok
+test utilities::tests::stale_poll_and_failure_retry ... ok
+test vault::tests::copy_open_locked_cancelled_and_error ... ok
+test vault::tests::icon_ids_and_fallback ... ok
+test notes::opus_html_fixtures::opus_notes_revision_cache_and_idle_tick_scaling ... ok
+test ui_state::tests::atomic_fixture_writes_and_failure_does_not_replace_state ... ok
+test vault::tests::lock_discards_sensitive_draft_and_pending_copy ... ok
+test vault::draft_tests::failure_keeps_draft_and_lock_invalidates_pending_payload ... ok
+test vault::draft_tests::name_touch_policy_and_frozen_save_payload ... ok
+test vault::tests::multiline_and_servers ... ok
+test vault::tests::notes_and_passwords ... ok
+test vault::tests::prefixes ... ok
+test ui_state::tests::opus_windows_sharing_retry_is_bounded_and_other_errors_immediate ... ok
+test chat::tests::chat_meta_eight_source_cases ... ok
+
+test result: ok. 381 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+

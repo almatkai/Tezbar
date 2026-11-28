@@ -1,0 +1,25 @@
+✔ native build arguments cannot request release/signing/channel or partial packaging (0.366958ms)
+✔ locked template delta removes only bootstrap and retains all installer contracts (2.246166ms)
+✔ rehearsal proposal contains no executable commands and names disposable context (0.421667ms)
+✔ inventories reject traversal, collisions, missing provenance and symlink-shaped names (0.502292ms)
+✔ plist preserves production metadata and exact permission strings without LSUIElement (2.374167ms)
+✔ planning refuses installed app paths and invented identities before any I/O (0.26525ms)
+✖ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (14.250417ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 6
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 54.811667
+
+✖ failing tests:
+
+test at scripts/native/package-macos.test.mjs:25:1
+✖ actual disposable unsealed assembly copies pinned bytes and fails closed on changed resources (14.250417ms)
+  Error: Use a fresh OS-temp assembly directory
+      at planMacos (file:///Users/almat/Desktop/code/Tezbar%20APP/Tezbar-native-rust-agent/scripts/native/package-macos.mjs:95:92)
+      at TestContext.<anonymous> (file:///Users/almat/Desktop/code/Tezbar%20APP/Tezbar-native-rust-agent/scripts/native/package-macos.test.mjs:40:16)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7)

@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-09",
+  "head": "0228b4fa289d5fce78bc3cf179575c4011c59f7c",
+  "source_state": "dirty; concurrent migration edits outside this repair were neither staged nor included in the Rust harness",
+  "finding": "N-R2X residual from /tmp/tezbar-gpui-m810-opus-6ffa4e5-closure.md",
+  "review_sha256": "e32f12ab5085a65c941c6ee1ceb3a2f6ae87b8b60f7e169d8427fa494cbcc1b3",
+  "owned_sources": {
+    "apps/tezbar/src/asset_transport.rs": "0109644daba3787f26a0195d636c4ec209794979011f41ef7071c3121db1bff9",
+    "apps/tezbar/src/asset_transport_tests.rs": "58c36c6f301000d444421bd7d7907bbf6f692787a555a51af2123316203f50b5"
+  },
+  "gates": {
+    "red_svg_preflight": {
+      "passed": 1,
+      "failed": 2,
+      "exit": 101
+    },
+    "green_exact_svg_functions": {
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "exit": 0
+    },
+    "typecheck": {
+      "exit": 0
+    },
+    "typescript": {
+      "passed": 748,
+      "skipped": 7,
+      "exit": 0
+    },
+    "scoped_rustfmt": {
+      "exit": 0
+    },
+    "scoped_diff_check": {
+      "exit": 0
+    }
+  },
+  "rust_method": "rustc 1.98.1 --test with byte-exact current decode_svg/svg_tree/svg_preflight functions and eight permanent source test bodies; links existing root target/debug/deps resvg/simplecss/image rlibs. No copied implementation or altered algorithm. See green-source.json for command and slice hash.",
+  "limitations": [
+    "No full native Cargo, bench, Windows, GUI, GPU or RAM rerun.",
+    "No new independent review or migration/cutover acceptance.",
+    "The previously recorded O-SVG-CPU observation remains open."
+  ],
+  "evidence": {
+    "green-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "green-source.json": "6f547fed0ed7791037a597aa128f68040877dde428c717754ba2fd6c714a0580",
+    "green-tests.log": "2604f848c1c29db6b112e455e65eeee6d0958e2d1083b815bb74f0c6ba9aa5ed",
+    "red-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "red-source.json": "2ac95f1e52dbbe9884f9656e64e7b8dafbcf0d8110c62d5246a9a511c6263f1b",
+    "red-tests.log": "df5bfc74033b74ceeecc2e3c64ba94d26debd6bf54bba7782e83b844a48353f1",
+    "typecheck.log": "8867adee9aa30745314d1609f6a31fc8eb686a49a22846b6a40240c8f699afc0",
+    "typescript-tests.log": "ff755a0d1a72aa9c957a287a1d20d4c14b31ca547ae4e0ceedde4d15ad78fb45"
+  }
+}

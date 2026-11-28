@@ -1,0 +1,1710 @@
+{
+  "Cargo.lock": {
+    "kind": "file",
+    "sha256": "edf39d1959abd2fc975efa0148912548a166dd5607cfc85e7b724f22fc2eb5a0"
+  },
+  "Cargo.toml": {
+    "kind": "file",
+    "sha256": "16f30dd61d94f5f3b3258bd81af0301812d7bed2307a736a28d563546c9eb44c"
+  },
+  "apps/tezbar/Cargo.toml": {
+    "kind": "file",
+    "sha256": "5bdec19b9a0e543ad202da7308d699e828fc6187675594a7a0b03032706ce557"
+  },
+  "apps/tezbar/build.rs": {
+    "kind": "file",
+    "sha256": "82f08466e92b30d8d88cc09f44848e507a3c0fd0c558412d03b048aa562c4557"
+  },
+  "apps/tezbar/src/app.rs": {
+    "kind": "file",
+    "sha256": "c8e43c0cd2c02db58b0255320e82981014285ea49cc534a342f032e46edb1b09"
+  },
+  "apps/tezbar/src/app/m10.rs": {
+    "kind": "file",
+    "sha256": "b46dcfaf40c5feb555251feb793868aa44f4555bdb783acd49b14b5e9dea5e22"
+  },
+  "apps/tezbar/src/app/m11.rs": {
+    "kind": "file",
+    "sha256": "f5a511c23dd418df581583e64551ff404f961e2bd70db4aa47cf3279028cb74e"
+  },
+  "apps/tezbar/src/app/m7.rs": {
+    "kind": "file",
+    "sha256": "e21a539e3fd60484efd814dfce79749dfa7ad15fa5ff88283e2042dddf774fb5"
+  },
+  "apps/tezbar/src/app/m7_tests.rs": {
+    "kind": "file",
+    "sha256": "fd1803d4bed09ed79dd0e76cb35cae40624f49e755673f7d7fccfd0c87d13a84"
+  },
+  "apps/tezbar/src/app/m8.rs": {
+    "kind": "file",
+    "sha256": "a8d01a97b189dd46459ab5f6aeafeabebaf1165a5216726e2857dba546737d6d"
+  },
+  "apps/tezbar/src/app/m8_tests.rs": {
+    "kind": "file",
+    "sha256": "60d6d2b07c123afa2d7fc55ac0ff76c9eae888699c4667396d0b9313e747db35"
+  },
+  "apps/tezbar/src/app/m9.rs": {
+    "kind": "file",
+    "sha256": "a246a1024997aa9968cb5c68a34964cefce591898450e859192d626d449d0cba"
+  },
+  "apps/tezbar/src/app/m9_review_tests.rs": {
+    "kind": "file",
+    "sha256": "5877de2c3d024ce384744fbf6b49ef2f374cb8dc2e431b2fea651e2ea4f1f1c8"
+  },
+  "apps/tezbar/src/app/production_launch.rs": {
+    "kind": "file",
+    "sha256": "3b616964306cd50a340ddd5da1901b477b9c1e01c759b4710a75cfbf9d52787e"
+  },
+  "apps/tezbar/src/app/production_launch/build_metadata.rs": {
+    "kind": "file",
+    "sha256": "4115a37670a7e5d2ff22f60d5cda255b03ca0cceab0aac13a293173ff99ca4bd"
+  },
+  "apps/tezbar/src/app/production_launch/bundle_validation.rs": {
+    "kind": "file",
+    "sha256": "0e2330896f075bbc34b9df891292277854eb0cc6226313744108f33bed1dc1f5"
+  },
+  "apps/tezbar/src/app/quit_budget.rs": {
+    "kind": "file",
+    "sha256": "6486f709c4390c025cefbb26d6a9abda387836e44487f783df41c5cb80f6a25d"
+  },
+  "apps/tezbar/src/app/update_integration.rs": {
+    "kind": "file",
+    "sha256": "acd6e1c95d9f80c9d175ea0330baaa81228cf9bfcf3ae86d3e05d55a4421b0ab"
+  },
+  "apps/tezbar/src/asset_transport.rs": {
+    "kind": "file",
+    "sha256": "9dc1f6b8cf6683bd502223d0d745eaaf2ce58ccacdbc7f1d384d81c237d6c025"
+  },
+  "apps/tezbar/src/asset_transport/status_icons.rs": {
+    "kind": "file",
+    "sha256": "df1f4a051f58d7e4b38e7e67a4c10da653e289a45dd6b27f8f367a01c6022c15"
+  },
+  "apps/tezbar/src/asset_transport/status_icons_tests.rs": {
+    "kind": "file",
+    "sha256": "83aa4345639e66a8c2e7feb3089a76cae491fefb09e4189ff9de60e944d080af"
+  },
+  "apps/tezbar/src/asset_transport_tests.rs": {
+    "kind": "file",
+    "sha256": "ec24968acbf9eff4bc8c1a8c65462645684b970da43aff9703b7948384eb3824"
+  },
+  "apps/tezbar/src/bench_control.rs": {
+    "kind": "file",
+    "sha256": "df2b7ae1cdc1bb20c509b418c8465f7d041da72e4c11f94ed99754db92d7a9cb"
+  },
+  "apps/tezbar/src/chat_transport.rs": {
+    "kind": "file",
+    "sha256": "418075b48b5b752877dc8ebcdf06fff414bf1e856f59b68cd7d40e6517b8ee22"
+  },
+  "apps/tezbar/src/cli.rs": {
+    "kind": "file",
+    "sha256": "2dc7489688179be3e3b55d43fbc9d74799799d837d7245d156760d0f14f1605a"
+  },
+  "apps/tezbar/src/core_client.rs": {
+    "kind": "file",
+    "sha256": "1421a7d2433aebfbab88092d881997b2cce4e8703742cfbff99bfe653cb308bd"
+  },
+  "apps/tezbar/src/core_client_command_tests.rs": {
+    "kind": "file",
+    "sha256": "2b1ecd5b1d18bdc947cb9d194ef84d26f8f6f15e91fd5ddcacacd103d0a36fc9"
+  },
+  "apps/tezbar/src/events.rs": {
+    "kind": "file",
+    "sha256": "05a35a9bc5f754f731e9955dccc48c12f20cc13e791a471904ad83168f283431"
+  },
+  "apps/tezbar/src/host_adapter.rs": {
+    "kind": "file",
+    "sha256": "66971db55e61ce56fc81c6d5f974869b7c4b5212603e333f372a55c2b434556f"
+  },
+  "apps/tezbar/src/legacy_state/leveldb.rs": {
+    "kind": "file",
+    "sha256": "f381f8928b04e8f9779c4d9e0d89f48343f2c413de1cb363dbcb15303c13d6f5"
+  },
+  "apps/tezbar/src/legacy_state/leveldb_tests.rs": {
+    "kind": "file",
+    "sha256": "2789c831621455470db09475be75efe953a2430eee6005149712e20da7d670f9"
+  },
+  "apps/tezbar/src/legacy_state/mod.rs": {
+    "kind": "file",
+    "sha256": "b82223153866f5f85931a7eab3484c378371029baa4899ea14ca5eccd0727622"
+  },
+  "apps/tezbar/src/legacy_state/tests.rs": {
+    "kind": "file",
+    "sha256": "8c450d3d695799c22810fcfbe70eb84960c8121c8ccaf3ecf41cba71bba07947"
+  },
+  "apps/tezbar/src/legacy_state/webkit.rs": {
+    "kind": "file",
+    "sha256": "082efcf180500a0dc78c4fc439b6efb041e3c4482383429f08945a534e712131"
+  },
+  "apps/tezbar/src/lib.rs": {
+    "kind": "file",
+    "sha256": "19474f5201e8db42382a2deee017bb246656ca8a156171bd160d4999bc63534d"
+  },
+  "apps/tezbar/src/main.rs": {
+    "kind": "file",
+    "sha256": "cfc8f9010e1602446e770dda0436cc9a7f49db7d009b7766a5be9ab0282ab998"
+  },
+  "apps/tezbar/src/settings_transport.rs": {
+    "kind": "file",
+    "sha256": "44ae549796f9cb13f5d6bd4a7cd36f72faa228906fac3acd0646616dbe75adb5"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/extensions.rs": {
+    "kind": "file",
+    "sha256": "0a88f723f2e6a4ec325df1b8af9586ca5653ac0afda8dc5f260704a8865b4e15"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/mod.rs": {
+    "kind": "file",
+    "sha256": "fa8ab132ab9e92d24c2a70330d54ce4c8bf12abbd845cb25b7a6fd0dce81ccd0"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/references.rs": {
+    "kind": "file",
+    "sha256": "8cd48f8f45518d5fa81e4ec5c4d73fe4c7abf5aaf330d85beb1e8abb75568161"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/request.rs": {
+    "kind": "file",
+    "sha256": "16a5bd08daa2fa0eefb691565753ea727067ac40737e150d545cbaa60be6aac8"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/runtime.rs": {
+    "kind": "file",
+    "sha256": "58987e83505a4ab766698b57ac9b5b6527703b7a5c2fbdb79a81fe96e95827c7"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/tests.rs": {
+    "kind": "file",
+    "sha256": "d55ceff138e1a963208d8006135539fd9fc76bff9684c55faa3995036c5874d2"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/tests/core_loopback.rs": {
+    "kind": "file",
+    "sha256": "4eb2f5b45fb11e98961a5a7a24130b06cacd89892c60a433d97bedc5e30a3bac"
+  },
+  "apps/tezbar/src/surfaces/ai_chat/view.rs": {
+    "kind": "file",
+    "sha256": "4110c4796ec22087679e02224a15e048b12af102ee9d90dfcef55572c58658cc"
+  },
+  "apps/tezbar/src/surfaces/command_bar/arguments.rs": {
+    "kind": "file",
+    "sha256": "3a497834fdd2233385b5d1beed5523f55713b3a3c6496d1d4e62e2ab4e28f7cc"
+  },
+  "apps/tezbar/src/surfaces/command_bar/chat_integration.rs": {
+    "kind": "file",
+    "sha256": "72f7b7aa3f4395ffbf192dd38bae6f3ab2656e7320bfa1dbfff60270e6c53644"
+  },
+  "apps/tezbar/src/surfaces/command_bar/chat_integration_tests.rs": {
+    "kind": "file",
+    "sha256": "cb9e3cb4dd1ac27e7d23727e7ca392690b10bcfe3df947f2dbb3885db8575ee7"
+  },
+  "apps/tezbar/src/surfaces/command_bar/extension_integration.rs": {
+    "kind": "file",
+    "sha256": "2d8f4586b80828c92b7b1928c1f76fa12349471c60937fa8c978bf34561d3923"
+  },
+  "apps/tezbar/src/surfaces/command_bar/extension_integration_tests.rs": {
+    "kind": "file",
+    "sha256": "3904b952ce74f78b594c3bed54779aba4ab3608d0c0592c18af4acea8ca25eec"
+  },
+  "apps/tezbar/src/surfaces/command_bar/icons.rs": {
+    "kind": "file",
+    "sha256": "51e13b330e09d8ec8beadcdc508dfb0215fa0d62fc083988c4b3700f48c0d361"
+  },
+  "apps/tezbar/src/surfaces/command_bar/interactions.rs": {
+    "kind": "file",
+    "sha256": "b11d407088e1c3e5093aa5061b12a48e9ee6d4a82c4bb8a3c5650a37119e8ca2"
+  },
+  "apps/tezbar/src/surfaces/command_bar/locale.rs": {
+    "kind": "file",
+    "sha256": "66189fe99bd53f49ffbaa974b913fed4c379336cf11cc8f7776a40206d5fca97"
+  },
+  "apps/tezbar/src/surfaces/command_bar/m810_review_pin.rs": {
+    "kind": "file",
+    "sha256": "4da9d6faa964ac430150b00515e47f93c82173a22c564214f965d92028c324f5"
+  },
+  "apps/tezbar/src/surfaces/command_bar/m9_followup_tests.rs": {
+    "kind": "file",
+    "sha256": "14caba8da1b66d532a48a78788cc3b4dc5f0e04f96fb93634ef638edcf8b37a6"
+  },
+  "apps/tezbar/src/surfaces/command_bar/mod.rs": {
+    "kind": "file",
+    "sha256": "1c9d939790b279727e89eb046b65697c00bd1c5eec7e312c084f0d4b746f7953"
+  },
+  "apps/tezbar/src/surfaces/command_bar/model_picker.rs": {
+    "kind": "file",
+    "sha256": "5826677a605375cccf93570731739abdac3661c9194c7d92605f202099e670ab"
+  },
+  "apps/tezbar/src/surfaces/command_bar/navigation.rs": {
+    "kind": "file",
+    "sha256": "c90db11d45431501406bb5cd44464ffdbf8b449c2ab9d29e17363956f3c2eb05"
+  },
+  "apps/tezbar/src/surfaces/command_bar/presentation.rs": {
+    "kind": "file",
+    "sha256": "aed41b6af7d5270e79be3048961df8413fa221e64f4e0d749ffa12acf262445b"
+  },
+  "apps/tezbar/src/surfaces/command_bar/review_extension_access.rs": {
+    "kind": "file",
+    "sha256": "b8cdb8a041e1825bb8e25464ce1fafa7e14e726ed54306f1740bbe75bfa0c5ab"
+  },
+  "apps/tezbar/src/surfaces/command_bar/review_regressions.rs": {
+    "kind": "file",
+    "sha256": "2fca1c9151a85fcdf7c4adb96ff879d1588dcdbd6c720abb47ce823f78b6cd95"
+  },
+  "apps/tezbar/src/surfaces/command_bar/review_tests.rs": {
+    "kind": "file",
+    "sha256": "e1faa739353f49566ad8849243aaa85a883db1b2a6e612457062f627a0b59205"
+  },
+  "apps/tezbar/src/surfaces/command_bar/settings_integration.rs": {
+    "kind": "file",
+    "sha256": "4cd49ea9240e21b7285ee39622f1dd9f9ecb6ebab11d897208e8487b526cf63e"
+  },
+  "apps/tezbar/src/surfaces/command_bar/settings_integration_tests.rs": {
+    "kind": "file",
+    "sha256": "f1e76f28c27fd8383e353993aa0f234b4a5a32f34ab399f8c9b66ffb6892efcc"
+  },
+  "apps/tezbar/src/surfaces/command_bar/task_indicator.rs": {
+    "kind": "file",
+    "sha256": "1224284a57d07914c9576d1f00cd3547899816ce656e65fdd2f17bc2a37381ca"
+  },
+  "apps/tezbar/src/surfaces/command_bar/terminal_integration.rs": {
+    "kind": "file",
+    "sha256": "257c41c5039241366a566332fc5b149a7b60274b54ce9e8fb03d32873f734a35"
+  },
+  "apps/tezbar/src/surfaces/command_bar/terminal_integration_tests.rs": {
+    "kind": "file",
+    "sha256": "d36e9dde7efd2bc5407891a61b163f88f9edefefdbf8b6921ea3d4d3fecd1cd3"
+  },
+  "apps/tezbar/src/surfaces/command_bar/tests.rs": {
+    "kind": "file",
+    "sha256": "b7cfbd64bb636d095fcd3685e85a8000e2fce2601a01e7ddbdbc171b2a133c58"
+  },
+  "apps/tezbar/src/surfaces/command_bar/utilities_integration.rs": {
+    "kind": "file",
+    "sha256": "ccfb4884e824e3497582f3f0bd05280f8264cad64f73f9a91c1bb36f6278c9d4"
+  },
+  "apps/tezbar/src/surfaces/command_bar/utilities_integration_tests.rs": {
+    "kind": "file",
+    "sha256": "f616ecaddf2f91bdd80c8de8a4bf3cc59246ad63a91768af9a1689f1a80e88ca"
+  },
+  "apps/tezbar/src/surfaces/command_bar/view.rs": {
+    "kind": "file",
+    "sha256": "70e076e408345c61b4e9a9644332a02a13451964c141ca9393b6596c7828f114"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/assets.rs": {
+    "kind": "file",
+    "sha256": "fe33523eecc29791fb6d980e1de9ff318404ac164a0f21271764f95337b3dd7a"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/color_wheel.rs": {
+    "kind": "file",
+    "sha256": "096b4b837ca2069ef7746a67311447ab91799d2742cea9bb03417f675ca8ecd1"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/followup_dropdown.rs": {
+    "kind": "file",
+    "sha256": "2b1e2a5b222f52effa74b2824371e76c9f10c0aec05f7f6c008cf883b1780623"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/images.rs": {
+    "kind": "file",
+    "sha256": "94447f12336da1c207566615f387a513f4f3d93869a03def6a611d2d8b219b72"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/mod.rs": {
+    "kind": "file",
+    "sha256": "9014cc1d4b2153ad655f3d1435ff9590b5be34de147b036ba44c44af79362cb6"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/preferences.rs": {
+    "kind": "file",
+    "sha256": "e6cc3ae1e10fd0e7cd2ed42c6a1077395c20cfd2fc833a697773f88dbdc161b9"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs": {
+    "kind": "file",
+    "sha256": "4a370ee7908981cccd2a511272b294bbd4eba7163b1f0c0d1dd4625d43804e96"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/review_regressions.rs": {
+    "kind": "file",
+    "sha256": "9288d3e1bb450183b5691512e3e4ab35cde7b9b3305b05fccdb60e21f65a3a2f"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/tests.rs": {
+    "kind": "file",
+    "sha256": "b998dd113c0542d953e720052997ed16bc33e3a1c1d6c2222bd759b4e1d4aa41"
+  },
+  "apps/tezbar/src/surfaces/extension_runtime/view.rs": {
+    "kind": "file",
+    "sha256": "3b626855746606af6369c167413a02e1cac4e386fa39a97cc989a57a95dbfaee"
+  },
+  "apps/tezbar/src/surfaces/extensions_store/artwork.rs": {
+    "kind": "file",
+    "sha256": "89bdce652c0c9bdb00d8281ee19ceebfba3c769305907b1ae2c009a284be69b0"
+  },
+  "apps/tezbar/src/surfaces/extensions_store/followup_tests.rs": {
+    "kind": "file",
+    "sha256": "f8aa07dac64f6d641aad30fcf7abb32fc7b1dd7b57f9a02a5a1ed211243721a5"
+  },
+  "apps/tezbar/src/surfaces/extensions_store/mod.rs": {
+    "kind": "file",
+    "sha256": "1764c582aa60609bf64d70d43ab0bafa9cc17b6eeaaeb32d9b1f8e2291bcfdb3"
+  },
+  "apps/tezbar/src/surfaces/extensions_store/request.rs": {
+    "kind": "file",
+    "sha256": "e04bf6ce51c7363fe482efab998819c2eb5c51944e3e0ce9093a90a6a7db8721"
+  },
+  "apps/tezbar/src/surfaces/extensions_store/tests.rs": {
+    "kind": "file",
+    "sha256": "a44d328c7a718028c17d8995703166356b15ea982c36674f84d3956eedb53d2c"
+  },
+  "apps/tezbar/src/surfaces/extensions_store/view.rs": {
+    "kind": "file",
+    "sha256": "9d51f06d2cf55e25ab1c13a27db19fb9890a7a56bf19e85bcdd62b59468ba0f2"
+  },
+  "apps/tezbar/src/surfaces/mod.rs": {
+    "kind": "file",
+    "sha256": "208c23823e2e80ea3ff4d111d7663c936a537d47d48b61a16e04b3de6a1c3a8f"
+  },
+  "apps/tezbar/src/surfaces/onboarding.rs": {
+    "kind": "file",
+    "sha256": "f3abf4d89fb98591502afc1146c1c374161c185e5d5b541986292120d865161f"
+  },
+  "apps/tezbar/src/surfaces/settings/barrier.rs": {
+    "kind": "file",
+    "sha256": "d6652c7cf0337404f6375dd803b9b36bb8297aa2351fba992b620061d4a9ad24"
+  },
+  "apps/tezbar/src/surfaces/settings/contributions.rs": {
+    "kind": "file",
+    "sha256": "70863768e7a5de222a3b0e9d155fb8506c44f03db347a03f877ddb7c8a8e1a96"
+  },
+  "apps/tezbar/src/surfaces/settings/mod.rs": {
+    "kind": "file",
+    "sha256": "a6285175ed5f1d6f8d396241c4cff207a44a925e617df04f5c570e746a63558a"
+  },
+  "apps/tezbar/src/surfaces/settings/request.rs": {
+    "kind": "file",
+    "sha256": "dc1fd75ed5823bcb108b11714d004d78fcef88466653e7baa9196efb75d5a63d"
+  },
+  "apps/tezbar/src/surfaces/settings/store.rs": {
+    "kind": "file",
+    "sha256": "f1359b7e04c9358de74a05839bdd0708f1288ee93326f6b7536e8b0bd9254873"
+  },
+  "apps/tezbar/src/surfaces/settings/tests.rs": {
+    "kind": "file",
+    "sha256": "dc0fdaf2d3bc539ac6e8ded567adf9507af9462353a8888ea24ac71610f5c68d"
+  },
+  "apps/tezbar/src/surfaces/settings/view.rs": {
+    "kind": "file",
+    "sha256": "684f73744dc2ef5fd51f34886b1b744e8fe38a9c90453bd247df1fc6b5de5cd9"
+  },
+  "apps/tezbar/src/surfaces/terminal/ime.rs": {
+    "kind": "file",
+    "sha256": "02a238ecfc07bef89e76b7acec2f9fd65665919bd055d1b87f918e01d268989d"
+  },
+  "apps/tezbar/src/surfaces/terminal/input.rs": {
+    "kind": "file",
+    "sha256": "6f7fe37a7f6fa1f76fd83385ceb8d53a88e2adad7bdb5aced3385a8ddf0a44d6"
+  },
+  "apps/tezbar/src/surfaces/terminal/m810_review_regressions.rs": {
+    "kind": "file",
+    "sha256": "86babb77c9e9f83b9c0260a445462511b91712feec01872a0d18c2d5f32c4569"
+  },
+  "apps/tezbar/src/surfaces/terminal/mod.rs": {
+    "kind": "file",
+    "sha256": "44d69ce34ca075175b92eda98192b6465edb46bfcb02d2f142ee0fa327def92b"
+  },
+  "apps/tezbar/src/surfaces/terminal/request.rs": {
+    "kind": "file",
+    "sha256": "35d77c8aea617b2bdf59f233686a8d2234020a608c870eeeb3855f7e11d93848"
+  },
+  "apps/tezbar/src/surfaces/terminal/state.rs": {
+    "kind": "file",
+    "sha256": "8b6145004f33105063c85d0db3878975c5b2ecd938732a7c66bd1cb63a53209e"
+  },
+  "apps/tezbar/src/surfaces/terminal/tests.rs": {
+    "kind": "file",
+    "sha256": "7c3f46c3fbea0815f06a3abba59e88b7a15f444f311dbf8a8f0586da270b5ae5"
+  },
+  "apps/tezbar/src/surfaces/terminal/view.rs": {
+    "kind": "file",
+    "sha256": "b067b13716c4ed003655aeadf5d7c03bef90c7af79ba5cace7c8789fc5062468"
+  },
+  "apps/tezbar/src/surfaces/utilities/background_tasks.rs": {
+    "kind": "file",
+    "sha256": "9a8c5149dcae1918a2eef44cb19f05d3e2fe7051619750624d27d08b24f4861e"
+  },
+  "apps/tezbar/src/surfaces/utilities/clipboard.rs": {
+    "kind": "file",
+    "sha256": "0467dd3c2b46ae2dc3c66dfc22f95db9fcb050edc7ffe314761ad5f3f922120c"
+  },
+  "apps/tezbar/src/surfaces/utilities/emoji.rs": {
+    "kind": "file",
+    "sha256": "cdbd905dfd1d5c39a956d1fa192a0d7e4f189e2e5a73ae6be462df56aa5b27ca"
+  },
+  "apps/tezbar/src/surfaces/utilities/indexing.rs": {
+    "kind": "file",
+    "sha256": "bde63076eaef9448b1b7474e087179ed5a6912cb4d9935b35a8c5dc2943265e8"
+  },
+  "apps/tezbar/src/surfaces/utilities/mod.rs": {
+    "kind": "file",
+    "sha256": "86fa09848a2779f91e14cb99f2f7733091a639086444202dd332f404570537c8"
+  },
+  "apps/tezbar/src/surfaces/utilities/notes.rs": {
+    "kind": "file",
+    "sha256": "bd91a088d1b087f777e58315fc8f020a900576d525ac09106a7408e5ee59b906"
+  },
+  "apps/tezbar/src/surfaces/utilities/permissions.rs": {
+    "kind": "file",
+    "sha256": "32499aa51b27d5bb08bc8409ffd34f6b245dbb2804219fb821adfe2ce5523aca"
+  },
+  "apps/tezbar/src/surfaces/utilities/release_notes.rs": {
+    "kind": "file",
+    "sha256": "6c53e6b56301835ce4c6512e919846b9672ee7551646feeefa3ba3bce9a2d452"
+  },
+  "apps/tezbar/src/surfaces/utilities/request.rs": {
+    "kind": "file",
+    "sha256": "27cf5f2d76848a4adc9716cc219af5fba0698c1e45546d162e15a61064379273"
+  },
+  "apps/tezbar/src/surfaces/utilities/review_regressions.rs": {
+    "kind": "file",
+    "sha256": "940560654a334fbefc80a801327495b52ee1b9ae2ff8f267589f9f1a82dba210"
+  },
+  "apps/tezbar/src/surfaces/utilities/snippets.rs": {
+    "kind": "file",
+    "sha256": "468a87d904c8d39de3a30a149ed5d70944d8b5cd01fb6b729e37a2fc9c0966c4"
+  },
+  "apps/tezbar/src/surfaces/utilities/system_monitor.rs": {
+    "kind": "file",
+    "sha256": "f061e2a17603e5a1c6a410184bb45ebf5eec70c71064e3045e0bc76e2df5f251"
+  },
+  "apps/tezbar/src/surfaces/utilities/tests.rs": {
+    "kind": "file",
+    "sha256": "9d770c093e4d99b8d987e04d2108b28d306725284eec8dc33beefac5ee514132"
+  },
+  "apps/tezbar/src/surfaces/utilities/vault.rs": {
+    "kind": "file",
+    "sha256": "a6559008e054eb0583cbb56be8bd784f779f4c545f1f592a65cda0d6df64b88a"
+  },
+  "apps/tezbar/src/surfaces/utilities/vault_icons.json": {
+    "kind": "file",
+    "sha256": "7992fe8bc5019fd1c9e734838f8d18a10dbd2964aefcbc7676697953a773efbb"
+  },
+  "apps/tezbar/src/surfaces/utilities/view.rs": {
+    "kind": "file",
+    "sha256": "c122fdca8ef841a4644202a232c1d6874e584bdc71feba0968cd5ee3bbd49a8e"
+  },
+  "apps/tezbar/src/utility_transport.rs": {
+    "kind": "file",
+    "sha256": "79dcbbdf0d64b4579b436bb36340257c1d5d0c4275b55f0007ce789e6bc6e041"
+  },
+  "apps/tezbar/src/windows/launcher.rs": {
+    "kind": "file",
+    "sha256": "f3f0e5784b11bc61aa3787a0b06abf2ab5c1178080ea59e739e2e54cc1b7c4f4"
+  },
+  "apps/tezbar/src/windows/mod.rs": {
+    "kind": "file",
+    "sha256": "2f814333d87d7fb51254b6d3bb6a99868d8e6fc53e20fbb9c9bfa6a617d312f4"
+  },
+  "apps/tezbar/src/windows/native.rs": {
+    "kind": "file",
+    "sha256": "744a2206882447189fb3d293798afb43c7e518fd8f7aca01f77ec1f3f643a37a"
+  },
+  "apps/tezbar/src/windows/persistence.rs": {
+    "kind": "file",
+    "sha256": "95eaff3a57a4cd22aa6a1c091fe87c9250e86868f788d5f5679009f557330486"
+  },
+  "apps/tezbar/src/windows/resize.rs": {
+    "kind": "file",
+    "sha256": "4870586c4e92b1208d58528355b235b355aee6ce184bd1895d4c4882e0c5b9af"
+  },
+  "apps/tezbar/src/windows/settings.rs": {
+    "kind": "file",
+    "sha256": "2aba9087b044633e048674c56a49009d5bde1e7237e1e7c4ff7bd2306b8ed9df"
+  },
+  "apps/tezbar/src/windows/settings_close.rs": {
+    "kind": "file",
+    "sha256": "2ff7506ce1c5ab16060bf26bfc0e48c72ddfa74349ff97caa7c644400450f1ca"
+  },
+  "apps/tezbar/src/windows/snap.rs": {
+    "kind": "file",
+    "sha256": "986c01e2ad3992c450ef71de02be11c99cfd614a8bb746e16f36d150f47559da"
+  },
+  "apps/tezbar/src/windows/snap_overlay.rs": {
+    "kind": "file",
+    "sha256": "9e9d513230464208f6d1844dd976ae2239161a4cbf6887fd16f868687eb2d9e5"
+  },
+  "apps/tezbar/src/windows/terminal_sessions.rs": {
+    "kind": "file",
+    "sha256": "a2c122375720d72a1b2e7f544b5ed0bdebb3b47873e21a794decd865fa4bbb0e"
+  },
+  "apps/tezbar/src/windows/termination.rs": {
+    "kind": "file",
+    "sha256": "8b2e958b14ea0490f7b444086334f4d5fa296e5eea049ad093b3be94689d9251"
+  },
+  "crates/tezbar-core/Cargo.toml": {
+    "kind": "file",
+    "sha256": "0982a0598b8cd4fc4198fec4691f855054e2a0d698919f8852336dd8d78caee5"
+  },
+  "crates/tezbar-core/build.rs": {
+    "kind": "file",
+    "sha256": "6d1aa64eb31cb02f890b2cda71748c95f19d2d4c0e56e58da96395d99637f421"
+  },
+  "crates/tezbar-core/src/ai/auth.rs": {
+    "kind": "file",
+    "sha256": "5d8f67718544a25201f2cd191040d7cad1d294c502cb9a2d3e9eff45f58ed493"
+  },
+  "crates/tezbar-core/src/ai/canonical_tests.rs": {
+    "kind": "file",
+    "sha256": "1d8c1a86d5e35fa6f01327c087717d758cef89909790419d3cb1af9df15ecb62"
+  },
+  "crates/tezbar-core/src/ai/chat.rs": {
+    "kind": "file",
+    "sha256": "20486897a0789b1c56572a103196612f0bf582e09393a9edfd7ab90ce9e2a017"
+  },
+  "crates/tezbar-core/src/ai/config.rs": {
+    "kind": "file",
+    "sha256": "e06e5426573bee39131f8805a5e8454370fe4a38b94d16fab14940522e67ab77"
+  },
+  "crates/tezbar-core/src/ai/ext/contributions.rs": {
+    "kind": "file",
+    "sha256": "4ac83409717b1787472e7458c99079f478cc1503e13ccd704e0efa2da0bc1427"
+  },
+  "crates/tezbar-core/src/ai/ext/manifest.rs": {
+    "kind": "file",
+    "sha256": "11809d94455e28c6bf2806774716a5dd311840ff3226373bca8a2b9d1c2700a1"
+  },
+  "crates/tezbar-core/src/ai/ext/mcp/client.rs": {
+    "kind": "file",
+    "sha256": "ddf88940bd4320d66942e10b81332b687136154f05fae4a255f6ce2327c916a3"
+  },
+  "crates/tezbar-core/src/ai/ext/mcp/fixture.rs.txt": {
+    "kind": "file",
+    "sha256": "91e1bca30cec1700bc4c5eb8e523da3dea18dfcd12bf4a45043fe050e1d483c4"
+  },
+  "crates/tezbar-core/src/ai/ext/mcp/mod.rs": {
+    "kind": "file",
+    "sha256": "27a6384f9602572bbfb4e26106be3561f41f7d71b327d7584fc93cc6e838cffb"
+  },
+  "crates/tezbar-core/src/ai/ext/mcp/oauth.rs": {
+    "kind": "file",
+    "sha256": "7b81eeb53f4fb208a55c2ff04e61bb7ca221ff8bf69e916435dc85e464dec707"
+  },
+  "crates/tezbar-core/src/ai/ext/mcp/schema.rs": {
+    "kind": "file",
+    "sha256": "ced888d028016cecc8c7f0816063504f4c81d5b7954639f28e81ef057ad6d5ba"
+  },
+  "crates/tezbar-core/src/ai/ext/mod.rs": {
+    "kind": "file",
+    "sha256": "f699ebdb2a0f7c68678dfa7bd45045331bad942a65a47cf4ee67b6692e48bd57"
+  },
+  "crates/tezbar-core/src/ai/ext/project.rs": {
+    "kind": "file",
+    "sha256": "e7e48fdccf9eeb444b38efb33ba68557b9f69e1f3a41ca9f66e4f2497664ca9a"
+  },
+  "crates/tezbar-core/src/ai/ext/resources.rs": {
+    "kind": "file",
+    "sha256": "338b6422c2d46d5dae16dde1db1620c03106a696af7a991bdc469ca080fe75af"
+  },
+  "crates/tezbar-core/src/ai/ext/secrets.rs": {
+    "kind": "file",
+    "sha256": "54477ef6a73b24b37090c60398ff5136661d4fc67372b216995ef3991938c014"
+  },
+  "crates/tezbar-core/src/ai/ext/tests.rs": {
+    "kind": "file",
+    "sha256": "c8b36a19ae4d26748fb27557233481e8fcc9062e7b04215e79f05ad74f861101"
+  },
+  "crates/tezbar-core/src/ai/fixture_http.rs": {
+    "kind": "file",
+    "sha256": "9cc89d393bdeb6e45c218c367d5b77c48c9f40c0e19a0b9b65c07f46662df579"
+  },
+  "crates/tezbar-core/src/ai/history_image_tests.rs": {
+    "kind": "file",
+    "sha256": "0d9e4d17c451b8f6bebcb796e7dbaf94142c0e580bd2ca6c9966264339c27165"
+  },
+  "crates/tezbar-core/src/ai/legacy.rs": {
+    "kind": "file",
+    "sha256": "66eb77928fab9d0c496de6ecac66734a7fe196e99b8b27c2fc3ffc57805d21a7"
+  },
+  "crates/tezbar-core/src/ai/memory.rs": {
+    "kind": "file",
+    "sha256": "2c37c3251ee4cd13ba747633aedf17b8d703bffd0b3d923b83cbbf01424c1568"
+  },
+  "crates/tezbar-core/src/ai/mod.rs": {
+    "kind": "file",
+    "sha256": "0f346f4bdbfbb4db25d60934377781fb6cf0ed0a336dcdc737055802e74e06bd"
+  },
+  "crates/tezbar-core/src/ai/moonshine.py": {
+    "kind": "file",
+    "sha256": "47e0e3c498cceb74d196ecd5de091d23ea145f136300a2abe0b476cd550c08dd"
+  },
+  "crates/tezbar-core/src/ai/native_tests.rs": {
+    "kind": "file",
+    "sha256": "af6f71e7fbc0e56550094b863aa07bb39d8490120f3556959a2e329ee1bb2a0a"
+  },
+  "crates/tezbar-core/src/ai/native_tools.rs": {
+    "kind": "file",
+    "sha256": "def628ed117abf7da4b3a0e528ec8b6ea5661453343c693a1134cdbd8f7b89c0"
+  },
+  "crates/tezbar-core/src/ai/oauth.rs": {
+    "kind": "file",
+    "sha256": "d87b873d8d38f3b2c447d6d7550a9c4d60a3c9e577271f89163e0062f782113e"
+  },
+  "crates/tezbar-core/src/ai/process.rs": {
+    "kind": "file",
+    "sha256": "ef0e23acce1a127093bcf15a5cbffcc1b09d6fd16cbbb93bcc7c4605e30b998b"
+  },
+  "crates/tezbar-core/src/ai/provider.rs": {
+    "kind": "file",
+    "sha256": "7b3386e994056950c192cc94a3e56a2e04149ecf9f541ea69d0480f28eb08a74"
+  },
+  "crates/tezbar-core/src/ai/provider_defaults.json": {
+    "kind": "file",
+    "sha256": "06772eb2b66c5b82431ceab94cc434b650b6d272631ec487e5f2dce9ea98a42f"
+  },
+  "crates/tezbar-core/src/ai/providers/antigravity.rs": {
+    "kind": "file",
+    "sha256": "2e82c281a16fda09975b51422555ca49f0bdc20640bdbc698032b3ca2584c81a"
+  },
+  "crates/tezbar-core/src/ai/providers/antigravity_metadata.json": {
+    "kind": "file",
+    "sha256": "07a945edddc194e6e308d5f68c9eb199700a85c5eb0547f481d324948d48f382"
+  },
+  "crates/tezbar-core/src/ai/providers/antigravity_routing.json": {
+    "kind": "file",
+    "sha256": "90238464647cfaa58ddb07946c9aba8e2ba8da7519c831df82c20f6af53b4c67"
+  },
+  "crates/tezbar-core/src/ai/providers/antigravity_tools.rs": {
+    "kind": "file",
+    "sha256": "f1ba269e98999f9de49fb3836bbcbf3579b73f8f5d1f95a7b597e072a5330b52"
+  },
+  "crates/tezbar-core/src/ai/providers/copilot.rs": {
+    "kind": "file",
+    "sha256": "8977ae08da13bf5cf0d98f07c788e5d4bb0469bc60349a0c5402eec20a28eb80"
+  },
+  "crates/tezbar-core/src/ai/providers/mod.rs": {
+    "kind": "file",
+    "sha256": "b24e3f066c7287f3b4c5cba08b4703942c3f5192c9f4e813d1b7424413b39b49"
+  },
+  "crates/tezbar-core/src/ai/providers/opencode_catalog.json": {
+    "kind": "file",
+    "sha256": "e858530a52e85c560bec81af7f41fa70b942d2ce04a729d68182cf5ed905dc99"
+  },
+  "crates/tezbar-core/src/ai/providers/route.rs": {
+    "kind": "file",
+    "sha256": "b0081b25f34a6a6e9ab8d0ca2bb3b472e1800e113d493c1eda21aaf64dba2921"
+  },
+  "crates/tezbar-core/src/ai/providers/tests.rs": {
+    "kind": "file",
+    "sha256": "7f31a99f688ebcd9d13ae09dd15489dc62a2cb4a7372574e74d93557085ffb3f"
+  },
+  "crates/tezbar-core/src/ai/review_regressions.rs": {
+    "kind": "file",
+    "sha256": "ba3438f29439824ae30a007636548ce0c8b605315863b19cb88d0165cf6d7214"
+  },
+  "crates/tezbar-core/src/ai/runtime/agent.rs": {
+    "kind": "file",
+    "sha256": "9ef04cf47a35b087ba62d3b50537d5aaf7888faa4b9f4f824e686c7521ff5e04"
+  },
+  "crates/tezbar-core/src/ai/runtime/clock.rs": {
+    "kind": "file",
+    "sha256": "d8818fe8925f788f60f4fe483733c7d4ec987cd01b78ce333731dad11e46b948"
+  },
+  "crates/tezbar-core/src/ai/runtime/limits.rs": {
+    "kind": "file",
+    "sha256": "5e27b482d1022f0dd1f547aa2d806c2ed11a4cdd9a6e3aac833f8cc71ce16764"
+  },
+  "crates/tezbar-core/src/ai/runtime/mod.rs": {
+    "kind": "file",
+    "sha256": "a1af2e49934371ce786282d65ab48e139ed4b22b5a008e1a4e5746cc5e278483"
+  },
+  "crates/tezbar-core/src/ai/runtime/policy.rs": {
+    "kind": "file",
+    "sha256": "90d5a70bb327eacc43edaa80e0cf01f0420814dd073f788a280484198b29a3e5"
+  },
+  "crates/tezbar-core/src/ai/runtime/store.rs": {
+    "kind": "file",
+    "sha256": "fbdde841939b9edef0ad6130356a3a4f9e529cb5e8af9a2da481033724ea1c61"
+  },
+  "crates/tezbar-core/src/ai/runtime/transcript.rs": {
+    "kind": "file",
+    "sha256": "35a459807d3c323d5a7be3feadc6f0bb6810efec8cfda21ceacc59ec2242d75e"
+  },
+  "crates/tezbar-core/src/ai/search_projection.rs": {
+    "kind": "file",
+    "sha256": "a573a506dd89313df5304b126f18e3123030edc2b8e10bcd4707684fb58ae644"
+  },
+  "crates/tezbar-core/src/ai/tests.rs": {
+    "kind": "file",
+    "sha256": "187ba01e49c12c147b29b629f5a6b959ad6ade9e975e4d67474c835f3030405f"
+  },
+  "crates/tezbar-core/src/ai/voice.rs": {
+    "kind": "file",
+    "sha256": "c7e13e34c891c03cc8e119f5ddc12cc4e7a7dc2887c5de10a91ab1373a2a8693"
+  },
+  "crates/tezbar-core/src/ai/voice_catalog.json": {
+    "kind": "file",
+    "sha256": "77a19da2fe31d2b88290d8b26ce2bc7d184c0453d1c1a21d26e4830e415d97af"
+  },
+  "crates/tezbar-core/src/ai/wire/anthropic.rs": {
+    "kind": "file",
+    "sha256": "b70120d41397b5356f79db7a53fd7e9b965ea89a7f80714a86948be8e77f66a5"
+  },
+  "crates/tezbar-core/src/ai/wire/chat.rs": {
+    "kind": "file",
+    "sha256": "32589d84a7aa7e4d50638b1db0b3c2b2e5f6fbe69453d832dce198dab61162bd"
+  },
+  "crates/tezbar-core/src/ai/wire/gemini.rs": {
+    "kind": "file",
+    "sha256": "066e70e485a145921b2bd6f4d1bb94a093f7fd1c081c1354710a6e9cad73bd31"
+  },
+  "crates/tezbar-core/src/ai/wire/mod.rs": {
+    "kind": "file",
+    "sha256": "3f093dab7f79ce48f0c38763dcba96b59fefc5fe5fb1c7166a1da214640265bc"
+  },
+  "crates/tezbar-core/src/ai/wire/ollama.rs": {
+    "kind": "file",
+    "sha256": "4d6cc8226fd8f07799c67f0ab7445bc2315fa87bd80a6fc957da0bfbed50edd3"
+  },
+  "crates/tezbar-core/src/ai/wire/redact.rs": {
+    "kind": "file",
+    "sha256": "926250eaacd89c38c616b1e145c14153b8c19fff7d5407357b70cac78e352958"
+  },
+  "crates/tezbar-core/src/ai/wire/responses.rs": {
+    "kind": "file",
+    "sha256": "dcaa4a4943c53e69cd06326062bdc6a50e6e67af045397e084b36223467e0ac2"
+  },
+  "crates/tezbar-core/src/ai/wire/tests.rs": {
+    "kind": "file",
+    "sha256": "3e8910febaf92d10d0db4737666613c4a018f97247e2cf6fdbb080e91d547a71"
+  },
+  "crates/tezbar-core/src/ai/wire/transport.rs": {
+    "kind": "file",
+    "sha256": "07ea9777b2d42db8fed1e2c357cb26e7ed0e13d422efcbcd25a6c144fa2e1ded"
+  },
+  "crates/tezbar-core/src/assets.rs": {
+    "kind": "file",
+    "sha256": "34bd87b8248bc43ded79f1195cb24fa11542b76d020e4ff3b7ee5c586fa02f81"
+  },
+  "crates/tezbar-core/src/assets_windows.rs": {
+    "kind": "file",
+    "sha256": "7c57db95f1698139d722662e2a2328bbd5f7f016d955318e5ea1545a8baeb80e"
+  },
+  "crates/tezbar-core/src/bun.rs": {
+    "kind": "file",
+    "sha256": "9ee715e2dfa6f768e850cc343baef361dd8405ff5e93ed7507fa98609a76e87c"
+  },
+  "crates/tezbar-core/src/child_supervisor.rs": {
+    "kind": "file",
+    "sha256": "3fe6a46c5350989ba66a3369e97e4d280cb9ca98ac8a2788b19b892a0cef0af5"
+  },
+  "crates/tezbar-core/src/child_supervisor_tests.rs": {
+    "kind": "file",
+    "sha256": "dc77d5ac8f26d3e9f1b3c85d90e05a79d1379863a85fd96fba2857cff36b0b2b"
+  },
+  "crates/tezbar-core/src/common.rs": {
+    "kind": "file",
+    "sha256": "d748f6330ee54974459b0427e0e69abb5efd164005753d32f600af5089a9f9f1"
+  },
+  "crates/tezbar-core/src/desktop_effect_tests.rs": {
+    "kind": "file",
+    "sha256": "88d15ad9052724a5a23a624743f4770eb185ed7e439b9e6f91773cb2de711937"
+  },
+  "crates/tezbar-core/src/extension_worker.rs": {
+    "kind": "file",
+    "sha256": "03d8bfc52f29a253ba7afb5ce21509ed3716b59b01f55e3855b293ebc384b184"
+  },
+  "crates/tezbar-core/src/extension_worker_status_icon_tests.rs": {
+    "kind": "file",
+    "sha256": "93b7f0b14d3599754b471d2557e050abc9d93f3800c917d31092133cfb9093bb"
+  },
+  "crates/tezbar-core/src/extension_worker_tests.rs": {
+    "kind": "file",
+    "sha256": "7b68c8eaf0be22928496d05092b06e857b89095d3329aefd331e1e763c5287fd"
+  },
+  "crates/tezbar-core/src/extensions/acquisition.json": {
+    "kind": "file",
+    "sha256": "f56403dd46284590329f837d0d0528e0a01e2bb95f137edc40d5cc5b15677321"
+  },
+  "crates/tezbar-core/src/extensions/acquisition.rs": {
+    "kind": "file",
+    "sha256": "ff215fe09d459fa8165438944a89bd52f8227a9130e6c4ae35c5e5a4f9f26ca7"
+  },
+  "crates/tezbar-core/src/extensions/asset_scope.rs": {
+    "kind": "file",
+    "sha256": "f7b57e88757e06f1bffa1c41470519abd794a243fc7010010c2c90dcd4e50a86"
+  },
+  "crates/tezbar-core/src/extensions/catalog.rs": {
+    "kind": "file",
+    "sha256": "25d8545f8c1bbd370a8c6f0eff10b54b32683180558e8215680816c6aa46f105"
+  },
+  "crates/tezbar-core/src/extensions/command_inputs.rs": {
+    "kind": "file",
+    "sha256": "9b0ae864dbda7913934d55c3ff562d6193c2096f2bad9305e4fcabba96900746"
+  },
+  "crates/tezbar-core/src/extensions/command_list.rs": {
+    "kind": "file",
+    "sha256": "6c1b5c7af80eb4b2937de2355dab4565ae40938a07f7ed6a411f82e109887c8b"
+  },
+  "crates/tezbar-core/src/extensions/command_list_tests.rs": {
+    "kind": "file",
+    "sha256": "12708cdd67fe72f0a87f4752b32c63dd02958a9007c3c3be1b43609f82209dcc"
+  },
+  "crates/tezbar-core/src/extensions/launcher.rs": {
+    "kind": "file",
+    "sha256": "98cebfa4c256f1ae5e631f553fca4d014be05360c43d8624f6c8e640870827c0"
+  },
+  "crates/tezbar-core/src/extensions/launcher_tests.rs": {
+    "kind": "file",
+    "sha256": "dedd416c1232a7986a84f227c2e15c98d4d3f12b72c8c2d59ac58e15799de018"
+  },
+  "crates/tezbar-core/src/extensions/loved_extensions.json": {
+    "kind": "file",
+    "sha256": "f30e521b2c1b196301d81502478732d506a50ed975a54f179ed077a687ca5537"
+  },
+  "crates/tezbar-core/src/extensions/mod.rs": {
+    "kind": "file",
+    "sha256": "3858db35b5f77b0d9638d4a686cf9545d0a2546401da9ea814c295671bca5635"
+  },
+  "crates/tezbar-core/src/extensions/native.rs": {
+    "kind": "file",
+    "sha256": "ac6610863363aa377b181e790741fe6f6998452d30e9a23aba542d48627e71cb"
+  },
+  "crates/tezbar-core/src/extensions/process.rs": {
+    "kind": "file",
+    "sha256": "61568998c49d648ad5c7abb0211cb0ae57bac1e369c877be260fe38d67b7eca6"
+  },
+  "crates/tezbar-core/src/extensions/process_fixture.rs.txt": {
+    "kind": "file",
+    "sha256": "715c4f644db87f5aeab38d3bd57ae93ed5834a2522e0fc3c7b98c2522d46863d"
+  },
+  "crates/tezbar-core/src/extensions/process_host.rs": {
+    "kind": "file",
+    "sha256": "7c56c5dbfeb6195284bae2211358b46e5f6a1cbcad956bc53ee66b5564047032"
+  },
+  "crates/tezbar-core/src/extensions/process_install.rs": {
+    "kind": "file",
+    "sha256": "88e24e2ad2b8a58841290a6d00e029da387be4405edbe763fe9b8df9fddef48f"
+  },
+  "crates/tezbar-core/src/extensions/process_tests.rs": {
+    "kind": "file",
+    "sha256": "667ed5a1596b696e9522c655d7493a4cedd364444f676dd53e05d9add330e7db"
+  },
+  "crates/tezbar-core/src/extensions/registry.rs": {
+    "kind": "file",
+    "sha256": "7e4b5c74dc3c4e647b72bbbb7b323407579b8ce1e5cca26a3e54c9ae3abf6d07"
+  },
+  "crates/tezbar-core/src/extensions/v2_catalog.json": {
+    "kind": "file",
+    "sha256": "13eab282b6c4ce2f7f76b614288544ca328cb70020c9d5bcbbd82b3b10efbc05"
+  },
+  "crates/tezbar-core/src/extensions/v2_catalog.rs": {
+    "kind": "file",
+    "sha256": "faf63303132bad61b85b549758c49adb2c8e331a3fb9923eb06ac282dc596024"
+  },
+  "crates/tezbar-core/src/extensions/v2_runtime.rs": {
+    "kind": "file",
+    "sha256": "537aeb67c9a7ad052c348d6c4fe09b19027854d07e912a432d36bc14896fc392"
+  },
+  "crates/tezbar-core/src/fixtures/legacy_channels.json": {
+    "kind": "file",
+    "sha256": "0f6bc9d505f59da6a84b3d3d5e1176301cd6601354475870c3c7b6bccd334823"
+  },
+  "crates/tezbar-core/src/fts_rank.rs": {
+    "kind": "file",
+    "sha256": "0b6c092c5f572608a875be7e000f8db0da0c1aa8c45505da3a3de8e387c18a03"
+  },
+  "crates/tezbar-core/src/fts_rank_math.c": {
+    "kind": "file",
+    "sha256": "71335f24a85811f4d398e7f7552c1d3a9da867a4d3c8c3a4b775a6d34c9d324e"
+  },
+  "crates/tezbar-core/src/host.rs": {
+    "kind": "file",
+    "sha256": "86b006ecebf783422d600b82df94258432f8a8e644d122f10b20bd186f21f803"
+  },
+  "crates/tezbar-core/src/instant.rs": {
+    "kind": "file",
+    "sha256": "293410928cd09fa8ea90cbc39d89301a310d7624618d4a5160af760e14ad6ccf"
+  },
+  "crates/tezbar-core/src/instant/calculator.rs": {
+    "kind": "file",
+    "sha256": "58649ca24197651c9316644345b66210823ed209e8fac2a35c251f4b55c0c558"
+  },
+  "crates/tezbar-core/src/instant/color.rs": {
+    "kind": "file",
+    "sha256": "8891021fbc24cc18d6706b7c7351b50e65c0a1f33b96e40909eb3e4c5e295ac1"
+  },
+  "crates/tezbar-core/src/instant/currency.rs": {
+    "kind": "file",
+    "sha256": "4fea31f63a96d858b8bb59383bd48409d62297c18d4e347184dd20455e451c3c"
+  },
+  "crates/tezbar-core/src/instant/currency_synonyms.json": {
+    "kind": "file",
+    "sha256": "f88d5a19c08da7b6d157701b036ae22e9d11fe70205d170413d9db63c6a129cc"
+  },
+  "crates/tezbar-core/src/instant/emoji.rs": {
+    "kind": "file",
+    "sha256": "b5c78494f4e630874dc69062d8898725c7d1d723376e6f0c6a0b300c5449f6a1"
+  },
+  "crates/tezbar-core/src/instant/emoji_data.json": {
+    "kind": "file",
+    "sha256": "e6ea7de54a1e7ed5f7d4346bbfa4708cb976fbe8b8633861e908f10dabf5f5db"
+  },
+  "crates/tezbar-core/src/instant/emoji_fixtures.json": {
+    "kind": "file",
+    "sha256": "d19f449fa3ca633bc279e911105713f05432ef40b69df82664f5e6ea5d07af82"
+  },
+  "crates/tezbar-core/src/instant/fuse-license.txt": {
+    "kind": "file",
+    "sha256": "cc807e3caa26cdee316bab2ff6fdb508a2f619b74959fe59e513ef6e61635ebe"
+  },
+  "crates/tezbar-core/src/instant/fuzzy.rs": {
+    "kind": "file",
+    "sha256": "0cd31cdad3ae4084705e8342d6bf381d1a83eb87b37c62826c7608324b9df8d0"
+  },
+  "crates/tezbar-core/src/instant/qr.rs": {
+    "kind": "file",
+    "sha256": "f0be74d43f0bfc25b02cdcfacce0b2654ff63c843fd2c5747982e1f7b3405809"
+  },
+  "crates/tezbar-core/src/instant/transform.rs": {
+    "kind": "file",
+    "sha256": "8979434f1c4f7fd93bade4b1aaaaa42471a3db7e3e5bc50de26fe5d07d069429"
+  },
+  "crates/tezbar-core/src/instant/transform_tests.rs": {
+    "kind": "file",
+    "sha256": "a9d6141c38bfdecff31ea71e1a71ffa2e50eec5a577e1d6987d75ff1b6f21fc6"
+  },
+  "crates/tezbar-core/src/knowledge/db.rs": {
+    "kind": "file",
+    "sha256": "d5e902870bef1064bd79a566197f63679e520fbacf50805a9e83f11c0495ab45"
+  },
+  "crates/tezbar-core/src/knowledge/embedding_schema.rs": {
+    "kind": "file",
+    "sha256": "1d8d597145ba4fe01c7ec25bba4c024140735ef6f162e9f06c04f0e31e99e83c"
+  },
+  "crates/tezbar-core/src/knowledge/extract.rs": {
+    "kind": "file",
+    "sha256": "dcf61ba668d9a7e00d390f89f662db75440800876c59e47b9b106e3d9b6efb80"
+  },
+  "crates/tezbar-core/src/knowledge/fixtures/parity.json": {
+    "kind": "file",
+    "sha256": "a0229bb6a706f29d1a35ffeea5447d2a57841657ddb46ad9d92e67275b9ea7c8"
+  },
+  "crates/tezbar-core/src/knowledge/lifecycle_tests.rs": {
+    "kind": "file",
+    "sha256": "7566f2ce838aca96553c3939c5a15a6e089c555fd9656d11b12a3868114fa9aa"
+  },
+  "crates/tezbar-core/src/knowledge/mod.rs": {
+    "kind": "file",
+    "sha256": "9afe083aaf82a180b48e044c16ce843457055ad5881b2d644d2bf4371ebec808"
+  },
+  "crates/tezbar-core/src/knowledge/performance_tests.rs": {
+    "kind": "file",
+    "sha256": "27008405c1ee11afaaf9fd86e195a3ed7c4e17419b39611800dba3668ff7eb64"
+  },
+  "crates/tezbar-core/src/knowledge/runtime.rs": {
+    "kind": "file",
+    "sha256": "a0386fc34ee2cd8ba6f936e468fcac4b8642b52741e98aa8c58769fba8dc28d0"
+  },
+  "crates/tezbar-core/src/knowledge/runtime_bundle.rs": {
+    "kind": "file",
+    "sha256": "b2b62447ce139160b895db4c31c869e49e81e2849672c55517930b698c86b8dc"
+  },
+  "crates/tezbar-core/src/knowledge/runtime_integrity.rs": {
+    "kind": "file",
+    "sha256": "f882239086d289f1bb6437cd390bf3f89939acb6badd533b6bb3df03e2ae72ee"
+  },
+  "crates/tezbar-core/src/knowledge/runtime_models.rs": {
+    "kind": "file",
+    "sha256": "d554beb1e03c86fd36084ede05455c53a56c610113b9202455658953c8088f5c"
+  },
+  "crates/tezbar-core/src/knowledge/schema.sql": {
+    "kind": "file",
+    "sha256": "498df254cb4167b8e66ba21de121e74867ba8ffc30dab81b31f438cd40343fb0"
+  },
+  "crates/tezbar-core/src/knowledge/search_cache.rs": {
+    "kind": "file",
+    "sha256": "7f713383df5d78cfb1733d44da5dbc9194cd0c0521d1a08b14128f15bed7addb"
+  },
+  "crates/tezbar-core/src/knowledge/search_journal.sql": {
+    "kind": "file",
+    "sha256": "b7566db63735d22a6993ececdc3a49b235520c42f9d7e5ea9f4e3a06888b0ec2"
+  },
+  "crates/tezbar-core/src/knowledge/semantic_work.rs": {
+    "kind": "file",
+    "sha256": "4d30b7350a0c1a88f7bb981528038a6ebdb99674629111766adaf27fc87f07b8"
+  },
+  "crates/tezbar-core/src/knowledge/semantic_work_tests.rs": {
+    "kind": "file",
+    "sha256": "e78a2fee0c0717a4ef9640975e0282c6a879c103164ba1ba223fe02e49799b86"
+  },
+  "crates/tezbar-core/src/knowledge/tests.rs": {
+    "kind": "file",
+    "sha256": "572d670afefc4f7dfba86e90c9f64023ddb857dc95ff38645616bbf7f36a8fa8"
+  },
+  "crates/tezbar-core/src/knowledge/text.rs": {
+    "kind": "file",
+    "sha256": "96383e04cdf7196821786428d9db44b0fcbe51497104ebad3ebae00c1bc26543"
+  },
+  "crates/tezbar-core/src/knowledge/text_performance_tests.rs": {
+    "kind": "file",
+    "sha256": "379ff7a6e6972e86d6b420a706df9107a45b10c1c0b3c015d633f78c1f53ac43"
+  },
+  "crates/tezbar-core/src/launcher/bundle_metadata.rs": {
+    "kind": "file",
+    "sha256": "9274f43bcab2541ac962e9f273af5749edea3dc71ab3761f0ee8febb58e4cf9d"
+  },
+  "crates/tezbar-core/src/launcher/clipboard.rs": {
+    "kind": "file",
+    "sha256": "da03cf4219e62beea403efbc824ab1d03e28d51bd3dcc67ea6b2cde954c73e6f"
+  },
+  "crates/tezbar-core/src/launcher/clipboard_native.rs": {
+    "kind": "file",
+    "sha256": "0d245a728d1e96507c7792f1bd9a93c7220388a96b7779fbacb6c01762b7091b"
+  },
+  "crates/tezbar-core/src/launcher/db.rs": {
+    "kind": "file",
+    "sha256": "a355821237b528a665d1aa5a281bac9f5bec3d9ef0e34ab137dfdf0f16cb0ecc"
+  },
+  "crates/tezbar-core/src/launcher/default_snippets.json": {
+    "kind": "file",
+    "sha256": "b9a42fc68cdfd12dd4d94bb19aa6f422764c829e6a5d36bfb8c19a0a736a9cc5"
+  },
+  "crates/tezbar-core/src/launcher/mod.rs": {
+    "kind": "file",
+    "sha256": "5bae312d06e2c21123072d1bfe72d407257fc3161ec742ef8f6bba76ed6ed7c0"
+  },
+  "crates/tezbar-core/src/launcher/providers.rs": {
+    "kind": "file",
+    "sha256": "a3b7bb98d98233e6c7345dd890f0b06e8559fc103152571c44e08ad0e8e12224"
+  },
+  "crates/tezbar-core/src/launcher/storage.rs": {
+    "kind": "file",
+    "sha256": "fb8e8a89c90611b33389a1accff1151ce281613d1706419ed4c3af56716a7761"
+  },
+  "crates/tezbar-core/src/launcher/stores.rs": {
+    "kind": "file",
+    "sha256": "bead8152b3766b3d291063051729c6d617102a25d3a14164ee69bbeeb94f0ef6"
+  },
+  "crates/tezbar-core/src/launcher/terminal.rs": {
+    "kind": "file",
+    "sha256": "3092551d2b89265da567bacf8bac34c7ba2527fddb5f5be0b545f31e498dd446"
+  },
+  "crates/tezbar-core/src/launcher/tests.rs": {
+    "kind": "file",
+    "sha256": "fecd2e240d1d5016c3806dfaeffe35900ed29c6b876cda8d8639459b4324632e"
+  },
+  "crates/tezbar-core/src/launcher/text.rs": {
+    "kind": "file",
+    "sha256": "24cd2ad02ec2dcaf0df088b6f8aece60d35973f079f226affd805f0dde164409"
+  },
+  "crates/tezbar-core/src/launcher_facade.rs": {
+    "kind": "file",
+    "sha256": "60f93d027db098469877631e9bffe24c31155cecffcbad0735ea3204f5fe3cee"
+  },
+  "crates/tezbar-core/src/lib.rs": {
+    "kind": "file",
+    "sha256": "040c1273583052087d5daa8b50cb0dd964c24afe98f1534b7d4b0f2386939048"
+  },
+  "crates/tezbar-core/src/native_v2_cli.rs": {
+    "kind": "file",
+    "sha256": "7a4928b26aec976abe9d52caff8cd645b48d66cdb87e87fb70ac8063f005ea85"
+  },
+  "crates/tezbar-core/src/performance.rs": {
+    "kind": "file",
+    "sha256": "d50f0f1babdc9d1e72946d754fb1b7c34133b0bbbaa17277b728adb15769f326"
+  },
+  "crates/tezbar-core/src/performance_alloc.rs": {
+    "kind": "file",
+    "sha256": "c1d695aa48563e2e36c0315b3405b5a0f8bd313a9a7120ad0499eeb840a2a7eb"
+  },
+  "crates/tezbar-core/src/platform.rs": {
+    "kind": "file",
+    "sha256": "ee7b19372f7b1d369fa210b0f26dec941f44f55b85800b52c25013d571498f40"
+  },
+  "crates/tezbar-core/src/platform_tests.rs": {
+    "kind": "file",
+    "sha256": "44b384e8a5e7917f0b8f222868701f648f10e31ed4d4972be09448c37e0d20db"
+  },
+  "crates/tezbar-core/src/resource_directory.rs": {
+    "kind": "file",
+    "sha256": "ae0638e22e162800eac54cd127e4f5e6a9d82cb8dab528bee83e8b26535e2527"
+  },
+  "crates/tezbar-core/src/system/assets.rs": {
+    "kind": "file",
+    "sha256": "43ff7fc79c0036183c2f672220a2dcae5631071229dad12542788891c04cc5dc"
+  },
+  "crates/tezbar-core/src/system/background.rs": {
+    "kind": "file",
+    "sha256": "893549c1cc1dbaebd54fe1c2fd8929305a0d7ac02410ab979a9dd1c63f01db30"
+  },
+  "crates/tezbar-core/src/system/commands.rs": {
+    "kind": "file",
+    "sha256": "aaa0b4d9cf4e9a1c5f306cb9f6e890b495d9ef5f23e2cba8ca7c7f99ce8a66e2"
+  },
+  "crates/tezbar-core/src/system/macos-permissions.plist": {
+    "kind": "file",
+    "sha256": "ba9e6db0baae76d90d95e54cdfd153c639e401419013c0f551c8dc2af0eb6a7c"
+  },
+  "crates/tezbar-core/src/system/mod.rs": {
+    "kind": "file",
+    "sha256": "5f873ec2c99fecea8df3138462ab53aa70eca75f29186e0158166b0ad8923593"
+  },
+  "crates/tezbar-core/src/system/native-macos.json": {
+    "kind": "file",
+    "sha256": "17e643912488eca8bb3266792db155ab6f5b8cf2beab366a225ed956132370a3"
+  },
+  "crates/tezbar-core/src/system/native-windows.json": {
+    "kind": "file",
+    "sha256": "1e9a2146acf65455f14dfc37896d0f61f67f23a126160b996f2f3243a8ae46f5"
+  },
+  "crates/tezbar-core/src/system/permissions-mac.json": {
+    "kind": "file",
+    "sha256": "1ab2972ca3f9e5f382189097dc13daef5a1b83610beac29b2269c24bee46b1a4"
+  },
+  "crates/tezbar-core/src/system/permissions-windows.json": {
+    "kind": "file",
+    "sha256": "9f6c205e8c679ccf52e476c2e6772c18aa546abab20b22ab9ba6a09a848558d1"
+  },
+  "crates/tezbar-core/src/system/permissions.rs": {
+    "kind": "file",
+    "sha256": "8a161548bf0fd5a48a10a5036dcb035c8f0106af61accafc350759f6d03a875b"
+  },
+  "crates/tezbar-core/src/system/safety.json": {
+    "kind": "file",
+    "sha256": "8ebe1d184096b139beddeb1f632aaa9a889f3160cba9bf18e9c677a2be40f786"
+  },
+  "crates/tezbar-core/src/system/safety.rs": {
+    "kind": "file",
+    "sha256": "ddaddd96f37aca91f6575a530a81d68515c5cef1f7e7728c12a91c596824b67d"
+  },
+  "crates/tezbar-core/src/system/stats.rs": {
+    "kind": "file",
+    "sha256": "2999ea5f13ad7d0feb00de5b461f948b7efca0aa57763b87b8046a4b4f170aab"
+  },
+  "crates/tezbar-core/src/system/tests.rs": {
+    "kind": "file",
+    "sha256": "eb80f2259b26d21c70f68e59116d98152c5438422e5a71766f8dc9278a152f36"
+  },
+  "crates/tezbar-core/src/terminal/mod.rs": {
+    "kind": "file",
+    "sha256": "2182842b6e1f3a96934ac0c220a460c69c8bd1c16d26989df5b9c453eb4d28b4"
+  },
+  "crates/tezbar-core/src/terminal/pty.rs": {
+    "kind": "file",
+    "sha256": "e58388273a44f9e7bec3d5c02fa1b2a32e962d658d118053e3d796c9e9a0a055"
+  },
+  "crates/tezbar-core/src/terminal/stream.rs": {
+    "kind": "file",
+    "sha256": "be2faaf8952d8fbaa2d866dfc3031be3a717364baa76f147973b056287e4a1d5"
+  },
+  "crates/tezbar-core/src/terminal_bridge.rs": {
+    "kind": "file",
+    "sha256": "e02063f583716604e88d047e3e54fcf692a62b881f9a90b76100d154c3f9734b"
+  },
+  "crates/tezbar-core/src/tests.rs": {
+    "kind": "file",
+    "sha256": "53f58f5f8434928a71fc4e39827ba5f95a8965146052dec10a1d5224c0d40430"
+  },
+  "crates/tezbar-core/src/vault/auth.rs": {
+    "kind": "file",
+    "sha256": "35e823cf4265759fe0362d51044445923432867495a1c3e30849fe578a3f1b67"
+  },
+  "crates/tezbar-core/src/vault/crypto.rs": {
+    "kind": "file",
+    "sha256": "f96876174b047f83f7fe3324a78686106a384eb9469cb698e3e5bda5fbafd68d"
+  },
+  "crates/tezbar-core/src/vault/keychain.rs": {
+    "kind": "file",
+    "sha256": "18392c64f08f1c68c99f0d2e9ce33f0c10c1c3d8c7b329930620cac02644da9c"
+  },
+  "crates/tezbar-core/src/vault/mod.rs": {
+    "kind": "file",
+    "sha256": "5e7778d41ab972844ff773b7531ba724f58e26ba233918500c67686c75c9c1ed"
+  },
+  "crates/tezbar-core/src/vault/storage.rs": {
+    "kind": "file",
+    "sha256": "ff34e15e12c23970336c55a1bc98c1acc6dc99e0d5e92e022dfd23ddbdcc8a9e"
+  },
+  "crates/tezbar-core/src/windows_job.rs": {
+    "kind": "file",
+    "sha256": "026eae48559b775da4d9ccfcd92eea2df6a79183798833fe94163bcb490ef58c"
+  },
+  "crates/tezbar-host/Cargo.toml": {
+    "kind": "file",
+    "sha256": "7eab3f806eed5ee1bd920dbd7672bf89528935b7ea0cf4a46518662dd7e6f821"
+  },
+  "crates/tezbar-host/src/desktop.rs": {
+    "kind": "file",
+    "sha256": "bc2e6763a3f0a6cd26a870956ca0f5930d8a83290805d51cd5705c91512ebd12"
+  },
+  "crates/tezbar-host/src/input.rs": {
+    "kind": "file",
+    "sha256": "fb717a08faebf1f25cb019c52b21b791af82386a08c9440648975f0ab3549af2"
+  },
+  "crates/tezbar-host/src/layout.rs": {
+    "kind": "file",
+    "sha256": "694f401f2a965e411af31cd2700dc307c9dabaf612e4cfe5955cae14563f517b"
+  },
+  "crates/tezbar-host/src/lib.rs": {
+    "kind": "file",
+    "sha256": "d66923b88768056fc4afeaaecbf2859ef4e084143d16279812e9ddccdf91966e"
+  },
+  "crates/tezbar-host/src/logging.rs": {
+    "kind": "file",
+    "sha256": "4f0f65f97e7282acaa86222eca87f0bdc07ae162003b5d43542ab1f04b8384db"
+  },
+  "crates/tezbar-host/src/monitors.rs": {
+    "kind": "file",
+    "sha256": "384e359a1945ecfd11bc0fb94c57a3ba395292fde35cbf7f6d0372a21a096fdd"
+  },
+  "crates/tezbar-host/src/native_input_platform_tests.rs": {
+    "kind": "file",
+    "sha256": "0c256ac0c75f5af84861659ba58b05f70c30a8953d0ac58ea59fcdd2ac181c78"
+  },
+  "crates/tezbar-host/src/notifications.rs": {
+    "kind": "file",
+    "sha256": "21efb1a5fed13359d9e9ac6dc15ca9d4302a3cfa8ef8b4fabad53056f4f18a7e"
+  },
+  "crates/tezbar-host/src/paths.rs": {
+    "kind": "file",
+    "sha256": "944547165b7ca6646109c501a1f8d00a210225fdc5c0065adb759ec7923b3d67"
+  },
+  "crates/tezbar-host/src/placement.rs": {
+    "kind": "file",
+    "sha256": "dd3aeaff86300515b30b2b19ab25c449fbb7af2ca19a96029b4859698e011905"
+  },
+  "crates/tezbar-host/src/single_instance.rs": {
+    "kind": "file",
+    "sha256": "b8206edac6aa345df20b691f2cc05ca7da804e46fa42cca18d176830943d96c9"
+  },
+  "crates/tezbar-host/src/timer_notifications.rs": {
+    "kind": "file",
+    "sha256": "7bd0b977963014ce4356c384cb0caaaeac68f1d62eb36f3ac2197e81c72311aa"
+  },
+  "crates/tezbar-ui-model/Cargo.toml": {
+    "kind": "file",
+    "sha256": "01ec495e7cbe7e27461634f899e37b3a4fccfe953835e87be6d85d0c030977c6"
+  },
+  "crates/tezbar-ui-model/src/chat.rs": {
+    "kind": "file",
+    "sha256": "d24d9dd5cfa52e9d8f5c58039304a7c8d9aca810b87da07b72b14cecdfa420a0"
+  },
+  "crates/tezbar-ui-model/src/chat/meta.rs": {
+    "kind": "file",
+    "sha256": "7817987108f54e77a038acea4260de5979b44c6c57d5337d266207ede0b91eed"
+  },
+  "crates/tezbar-ui-model/src/chat/tests.rs": {
+    "kind": "file",
+    "sha256": "83695ce89c976b61fe517f39051dafb2c6ae61a667bab6b47242a78effc3dc96"
+  },
+  "crates/tezbar-ui-model/src/extensions.rs": {
+    "kind": "file",
+    "sha256": "7c069429f9126390323f2791a7847fb1f6fed7601dd87aced9451e560191ed7a"
+  },
+  "crates/tezbar-ui-model/src/extensions/catalog.rs": {
+    "kind": "file",
+    "sha256": "00ca571362ae71faf27ff8bb92867a99d4b286b3bffab63dcc13e7a138073ecb"
+  },
+  "crates/tezbar-ui-model/src/extensions/catalog/tests.rs": {
+    "kind": "file",
+    "sha256": "6b2eda7eebbe3229ec374ffe9be43e844506008a2a9341ae830f6f05bbd3ac4f"
+  },
+  "crates/tezbar-ui-model/src/extensions/forms.rs": {
+    "kind": "file",
+    "sha256": "c896e57b87f5c76936e8a3fc0fcc6842837f0ca50cf44496d2f05378e6dd8f5c"
+  },
+  "crates/tezbar-ui-model/src/extensions/forms/tests.rs": {
+    "kind": "file",
+    "sha256": "0fbd950260fece5616289dca059f42cfd1be6df09d964bb4e24910f77ab68ad2"
+  },
+  "crates/tezbar-ui-model/src/extensions/images.rs": {
+    "kind": "file",
+    "sha256": "9f5e76f39e88194ef5ea83d433df0f768d00792a6a5491b695e9446399a79754"
+  },
+  "crates/tezbar-ui-model/src/extensions/images/tests.rs": {
+    "kind": "file",
+    "sha256": "efb0b22e2125b1559f032a4d01bffa5275c89486199e6b139ab2c9630ef4a5da"
+  },
+  "crates/tezbar-ui-model/src/extensions/runtime.rs": {
+    "kind": "file",
+    "sha256": "be4b5816910402a524c1b69309386a35fd400d1ad5558114becdf542d6435423"
+  },
+  "crates/tezbar-ui-model/src/extensions/runtime/tests.rs": {
+    "kind": "file",
+    "sha256": "41913281388f76b142a2899aa3d3fe9c2bdd345d4615ebce4383179e3f79592b"
+  },
+  "crates/tezbar-ui-model/src/knowledge_settings.rs": {
+    "kind": "file",
+    "sha256": "33e5a138abc831adf0f628560b839688a20b643a6c3dfe2996a63cee207c4006"
+  },
+  "crates/tezbar-ui-model/src/knowledge_settings/tests.rs": {
+    "kind": "file",
+    "sha256": "9e22f945b8b794cbf406833d7b25c7bd8f78d0a789448d64cd9c2cfa6dab534c"
+  },
+  "crates/tezbar-ui-model/src/launcher.rs": {
+    "kind": "file",
+    "sha256": "96194ef666f4112146184f199a540bdaaf2b366c09871313ec7d1cf5feff9cfd"
+  },
+  "crates/tezbar-ui-model/src/launcher/controller.rs": {
+    "kind": "file",
+    "sha256": "00f9a3d73672d258decfbd72fd690f55f890a82996e56d3222617be6a8248e90"
+  },
+  "crates/tezbar-ui-model/src/launcher/session.rs": {
+    "kind": "file",
+    "sha256": "844551e5d97059f74edbc0f6d3ff7ecda2a950cb6e11f14d85b2184809d7e4de"
+  },
+  "crates/tezbar-ui-model/src/launcher/ts_cases.json": {
+    "kind": "file",
+    "sha256": "2134c82699c63096279979d0b1378a0e99c6b3f4e795115f101602adf9fad495"
+  },
+  "crates/tezbar-ui-model/src/launcher/ts_cases.rs": {
+    "kind": "file",
+    "sha256": "7075df9233e7db02aa07e1952881d5333f2188f637b2c853049881e688bfec83"
+  },
+  "crates/tezbar-ui-model/src/lib.rs": {
+    "kind": "file",
+    "sha256": "81c6d874c644f2bbf33b672ebbcbfccc0c3357b7525ed9fa5fafc9e24f30e3dd"
+  },
+  "crates/tezbar-ui-model/src/notes.rs": {
+    "kind": "file",
+    "sha256": "2d2f718bea5f04cb0f0df8d2e930eccef6777db2c870d312baee6a0b3f5b9972"
+  },
+  "crates/tezbar-ui-model/src/notes/opus_html_fixtures.json": {
+    "kind": "file",
+    "sha256": "b8b807cf0cd549ed051835b2006f3a10ad10d27c1718e874f2d19b930fa896b1"
+  },
+  "crates/tezbar-ui-model/src/router.rs": {
+    "kind": "file",
+    "sha256": "a0263a73610c89a0d7a435ab52eb8e13cf3fe8f942bb01eb7888a3adf8b27bd1"
+  },
+  "crates/tezbar-ui-model/src/settings.rs": {
+    "kind": "file",
+    "sha256": "66227770b50061283694d2ee818e75604c37e79409c24cad952bd5299384a2a3"
+  },
+  "crates/tezbar-ui-model/src/settings/contributions.rs": {
+    "kind": "file",
+    "sha256": "3703088ec120e2e1dbbf11c725228c83876c9da73b957b9167d0288e27b74ed0"
+  },
+  "crates/tezbar-ui-model/src/settings/contributions/secret_slots.rs": {
+    "kind": "file",
+    "sha256": "99b3630c05b813f1cf4e1dd87d5effba041237afdc7647b8a8267a7db7678b6f"
+  },
+  "crates/tezbar-ui-model/src/settings/providers.rs": {
+    "kind": "file",
+    "sha256": "cb4848a7ea828b9cc54e81aaf4d36f59f45ad8860ffee5ba9691fda9f6e48013"
+  },
+  "crates/tezbar-ui-model/src/settings/tests.rs": {
+    "kind": "file",
+    "sha256": "e441777857960168d8f892a18ea8a5a744e0034b8f308db46ef0bdb2d86bec86"
+  },
+  "crates/tezbar-ui-model/src/terminal.rs": {
+    "kind": "file",
+    "sha256": "671ad7c28dcd8defb465eb8695da0f9e0c5bdab7342732b9a31c407c302bdd26"
+  },
+  "crates/tezbar-ui-model/src/ui_state.rs": {
+    "kind": "file",
+    "sha256": "da87bf998555c83654cfae026c1528fd97e0c47e018b1338e0b90bf5fe5b4144"
+  },
+  "crates/tezbar-ui-model/src/ui_state/tests.rs": {
+    "kind": "file",
+    "sha256": "3c076f1ae020d5a68fa887be94b7e1a9f1ebef99f7369f7c6f91821d5aa14887"
+  },
+  "crates/tezbar-ui-model/src/update_policy.rs": {
+    "kind": "file",
+    "sha256": "3fc73d7ad8deec00035fc8f985625ee6b69808383b02a6ed19a973697a5d212b"
+  },
+  "crates/tezbar-ui-model/src/update_policy_tests.rs": {
+    "kind": "file",
+    "sha256": "f3c5d1796c9c640a4d991f2a40627e7b83de050278ad56c5810f7876375a9363"
+  },
+  "crates/tezbar-ui-model/src/utilities.rs": {
+    "kind": "file",
+    "sha256": "e8c87be5645156038e7d747a5719ce2b6452ac0f815767e35ec41626e2e0be24"
+  },
+  "crates/tezbar-ui-model/src/utilities/monitor.rs": {
+    "kind": "file",
+    "sha256": "03df732f4e06645ca55e7c5e4b61b93aa9a4f6aa598116eac5dcab43b0e60971"
+  },
+  "crates/tezbar-ui-model/src/vault.rs": {
+    "kind": "file",
+    "sha256": "ad31952844da33a6d3d105da1cf1292222fba08cd2d03a753868a04bbfb59cc9"
+  },
+  "crates/tezbar-ui/Cargo.toml": {
+    "kind": "file",
+    "sha256": "5e27c6824c033dd3cf87914535958957a353460fda055b529754168c7a6bd69f"
+  },
+  "crates/tezbar-ui/src/controls.rs": {
+    "kind": "file",
+    "sha256": "c26b7902aaa910a7d898d71963d6e29a4ee7bc1534da0bf26275a0fe83d50d42"
+  },
+  "crates/tezbar-ui/src/image_cache.rs": {
+    "kind": "file",
+    "sha256": "cfd84a6ff26e6ea683cdbced01ad711f7fcff63cac6057f9684105456cfeb2f6"
+  },
+  "crates/tezbar-ui/src/lib.rs": {
+    "kind": "file",
+    "sha256": "28da53d7c5fce2b84ed05138c725e4041d55276e9e28d1d831d202bec2e6e9f9"
+  },
+  "crates/tezbar-ui/src/markdown.rs": {
+    "kind": "file",
+    "sha256": "7b87d59f6695cae6b89cf48bdd535cd3200966a3bd81b48e73c7d152092eac3d"
+  },
+  "crates/tezbar-ui/src/markdown_html.rs": {
+    "kind": "file",
+    "sha256": "7bda0c3e20f48f6b8113a6a7a7c17efce6aa24cf93e2b6d2d377f1be3c0fbc22"
+  },
+  "crates/tezbar-ui/src/rich_text.rs": {
+    "kind": "file",
+    "sha256": "293da41258c5158922fcb404b6ce78fec745ca166b7bd3ecfb9b6b804ee264f0"
+  },
+  "crates/tezbar-ui/src/terminal_grid.rs": {
+    "kind": "file",
+    "sha256": "b0090cc1fce63b81325a013d3230afe46f0e114b46c04ec42a2466686f9650ae"
+  },
+  "crates/tezbar-ui/src/text_input.rs": {
+    "kind": "file",
+    "sha256": "ef9308137aa1234028d3a9eacf1e9741e9d77ae71fff4a80b6422dc334ea77a9"
+  },
+  "crates/tezbar-ui/src/tokens.rs": {
+    "kind": "file",
+    "sha256": "3d2ce4cfbb389554ecec31820d6fdc3023481e2d013f1fcd83eec1d1b08d8bf1"
+  },
+  "crates/tezbar-ui/src/virtual_list.rs": {
+    "kind": "file",
+    "sha256": "c95ec40f97277d3a1c4e6f9cdfedb17fd521ee449d59f5fb2b8a452eccf6e64e"
+  },
+  "crates/tezbar-update/Cargo.toml": {
+    "kind": "file",
+    "sha256": "fa30e0e4628b23146fb32f7c455cc1955568b7ca7e8abaf1765624aad96ca7af"
+  },
+  "crates/tezbar-update/src/lib.rs": {
+    "kind": "file",
+    "sha256": "e32c7831fab69dc73a7bbec926f336f32ce2aecfa28ce9aa1bdf855adf8fdc96"
+  },
+  "crates/tezbar-update/src/manual_releases.rs": {
+    "kind": "file",
+    "sha256": "efe75f10003a911c596954456cf43a6481efbd9be4363c0ffdd167f0ca852866"
+  },
+  "crates/tezbar-update/src/native.rs": {
+    "kind": "file",
+    "sha256": "aca30fe812da0249d0e363b41283dcc849866df140a83982707a85788b3379fb"
+  },
+  "crates/tezbar-update/src/notes.rs": {
+    "kind": "file",
+    "sha256": "f9f5734de8a3af01a8a1fa903730fca07e68dceaa015d82c10d1f296d532aed1"
+  },
+  "crates/tezbar-update/src/notes/http.rs": {
+    "kind": "file",
+    "sha256": "2b3072ffe2792edf1c6d8462b481779ac52cd1fa285339f7f7e5327c006135b3"
+  },
+  "crates/tezbar-update/src/release_channels.rs": {
+    "kind": "file",
+    "sha256": "dfbf75d667384976d521387f4bdcca663837f3072bde97b63cfa42891896ab67"
+  },
+  "crates/tezbar-update/src/updater_temp.rs": {
+    "kind": "file",
+    "sha256": "1f4e520e5ee1f2d255c0ecb6be9d45f4b9a8e30e90b6795dd6ad46719d6fd137"
+  },
+  "crates/tezbar-update/tests/fixtures/README.md": {
+    "kind": "file",
+    "sha256": "e634f138315d6b6a8fef2b0e95c0e3b08602e3882f15b0ac073777fe9e84277e"
+  },
+  "crates/tezbar-update/tests/fixtures/fixture.pub": {
+    "kind": "file",
+    "sha256": "cfc19d81d82a64fdd51f493cf526002ff1b772ff66924ed3b6348a0871328fe5"
+  },
+  "crates/tezbar-update/tests/fixtures/fixture.tar.gz": {
+    "kind": "file",
+    "sha256": "556c7b84799ac5d78f9b673483639f1976f57872e1f9e46fe17919203dd50de7"
+  },
+  "crates/tezbar-update/tests/fixtures/fixture.tar.gz.minisig": {
+    "kind": "file",
+    "sha256": "be44c28bb4794e83507b0d3393cb7302a7e17c53937a604bbf60c8cfddbcdb21"
+  },
+  "package.json": {
+    "kind": "file",
+    "sha256": "0383f118ee7d8ad39fc599b0a0128ba8abc3b83df1465df77110f4b8c909176c"
+  },
+  "pnpm-lock.yaml": {
+    "kind": "file",
+    "sha256": "1268deb243e64b16bfee497812a77138fc5c3f7e5acae078ca0b9b6abefa2074"
+  },
+  "scripts/native/README.md": {
+    "kind": "file",
+    "sha256": "584d26ce7ed4978a7b5cb117f2fe63e8a18e3de59f8abe685505bbb56f6f668e"
+  },
+  "scripts/native/admission-fixture.test.mjs": {
+    "kind": "file",
+    "sha256": "87d094fd08c3b5d84c71198ed164ebb69c791f917da559f5c7c2ca62cf937afc"
+  },
+  "scripts/native/build-metadata.mjs": {
+    "kind": "file",
+    "sha256": "f1045ea6568fe51f2ad1c4d9c1944fd6aa2de6d5831d9f5f3f9f2d4a7f6ab0d8"
+  },
+  "scripts/native/build.mjs": {
+    "kind": "file",
+    "sha256": "c6b202c4de77715f711148fb9e175a9a9b855c0d5131c0a5933fd0a2266c77c5"
+  },
+  "scripts/native/build.test.mjs": {
+    "kind": "file",
+    "sha256": "4922d6c7907d889ce493afd4dd6a37950288293b5fa8a4745427036be19cd5dd"
+  },
+  "scripts/native/cargo-artifact.mjs": {
+    "kind": "file",
+    "sha256": "f44efb468bec864ac487467544c2a54c5bb817a74766569fabbcaa5bc076837c"
+  },
+  "scripts/native/cargo-artifact.test.mjs": {
+    "kind": "file",
+    "sha256": "dd7cecd31d8702f9eaedec2ce9fec83878035a767db67e165a9a200807fd5a45"
+  },
+  "scripts/native/cutover.test.py": {
+    "kind": "file",
+    "sha256": "8c99d11633d9a9c54ba3270c305cc42e0e2a4f553ac60339776980fe940425f7"
+  },
+  "scripts/native/lock-drift.py": {
+    "kind": "file",
+    "sha256": "c1f529cc327106095d0adb1a3ac8b0fc8004d87aa2b1448b383d877bd4cb34a1"
+  },
+  "scripts/native/nsis-template.test.mjs": {
+    "kind": "file",
+    "sha256": "528ce0bb0b48ca85fd45e13fb31e55ba72bab7f81a9edc843247d9ca6db9f569"
+  },
+  "scripts/native/package-macos.mjs": {
+    "kind": "file",
+    "sha256": "91cac53d9fe35e738f25dc4e7169beb3505686ff99cf02baca93bd74b685e79a"
+  },
+  "scripts/native/package-macos.test.mjs": {
+    "kind": "file",
+    "sha256": "54175e945e81d4855736ab6b842b58c1b709ae633b56db99775232b36750e224"
+  },
+  "scripts/native/provenance.test.mjs": {
+    "kind": "file",
+    "sha256": "a33ed5edb16e44c6dc7652f09d1ace94722a1f81020fa8c9fcba91c672e86a78"
+  },
+  "scripts/native/theme-fixture.test.mjs": {
+    "kind": "file",
+    "sha256": "d2d262fd772dacac637c6fa1482a33cabb995adae219408ab9a15a349aca9943"
+  },
+  "scripts/native/windows-rehearsal-plan.mjs": {
+    "kind": "file",
+    "sha256": "7298d9d4e6047c7eb152db7fa98c1dddfbe11fe415f7f8089322a3d9718d1396"
+  },
+  "src-tauri/Cargo.lock": {
+    "kind": "file",
+    "sha256": "ac240b768f3a04b49e4f0feb1380688fe004fa64fe4d55cc343285b9d0d2b53e"
+  },
+  "src-tauri/macos-signing.json": {
+    "kind": "file",
+    "sha256": "f3a6eddc5c16979588b37856fc9294d4778e5ab4579d797ca36d36a684e69aeb"
+  },
+  "src/main/extensionWorker/clipboard.test.ts": {
+    "kind": "file",
+    "sha256": "ac0f0c96738e39fd228a94c3855d6a5e80d3f356ac706aff2b24340ac7b6d14b"
+  },
+  "src/main/extensionWorker/clipboard.ts": {
+    "kind": "file",
+    "sha256": "b8ff17943545b6f56e7e8fdbdd419ffd53354de0b8ec9634766063264e0e9c6b"
+  },
+  "src/main/extensionWorker/desktop.test.ts": {
+    "kind": "file",
+    "sha256": "45a9ea3c5815531ef81c4df715893a4baceb395f947d78e19903302a101dd293"
+  },
+  "src/main/extensionWorker/desktop.ts": {
+    "kind": "file",
+    "sha256": "3d9142c2f358a9d13677d9580d6c6975f18e42c9260af4fd4565899f4f77f8c2"
+  },
+  "src/main/extensionWorker/framing.test.ts": {
+    "kind": "file",
+    "sha256": "4fbd9a27557d1d7edc922dbdb7afd0c2202b448d1d72ee01c1291d91935f8f8f"
+  },
+  "src/main/extensionWorker/framing.ts": {
+    "kind": "file",
+    "sha256": "5cb589a0d2d5c5e63d1e22c6b47f4b60a21482bca943b140cfec64752423b05c"
+  },
+  "src/main/extensionWorker/host.ts": {
+    "kind": "file",
+    "sha256": "1006d76af9c6eee74aff897c92fae1861d0d011e142b9cdc42442356aef5567e"
+  },
+  "src/main/extensionWorker/main.ts": {
+    "kind": "file",
+    "sha256": "20f0fbd84c739081858c5bde725d8698e4fffc2f56e636fe8f8e9e1bca1b905b"
+  },
+  "src/main/extensionWorker/services.ts": {
+    "kind": "file",
+    "sha256": "27aa655c915ace0f74fe71a23411c428e70419ebb5106980b8030cd7422d870a"
+  },
+  "src/main/extensionWorker/windowState.ts": {
+    "kind": "file",
+    "sha256": "ad1b617749efea3c5f9d6d457cb0a74106ca644c6ca5d1dda88197a00b181a07"
+  },
+  "tests/fixtures/extensions/native_harness.rs": {
+    "kind": "file",
+    "sha256": "e97982ce08ebb3867d47dd510aac5f7cad79d79d9aea11fe49b6966391288810"
+  },
+  "tests/fixtures/extensions/package.json": {
+    "kind": "file",
+    "sha256": "68563491caaaa52df79b9d873e265a8196cf5f5bfdda7a9a33a515a860d16401"
+  },
+  "tests/fixtures/extensions/prepare.mjs": {
+    "kind": "file",
+    "sha256": "3bf80470a9505fc7d847c867cd9af22addb536e89bf53b013f0ab2469ac8aa9a"
+  },
+  "tests/fixtures/extensions/src/actions.tsx": {
+    "kind": "file",
+    "sha256": "135c57048e46b915f4261162be27499bd8859bd946d0bd9d4ec447deeabd3ef6"
+  },
+  "tests/fixtures/extensions/src/detail.tsx": {
+    "kind": "file",
+    "sha256": "77ea511378f8fed47c8e06678203912b9fc07daaeea4efcde1833193f09db61a"
+  },
+  "tests/fixtures/extensions/src/feedback.tsx": {
+    "kind": "file",
+    "sha256": "a6a53cd96fb0fe3fc8d3e0de4b92046184e99c192a6f81371f855a5587a94876"
+  },
+  "tests/fixtures/extensions/src/form.tsx": {
+    "kind": "file",
+    "sha256": "550e5136d053dae320e9255d562345cd480f2700cf558e153460ca7cac524ebd"
+  },
+  "tests/fixtures/extensions/src/grid.tsx": {
+    "kind": "file",
+    "sha256": "6166ef4c94474e418533370c2113044e5b75a4f716c0e17df0920d586671687a"
+  },
+  "tests/fixtures/extensions/src/invalidation.tsx": {
+    "kind": "file",
+    "sha256": "3d9be49bd26da595e50f76151e075c141ea888780b6282a845b30306f1c9c0d7"
+  },
+  "tests/fixtures/extensions/src/list.tsx": {
+    "kind": "file",
+    "sha256": "adae7fc47912a0311fc1441edde970b6e5bf2b8292cfe62d967d83aa213b87a6"
+  },
+  "tests/fixtures/extensions/src/menubar.tsx": {
+    "kind": "file",
+    "sha256": "d4c290315857522d40f5742254f787ce1930c9b0798b0ae8f26805b90752cef8"
+  },
+  "tests/fixtures/extensions/src/probe-date.tsx": {
+    "kind": "file",
+    "sha256": "54d71d55fdec4e555c4679e1f0cbda9c9ddbaef1088668bfa020a846501d09c9"
+  },
+  "tests/fixtures/extensions/src/probe-menubar-info.tsx": {
+    "kind": "file",
+    "sha256": "f2ab1f703d9963b4e57cb04af377c35b14666f53418d0f228cf8c2ab494706b2"
+  },
+  "tests/fixtures/extensions/src/probe-noview-clear.tsx": {
+    "kind": "file",
+    "sha256": "0b38cb059512b35179616cf5f551a63d8161806ff7ed181962c82b1a2272cf99"
+  },
+  "tests/fixtures/extensions/src/probe-noview-close.tsx": {
+    "kind": "file",
+    "sha256": "7f62685587343ccd972128ab2f9acc84214e60dc869376d5baf7c4392963b940"
+  },
+  "tests/fixtures/extensions/src/probe-noview-plain.tsx": {
+    "kind": "file",
+    "sha256": "a07eb0333b4b6dd9995e6537caa1ad311f6cfcc92e29b1ea36cf6491a7df3624"
+  },
+  "tests/fixtures/extensions/src/probe-noview-pref.tsx": {
+    "kind": "file",
+    "sha256": "7125588d0d2262dd7a2acfce11db1ad73a7e08d0bed6c59dcfb0933370ed9756"
+  },
+  "tests/fixtures/extensions/src/probe-noview-prefs.tsx": {
+    "kind": "file",
+    "sha256": "c2a2d08ec20ff68df2b16127fa05282c0ed7d327abaed694a90b1c2d26d9af34"
+  },
+  "tests/fixtures/extensions/src/probe-push.tsx": {
+    "kind": "file",
+    "sha256": "b1c3904ec68410957f16c8179491761da36d365253833dafde7c8a623df01611"
+  },
+  "tests/fixtures/extensions/src/probe-status-icons.tsx": {
+    "kind": "file",
+    "sha256": "fd9781a20e2045fc97983d7c881260d96e1496422295793412e798a180ec6ead"
+  },
+  "tests/fixtures/extensions/src/prompts.tsx": {
+    "kind": "file",
+    "sha256": "9e76ab79a2891c2274e0c44e38c40fbf8d12df3838176cdadef649bef31dea67"
+  }
+}

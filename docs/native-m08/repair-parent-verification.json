@@ -1,0 +1,54 @@
+{
+  "base": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+  "verified_source_input_count": 359,
+  "verified_owned_files_before_parent_delta": 42,
+  "verified_gate_log_hashes": 33,
+  "nb1_exact_parent_manifest": true,
+  "root_independent_tests": [
+    {
+      "path": "docs/native-m08/repair-logs/parent-nb1.log",
+      "sha256": "a5d6fad9439bc64a3919c908ad35638682399d93f8fdd10e9f72cbc0dfaf27f1",
+      "passed": 4
+    },
+    {
+      "path": "docs/native-m08/repair-logs/parent-quit.log",
+      "sha256": "267e4f73fff1ded85c993a21a37bf123651d6a0cb009ec7abb8adc5d5c1eb99c",
+      "passed": 3
+    },
+    {
+      "path": "docs/native-m08/repair-logs/parent-decode.log",
+      "sha256": "bb17f8abb6dae492015787cee7d9eb33f5487a7a4665b90b6b7e80b5fd7e1f86",
+      "passed": 1
+    }
+  ],
+  "root_windows_only_delta": {
+    "path": "crates/tezbar-core/src/assets_windows.rs",
+    "before_sha256": "c0220985b76131bf3c080fd6d5a30d00f2eefef2c6623a213e0dd366e189a028",
+    "after_sha256": "971a2ea6d797a1ab3745746c91c3bd24a43066f85d222482461c24c0ed608dda",
+    "reason": "Identify Prefix::VerbatimDisk through components rather than Path::starts_with on a textual marker; add idempotence fixture. Windows-only; not compiled or executed on macOS. Real Windows gate required."
+  },
+  "preserved_binary": {
+    "path": "/tmp/tezbar-native-m8m10-b626f28-verified-preview",
+    "sha256": "17aeb727fd060dcd31b34e1c8bff98c5614201a3b2c1103b333815a551195e0e",
+    "metadata": {
+      "version": "0.3.0-beta.7",
+      "source": "b626f28476d136a292ed2385e0e1bc2ddedd1489",
+      "dirty": "true",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true,
+      "bench_control": false
+    }
+  },
+  "remaining": [
+    "fresh M7 N-B1 closure",
+    "fresh M8 repair review",
+    "full M10 first review",
+    "real Windows asset-security / ConPTY and exact-source platform gates",
+    "M9 real SDK/native integration",
+    "M11 packaging/import/updater cutover",
+    "M3 final controller review and full final review",
+    "manual GUI/IME/AX/GPU and full-app RAM acceptance"
+  ]
+}

@@ -1,0 +1,23 @@
+   Compiling tezbar-update v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/crates/tezbar-update)
+error[E0308]: mismatched types
+   --> crates/tezbar-update/src/native.rs:597:37
+    |
+597 |     if !writable || parent.mode() & libc::S_ISVTX != 0 && meta.uid() != unsafe { libc::geteuid() } {
+    |                                     ^^^^^^^^^^^^^ expected `u32`, found `u16`
+
+error[E0277]: no implementation for `u32 & u16`
+   --> crates/tezbar-update/src/native.rs:597:35
+    |
+597 |     if !writable || parent.mode() & libc::S_ISVTX != 0 && meta.uid() != unsafe { libc::geteuid() } {
+    |                                   ^ no implementation for `u32 & u16`
+    |
+    = help: the trait `BitAnd<u16>` is not implemented for `u32`
+    = help: the following other types implement trait `BitAnd<Rhs>`:
+              `&u32` implements `BitAnd<u32>`
+              `&u32` implements `BitAnd`
+              `u32` implements `BitAnd<&u32>`
+              `u32` implements `BitAnd`
+
+Some errors have detailed explanations: E0277, E0308.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `tezbar-update` (lib test) due to 2 previous errors

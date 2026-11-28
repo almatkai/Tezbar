@@ -1,0 +1,246 @@
+{
+  "evidence": {
+    "evidence-sha256.json": {
+      "verified": 96,
+      "bad": []
+    },
+    "external-evidence-sha256.json": {
+      "verified": 211,
+      "bad": []
+    }
+  },
+  "compiled_inputs": {
+    "verified": 427,
+    "bad": []
+  },
+  "gates": {
+    "core-msrv-check-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "core-msrv-status-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "core-msrv-status-port-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "native-bench-build-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "native-bench-metadata-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "native-bench-tests-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 462,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "native-check-01": {
+      "exit": 101,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "native-check-02": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "native-node-nonprovenance-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "native-normal-build-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "native-normal-metadata-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "native-normal-tests-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 460,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "native-sdk-los-angeles-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "native-status-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "normal-dependency-tree-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "owned-app-format-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "owned-core-format-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "pnpm-tests-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "python-cutover-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "red-01-registered-name": {
+      "exit": 101,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "red-02-exact": {
+      "exit": 101,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "red-02-registered-name": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "red-03-exact": {
+      "exit": 101,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "red-03-registered-name": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "tauri-compatibility-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "typecheck-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    },
+    "ui-tests-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [
+        {
+          "passed": 57,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "log_verified": true
+    },
+    "whole-tree-whitespace-01": {
+      "exit": 0,
+      "stable": true,
+      "counts": [],
+      "log_verified": true
+    }
+  },
+  "reports": {
+    "/tmp/tezbar-gpui-m11-recheck-opus-9832852.md": "f30b9cce1fbe2cc0374ba024639cd0019778c8b859cd76752820195e258b6cb2",
+    "/tmp/tezbar-gpui-m810-r1r7-opus-fec3257.md": "1ad45407a2142fda5a61d66870c0e6b02a4617bce59f0a04dc5200a1e7b0aee2",
+    "/tmp/tezbar-gpui-m9-d1-d15-opus-fec3257.md": "ab7c879e95543b14cae2662cce9264ba1ba02890def1489c808481a9d5477e6f"
+  },
+  "index_is_empty": true
+}

@@ -1,0 +1,154 @@
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/assets.rs:121:21
+    |
+121 |                 let mut response = self
+    |                     ----^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/native_tests.rs:617:9
+    |
+617 |     let mut http = server(vec![
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `gemma_has` and `gemma_counts` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1322:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+
+warning: `tezbar-core` (lib test) generated 5 warnings (run `cargo fix --lib -p tezbar-core --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (/tmp/tezbar-m9-c01-validation-Rffw07/target/debug/deps/tezbar_core-c909a02a6a6c197c)
+
+running 1 test
+Rust host integration runtime: /opt/homebrew/Cellar/bun/1.4.0/bin/bun (1.4.0)
+worker event extension-worker-status: {"phase":"starting"}
+worker event extension-worker-status: {"phase":"ready"}
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/run
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="run", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/run.js
+Extension Worker stderr: [Runner] Bundle size: 242 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/run
+host request: clipboard:read
+host request: core:ai:extension-ask
+host request: clipboard:write
+host request: clipboard:write
+Extension Worker stderr: [Runner] Pass 1 complete: 0 promises, 0 hook states, stateUpdates=false
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/run
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="run", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/run.js
+Extension Worker stderr: [Runner] Bundle size: 242 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/run
+host request: clipboard:read
+host request: core:ai:extension-ask
+host request: clipboard:write
+host request: clipboard:write
+Extension Worker stderr: [Runner] Pass 1 complete: 0 promises, 0 hook states, stateUpdates=false
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/run
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="run", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/run.js
+Extension Worker stderr: [Runner] Bundle size: 242 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/run
+host request: clipboard:read
+host request: core:ai:extension-ask
+host request: clipboard:write
+host request: clipboard:write
+Extension Worker stderr: [Runner] Pass 1 complete: 0 promises, 0 hook states, stateUpdates=false
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/failure
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="failure", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/failure.js
+Extension Worker stderr: [Runner] Bundle size: 128 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/failure
+host request: clipboard:write
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/hang
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="hang", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/hang.js
+Extension Worker stderr: [Runner] Bundle size: 113 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/hang
+host request: clipboard:read
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/hang
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="hang", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/hang.js
+Extension Worker stderr: [Runner] Bundle size: 113 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/hang
+host request: clipboard:read
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/crash
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="crash", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/crash.js
+Extension Worker stderr: [Runner] Bundle size: 103 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/crash
+worker event extension-worker-status: {"phase":"stopped"}
+worker event extension-worker-status: {"phase":"starting"}
+worker event extension-worker-status: {"phase":"ready"}
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/run
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="run", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/run.js
+Extension Worker stderr: [Runner] Bundle size: 242 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/run
+host request: clipboard:read
+host request: core:ai:extension-ask
+host request: clipboard:write
+host request: clipboard:write
+Extension Worker stderr: [Runner] Pass 1 complete: 0 promises, 0 hook states, stateUpdates=false
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/hang
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="hang", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/hang.js
+Extension Worker stderr: [Runner] Bundle size: 113 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/hang
+host request: clipboard:read
+worker event extension-worker-status: {"phase":"stopped"}
+worker event extension-worker-status: {"phase":"starting"}
+worker event extension-worker-status: {"phase":"ready"}
+host request: core:apps:list
+Extension Worker stderr: [Runner] runExtensionCommand called: raycast.protocol-fixture/run
+Extension Worker stderr: [Runner] Found package.json at /var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/package.json
+Extension Worker stderr: [Runner] Mode=no-view, title="run", entry=/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/.tmpdwzMSy/data/extensions/protocol-fixture/.sc-build/run.js
+Extension Worker stderr: [Runner] Bundle size: 242 chars
+Extension Worker stderr: [Runner] Pass 1: executing raycast.protocol-fixture/run
+host request: clipboard:read
+host request: core:ai:extension-ask
+host request: clipboard:write
+host request: clipboard:write
+Extension Worker stderr: [Runner] Pass 1 complete: 0 promises, 0 hook states, stateUpdates=false
+worker event extension-worker-status: {"phase":"stopped"}
+test extension_worker::integration_tests::real_rust_host_bun_roundtrip_and_termination ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 1.03s
+

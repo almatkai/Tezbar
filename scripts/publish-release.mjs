@@ -39,7 +39,7 @@ const notes = readFileSync(
 const receipts = readdirSync(directory)
   .filter((name) => /^receipt-.+\.json$/.test(name))
   .map((name) => JSON.parse(readFileSync(join(directory, name), 'utf8')))
-const publicKey = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'utf8')).plugins
+const publicKey = JSON.parse(readFileSync(join(root, 'packaging/legacy-app-policy.json'), 'utf8')).plugins
   .updater.pubkey
 let manifest = manifestFromReceipts(receipts, notes, publicKey, directory, {
   channel: options.channel,

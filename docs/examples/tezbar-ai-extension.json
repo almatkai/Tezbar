@@ -1,0 +1,45 @@
+{
+  "manifestVersion": 1,
+  "id": "com.example.notes",
+  "name": "Notes",
+  "connections": [
+    {
+      "id": "notes",
+      "name": "Notes program",
+      "transport": "stdio",
+      "command": "notes-mcp-server",
+      "args": ["stdio"],
+      "env": { "NOTES_TOKEN": { "secret": "NOTES_TOKEN", "label": "Notes token" } },
+      "toolPolicy": "ask",
+      "timeoutSeconds": 120
+    }
+  ],
+  "instructions": "Cite note titles and keep quotations brief.",
+  "prompts": [
+    {
+      "name": "summarize",
+      "title": "Summarize notes",
+      "arguments": [{ "name": "topic", "required": true }],
+      "template": "Summarize my notes about {{topic}} and cite each note."
+    }
+  ],
+  "commands": [{ "name": "notes", "prompt": "summarize" }],
+  "agents": [
+    {
+      "id": "reviewer",
+      "name": "Reviewer",
+      "instructions": "Read the project and list issues with file references.",
+      "tools": ["read", "grep", "project_search"]
+    }
+  ],
+  "providers": [
+    {
+      "id": "custom:notes-model",
+      "title": "Notes model",
+      "baseURL": "https://models.example.invalid/v1",
+      "protocol": "openai-chat",
+      "headers": { "Authorization": { "secret": "MODEL_AUTHORIZATION", "label": "Model authorization header" } },
+      "models": [{ "id": "notes-chat", "name": "Notes chat", "protocol": "openai-chat", "vision": false }]
+    }
+  ]
+}

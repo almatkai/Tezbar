@@ -1,0 +1,419 @@
+{
+  "schemaVersion": 3,
+  "id": "com.tezbar.native.brew",
+  "slug": "brew",
+  "name": "Brew",
+  "version": "0.1.0",
+  "description": "Search, install, upgrade and uninstall Homebrew formulae and casks on your Mac, manage services and taps, run brew doctor and check vulnerabilities.",
+  "author": "nhojb",
+  "icon": "resources/icon.png",
+  "runtime": "rust",
+  "execution": "process",
+  "protocolVersion": 1,
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "installed",
+      "title": "Show Installed",
+      "subtitle": "Brew",
+      "description": "List installed brew formulae & casks",
+      "mode": "view",
+      "keywords": [
+        "list",
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "search",
+      "title": "Search",
+      "subtitle": "Brew",
+      "description": "Search brew formulae & casks",
+      "mode": "view",
+      "keywords": [
+        "homebrew"
+      ],
+      "arguments": [
+        {
+          "name": "search",
+          "placeholder": "Query",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "preferences": [
+        {
+          "name": "showMetadataPanel",
+          "type": "checkbox",
+          "default": true,
+          "required": false,
+          "title": "Search View",
+          "label": "Show metadata panel in search results",
+          "description": "Show the selected package's details beside the search results."
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "outdated",
+      "title": "Show Upgrades",
+      "subtitle": "Brew",
+      "description": "Review available upgrades, choose which to apply, and run it",
+      "mode": "view",
+      "keywords": [
+        "outdated",
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "show-vulnerabilities",
+      "title": "Show Vulnerabilities",
+      "subtitle": "Brew",
+      "description": "Check installed formulae for known vulnerabilities (Homebrew 7)",
+      "mode": "view",
+      "keywords": [
+        "security",
+        "vulns",
+        "vulnerabilities",
+        "cve",
+        "osv",
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "run-doctor",
+      "title": "Run Doctor",
+      "subtitle": "Brew",
+      "description": "Check your Homebrew installation for problems and fix them",
+      "mode": "view",
+      "keywords": [
+        "doctor",
+        "diagnose",
+        "health",
+        "check",
+        "problems",
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "adopt-apps",
+      "title": "Adopt Apps",
+      "subtitle": "Brew",
+      "description": "Find applications already on your Mac that Homebrew can manage, and adopt them into a cask.",
+      "mode": "view",
+      "keywords": [
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "upgrade",
+      "title": "Upgrade All",
+      "subtitle": "Brew",
+      "description": "Upgrade brew formulae & casks",
+      "mode": "view",
+      "keywords": [
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "manage-services",
+      "title": "Manage Services",
+      "subtitle": "Brew",
+      "description": "Start, stop & restart Homebrew services",
+      "mode": "view",
+      "keywords": [
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "manage-taps",
+      "title": "Manage Taps",
+      "subtitle": "Brew",
+      "description": "Add, trust & remove third-party Homebrew taps, and explore what they provide",
+      "mode": "view",
+      "keywords": [
+        "untap",
+        "trust",
+        "homebrew"
+      ],
+      "arguments": [
+        {
+          "name": "tap",
+          "placeholder": "user/repo",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "services-menu",
+      "title": "Services Menu Bar",
+      "subtitle": "Brew",
+      "description": "Control Homebrew services from the menu bar",
+      "mode": "menu-bar",
+      "interval": "1m",
+      "keywords": [
+        "homebrew"
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "clean-up",
+      "title": "Clean up",
+      "subtitle": "Brew",
+      "description": "Clean files and packages from the cache that are older than 120 days",
+      "mode": "no-view",
+      "keywords": [
+        "cleanup",
+        "homebrew"
+      ],
+      "preferences": [
+        {
+          "name": "withoutThreshold",
+          "title": "Clean up",
+          "type": "checkbox",
+          "default": false,
+          "required": false,
+          "label": "Include --prune=all when cleaning",
+          "description": "Remove every cached download (--prune=all), not only those over 120 days old."
+        }
+      ],
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    },
+    {
+      "name": "clear-cache",
+      "title": "Clear Cache",
+      "subtitle": "Brew",
+      "description": "Clear the cached Formulae, Casks, and installed packages files",
+      "mode": "no-view",
+      "keywords": [
+        "homebrew"
+      ],
+      "disabledByDefault": true,
+      "platforms": [
+        "macOS"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "refreshMs": null,
+      "timeoutMs": 300000
+    }
+  ],
+  "preferences": [
+    {
+      "name": "customBrewPath",
+      "type": "textfield",
+      "required": false,
+      "title": "Custom Brew Executable Path",
+      "description": "Set this if your brew executable is in a non-standard location"
+    },
+    {
+      "name": "terminalApp",
+      "type": "dropdown",
+      "required": false,
+      "default": "terminal",
+      "title": "Terminal Application",
+      "data": [
+        {
+          "title": "Alacritty",
+          "value": "alacritty"
+        },
+        {
+          "title": "Ghostty",
+          "value": "ghostty"
+        },
+        {
+          "title": "Hyper",
+          "value": "hyper"
+        },
+        {
+          "title": "iTerm",
+          "value": "iterm"
+        },
+        {
+          "title": "kitty",
+          "value": "kitty"
+        },
+        {
+          "title": "Terminal",
+          "value": "terminal"
+        },
+        {
+          "title": "Warp",
+          "value": "warp"
+        },
+        {
+          "title": "WezTerm",
+          "value": "wezterm"
+        }
+      ],
+      "description": "The terminal application/emulator to use when using any Run in Terminal action."
+    },
+    {
+      "name": "runInTerminalByDefault",
+      "type": "checkbox",
+      "required": false,
+      "default": false,
+      "label": "Install and uninstall in the terminal application",
+      "description": "Install and uninstall run in your terminal. ⌘I still installs in Raycast."
+    },
+    {
+      "name": "greedyUpgrades",
+      "type": "checkbox",
+      "required": false,
+      "title": "Upgrades",
+      "description": "Include auto-updating casks when upgrading or checking for outdated items.",
+      "default": false,
+      "label": "Include auto-updating casks when upgrading"
+    },
+    {
+      "name": "zapCask",
+      "type": "checkbox",
+      "required": false,
+      "title": "Uninstall",
+      "label": "Remove all files associated with a cask",
+      "description": "Also remove a cask's support files (--zap). Some may be shared with other apps."
+    },
+    {
+      "default": false,
+      "description": "Download one package at a time. Turn on if parallel downloads fail.",
+      "label": "Disable concurrent downloads",
+      "name": "disableDownloadConcurrency",
+      "required": false,
+      "title": "Homebrew Options",
+      "type": "checkbox"
+    },
+    {
+      "default": true,
+      "description": "List pinned packages first in Show Installed and Show Upgrades.",
+      "label": "Show pinned items at the top of lists",
+      "title": "Lists",
+      "name": "pinnedFirst",
+      "required": false,
+      "type": "checkbox"
+    },
+    {
+      "default": false,
+      "description": "Close Raycast after an install, uninstall or upgrade.",
+      "label": "Close immediately after action",
+      "name": "closeAfterAction",
+      "required": false,
+      "title": "Window Behavior",
+      "type": "checkbox"
+    },
+    {
+      "default": false,
+      "description": "Show detailed logs in the console for debugging.",
+      "label": "Enable extra diagnostics in the console",
+      "name": "verboseLogging",
+      "required": false,
+      "title": "Debug Logging",
+      "type": "checkbox"
+    }
+  ],
+  "replaces": [
+    "raycast.brew"
+  ],
+  "capabilities": [
+    "dialog.confirm",
+    "clipboard.write",
+    "window.visibility",
+    "background.retain",
+    "background.release",
+    "tray.set",
+    "tray.remove"
+  ],
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/brew/releases/download/v0.1.0/brew-aarch64-apple-darwin-development.zip",
+      "sha256": "80697e468292e7bbb49c510bdc30a1fb79b95a86a0fec7cbd51c21921c89d87a",
+      "executable": "bin/brew",
+      "executableSha256": "368bc9aca93d8a2b8da68df16bae6963c3d49b6ecc16eb3624ea4601c414cac5"
+    }
+  },
+  "files": {},
+  "verification": [
+    {
+      "platform": "macOS",
+      "state": "not-run",
+      "note": "Native macOS and Windows synthetic tests/package checks passed; live desktop and real service/account acceptance remain pending. Requires the beta.12 host contracts."
+    }
+  ],
+  "repository": "https://github.com/almatkai/brew",
+  "minHostVersion": "0.3.0-beta.12"
+}

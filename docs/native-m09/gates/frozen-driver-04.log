@@ -1,0 +1,44 @@
+START model-extension-regressions
+END model-extension-regressions: 0
+START root-bench-panel
+END root-bench-panel: 0
+START normal-native
+END normal-native: 0
+START bench-native
+END bench-native: 0
+START ui
+END ui: 0
+START model-all
+END model-all: 0
+START core-assets
+END core-assets: 0
+START core-registry-scopes
+END core-registry-scopes: 0
+START core-desktop
+END core-desktop: 0
+START core-worker-unit
+END core-worker-unit: 0
+START core-root-stream
+END core-root-stream: 0
+START core-status-shapes
+END core-status-shapes: 0
+START rust-bun-smoke
+END rust-bun-smoke: 0
+START channel-audit
+END channel-audit: 0
+START typecheck
+END typecheck: 0
+START typescript
+END typescript: 0
+START worker-smoke
+END worker-smoke: 0
+START normal-check
+END normal-check: 0
+START debug-build
+END debug-build: 0
+START tree
+END tree: 0
+START metadata
+END metadata: 0
+START lock-drift
+END lock-drift: 1

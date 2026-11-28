@@ -1,0 +1,6 @@
+$ rustfmt --check --edition 2024 --config skip_children=true apps/tezbar/src/surfaces/terminal/ime.rs apps/tezbar/src/surfaces/terminal/input.rs apps/tezbar/src/surfaces/terminal/mod.rs apps/tezbar/src/surfaces/terminal/request.rs apps/tezbar/src/surfaces/terminal/state.rs apps/tezbar/src/surfaces/terminal/tests.rs apps/tezbar/src/surfaces/terminal/view.rs crates/tezbar-ui/src/terminal_grid.rs
+exit=0
+stdout:
+
+stderr:
+

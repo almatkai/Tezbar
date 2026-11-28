@@ -1,0 +1,347 @@
+mod acquisition;
+mod catalog;
+mod command_list;
+#[cfg(test)]
+mod command_list_tests;
+mod launcher;
+mod native;
+mod process;
+pub(crate) mod process_host;
+mod process_install;
+
+mod registry;
+pub(crate) use registry::hotkey_edit_owner;
+mod updates;
+mod v2_catalog;
+mod v2_runtime;
+// Domain implementations/assets live in standalone extension repositories.
+// v2_runtime retains generic legacy identity compatibility only.
+
+use super::common::{CoreContext, HandlerResult};
+use super::extension_worker::{ExtensionWorker, CHANNELS as WORKER_CHANNELS};
+use serde_json::{json, Value};
+use std::sync::{Arc, Mutex};
+
+/// Compatibility names owned by one canonical native command hotkey.
+pub(crate) fn command_hotkey_aliases(id: &str) -> Vec<String> {
+    let Some((extension, command)) = id.strip_prefix("extcmd:").and_then(|v| v.split_once(':')) else {
+        return vec![];
+    };
+    let Some(slug) = extension.strip_prefix("com.tezbar.native.") else { return vec![]; };
+    if process_install::component(slug).is_err() || process_install::component(command).is_err() {
+        return vec![];
+    }
+    let mut ids = vec![format!("raycast.{slug}"), format!("com.tezbar.{slug}")];
+    let mut declared = v2_runtime::compatible_ids(slug);
+    declared.sort();
+    for alias in declared {
+        if alias != extension && !ids.contains(&alias) { ids.push(alias); }
+    }
+    if !ids.iter().any(|alias| alias == slug) { ids.push(slug.to_owned()); }
+    ids.into_iter().map(|alias| format!("extcmd:{alias}:{command}")).collect()
+}
+
+/// Keep rollback values outside the map registered by PlatformCore at startup.
+pub(crate) fn retire_legacy_command_hotkeys(config: &mut Value, id: &str) -> Result<(), String> {
+    let values: Vec<_> = command_hotkey_aliases(id).into_iter()
+        .filter_map(|alias| config["commandHotkeys"].get(&alias).cloned().map(|value| (alias, value)))
+        .collect();
+    if values.is_empty() { return Ok(()); }
+    let extension = id.strip_prefix("extcmd:").unwrap().split_once(':').unwrap().0;
+    let backup = format!("identityMigrationHotkeyBackup:{extension}");
+    if config.get(&backup).is_some_and(|value| !value.is_object()) {
+        return Err("Identity migration: invalid hotkey rollback map; configuration retained".into());
+    }
+    if config.get(&backup).is_none() { config[&backup] = json!({}); }
+    for (alias, value) in values {
+        config[&backup][&alias] = value;
+        config["commandHotkeys"].as_object_mut().ok_or("Invalid commandHotkeys")?.remove(&alias);
+    }
+    Ok(())
+}
+
+pub(crate) fn v2_cli_list(ctx: &CoreContext) -> super::common::CoreResult {
+    v2_catalog::cli_list(ctx)
+}
+
+pub(crate) async fn v2_cli_install(ctx: &CoreContext, id: &str) -> super::common::CoreResult {
+    v2_catalog::cli_install(ctx, id).await
+}
+pub(crate) async fn v3_cli_import(
+    ctx: &CoreContext,
+    manifest: std::path::PathBuf,
+    zip: std::path::PathBuf,
+) -> super::common::CoreResult {
+    let manifest = super::common::read_json(&manifest)?;
+    process_install::install(ctx, manifest, Some(zip)).await
+}
+
+pub const CHANNELS: &[&str] = &[
+    "get-extensions",
+    "extensions:listInstalled",
+    "extensions:searchStore",
+    "extensions:uninstall",
+    "extensions:integrity",
+    "extensions:install-error",
+    "extension:list",
+    "extension:search-store",
+    "extension:uninstall",
+    "preferences:get",
+    "preferences:setup",
+    "preferences:set",
+    "get-installed-extensions-settings-schema",
+    "core:extensions:commands",
+    "extensions:updates",
+    "extensions:check-updates",
+];
+
+#[derive(Clone)]
+pub struct ExtensionsCore {
+    ctx: CoreContext,
+    worker: ExtensionWorker,
+    // Serialize metadata mutations without blocking the async runtime.
+    files: Arc<Mutex<()>>,
+    catalog: catalog::Catalog,
+    native: native::NativeSessions,
+    installs: Arc<tokio::sync::Mutex<()>>,
+    commands: Arc<command_list::CommandList>,
+    update_checks: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    #[cfg(test)]
+    worker_override: Option<super::common::CoreRouter>,
+    #[cfg(test)]
+    hash_work: Arc<process_install::hash_work::Work>,
+}
+
+impl ExtensionsCore {
+    pub fn asset_scope(&self, id: &str) -> Result<crate::assets::AssetScope, String> {
+        registry::asset_scope(&self.ctx, id)
+    }
+    pub fn asset_scope_for_root(
+        &self,
+        root: &std::path::Path,
+    ) -> Result<crate::assets::AssetScope, String> {
+        registry::asset_scope_for_root(&self.ctx, root)
+    }
+    pub fn start(&self) -> Result<(), String> {
+        self.native.start(&self.ctx)?;
+        // Installed extensions are checked for updates every 12 hours.
+        if let Ok(mut task) = self.update_checks.lock() {
+            if task.as_ref().is_none_or(|t| t.is_finished()) {
+                *task = updates::spawn(self.ctx.clone(), self.catalog.clone());
+            }
+        }
+        Ok(())
+    }
+
+    pub fn new(ctx: CoreContext) -> Self {
+        Self {
+            worker: ExtensionWorker::new(ctx.clone()),
+            catalog: catalog::Catalog::new(ctx.clone()),
+            ctx,
+            files: Arc::new(Mutex::new(())),
+            native: native::NativeSessions::default(),
+            installs: Arc::new(tokio::sync::Mutex::new(())),
+            commands: Arc::default(),
+            update_checks: Arc::default(),
+            #[cfg(test)]
+            worker_override: None,
+            #[cfg(test)]
+            hash_work: Arc::default(),
+        }
+    }
+    pub fn with_worker_launch(
+        ctx: CoreContext,
+        launch: super::extension_worker::WorkerLaunch,
+    ) -> Self {
+        Self {
+            worker: ExtensionWorker::with_launch(ctx.clone(), launch),
+            ..Self::new(ctx)
+        }
+    }
+
+    pub async fn handle(&self, channel: &str, args: &[Value]) -> HandlerResult {
+        if channel == "core:extensions:commands" {
+            return Some(
+                self.commands
+                    .commands(
+                        &self.ctx,
+                        #[cfg(test)]
+                        self.hash_work.clone(),
+                    )
+                    .await,
+            );
+        }
+        // Fence the whole operation (including worker installs, failure and
+        // cancellation), not just its final event. CLI imports are discovered
+        // independently by the cheap input probe.
+        let mut command_mutation = matches!(
+            channel,
+            "extension:install"
+                | "extensions:install"
+                | "extensions:reinstall"
+                | "extension:uninstall"
+                | "extensions:uninstall"
+        )
+        .then(|| self.commands.mutation());
+        if let Some(result) = self
+            .native
+            .handle(&self.ctx, &self.files, channel, args)
+            .await
+        {
+            return Some(result);
+        }
+        if matches!(
+            channel,
+            "extension:install" | "extensions:install" | "extensions:reinstall"
+        ) {
+            if let Some(id) = args.first().and_then(Value::as_str) {
+                let _install = self.installs.lock().await;
+                // Reject unsupported acquisition before disturbing a running
+                // local package. The installer independently enforces this.
+                if let Err(error) = acquisition::require_remote(acquisition::for_id(id)) {
+                    return Some(Err(error));
+                }
+                if let Some(slug) = id.strip_prefix("com.tezbar.native.") {
+                    self.native.clear_slug(slug).await;
+                }
+                match v2_catalog::install(&self.ctx, id).await {
+                    Some(result) => {
+                        drop(command_mutation.take());
+                        // Resume only this package's durable ownership after an
+                        // update (or failed update retaining its old activation).
+                        if let Err(error)=self.native.restore_id(&self.ctx,id){log::warn!("Background restoration after install failed: {error}");}
+                        if result.is_ok() {
+                            self.ctx.emit("extensions-changed", json!({}));
+                            let _ = self
+                                .ctx
+                                .request("core:launcher:reindex-extensions", vec![])
+                                .await;
+                        }
+                        return Some(result);
+                    }
+                    None if id.starts_with("com.tezbar.native.") => return Some(Err("Unknown external Rust package; import a trusted local release manifest and ZIP".into())),
+                    None => {}
+                }
+            }
+        }
+        if WORKER_CHANNELS.contains(&channel) {
+            #[cfg(test)]
+            if let Some(router) = &self.worker_override {
+                return Some(router(channel.to_string(), args.to_vec()).await);
+            }
+            let result = self.worker.request(channel, args.to_vec()).await;
+            drop(command_mutation.take());
+            if result.is_ok() && channel.ends_with("install") {
+                self.ctx.emit("extensions-changed", json!({}));
+                // The launcher refreshes its native extension documents on this request.
+                let _ = self
+                    .ctx
+                    .request("core:launcher:reindex-extensions", vec![])
+                    .await;
+            }
+            return Some(result);
+        }
+        if !CHANNELS.contains(&channel) {
+            return None;
+        }
+        if channel == "extension:search-store" || channel == "extensions:searchStore" {
+            return Some(self.catalog.search(channel, args).await);
+        }
+        if channel == "extensions:check-updates" {
+            return Some(updates::check(&self.ctx, &self.catalog).await);
+        }
+        if channel == "extensions:updates" {
+            let ctx = self.ctx.clone();
+            return Some(
+                tokio::task::spawn_blocking(move || updates::current(&ctx))
+                    .await
+                    .map_err(|e| e.to_string())
+                    .and_then(|v| v),
+            );
+        }
+        let this = self.clone();
+        let channel = channel.to_string();
+        let args = args.to_vec();
+        let uninstall = channel == "extension:uninstall" || channel == "extensions:uninstall";
+        let uninstall_slug = if uninstall {
+            args.first()
+                .and_then(Value::as_str)
+                .and_then(|id| id.trim().strip_prefix("com.tezbar.native."))
+                .map(str::to_owned)
+        } else {
+            None
+        };
+        let _install_guard = if uninstall {
+            Some(self.installs.lock().await)
+        } else {
+            None
+        };
+        if let Some(slug) = &uninstall_slug {
+            self.native.clear_slug(slug).await;
+        }
+        let sdk_remove_id = if uninstall {
+            args.first().and_then(Value::as_str).map(str::to_owned)
+        } else {
+            None
+        };
+        let blocking_mutation = command_mutation.take();
+        let result = tokio::task::spawn_blocking(move || {
+            // A cancelled async request must not release the uninstall fence
+            // while its blocking filesystem operation is still in flight.
+            let _command_mutation = blocking_mutation;
+            let _guard = this.files.lock().map_err(|e| e.to_string())?;
+            registry::handle(&this.ctx, &channel, &args)
+        })
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|v| v);
+        drop(command_mutation.take());
+        if uninstall && result.is_ok() {
+            if let Some(id) = sdk_remove_id {
+                self.worker.retire_sdk(&id, None).await;
+            }
+
+            if let Some(slug) = uninstall_slug {
+                self.native.clear_slug(&slug).await;
+            }
+            let _ = self
+                .ctx
+                .request("core:launcher:reindex-extensions", vec![])
+                .await;
+        }
+        Some(result)
+    }
+
+    pub(crate) async fn refresh_sdk_status(&self, payload: Value) -> crate::common::CoreResult {
+        self.worker
+            .request("extension:refresh-session", vec![payload])
+            .await
+    }
+    pub(crate) async fn command_disabled(&self, id: &str) {
+        if let Some((extension, command)) = id
+            .strip_prefix("extcmd:")
+            .and_then(|id| id.rsplit_once(':'))
+        {
+            self.worker.retire_sdk(extension, Some(command)).await;
+        }
+    }
+    pub async fn shutdown(&self) {
+        if let Some(task) = self.update_checks.lock().ok().and_then(|mut t| t.take()) {
+            task.abort();
+        }
+        self.commands.clear();
+        self.native.clear().await;
+        self.worker.shutdown().await;
+    }
+    pub async fn restart_worker(&self) {
+        self.native.clear().await;
+        self.worker.shutdown().await;
+    }
+
+    #[cfg(test)]
+    pub async fn worker_running(&self) -> bool {
+        self.worker.is_running().await
+    }
+}
+
+mod process_audio;

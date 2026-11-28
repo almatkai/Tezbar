@@ -1,0 +1,17 @@
+{
+  "apps/tezbar/build.rs": "2e5946f621e7b1f2474193a70b757f6a43002e612bb9cd457cddf34f52dd8925",
+  "apps/tezbar/src/app.rs": "3d4f0cc58177deb94f1150730d9910fcd7fab87786b59c94cf69c25bd9333f2a",
+  "apps/tezbar/src/app/m11.rs": "7b08cb0e15daebab7b77bc9b20004186308e2d59bb17a422775ca19ecd90ff71",
+  "apps/tezbar/src/app/m8_tests.rs": "97d1a16cea9749db517765def45c1fbcdb618062226371b718f687a5955e5b4e",
+  "apps/tezbar/src/app/production_launch/build_metadata.rs": "d2b65d1b54597fa0e7fa58099e031348025a315e36ee76b058a668be886ad54a",
+  "apps/tezbar/src/app/production_launch/bundle_validation.rs": "a7aba7f5b2bab170822861789b7c3906938b5c7b92b37e7287a1b80f160f4807",
+  "crates/tezbar-update/src/native.rs": "a80ffbfe2a57afbe0189cb7a5959ccef9765cace06302349ade4cf1645f40596",
+  "docs/native-m11/integration/prepare-cutover.py": "2a906cbeeda205e24cb9ecb45debace1d90765b5f99448acae27cba17747bef2",
+  "scripts/native/README.md": "532e474062013b51d727cdc5284f798a326a138974054b6a10df220ef717083e",
+  "scripts/native/admission-fixture.test.mjs": "e5606325e8ba528036f5972cf52b03bd259e176247288641e72318c18b2c1656",
+  "scripts/native/build-identity.test.mjs": "200ea1a3699a75cf45abafbe55d01d233e9032b96840b2e6b4dce8065e431ce2",
+  "scripts/native/build-metadata.mjs": "8758e58b19e2210f814b7c9ff18e828186eb20d0f07c8721f98e35a10394a8c8",
+  "scripts/native/cutover.test.py": "b00ac09c7b5e496eff01408da2a15d1cda7ad9065510e133547a86a525ec8fce",
+  "scripts/native/package-macos.mjs": "94d894cec5363cdb24a89c22e67f7ce71df1a7f3039367c05746eafc8545ca3d",
+  "scripts/native/provenance.test.mjs": "04e8f1c686c4217c26867464732370fcfe58eb1473c7b0b514559bdad9c3921b"
+}

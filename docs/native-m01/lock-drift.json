@@ -1,0 +1,1303 @@
+{
+  "baseline": "55971131bf2bcb2cd4e44129fc0c1a130d085500",
+  "locks": {
+    "Cargo.lock": {
+      "sha256": "27c023e3302e1b3682587254819b98cacce2745c876e408f93fb786f7afd6dfd",
+      "watchlist": {
+        "arboard": [
+          "3.6.1"
+        ],
+        "image": [
+          "0.25.9"
+        ],
+        "notify": [
+          "8.2.0"
+        ],
+        "regex": [
+          "1.12.4"
+        ],
+        "reqwest": [
+          "0.13.4"
+        ],
+        "rusqlite": [
+          "0.32.1"
+        ],
+        "serde_json": [
+          "1.0.150"
+        ],
+        "tokio": [
+          "1.52.3"
+        ],
+        "unicode-normalization": [
+          "0.1.26"
+        ],
+        "walkdir": [
+          "2.5.0"
+        ]
+      },
+      "watchlist_changes": [],
+      "shared_registry_changes": [
+        {
+          "name": "ahash",
+          "before": [
+            "0.7.8",
+            "0.8.12"
+          ],
+          "after": [
+            "0.8.12"
+          ]
+        },
+        {
+          "name": "base64",
+          "before": [
+            "0.21.7",
+            "0.22.1"
+          ],
+          "after": [
+            "0.22.1"
+          ]
+        },
+        {
+          "name": "bit-set",
+          "before": [
+            "0.8.0"
+          ],
+          "after": [
+            "0.11.1",
+            "0.8.0"
+          ]
+        },
+        {
+          "name": "bit-vec",
+          "before": [
+            "0.8.0"
+          ],
+          "after": [
+            "0.10.1",
+            "0.8.0"
+          ]
+        },
+        {
+          "name": "block2",
+          "before": [
+            "0.6.2"
+          ],
+          "after": [
+            "0.5.1",
+            "0.6.2"
+          ]
+        },
+        {
+          "name": "brotli",
+          "before": [
+            "8.0.3",
+            "9.0.0"
+          ],
+          "after": [
+            "9.0.0"
+          ]
+        },
+        {
+          "name": "cfg_aliases",
+          "before": [
+            "0.1.1",
+            "0.2.1"
+          ],
+          "after": [
+            "0.1.1",
+            "0.2.2"
+          ]
+        },
+        {
+          "name": "core-graphics",
+          "before": [
+            "0.23.2",
+            "0.25.0"
+          ],
+          "after": [
+            "0.23.2",
+            "0.24.0"
+          ]
+        },
+        {
+          "name": "ctor",
+          "before": [
+            "0.8.0"
+          ],
+          "after": [
+            "1.0.13"
+          ]
+        },
+        {
+          "name": "futures-channel",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-core",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-executor",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-io",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-macro",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-sink",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-task",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-util",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "hashbrown",
+          "before": [
+            "0.12.3",
+            "0.14.5",
+            "0.15.5",
+            "0.17.1"
+          ],
+          "after": [
+            "0.14.5",
+            "0.15.5",
+            "0.16.1",
+            "0.17.1"
+          ]
+        },
+        {
+          "name": "indexmap",
+          "before": [
+            "1.9.3",
+            "2.14.0"
+          ],
+          "after": [
+            "2.14.0"
+          ]
+        },
+        {
+          "name": "js-sys",
+          "before": [
+            "0.3.102"
+          ],
+          "after": [
+            "0.3.107"
+          ]
+        },
+        {
+          "name": "libloading",
+          "before": [
+            "0.7.4"
+          ],
+          "after": [
+            "0.7.4",
+            "0.8.9"
+          ]
+        },
+        {
+          "name": "miniz_oxide",
+          "before": [
+            "0.8.9"
+          ],
+          "after": [
+            "0.8.9",
+            "0.9.1"
+          ]
+        },
+        {
+          "name": "objc2",
+          "before": [
+            "0.6.4"
+          ],
+          "after": [
+            "0.5.3",
+            "0.6.4"
+          ]
+        },
+        {
+          "name": "objc2-app-kit",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "objc2-core-data",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2"
+          ]
+        },
+        {
+          "name": "objc2-core-image",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2"
+          ]
+        },
+        {
+          "name": "objc2-foundation",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "objc2-quartz-core",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "proc-macro-crate",
+          "before": [
+            "1.3.1",
+            "2.0.2",
+            "3.5.0"
+          ],
+          "after": [
+            "2.0.0",
+            "3.5.0"
+          ]
+        },
+        {
+          "name": "quick-xml",
+          "before": [
+            "0.38.4"
+          ],
+          "after": [
+            "0.41.0"
+          ]
+        },
+        {
+          "name": "rand",
+          "before": [
+            "0.8.6"
+          ],
+          "after": [
+            "0.8.6",
+            "0.9.5"
+          ]
+        },
+        {
+          "name": "rand_chacha",
+          "before": [
+            "0.3.1"
+          ],
+          "after": [
+            "0.3.1",
+            "0.9.0"
+          ]
+        },
+        {
+          "name": "rand_core",
+          "before": [
+            "0.6.4"
+          ],
+          "after": [
+            "0.6.4",
+            "0.9.5"
+          ]
+        },
+        {
+          "name": "rustc-hash",
+          "before": [
+            "2.1.2"
+          ],
+          "after": [
+            "1.1.0",
+            "2.1.2"
+          ]
+        },
+        {
+          "name": "schemars",
+          "before": [
+            "0.8.22",
+            "0.9.0",
+            "1.2.1"
+          ],
+          "after": [
+            "1.2.1"
+          ]
+        },
+        {
+          "name": "schemars_derive",
+          "before": [
+            "0.8.22"
+          ],
+          "after": [
+            "1.2.1"
+          ]
+        },
+        {
+          "name": "syn",
+          "before": [
+            "1.0.109",
+            "2.0.117",
+            "3.0.3"
+          ],
+          "after": [
+            "2.0.117",
+            "3.0.3"
+          ]
+        },
+        {
+          "name": "toml",
+          "before": [
+            "0.8.2",
+            "0.9.12+spec-1.1.0",
+            "1.1.2+spec-1.1.0"
+          ],
+          "after": [
+            "0.8.23",
+            "1.1.2+spec-1.1.0"
+          ]
+        },
+        {
+          "name": "toml_datetime",
+          "before": [
+            "0.6.3",
+            "0.7.5+spec-1.1.0",
+            "1.1.1+spec-1.1.0"
+          ],
+          "after": [
+            "0.6.11",
+            "1.1.1+spec-1.1.0"
+          ]
+        },
+        {
+          "name": "toml_edit",
+          "before": [
+            "0.19.15",
+            "0.20.2",
+            "0.25.12+spec-1.1.0"
+          ],
+          "after": [
+            "0.20.2",
+            "0.22.27",
+            "0.25.12+spec-1.1.0"
+          ]
+        },
+        {
+          "name": "wasm-bindgen",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-futures",
+          "before": [
+            "0.4.75"
+          ],
+          "after": [
+            "0.4.80"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-macro",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-macro-support",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-shared",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "web-sys",
+          "before": [
+            "0.3.102"
+          ],
+          "after": [
+            "0.3.107"
+          ]
+        },
+        {
+          "name": "windows",
+          "before": [
+            "0.61.3"
+          ],
+          "after": [
+            "0.57.0",
+            "0.61.3",
+            "0.62.2"
+          ]
+        },
+        {
+          "name": "windows-collections",
+          "before": [
+            "0.2.0"
+          ],
+          "after": [
+            "0.2.0",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "windows-core",
+          "before": [
+            "0.61.2"
+          ],
+          "after": [
+            "0.57.0",
+            "0.61.2",
+            "0.62.2"
+          ]
+        },
+        {
+          "name": "windows-future",
+          "before": [
+            "0.2.1"
+          ],
+          "after": [
+            "0.2.1",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "windows-implement",
+          "before": [
+            "0.60.2"
+          ],
+          "after": [
+            "0.57.0",
+            "0.60.2"
+          ]
+        },
+        {
+          "name": "windows-interface",
+          "before": [
+            "0.59.3"
+          ],
+          "after": [
+            "0.57.0",
+            "0.59.3"
+          ]
+        },
+        {
+          "name": "windows-numerics",
+          "before": [
+            "0.2.0"
+          ],
+          "after": [
+            "0.2.0",
+            "0.3.1"
+          ]
+        },
+        {
+          "name": "windows-result",
+          "before": [
+            "0.3.4"
+          ],
+          "after": [
+            "0.1.2",
+            "0.3.4",
+            "0.4.1"
+          ]
+        },
+        {
+          "name": "windows-strings",
+          "before": [
+            "0.4.2"
+          ],
+          "after": [
+            "0.4.2",
+            "0.5.1"
+          ]
+        },
+        {
+          "name": "windows-sys",
+          "before": [
+            "0.45.0",
+            "0.59.0",
+            "0.60.2",
+            "0.61.2"
+          ],
+          "after": [
+            "0.59.0",
+            "0.60.2",
+            "0.61.2"
+          ]
+        },
+        {
+          "name": "windows-targets",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.5"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.5"
+          ]
+        },
+        {
+          "name": "windows-threading",
+          "before": [
+            "0.1.0"
+          ],
+          "after": [
+            "0.1.0",
+            "0.2.1"
+          ]
+        },
+        {
+          "name": "windows_aarch64_gnullvm",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.1"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.1"
+          ]
+        },
+        {
+          "name": "windows_aarch64_msvc",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.1"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.1"
+          ]
+        },
+        {
+          "name": "windows_i686_gnu",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.1"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.1"
+          ]
+        },
+        {
+          "name": "windows_i686_msvc",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.1"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.1"
+          ]
+        },
+        {
+          "name": "windows_x86_64_gnu",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.1"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.1"
+          ]
+        },
+        {
+          "name": "windows_x86_64_gnullvm",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.1"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.1"
+          ]
+        },
+        {
+          "name": "windows_x86_64_msvc",
+          "before": [
+            "0.42.2",
+            "0.52.6",
+            "0.53.1"
+          ],
+          "after": [
+            "0.52.6",
+            "0.53.1"
+          ]
+        }
+      ],
+      "registry_set_changes": null
+    },
+    "src-tauri/Cargo.lock": {
+      "sha256": "d868e6aca47f2e066c2a8e976d87cb6058d1b901e24dac208f2bd1da2fe56566",
+      "watchlist": {
+        "arboard": [
+          "3.6.1"
+        ],
+        "image": [
+          "0.25.9"
+        ],
+        "notify": [
+          "8.2.0"
+        ],
+        "regex": [
+          "1.12.4"
+        ],
+        "reqwest": [
+          "0.13.4"
+        ],
+        "rusqlite": [
+          "0.32.1"
+        ],
+        "serde_json": [
+          "1.0.150"
+        ],
+        "tokio": [
+          "1.52.3"
+        ],
+        "unicode-normalization": [
+          "0.1.26"
+        ],
+        "walkdir": [
+          "2.5.0"
+        ]
+      },
+      "watchlist_changes": [],
+      "shared_registry_changes": [],
+      "registry_set_changes": []
+    },
+    "prototypes/native-launcher/Cargo.lock": {
+      "sha256": "23535c18b889be82ea533693b5ff066234fcb74eff9c5afd23bed110da6c3f40",
+      "watchlist": {
+        "arboard": [
+          "3.6.1"
+        ],
+        "image": [
+          "0.25.9"
+        ],
+        "notify": [
+          "8.2.0"
+        ],
+        "regex": [
+          "1.12.4"
+        ],
+        "reqwest": [
+          "0.13.4"
+        ],
+        "rusqlite": [
+          "0.32.1"
+        ],
+        "serde_json": [
+          "1.0.150"
+        ],
+        "tokio": [
+          "1.52.3"
+        ],
+        "unicode-normalization": [
+          "0.1.26"
+        ],
+        "walkdir": [
+          "2.5.0"
+        ]
+      },
+      "watchlist_changes": [],
+      "shared_registry_changes": [
+        {
+          "name": "bit-set",
+          "before": [
+            "0.8.0"
+          ],
+          "after": [
+            "0.11.1",
+            "0.8.0"
+          ]
+        },
+        {
+          "name": "bit-vec",
+          "before": [
+            "0.8.0"
+          ],
+          "after": [
+            "0.10.1",
+            "0.8.0"
+          ]
+        },
+        {
+          "name": "block2",
+          "before": [
+            "0.6.2"
+          ],
+          "after": [
+            "0.5.1",
+            "0.6.2"
+          ]
+        },
+        {
+          "name": "cfg_aliases",
+          "before": [
+            "0.1.1",
+            "0.2.1"
+          ],
+          "after": [
+            "0.1.1",
+            "0.2.2"
+          ]
+        },
+        {
+          "name": "core-graphics",
+          "before": [
+            "0.23.2",
+            "0.25.0"
+          ],
+          "after": [
+            "0.23.2",
+            "0.24.0",
+            "0.25.0"
+          ]
+        },
+        {
+          "name": "ctor",
+          "before": [
+            "0.8.0"
+          ],
+          "after": [
+            "0.8.0",
+            "1.0.13"
+          ]
+        },
+        {
+          "name": "futures-channel",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-core",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-executor",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-io",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-macro",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-sink",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-task",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "futures-util",
+          "before": [
+            "0.3.32"
+          ],
+          "after": [
+            "0.3.34"
+          ]
+        },
+        {
+          "name": "hashbrown",
+          "before": [
+            "0.12.3",
+            "0.14.5",
+            "0.15.5",
+            "0.17.1"
+          ],
+          "after": [
+            "0.12.3",
+            "0.14.5",
+            "0.15.5",
+            "0.16.1",
+            "0.17.1"
+          ]
+        },
+        {
+          "name": "js-sys",
+          "before": [
+            "0.3.102"
+          ],
+          "after": [
+            "0.3.107"
+          ]
+        },
+        {
+          "name": "libloading",
+          "before": [
+            "0.7.4"
+          ],
+          "after": [
+            "0.7.4",
+            "0.8.9"
+          ]
+        },
+        {
+          "name": "miniz_oxide",
+          "before": [
+            "0.8.9"
+          ],
+          "after": [
+            "0.8.9",
+            "0.9.1"
+          ]
+        },
+        {
+          "name": "objc2",
+          "before": [
+            "0.6.4"
+          ],
+          "after": [
+            "0.5.3",
+            "0.6.4"
+          ]
+        },
+        {
+          "name": "objc2-app-kit",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "objc2-core-data",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "objc2-core-image",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "objc2-foundation",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "objc2-quartz-core",
+          "before": [
+            "0.3.2"
+          ],
+          "after": [
+            "0.2.2",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "proc-macro-crate",
+          "before": [
+            "1.3.1",
+            "2.0.2",
+            "3.5.0"
+          ],
+          "after": [
+            "1.3.1",
+            "2.0.0",
+            "3.5.0"
+          ]
+        },
+        {
+          "name": "quick-xml",
+          "before": [
+            "0.38.4"
+          ],
+          "after": [
+            "0.38.4",
+            "0.41.0"
+          ]
+        },
+        {
+          "name": "rand",
+          "before": [
+            "0.8.6"
+          ],
+          "after": [
+            "0.8.6",
+            "0.9.5"
+          ]
+        },
+        {
+          "name": "rand_chacha",
+          "before": [
+            "0.3.1"
+          ],
+          "after": [
+            "0.3.1",
+            "0.9.0"
+          ]
+        },
+        {
+          "name": "rand_core",
+          "before": [
+            "0.6.4"
+          ],
+          "after": [
+            "0.6.4",
+            "0.9.5"
+          ]
+        },
+        {
+          "name": "rustc-hash",
+          "before": [
+            "2.1.2"
+          ],
+          "after": [
+            "1.1.0",
+            "2.1.2"
+          ]
+        },
+        {
+          "name": "schemars_derive",
+          "before": [
+            "0.8.22"
+          ],
+          "after": [
+            "0.8.22",
+            "1.2.1"
+          ]
+        },
+        {
+          "name": "toml",
+          "before": [
+            "0.8.2",
+            "0.9.12+spec-1.1.0",
+            "1.1.2+spec-1.1.0"
+          ],
+          "after": [
+            "0.8.23",
+            "0.9.12+spec-1.1.0",
+            "1.1.2+spec-1.1.0"
+          ]
+        },
+        {
+          "name": "toml_datetime",
+          "before": [
+            "0.6.3",
+            "0.7.5+spec-1.1.0",
+            "1.1.1+spec-1.1.0"
+          ],
+          "after": [
+            "0.6.11",
+            "0.7.5+spec-1.1.0",
+            "1.1.1+spec-1.1.0"
+          ]
+        },
+        {
+          "name": "toml_edit",
+          "before": [
+            "0.19.15",
+            "0.20.2",
+            "0.25.12+spec-1.1.0"
+          ],
+          "after": [
+            "0.19.15",
+            "0.20.2",
+            "0.22.27",
+            "0.25.12+spec-1.1.0"
+          ]
+        },
+        {
+          "name": "wasm-bindgen",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-futures",
+          "before": [
+            "0.4.75"
+          ],
+          "after": [
+            "0.4.80"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-macro",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-macro-support",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "wasm-bindgen-shared",
+          "before": [
+            "0.2.125"
+          ],
+          "after": [
+            "0.2.130"
+          ]
+        },
+        {
+          "name": "web-sys",
+          "before": [
+            "0.3.102"
+          ],
+          "after": [
+            "0.3.107"
+          ]
+        },
+        {
+          "name": "windows",
+          "before": [
+            "0.61.3"
+          ],
+          "after": [
+            "0.57.0",
+            "0.61.3",
+            "0.62.2"
+          ]
+        },
+        {
+          "name": "windows-collections",
+          "before": [
+            "0.2.0"
+          ],
+          "after": [
+            "0.2.0",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "windows-core",
+          "before": [
+            "0.61.2"
+          ],
+          "after": [
+            "0.57.0",
+            "0.61.2",
+            "0.62.2"
+          ]
+        },
+        {
+          "name": "windows-future",
+          "before": [
+            "0.2.1"
+          ],
+          "after": [
+            "0.2.1",
+            "0.3.2"
+          ]
+        },
+        {
+          "name": "windows-implement",
+          "before": [
+            "0.60.2"
+          ],
+          "after": [
+            "0.57.0",
+            "0.60.2"
+          ]
+        },
+        {
+          "name": "windows-interface",
+          "before": [
+            "0.59.3"
+          ],
+          "after": [
+            "0.57.0",
+            "0.59.3"
+          ]
+        },
+        {
+          "name": "windows-numerics",
+          "before": [
+            "0.2.0"
+          ],
+          "after": [
+            "0.2.0",
+            "0.3.1"
+          ]
+        },
+        {
+          "name": "windows-result",
+          "before": [
+            "0.3.4"
+          ],
+          "after": [
+            "0.1.2",
+            "0.3.4",
+            "0.4.1"
+          ]
+        },
+        {
+          "name": "windows-strings",
+          "before": [
+            "0.4.2"
+          ],
+          "after": [
+            "0.4.2",
+            "0.5.1"
+          ]
+        },
+        {
+          "name": "windows-threading",
+          "before": [
+            "0.1.0"
+          ],
+          "after": [
+            "0.1.0",
+            "0.2.1"
+          ]
+        }
+      ],
+      "registry_set_changes": null
+    }
+  }
+}

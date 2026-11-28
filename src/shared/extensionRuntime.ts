@@ -1,3 +1,5 @@
+import type { ExtensionManifest, ExtensionPlatform, ExtensionRuntimeKind, NativeV2Info } from './extensions'
+
 export type ExtensionRegistryCommand = {
   name: string
   title: string
@@ -12,9 +14,13 @@ export type ExtensionRegistryCommand = {
     title?: string
     data?: Array<{ title?: string; value?: string }>
   }>
+  launcher?: import('./search').LauncherCommandMetadata
 }
 
 export type InstalledRegistryExtension = {
+  acquisition?: ExtensionManifest['acquisition']
+  installationStatus?: import('./extensions').ExtensionInstallationStatus
+  healthError?: string
   id: string
   slug: string
   name: string
@@ -25,13 +31,20 @@ export type InstalledRegistryExtension = {
   authorIconUrl?: string
   downloadCount?: number
   iconPath?: string | undefined
+  iconUrl?: string
+  artwork?: string
+  artworkBackground?: string
   packageJsonPath: string
   extensionPath: string
   commands: ExtensionRegistryCommand[]
   installedAt: number
+  runtime?: ExtensionRuntimeKind
+  nativeV2?: NativeV2Info
+  platforms?: ExtensionPlatform[]
 }
 
 export type ExtensionRuntimeAction = {
+  section?: string
   id: string
   title: string
   style?: 'default' | 'destructive'
@@ -74,19 +87,28 @@ export type ExtensionRunCommandResult =
   | {
       ok: true
       mode: 'no-view'
+      sessionId?: string
       message: string
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: true
       mode: 'view'
+      viewRevision?: number
       message?: string
+      /** Absent for legacy V1; null means event-driven/static (no polling). */
+      refreshMs?: number | null
+      generation?: string
       sessionId: string
       extensionId: string
       commandName: string
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -104,19 +126,28 @@ export type ExtensionInvokeActionResult =
   | {
       ok: true
       mode: 'no-view'
+      sessionId?: string
       message: string
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: true
       mode: 'view'
+      viewRevision?: number
       message?: string
+      /** Absent for legacy V1; null means event-driven/static (no polling). */
+      refreshMs?: number | null
+      generation?: string
       sessionId: string
       extensionId: string
       commandName: string
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -130,6 +161,7 @@ export type ExtensionSearchTextChangedRequest = {
 }
 
 export type ExtensionRefreshSessionRequest = {
+  viewRevision?: number
   sessionId: string
 }
 
@@ -152,19 +184,28 @@ export type ExtensionSearchTextChangedResult =
   | {
       ok: true
       mode: 'no-view'
+      sessionId?: string
       message: string
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
       ok: true
       mode: 'view'
+      viewRevision?: number
       message?: string
+      /** Absent for legacy V1; null means event-driven/static (no polling). */
+      refreshMs?: number | null
+      generation?: string
       sessionId: string
       extensionId: string
       commandName: string
       title: string
       root: ExtensionRuntimeNode
       actions: ExtensionRuntimeAction[]
+      /** Monotonic total records; effects retains only the latest 50. Absent on legacy workers. */
+      effectSequence?: number
       effects?: ExtensionRuntimeEffect[]
     }
   | {
@@ -175,4 +216,10 @@ export type ExtensionSearchTextChangedResult =
 export type ExtensionRuntimePreferencesRequest = {
   extensionId: string
   commandName?: string
+}
+
+export type ExtensionSessionInvalidation = {
+  sessionId: string
+  revision: number
+  generation: string
 }

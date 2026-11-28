@@ -1,0 +1,37 @@
+[package]
+name = "tezbar-launcher-prototype"
+version = "0.0.0"
+edition = "2024"
+publish = false
+rust-version = "1.98.1"
+
+[workspace]
+
+[features]
+bench-control = []
+
+[dependencies]
+app_lib = { package = "tezbar", path = "../../src-tauri", default-features = false, features = ["native-launcher-facade"] }
+serde_json = "1.0"
+anyhow = "1"
+unicode-segmentation = "1.12"
+image = { version = "0.25", default-features = false, features = ["png"] }
+gpui = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35", default-features = false, features = ["font-kit", "runtime_shaders"] }
+gpui_tokio = { git = "https://github.com/zed-industries/zed", rev = "c84af5b99cbc366d675064e52b23664a015b6e35" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+[patch.crates-io]
+async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
+
+# GTK is not built on Mac/Windows, but Cargo resolves it. 2.0.1–2.0.2
+# pin toml_datetime =0.6.3, incompatible with GPUI's cbindgen ^0.8.8 TOML.
+# Official registry 2.0.0 has the same public interface without that pin.
+[target.'cfg(target_os = "linux")'.dependencies]
+proc-macro-crate = "=2.0.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading"] }
+
+[dev-dependencies]
+tempfile = "3.27"

@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "google-chrome",
+    "exitCode": 0,
+    "stdout": "https://github.com/almatkai/google-chrome/releases/tag/v0.1.0",
+    "stderr": ""
+  },
+  {
+    "slug": "brew",
+    "exitCode": 0,
+    "stdout": "https://github.com/almatkai/brew/releases/tag/v0.1.0",
+    "stderr": ""
+  },
+  {
+    "slug": "linear",
+    "exitCode": 0,
+    "stdout": "https://github.com/almatkai/linear/releases/tag/v0.1.0",
+    "stderr": ""
+  },
+  {
+    "slug": "slack",
+    "exitCode": 0,
+    "stdout": "https://github.com/almatkai/slack/releases/tag/v0.1.0",
+    "stderr": ""
+  }
+]

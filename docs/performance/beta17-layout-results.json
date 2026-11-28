@@ -1,0 +1,1035 @@
+{
+  "schemaVersion": 1,
+  "startHead": "1803f3d8a36be91ba727e3c6051b7520306ba025",
+  "productionChanges": false,
+  "acceptedCandidate": null,
+  "goalAchieved": false,
+  "regressionFixed": false,
+  "decisions": {
+    "geometry": {
+      "accepted": false,
+      "shortFamilyCpuRatio": 0.9749206515734202,
+      "shortWebCpuRatio": 0.9700263339613906
+    },
+    "width": {
+      "accepted": false,
+      "shortFamilyCpuRatio": 0.871255371011761,
+      "shortWebCpuRatio": 0.8913050416452277,
+      "fullRatios": {
+        "familySimpleCpu": 0.9522090093932557,
+        "postRepeatWeb": 1.2428532536740928,
+        "postRepeatFamily": 1.0931212110456088
+      }
+    }
+  },
+  "diagnostic": {
+    "diag-contain": {
+      "bridge": {
+        "active": 0,
+        "diagnosticOnly": true,
+        "dispatched": 641,
+        "layoutProbe": {
+          "input.getComputedStyle": {
+            "count": 3187,
+            "max": 1.000000000007276,
+            "ms": 3.000000000007276,
+            "over1ms": 3
+          },
+          "input.style.fontFamily": {
+            "count": 3187,
+            "max": 1,
+            "ms": 2,
+            "over1ms": 2
+          },
+          "input.style.fontSize": {
+            "count": 3187,
+            "max": 0.999999999996362,
+            "ms": 0.999999999996362,
+            "over1ms": 0
+          },
+          "input.style.fontWeight": {
+            "count": 3187,
+            "max": 1,
+            "ms": 4.999999999996362,
+            "over1ms": 4
+          },
+          "measureText": {
+            "count": 3187,
+            "max": 1.000000000003638,
+            "ms": 13.999999999996362,
+            "over1ms": 11
+          },
+          "row.offsetHeight": {
+            "count": 3191,
+            "max": 0,
+            "ms": 0,
+            "over1ms": 0
+          },
+          "row.offsetTop": {
+            "count": 3191,
+            "max": 19,
+            "ms": 3945.999999999997,
+            "over1ms": 594
+          },
+          "scrollIntoView": {
+            "count": 1,
+            "max": 1,
+            "ms": 1,
+            "over1ms": 1
+          }
+        },
+        "maxActive": 1
+      },
+      "familyCpu": 13.79117383333333,
+      "perRoleCpu": {
+        "host": 2.7796764166666668,
+        "com.apple.WebKit.GPU": 1.6235445416666665,
+        "com.apple.WebKit.Networking": 0.06988420833333332,
+        "com.apple.WebKit.WebContent": 9.056852249999999,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.00012108333333332721,
+        "qlmanage": 0.26109533333333335
+      },
+      "nativeInclusiveSamples": {
+        "WebCore::jsHTMLElement_offsetTop": 1532,
+        "WebCore::Document::updateLayout(": 1587,
+        "WebCore::Page::updateRendering(": 180
+      }
+    },
+    "diag-geometry": {
+      "bridge": {
+        "active": 0,
+        "diagnosticOnly": true,
+        "dispatched": 641,
+        "layoutProbe": {
+          "input.getComputedStyle": {
+            "count": 3198,
+            "max": 0,
+            "ms": 0,
+            "over1ms": 0
+          },
+          "input.style.fontFamily": {
+            "count": 3198,
+            "max": 1,
+            "ms": 1,
+            "over1ms": 1
+          },
+          "input.style.fontSize": {
+            "count": 3198,
+            "max": 0,
+            "ms": 0,
+            "over1ms": 0
+          },
+          "input.style.fontWeight": {
+            "count": 3198,
+            "max": 1.000000000003638,
+            "ms": 5.000000000003638,
+            "over1ms": 4
+          },
+          "measureText": {
+            "count": 3198,
+            "max": 1,
+            "ms": 18.99999999998909,
+            "over1ms": 16
+          },
+          "row.offsetHeight": {
+            "count": 3202,
+            "max": 1,
+            "ms": 1,
+            "over1ms": 1
+          },
+          "row.offsetTop": {
+            "count": 3202,
+            "max": 16,
+            "ms": 3145.0000000000255,
+            "over1ms": 580
+          },
+          "scrollIntoView": {
+            "count": 1,
+            "max": 0,
+            "ms": 0,
+            "over1ms": 0
+          }
+        },
+        "maxActive": 1
+      },
+      "familyCpu": 14.409915416666664,
+      "perRoleCpu": {
+        "host": 3.5426530833333327,
+        "com.apple.WebKit.GPU": 2.152773666666666,
+        "com.apple.WebKit.Networking": 0.06988958333333332,
+        "com.apple.WebKit.WebContent": 8.352931416666665,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.0006137499999999962,
+        "qlmanage": 0.29105391666666663
+      },
+      "nativeInclusiveSamples": {
+        "WebCore::jsHTMLElement_offsetTop": 1290,
+        "WebCore::Document::updateLayout(": 1413,
+        "WebCore::Page::updateRendering(": 272
+      }
+    },
+    "diag-baseline": {
+      "bridge": {
+        "active": 0,
+        "diagnosticOnly": true,
+        "dispatched": 641,
+        "layoutProbe": {
+          "input.getComputedStyle": {
+            "count": 3197,
+            "max": 1,
+            "ms": 2,
+            "over1ms": 2
+          },
+          "input.style.fontFamily": {
+            "count": 3197,
+            "max": 1.000000000003638,
+            "ms": 4.000000000003638,
+            "over1ms": 4
+          },
+          "input.style.fontSize": {
+            "count": 3197,
+            "max": 1.000000000003638,
+            "ms": 4.000000000007276,
+            "over1ms": 4
+          },
+          "input.style.fontWeight": {
+            "count": 3197,
+            "max": 1,
+            "ms": 11.999999999989086,
+            "over1ms": 10
+          },
+          "measureText": {
+            "count": 3197,
+            "max": 1.000000000003638,
+            "ms": 16.999999999996362,
+            "over1ms": 15
+          },
+          "row.offsetHeight": {
+            "count": 3201,
+            "max": 1,
+            "ms": 2,
+            "over1ms": 2
+          },
+          "row.offsetTop": {
+            "count": 3201,
+            "max": 22,
+            "ms": 3765.9999999999854,
+            "over1ms": 570
+          },
+          "scrollIntoView": {
+            "count": 1,
+            "max": 0,
+            "ms": 0,
+            "over1ms": 0
+          }
+        },
+        "maxActive": 1
+      },
+      "familyCpu": 15.20860175,
+      "perRoleCpu": {
+        "host": 3.66157175,
+        "com.apple.WebKit.GPU": 2.275883583333333,
+        "com.apple.WebKit.Networking": 0.07458379166666665,
+        "com.apple.WebKit.WebContent": 8.883675083333333,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.0002466666666666728,
+        "qlmanage": 0.312640875
+      },
+      "nativeInclusiveSamples": {
+        "WebCore::jsHTMLElement_offsetTop": 1623,
+        "WebCore::Document::updateLayout(": 1768,
+        "WebCore::Page::updateRendering(": 274
+      }
+    },
+    "diag-width": {
+      "bridge": {
+        "active": 0,
+        "diagnosticOnly": true,
+        "dispatched": 641,
+        "layoutProbe": {
+          "input.getComputedStyle": {
+            "count": 2300,
+            "max": 1.000000000007276,
+            "ms": 5.000000000007276,
+            "over1ms": 5
+          },
+          "input.style.fontFamily": {
+            "count": 2300,
+            "max": 1,
+            "ms": 2,
+            "over1ms": 2
+          },
+          "input.style.fontSize": {
+            "count": 2300,
+            "max": 1,
+            "ms": 3,
+            "over1ms": 3
+          },
+          "input.style.fontWeight": {
+            "count": 2300,
+            "max": 1.000000000003638,
+            "ms": 8.000000000007276,
+            "over1ms": 8
+          },
+          "measureText": {
+            "count": 2300,
+            "max": 1,
+            "ms": 19.99999999999636,
+            "over1ms": 19
+          },
+          "row.offsetHeight": {
+            "count": 2303,
+            "max": 1,
+            "ms": 1,
+            "over1ms": 1
+          },
+          "row.offsetTop": {
+            "count": 2303,
+            "max": 20,
+            "ms": 3587.9999999999745,
+            "over1ms": 548
+          },
+          "scrollIntoView": {
+            "count": 1,
+            "max": 0,
+            "ms": 0,
+            "over1ms": 0
+          }
+        },
+        "maxActive": 1
+      },
+      "familyCpu": 14.397016874999997,
+      "perRoleCpu": {
+        "host": 3.609184375,
+        "com.apple.WebKit.GPU": 2.1808273333333332,
+        "com.apple.WebKit.Networking": 0.06750820833333333,
+        "com.apple.WebKit.WebContent": 8.340818666666665,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.000425791666666675,
+        "qlmanage": 0.19825249999999997
+      },
+      "nativeInclusiveSamples": {
+        "WebCore::jsHTMLElement_offsetTop": 1411,
+        "WebCore::Document::updateLayout(": 1539,
+        "WebCore::Page::updateRendering(": 252
+      }
+    }
+  },
+  "short": {
+    "geometry-short-4-prefix": {
+      "name": "geometry-short-4-prefix",
+      "familyCpu": 1.5118281249999999,
+      "perRoleCpu": {
+        "host": 0.26684908333333335,
+        "com.apple.WebKit.GPU": 0.18718691666666662,
+        "com.apple.WebKit.Networking": 0.007286250000000001,
+        "com.apple.WebKit.WebContent": 0.8763311249999999,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 4.470833333333757e-05,
+        "qlmanage": 0.17413004166666665
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 14.999999999996362,
+          "p95": 17
+        },
+        "inputToTwoFramesMs": {
+          "p50": 42,
+          "p95": 48
+        },
+        "ipcMs": {
+          "p50": 4.000000000003638,
+          "p95": 6
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 190.43846130371094,
+      "familyMiB": 274.5511779785156
+    },
+    "width-short-4-prefix": {
+      "name": "width-short-4-prefix",
+      "familyCpu": 1.5345184166666663,
+      "perRoleCpu": {
+        "host": 0.2619989583333333,
+        "com.apple.WebKit.GPU": 0.1790160833333333,
+        "com.apple.WebKit.Networking": 0.006295583333333334,
+        "com.apple.WebKit.WebContent": 0.8867540416666665,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.00025612499999999594,
+        "qlmanage": 0.20019762499999996
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 15,
+          "p95": 15.000000000003638
+        },
+        "inputToTwoFramesMs": {
+          "p50": 44,
+          "p95": 46
+        },
+        "ipcMs": {
+          "p50": 4,
+          "p95": 4.000000000003638
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 94.53221130371094,
+      "familyMiB": 178.69173431396484
+    },
+    "geometry-short-3-geometry": {
+      "name": "geometry-short-3-geometry",
+      "familyCpu": 1.4702677083333333,
+      "perRoleCpu": {
+        "host": 0.26312395833333324,
+        "com.apple.WebKit.GPU": 0.17516329166666667,
+        "com.apple.WebKit.Networking": 0.007620874999999999,
+        "com.apple.WebKit.WebContent": 0.851180375,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.00025370833333332454,
+        "qlmanage": 0.1729255
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 14,
+          "p95": 15
+        },
+        "inputToTwoFramesMs": {
+          "p50": 42,
+          "p95": 46
+        },
+        "ipcMs": {
+          "p50": 4,
+          "p95": 4
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 96.03223419189453,
+      "familyMiB": 179.44178009033203
+    },
+    "geometry-short-2-geometry": {
+      "name": "geometry-short-2-geometry",
+      "familyCpu": 1.4004017083333336,
+      "perRoleCpu": {
+        "host": 0.2580592083333334,
+        "com.apple.WebKit.GPU": 0.16770379166666663,
+        "com.apple.WebKit.Networking": 0.007139166666666669,
+        "com.apple.WebKit.WebContent": 0.8222286249999999,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.0003022500000000039,
+        "qlmanage": 0.14496866666666663
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 14,
+          "p95": 16
+        },
+        "inputToTwoFramesMs": {
+          "p50": 40,
+          "p95": 47
+        },
+        "ipcMs": {
+          "p50": 4,
+          "p95": 5
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 96.92285919189453,
+      "familyMiB": 181.28557586669922
+    },
+    "width-short-2-width": {
+      "name": "width-short-2-width",
+      "familyCpu": 1.369910875,
+      "perRoleCpu": {
+        "host": 0.2548514999999999,
+        "com.apple.WebKit.GPU": 0.17004704166666665,
+        "com.apple.WebKit.Networking": 0.007034166666666668,
+        "com.apple.WebKit.WebContent": 0.7932629583333333,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.00026495833333334273,
+        "qlmanage": 0.14445024999999997
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 14,
+          "p95": 15.000000000003638
+        },
+        "inputToTwoFramesMs": {
+          "p50": 43,
+          "p95": 44.00000000000364
+        },
+        "ipcMs": {
+          "p50": 4,
+          "p95": 4.000000000003638
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 92.43841552734375,
+      "familyMiB": 176.22298431396484
+    },
+    "width-short-1-prefix": {
+      "name": "width-short-1-prefix",
+      "familyCpu": 1.6231055416666664,
+      "perRoleCpu": {
+        "host": 0.2603635000000001,
+        "com.apple.WebKit.GPU": 0.17878020833333333,
+        "com.apple.WebKit.Networking": 0.006397625000000004,
+        "com.apple.WebKit.WebContent": 0.8730914583333332,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.00028212500000000806,
+        "qlmanage": 0.304190625
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 15,
+          "p95": 16
+        },
+        "inputToTwoFramesMs": {
+          "p50": 44,
+          "p95": 48
+        },
+        "ipcMs": {
+          "p50": 4,
+          "p95": 5
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 192.09468841552734,
+      "familyMiB": 275.50425720214844
+    },
+    "width-short-3-width": {
+      "name": "width-short-3-width",
+      "familyCpu": 1.381185958333333,
+      "perRoleCpu": {
+        "host": 0.25641229166666657,
+        "com.apple.WebKit.GPU": 0.17052879166666662,
+        "com.apple.WebKit.Networking": 0.006867208333333333,
+        "com.apple.WebKit.WebContent": 0.7752962083333331,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 4.970833333334257e-05,
+        "qlmanage": 0.17203174999999998
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 14.000000000003638,
+          "p95": 15
+        },
+        "inputToTwoFramesMs": {
+          "p50": 42,
+          "p95": 46
+        },
+        "ipcMs": {
+          "p50": 3.999999999996362,
+          "p95": 4.000000000003638
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 90.79776763916016,
+      "familyMiB": 174.62923431396484
+    },
+    "geometry-short-1-prefix": {
+      "name": "geometry-short-1-prefix",
+      "familyCpu": 1.4326878333333333,
+      "perRoleCpu": {
+        "host": 0.2587548333333334,
+        "com.apple.WebKit.GPU": 0.16996704166666665,
+        "com.apple.WebKit.Networking": 0.007080333333333327,
+        "com.apple.WebKit.WebContent": 0.8487859583333333,
+        "com.apple.audio.SandboxHelper": 0.0,
+        "com.apple.SafariPlatformSupport.Helper": 0.0002365000000000006,
+        "qlmanage": 0.14786316666666666
+      },
+      "latency": {
+        "responseMs": {
+          "p50": 15,
+          "p95": 15
+        },
+        "inputToTwoFramesMs": {
+          "p50": 42,
+          "p95": 47
+        },
+        "ipcMs": {
+          "p50": 4,
+          "p95": 4.000000000003638
+        }
+      },
+      "dispatches": [
+        3,
+        7,
+        3,
+        7,
+        3,
+        7,
+        3,
+        7
+      ],
+      "webMiB": 195.25100708007812,
+      "familyMiB": 279.3324279785156
+    }
+  },
+  "full": {
+    "discriminating-2-prefix": {
+      "name": "discriminating-2-prefix",
+      "firstUiMs": 1200.871125,
+      "simple": {
+        "familyCpu": 1.3254859166666666,
+        "perRoleCpu": {
+          "host": 0.26475291666666667,
+          "com.apple.WebKit.GPU": 0.22426183333333338,
+          "com.apple.WebKit.Networking": 0.006759750000000002,
+          "com.apple.WebKit.WebContent": 0.6600685416666665,
+          "com.apple.audio.SandboxHelper": 0.0,
+          "com.apple.SafariPlatformSupport.Helper": 0.00026404166666667284,
+          "qlmanage": 0.1693788333333333
+        },
+        "latency": {
+          "responseMs": {
+            "p50": 14,
+            "p95": 15
+          },
+          "inputToTwoFramesMs": {
+            "p50": 39,
+            "p95": 49
+          },
+          "ipcMs": {
+            "p50": 4,
+            "p95": 5.000000000007276
+          }
+        },
+        "dispatches": [
+          3,
+          7,
+          3,
+          7,
+          3,
+          7,
+          3,
+          7
+        ]
+      },
+      "quiet": {
+        "hidden_idle": {
+          "familyMiB": 143.36347198486328,
+          "webMiB": 62.407073974609375,
+          "cpu": 0.1221271666666667
+        },
+        "post_search_idle": {
+          "familyMiB": 198.00448608398438,
+          "webMiB": 113.5948486328125,
+          "cpu": 0.14353787499999984
+        },
+        "active_model_idle": {
+          "familyMiB": 304.27952575683594,
+          "webMiB": 111.62614440917969,
+          "cpu": 0.2692575833333331
+        },
+        "post_repeat_idle": {
+          "familyMiB": 304.0373725891113,
+          "webMiB": 112.65739440917969,
+          "cpu": 0.26351570833333343
+        }
+      }
+    },
+    "final-full-2-final": {
+      "name": "final-full-2-final",
+      "firstUiMs": 1430.482917,
+      "simple": {
+        "familyCpu": 1.2681099166666667,
+        "perRoleCpu": {
+          "host": 0.25663979166666673,
+          "com.apple.WebKit.GPU": 0.2116239166666667,
+          "com.apple.WebKit.Networking": 0.006534458333333333,
+          "com.apple.WebKit.WebContent": 0.6425844583333333,
+          "com.apple.audio.SandboxHelper": 0.0,
+          "com.apple.SafariPlatformSupport.Helper": 0.00021420833333332667,
+          "qlmanage": 0.15051308333333333
+        },
+        "latency": {
+          "responseMs": {
+            "p50": 14.000000000007276,
+            "p95": 15
+          },
+          "inputToTwoFramesMs": {
+            "p50": 37,
+            "p95": 44
+          },
+          "ipcMs": {
+            "p50": 4,
+            "p95": 4.000000000007276
+          }
+        },
+        "dispatches": [
+          3,
+          7,
+          3,
+          7,
+          3,
+          7,
+          3,
+          7
+        ]
+      },
+      "quiet": {
+        "hidden_idle": {
+          "familyMiB": 142.2384262084961,
+          "webMiB": 60.95392608642578,
+          "cpu": 0.1242055416666666
+        },
+        "post_search_idle": {
+          "familyMiB": 220.0668487548828,
+          "webMiB": 136.14160919189453,
+          "cpu": 0.1576848749999997
+        },
+        "active_model_idle": {
+          "familyMiB": 331.7246780395508,
+          "webMiB": 140.32910919189453,
+          "cpu": 0.2733369999999998
+        },
+        "post_repeat_idle": {
+          "familyMiB": 332.3497009277344,
+          "webMiB": 140.01660919189453,
+          "cpu": 0.2428209583333332
+        }
+      }
+    },
+    "final-full-1-prefix": {
+      "name": "final-full-1-prefix",
+      "firstUiMs": 985.0355420000001,
+      "simple": {
+        "familyCpu": 1.439046208333333,
+        "perRoleCpu": {
+          "host": 0.27341945833333314,
+          "com.apple.WebKit.GPU": 0.2377367916666666,
+          "com.apple.WebKit.Networking": 0.006885124999999992,
+          "com.apple.WebKit.WebContent": 0.7519003333333334,
+          "com.apple.audio.SandboxHelper": 0.0,
+          "com.apple.SafariPlatformSupport.Helper": 0.0002823750000000014,
+          "qlmanage": 0.168822125
+        },
+        "latency": {
+          "responseMs": {
+            "p50": 15,
+            "p95": 16
+          },
+          "inputToTwoFramesMs": {
+            "p50": 41.99999999999272,
+            "p95": 50.00000000000728
+          },
+          "ipcMs": {
+            "p50": 4,
+            "p95": 6
+          }
+        },
+        "dispatches": [
+          3,
+          7,
+          3,
+          7,
+          3,
+          7,
+          3,
+          7
+        ]
+      },
+      "quiet": {
+        "hidden_idle": {
+          "familyMiB": 143.8009262084961,
+          "webMiB": 62.11017608642578,
+          "cpu": 0.12433879166666677
+        },
+        "post_search_idle": {
+          "familyMiB": 165.5199737548828,
+          "webMiB": 80.25093841552734,
+          "cpu": 0.15135320833333327
+        },
+        "active_model_idle": {
+          "familyMiB": 271.0528030395508,
+          "webMiB": 75.98531341552734,
+          "cpu": 0.2770052916666671
+        },
+        "post_repeat_idle": {
+          "familyMiB": 264.5918884277344,
+          "webMiB": 74.48531341552734,
+          "cpu": 0.2651575000000004
+        }
+      }
+    },
+    "final-full-3-final": {
+      "name": "final-full-3-final",
+      "firstUiMs": 987.8663750000001,
+      "simple": {
+        "familyCpu": 1.3321497083333333,
+        "perRoleCpu": {
+          "host": 0.26461820833333327,
+          "com.apple.WebKit.GPU": 0.22350987499999997,
+          "com.apple.WebKit.Networking": 0.006871291666666661,
+          "com.apple.WebKit.WebContent": 0.6884700833333333,
+          "com.apple.audio.SandboxHelper": 0.0,
+          "com.apple.SafariPlatformSupport.Helper": 0.000291416666666669,
+          "qlmanage": 0.14838883333333333
+        },
+        "latency": {
+          "responseMs": {
+            "p50": 15,
+            "p95": 16
+          },
+          "inputToTwoFramesMs": {
+            "p50": 39.00000000000728,
+            "p95": 48
+          },
+          "ipcMs": {
+            "p50": 3.999999999992724,
+            "p95": 6
+          }
+        },
+        "dispatches": [
+          3,
+          7,
+          3,
+          7,
+          3,
+          7,
+          3,
+          7
+        ]
+      },
+      "quiet": {
+        "hidden_idle": {
+          "familyMiB": 141.44159698486328,
+          "webMiB": 60.75080108642578,
+          "cpu": 0.12263395833333329
+        },
+        "post_search_idle": {
+          "familyMiB": 201.65283203125,
+          "webMiB": 117.12598419189453,
+          "cpu": 0.15784150000000002
+        },
+        "active_model_idle": {
+          "familyMiB": 321.38099670410156,
+          "webMiB": 132.79788208007812,
+          "cpu": 0.2733242083333337
+        },
+        "post_repeat_idle": {
+          "familyMiB": 312.08414459228516,
+          "webMiB": 124.76663208007812,
+          "cpu": 0.24043520833333376
+        }
+      }
+    },
+    "discriminating-1-candidate": {
+      "name": "discriminating-1-candidate",
+      "firstUiMs": 1214.557458,
+      "simple": {
+        "familyCpu": 1.3157099583333334,
+        "perRoleCpu": {
+          "host": 0.25914245833333327,
+          "com.apple.WebKit.GPU": 0.2178051666666666,
+          "com.apple.WebKit.Networking": 0.006791499999999999,
+          "com.apple.WebKit.WebContent": 0.6370722916666667,
+          "com.apple.audio.SandboxHelper": 0.0,
+          "com.apple.SafariPlatformSupport.Helper": 7.545833333333363e-05,
+          "qlmanage": 0.1948230833333333
+        },
+        "latency": {
+          "responseMs": {
+            "p50": 14,
+            "p95": 15
+          },
+          "inputToTwoFramesMs": {
+            "p50": 37,
+            "p95": 47
+          },
+          "ipcMs": {
+            "p50": 4,
+            "p95": 4
+          }
+        },
+        "dispatches": [
+          3,
+          7,
+          3,
+          7,
+          3,
+          7,
+          3,
+          7
+        ]
+      },
+      "quiet": {
+        "hidden_idle": {
+          "familyMiB": 141.7931365966797,
+          "webMiB": 60.70392608642578,
+          "cpu": 0.12063799999999987
+        },
+        "post_search_idle": {
+          "familyMiB": 229.1606674194336,
+          "webMiB": 144.90727996826172,
+          "cpu": 0.15666816666666583
+        },
+        "active_model_idle": {
+          "familyMiB": 339.0215530395508,
+          "webMiB": 145.37602996826172,
+          "cpu": 0.28005083333333336
+        },
+        "post_repeat_idle": {
+          "familyMiB": 344.74034881591797,
+          "webMiB": 152.42290496826172,
+          "cpu": 0.2440655000000001
+        }
+      }
+    },
+    "final-full-4-prefix": {
+      "name": "final-full-4-prefix",
+      "firstUiMs": 1182.835458,
+      "simple": {
+        "familyCpu": 1.3817449166666667,
+        "perRoleCpu": {
+          "host": 0.26564124999999983,
+          "com.apple.WebKit.GPU": 0.21725083333333328,
+          "com.apple.WebKit.Networking": 0.006741791666666663,
+          "com.apple.WebKit.WebContent": 0.6892747083333335,
+          "com.apple.audio.SandboxHelper": 0.0,
+          "com.apple.SafariPlatformSupport.Helper": 0.00031449999999999534,
+          "qlmanage": 0.20252183333333332
+        },
+        "latency": {
+          "responseMs": {
+            "p50": 14,
+            "p95": 14.999999999992724
+          },
+          "inputToTwoFramesMs": {
+            "p50": 38.00000000000728,
+            "p95": 44.99999999999272
+          },
+          "ipcMs": {
+            "p50": 4,
+            "p95": 4.000000000007276
+          }
+        },
+        "dispatches": [
+          3,
+          7,
+          3,
+          7,
+          3,
+          7,
+          3,
+          7
+        ]
+      },
+      "quiet": {
+        "hidden_idle": {
+          "familyMiB": 143.5978012084961,
+          "webMiB": 62.65705108642578,
+          "cpu": 0.12030800000000008
+        },
+        "post_search_idle": {
+          "familyMiB": 271.4730987548828,
+          "webMiB": 190.68850708007812,
+          "cpu": 0.1511151666666668
+        },
+        "active_model_idle": {
+          "familyMiB": 385.1622009277344,
+          "webMiB": 193.09477996826172,
+          "cpu": 0.2704020833333331
+        },
+        "post_repeat_idle": {
+          "familyMiB": 388.0450134277344,
+          "webMiB": 194.62602996826172,
+          "cpu": 0.2424638749999995
+        }
+      }
+    }
+  },
+  "accountingTimebase": {
+    "numer": 125,
+    "denom": 3
+  },
+  "receipts": {
+    "artifacts": "build/performance-layout-20261030",
+    "manifestPath": "build/performance-layout-20261030/beta17-layout-results-manifest.json",
+    "manifestSha256": "286f53eefb06d5163c209d553d707ea6f2af87d68630ce065f8f6d511704b509",
+    "detailsPath": "build/performance-layout-20261030/beta17-layout-results-details.json",
+    "detailsSha256": "3fed236389c82917bd7c34ca15ccffe8cdce6fb5e15aed10274b21ba913e2763",
+    "productionInputCount": 573,
+    "changedBuildInputs": {
+      "src/renderer/CommandBar.lifecycle.test.ts": "42bba7c85cee6bac30d6657bf2766e16d5a20dbf5fa735ae23718fc7cf141800"
+    },
+    "reusedRustPassed": 450,
+    "reusedRustIgnored": 8,
+    "reusedNativeSignatures": 40,
+    "reusedExactArtifacts": 84,
+    "ownedIdentities": 308,
+    "survivors": [],
+    "durableIndexes": 6
+  },
+  "limitations": [
+    "All candidates rejected and reverted. No new original/final acceptance matrix or 90s retention claim.",
+    "First four full receipts retain default production_label=current, including two rejected candidate apps; app path/binary SHA and command timeline, not that default metadata, identify each build.",
+    "Diagnostic sample is a ten-second inclusive native stack census, not an exact CPU percentage or a symbolized React JS calltree.",
+    "Timers are quantized wall time with diagnostic overhead; no retainer graph, live leak or stable causal memory regression is proved."
+  ]
+}

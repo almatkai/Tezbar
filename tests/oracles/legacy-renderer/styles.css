@@ -1,0 +1,2798 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================================
+   Tezbar Design System
+   -------------------------------------------------------------------------
+   All visual tokens flow from here. Components compose these tokens via
+   utility classes and the `@layer components` block below.
+   ========================================================================= */
+@layer base {
+  :root {
+    /* Radius — concentric scale so nested shapes stay visually aligned.
+       The outer window is 8px larger than any element sitting directly
+       inside it (surfaces inset the window by 8px), so inner corners
+       appear visually parallel to the window corner. Each subsequent
+       level steps down by ~4–6px to keep the hierarchy readable.
+       window (card + 8px inset) ⟶ panel / card (16) ⟶ row (10) ⟶ field (8) ⟶ chip (6) */
+    --r-window: calc(var(--r-card) + var(--s-2));
+    --r-panel: 16px;
+    --r-card: 16px;
+    --r-row: 10px;
+    --r-field: 8px;
+    --r-chip: 6px;
+
+    /* Spacing — 4px base scale */
+    --s-1: 4px;
+    --s-2: 8px;
+    --s-3: 12px;
+    --s-4: 16px;
+    --s-5: 20px;
+    --s-6: 24px;
+
+    /* Surface colors (RGB triplets for tailwind alpha) */
+    --c-shell: 10 11 14;
+    --c-panel: 18 20 26;
+    --c-row: 255 255 255;
+
+    /* Text ramp */
+    --c-text-1: 245 246 250;
+    --c-text-2: 188 190 200;
+    --c-text-3: 134 138 150;
+    --c-text-4: 94 98 112;
+
+    /* Accent — soft violet-indigo, refined */
+    --c-accent: 139 141 247;
+    --c-accent-strong: 168 170 255;
+
+    /* Semantic */
+    --c-success: 52 211 153;
+    --c-danger: 248 113 113;
+    --c-warning: 251 191 36;
+    --c-theme-line: 255 255 255;
+    --c-theme-control: 255 255 255;
+    --c-theme-control-hover: 255 255 255;
+
+    /* Shadows intentionally omitted — the design relies on 1px inset
+       borders for edge definition, not drop shadows. */
+  }
+
+  :root[data-theme='white'] {
+    --c-shell: 241 244 249;
+    --c-panel: 255 255 255;
+    --c-row: 255 255 255;
+    --c-text-1: 27 37 57;
+    --c-text-2: 62 76 101;
+    --c-text-3: 91 106 129;
+    --c-text-4: 99 113 135;
+    --c-accent: 76 68 193;
+    --c-accent-strong: 62 53 165;
+    --c-success: 5 150 105;
+    --c-danger: 220 38 38;
+    --c-warning: 217 119 6;
+    --c-theme-line: 97 113 140;
+    --c-theme-control: 243 246 251;
+    --c-theme-control-hover: 230 235 246;
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    background: transparent !important;
+    font-family:
+      'Geist',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    letter-spacing: -0.005em;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Prevent drag ghosting on links, images, icons, and text during window drag */
+  *,
+  *::before,
+  *::after {
+    -webkit-user-drag: none;
+  }
+
+  /* Allow text selection only in editable input controls and explicitly marked content */
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .select-text,
+  [data-selectable='true'],
+  .tezbar-md {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .select-none,
+  [data-selectable='false'] {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+
+  button,
+  [role='button'],
+  [role='menuitem'],
+  [role='option'],
+  [role='tab'],
+  kbd {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Smooth scrolling for every scrollable region */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Thin, subtle scrollbars that match the glass aesthetic */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background 220ms ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.18);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+
+  /* Remove default browser focus rings; components opt into a custom ring */
+  *:focus {
+    outline: none;
+  }
+
+  /* Selection color */
+  ::selection {
+    background: rgba(139, 141, 247, 0.35);
+    color: rgb(var(--c-text-1));
+  }
+
+  :root[data-theme='white'] {
+    *::-webkit-scrollbar-thumb {
+      background: rgba(75, 91, 120, 0.22);
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+      background: rgba(75, 91, 120, 0.34);
+    }
+
+    [class*='border-white/'] {
+      border-color: rgba(76, 94, 125, 0.16);
+    }
+
+    [class*='hover:border-white/']:hover {
+      border-color: rgba(76, 94, 125, 0.31);
+    }
+
+    [class*='bg-white/'] {
+      background-color: rgba(78, 98, 136, 0.065);
+    }
+
+    [class*='hover:bg-white/']:hover {
+      background-color: rgba(78, 98, 136, 0.12);
+    }
+
+    :where(
+      button,
+      [role='button'],
+      [role='menuitem'],
+      input,
+      textarea,
+      select,
+      a[href]
+    ):focus-visible {
+      outline: 2px solid rgb(var(--c-accent) / 0.68);
+      outline-offset: 2px;
+    }
+  }
+}
+
+/* =========================================================================
+   Component classes
+   ========================================================================= */
+@layer components {
+  /* ---- Window chrome ----
+     The launcher is frameless, so the OS only lets the user move the
+     window through regions that opt in via -webkit-app-region. The
+     outer app container marks itself as draggable; interactive
+     children (inputs, buttons, lists, scroll containers) opt back out
+     with .no-drag so the user can still click them. */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+
+  /* WebView2's native app-region drag bypasses the renderer mousedown event
+     that starts center snapping. The Windows host tracks the held cursor and
+     moves the window itself, so keep the main surface as ordinary web content. */
+  html.platform-windows .drag-region,
+  html.platform-windows .drag-region * {
+    -webkit-app-region: no-drag;
+  }
+
+  .no-drag,
+  input,
+  textarea,
+  select,
+  button,
+  a[href],
+  [role='button'],
+  [role='menuitem'],
+  [role='option'],
+  [contenteditable='true'],
+  [class*='overflow-y-auto'],
+  [class*='overflow-auto'],
+  [class*='overflow-y-scroll'] {
+    -webkit-app-region: no-drag;
+  }
+
+  /* Search dragging is threshold-based in windowDrag.ts, including over the
+     input. Native app-region dragging would swallow clicks before that handler. */
+  .command-search[data-window-search-drag],
+  .command-search[data-window-search-drag] * {
+    -webkit-app-region: no-drag;
+  }
+
+  /* ---- Surfaces ---- */
+
+  /* Outermost glass shell — the rounded floating card that wraps the window */
+  .glass-shell {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-window);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 40%),
+      rgba(12, 13, 17, 0.92);
+    backdrop-filter: blur(48px) saturate(180%);
+    -webkit-backdrop-filter: blur(48px) saturate(180%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    /* Native resize frames must be immediate. Animating height clips the
+       footer outside the shrinking window until the transition catches up. */
+    transition: none;
+  }
+
+  .glass-shell.overflow-visible {
+    overflow: visible;
+  }
+
+  .glass-shell.glass-shell--terminal {
+    border-radius: var(--r-window);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 40%),
+      rgba(12, 13, 17, 0.92);
+    backdrop-filter: blur(48px) saturate(180%);
+    -webkit-backdrop-filter: blur(48px) saturate(180%);
+    box-shadow: none;
+  }
+
+  /* xterm ships an opaque black viewport fallback. Keep its rendering layers
+     transparent so the terminal uses the surrounding glass card surface. */
+  .terminal-host .xterm,
+  .terminal-host .xterm-viewport,
+  .terminal-host .xterm-screen,
+  .terminal-host .xterm-scrollable-element {
+    background-color: transparent !important;
+  }
+
+  /* Mid-level glass panel — for view chrome inside the shell */
+  .glass-panel {
+    -webkit-app-region: drag;
+    position: relative;
+    border-radius: var(--r-panel);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 60%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  /* Standalone glass card — used inside shell when we need a distinct layer */
+  .glass-card {
+    -webkit-app-region: drag;
+    position: relative;
+    border-radius: var(--r-card);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 45%),
+      rgba(18, 20, 26, 0.55);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-card.no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .tezbar-pin-rail {
+    animation: tezbar-pin-rail-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    scrollbar-width: none;
+  }
+
+  .tezbar-pin-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rolling-command-hint {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    color: rgb(var(--c-text-4));
+    font-size: 15px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .rolling-command-hint__item {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    animation: tezbar-rolling-hint 3200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .rolling-command-hint__shortcut {
+    display: inline-flex;
+    height: 20px;
+    flex-shrink: 0;
+    align-items: center;
+    border: 1px solid rgba(180, 177, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(127, 118, 230, 0.1);
+    padding: 0 7px;
+    color: rgb(var(--c-accent-strong));
+    font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .rolling-command-hint__label {
+    min-width: 0;
+    overflow: hidden;
+    color: rgb(var(--c-text-4));
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .path-command-hint {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    white-space: pre;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .path-command-hint__value {
+    flex-shrink: 0;
+    visibility: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* ⌘C on a vault search result: replaces the hint next to the query. */
+  .vault-copy-feedback {
+    display: inline-flex;
+    height: 20px;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 5px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0 8px;
+    color: rgb(var(--c-text-3));
+    font-size: 11.5px;
+    font-weight: 500;
+    animation: tezbar-scale-in 160ms ease-out both;
+  }
+
+  .vault-copy-feedback--done {
+    background: rgba(52, 211, 153, 0.12);
+    color: rgb(110, 231, 183);
+  }
+
+  .vault-copy-feedback--error {
+    background: rgba(251, 113, 133, 0.12);
+    color: rgb(253, 164, 175);
+  }
+
+  :root[data-theme='white'] .vault-copy-feedback {
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  :root[data-theme='white'] .vault-copy-feedback--done {
+    background: rgba(16, 185, 129, 0.12);
+    color: rgb(4, 120, 87);
+  }
+
+  :root[data-theme='white'] .vault-copy-feedback--error {
+    background: rgba(244, 63, 94, 0.1);
+    color: rgb(190, 18, 60);
+  }
+
+  .glass-card > *,
+  .glass-panel > * {
+    -webkit-app-region: no-drag;
+  }
+
+  .tezbar-popover {
+    -webkit-app-region: no-drag;
+    border-radius: var(--r-card);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgb(var(--c-panel));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 22px 52px rgba(0, 0, 0, 0.72);
+  }
+
+  .agent-chat-shell {
+    -webkit-app-region: drag;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: var(--r-card);
+    background: rgb(var(--c-panel) / 0.96);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.045),
+      0 18px 55px rgba(0, 0, 0, 0.2);
+  }
+
+  .agent-result {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+
+  .agent-result table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .agent-tool-step > summary {
+    user-select: none;
+  }
+
+  :root[data-theme='white'] .agent-tool-step,
+  :root[data-theme='white'] .agent-composer {
+    border-color: rgba(0, 0, 0, 0.12);
+    background-color: rgba(0, 0, 0, 0.025);
+  }
+
+  :root[data-theme='white'] .agent-user-bubble {
+    border-color: rgba(0, 0, 0, 0.08);
+    background-color: rgba(0, 0, 0, 0.045);
+  }
+
+  :root[data-theme='white'] .agent-run-error {
+    color: #9b2442;
+    background-color: #fff0f3;
+    border-color: #e8bdc8;
+  }
+
+  :root[data-theme='white'] .agent-tool-step .text-rose-300 {
+    color: #9b2442;
+  }
+
+  .agent-chat-shell > * {
+    -webkit-app-region: no-drag;
+  }
+
+  .agent-chat-thread > * {
+    width: 100%;
+    max-width: 780px;
+    margin-inline: auto;
+  }
+
+  .agent-chat-thread {
+    contain: paint;
+    overflow-anchor: none;
+    overscroll-behavior-y: contain;
+    scroll-behavior: auto;
+    scrollbar-gutter: stable;
+    touch-action: pan-y;
+  }
+
+  .agent-chat-turn {
+    contain: layout paint style;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 140px;
+  }
+
+  .agent-chat-live {
+    contain: layout paint style;
+  }
+
+  .agent-composer {
+    backdrop-filter: blur(18px) saturate(130%);
+    -webkit-backdrop-filter: blur(18px) saturate(130%);
+  }
+
+  .agent-composer textarea::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .tezbar-settings-window {
+    -webkit-app-region: drag;
+    position: relative;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 42%),
+      rgba(30, 31, 46, 0.96);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 22px 60px rgba(0, 0, 0, 0.26);
+  }
+
+  .tezbar-settings-window > * {
+    -webkit-app-region: no-drag;
+  }
+
+  .tezbar-settings-window--native {
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  :root[data-theme='white'] .glass-shell,
+  :root[data-theme='white'] .glass-shell.glass-shell--terminal {
+    border: 1px solid rgba(76, 94, 125, 0.2);
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(241, 245, 251, 0.96) 70%),
+      rgb(var(--c-shell));
+    backdrop-filter: blur(48px) saturate(155%);
+    -webkit-backdrop-filter: blur(48px) saturate(155%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.1);
+  }
+
+  :root[data-theme='white'] .glass-panel {
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.13);
+  }
+
+  :root[data-theme='white'] .glass-card {
+    background: rgba(255, 255, 255, 0.84);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.96),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.14),
+      0 10px 28px rgba(34, 48, 76, 0.08);
+  }
+
+  :root[data-theme='white'] .glass-field {
+    background: rgba(255, 255, 255, 0.91);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      inset 0 0 0 1px rgba(93, 108, 145, 0.18),
+      0 2px 8px rgba(34, 48, 76, 0.04);
+  }
+
+  :root[data-theme='white'] .glass-field:hover {
+    background: #fff;
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.3);
+  }
+
+  :root[data-theme='white'] .glass-field:focus,
+  :root[data-theme='white'] .glass-field:focus-visible {
+    background: #fff;
+    box-shadow: inset 0 0 0 2px rgb(var(--c-accent) / 0.6);
+  }
+
+  :root[data-theme='white'] select.glass-field,
+  :root[data-theme='white'] select:not(.glass-field) {
+    background-color: rgba(248, 250, 253, 0.82);
+    color: rgb(var(--c-text-1));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 0 0 1px rgba(93, 108, 145, 0.2),
+      0 4px 12px rgba(44, 56, 87, 0.07);
+  }
+
+  :root[data-theme='white'] option {
+    background: rgb(248, 250, 253);
+    color: rgb(31, 35, 48);
+  }
+
+  :root[data-theme='white'] .tezbar-popover {
+    border-color: rgba(76, 94, 125, 0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 22px 52px rgba(15, 23, 42, 0.18);
+  }
+
+  :root[data-theme='white'] .tezbar-settings-window {
+    border-color: rgba(76, 94, 125, 0.17);
+    background:
+      linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(242, 246, 251, 0.97) 70%),
+      rgb(var(--c-shell));
+    backdrop-filter: blur(40px) saturate(150%);
+    -webkit-backdrop-filter: blur(40px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.94),
+      inset 0 0 0 1px rgba(76, 94, 125, 0.09);
+  }
+
+  :root[data-theme='white'] .agent-chat-shell {
+    border-color: rgba(15, 23, 42, 0.1);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 18px 55px rgba(15, 23, 42, 0.1);
+  }
+
+  :root[data-theme='white'] .extension-detail-footer {
+    border-top-color: rgba(76, 94, 125, 0.16);
+    background: rgba(255, 255, 255, 0.96);
+  }
+
+  /* Light mode uses ink-tinted interaction states so selection stays visible
+     on the pale glass surfaces used throughout the launcher. */
+  :root[data-theme='white'] .glass-inset {
+    background: rgba(78, 98, 136, 0.055);
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.12);
+  }
+
+  :root[data-theme='white'] .btn-primary {
+    color: #fff;
+    background: rgb(var(--c-accent));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+
+  :root[data-theme='white'] .btn-primary:hover:not(:disabled) {
+    background: rgb(var(--c-accent-strong));
+  }
+
+  :root[data-theme='white'] .btn-ghost,
+  :root[data-theme='white'] .kbd {
+    background: rgba(78, 98, 136, 0.07);
+    box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.18);
+  }
+
+  :root[data-theme='white'] .btn-ghost:hover:not(:disabled),
+  :root[data-theme='white'] .btn-quiet:hover:not(:disabled) {
+    background: rgba(78, 98, 136, 0.13);
+  }
+
+  :root[data-theme='white'] .row-interactive:hover {
+    background: rgba(78, 98, 136, 0.08);
+  }
+
+  :root[data-theme='white'] .row-interactive[data-selected='true'],
+  :root[data-theme='white'] .glide-highlight {
+    background: rgba(76, 68, 193, 0.09);
+    box-shadow: inset 0 0 0 1px rgba(76, 68, 193, 0.22);
+  }
+
+  :root[data-theme='white'] .hairline {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(76, 94, 125, 0.18) 12%,
+      rgba(76, 94, 125, 0.18) 88%,
+      transparent
+    );
+  }
+
+  :root[data-theme='white'] .rolling-command-hint__shortcut {
+    border-color: rgba(76, 68, 193, 0.22);
+    background: rgba(76, 68, 193, 0.08);
+  }
+
+  @keyframes tezbar-text-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  .tezbar-streaming-text {
+    display: inline-block;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(147, 197, 253, 0.95) 25%,
+      rgba(255, 255, 255, 1) 50%,
+      rgba(168, 85, 247, 0.95) 75%,
+      rgba(255, 255, 255, 0.6) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: tezbar-text-shimmer 2.2s linear infinite;
+  }
+
+  /* The search header is flat chrome separated by a hairline, matching dark
+     mode. The input is always focused, so it gets no ring of its own. */
+  :root[data-theme='white'] .command-search :is(#command-input, .command-surface-input):focus-visible {
+    outline: none;
+  }
+
+  /* Mode accents need enough contrast against the white launcher cards. */
+  :root[data-theme='white'] :is(.command-ai-icon, .command-ai-heading) {
+    color: #5c37a4;
+  }
+
+  :root[data-theme='white'] .command-ai-icon {
+    background: #f0ebfc;
+  }
+
+  :root[data-theme='white'] .model-picker-active-dot {
+    background: #0b7651;
+  }
+
+  :root[data-theme='white'] .command-ai-chat-icon {
+    color: #5c37a4;
+    background: #f0ebfc;
+  }
+
+  :root[data-theme='white'] .group:hover .command-ai-chat-icon {
+    background: #e7def9;
+  }
+
+  :root[data-theme='white']
+    :is(.command-terminal-icon, .command-terminal-prompt, .command-terminal-heading),
+  :root[data-theme='white'] .command-terminal-session-status.command-terminal-running {
+    color: #0b7651;
+  }
+
+  :root[data-theme='white'] .command-terminal-session-icon.command-terminal-running {
+    color: #0b7651;
+    border-color: #9edabd;
+    background: #e9f8f0;
+  }
+
+  :root[data-theme='white'] .command-result-icon svg {
+    stroke-width: 1.5px;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-sky-200, .text-sky-300, .text-cyan-200) {
+    color: #165d91;
+    border-color: #a9cbe4;
+    background: #eaf5fc;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-violet-200, .text-violet-300) {
+    color: #6241aa;
+    border-color: #cbbaf0;
+    background: #f2edfc;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-amber-200, .text-amber-300) {
+    color: #936200;
+    border-color: #e6cc8e;
+    background: #fff7e5;
+  }
+
+  :root[data-theme='white'] .command-result-icon:is(.text-emerald-200, .text-emerald-300) {
+    color: #0b7651;
+    border-color: #9edabd;
+    background: #e9f8f0;
+  }
+
+  :root[data-theme='white'] .command-result-icon.text-lime-200 {
+    color: #56721d;
+    border-color: #c2d893;
+    background: #f2f8e5;
+  }
+
+  :root[data-theme='white'] .command-result-icon.text-rose-200 {
+    color: #ad3653;
+    border-color: #e8afbd;
+    background: #fff0f3;
+  }
+
+  .theme-choice {
+    border-color: rgb(var(--c-theme-line) / 0.22);
+    background: rgb(var(--c-theme-control) / 0.08);
+    color: rgb(var(--c-text-2));
+  }
+
+  .theme-choice:hover {
+    border-color: rgb(var(--c-theme-line) / 0.36);
+    background: rgb(var(--c-theme-control-hover) / 0.14);
+    color: rgb(var(--c-text-1));
+  }
+
+  .theme-choice[aria-pressed='true'],
+  .theme-choice[aria-pressed='true']:hover {
+    border-color: rgb(var(--c-accent));
+    background: rgb(var(--c-accent));
+    color: #fff;
+    box-shadow: 0 0 0 2px rgb(var(--c-accent) / 0.18);
+  }
+
+  .theme-choice__check {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+  }
+
+  :root[data-theme='white'] .theme-choice {
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  :root[data-theme='white'] .theme-choice:hover {
+    background: #fff;
+  }
+
+  :root[data-theme='white'] .theme-choice[aria-pressed='true'],
+  :root[data-theme='white'] .theme-choice[aria-pressed='true']:hover {
+    background: rgb(var(--c-accent));
+  }
+
+  /* ---- CleanMyMac-style sidebar ---- */
+  .cleanmymac-sidebar {
+    -webkit-app-region: no-drag;
+    border-top-left-radius: var(--r-window);
+    border-bottom-left-radius: var(--r-window);
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    scrollbar-width: none;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0) 30%),
+      rgba(8, 9, 14, 0.55);
+    backdrop-filter: blur(36px) saturate(180%);
+    -webkit-backdrop-filter: blur(36px) saturate(180%);
+  }
+
+  .cleanmymac-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cleanmymac-sidebar > * {
+    -webkit-app-region: no-drag;
+  }
+
+  :root[data-theme='white'] .cleanmymac-sidebar {
+    border-right-color: rgba(76, 94, 125, 0.16);
+    background: rgba(226, 233, 244, 0.66);
+  }
+
+  :root[data-theme='white'] .cleanmymac-sidebar [aria-current='page'] {
+    background: rgba(255, 255, 255, 0.86);
+    color: rgb(var(--c-text-1));
+    box-shadow:
+      inset 0 0 0 1px rgba(76, 94, 125, 0.14),
+      0 2px 6px rgba(34, 48, 76, 0.04);
+  }
+
+  /* A transparent, click-through work-area overlay renders the fixed
+     centered target frame while the launcher moves independently. */
+  .snap-overlay {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .snap-overlay.is-visible {
+    opacity: 1;
+  }
+
+  .snap-overlay__edge {
+    position: absolute;
+    box-sizing: border-box;
+    opacity: 0.4;
+    background: rgba(26, 28, 62, 0.88);
+    border: 1px solid rgba(10, 12, 26, 0.9);
+    box-shadow:
+      inset 0 0 0 1px rgba(96, 98, 180, 0.14),
+      0 0 0 1px rgba(17, 19, 45, 0.78),
+      0 0 12px rgba(42, 44, 130, 0.42),
+      0 0 24px rgba(22, 24, 90, 0.24);
+    transition:
+      background 120ms ease,
+      box-shadow 120ms ease,
+      opacity 120ms ease;
+  }
+
+  .snap-overlay__edge--left,
+  .snap-overlay__edge--right {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+  }
+
+  .snap-overlay__edge--top,
+  .snap-overlay__edge--bottom {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 8px;
+  }
+
+  .snap-overlay.is-snapped-x .snap-overlay__edge--left,
+  .snap-overlay.is-snapped-x .snap-overlay__edge--right,
+  .snap-overlay.is-snapped-y .snap-overlay__edge--top,
+  .snap-overlay.is-snapped-y .snap-overlay__edge--bottom {
+    opacity: 0.56;
+    background: rgba(35, 37, 84, 0.92);
+    border-color: rgba(12, 14, 32, 0.94);
+    box-shadow:
+      inset 0 0 0 1px rgba(102, 104, 205, 0.2),
+      0 0 0 1px rgba(20, 22, 54, 0.84),
+      0 0 14px rgba(48, 50, 150, 0.48),
+      0 0 28px rgba(25, 27, 104, 0.3);
+  }
+
+  .snap-overlay.is-centered .snap-overlay__edge {
+    opacity: 0.68;
+    background: rgba(47, 49, 108, 0.94);
+    border-color: rgba(14, 16, 38, 0.96);
+    box-shadow:
+      inset 0 0 0 1px rgba(118, 120, 228, 0.24),
+      0 0 0 1px rgba(25, 27, 68, 0.9),
+      0 0 16px rgba(56, 58, 170, 0.56),
+      0 0 32px rgba(28, 30, 120, 0.36);
+  }
+
+  .snap-overlay__center-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    border: 1px solid rgba(196, 197, 255, 0.88);
+    border-radius: 999px;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 0 3px rgba(139, 141, 247, 0.12);
+    transition: opacity 120ms ease;
+  }
+
+  .snap-overlay.is-centered .snap-overlay__center-indicator {
+    opacity: 1;
+    animation: snap-center-pulse 1.1s ease-in-out infinite;
+  }
+
+  @keyframes snap-center-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 3px rgba(139, 141, 247, 0.12);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(139, 141, 247, 0.24);
+    }
+  }
+
+  /* Inset section — lighter glass for grouping inside a card */
+  .glass-inset {
+    border-radius: var(--r-row);
+    background: rgba(255, 255, 255, 0.025);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  /* ---- Input primitives ---- */
+  .glass-field {
+    width: 100%;
+    border-radius: var(--r-field);
+    padding: 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.28);
+    color: rgb(var(--c-text-1));
+    font-size: 13px;
+    line-height: 1.25rem;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transition:
+      box-shadow var(--dur-base, 220ms) cubic-bezier(0.22, 1, 0.36, 1),
+      background var(--dur-base, 220ms) cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .glass-field::placeholder {
+    color: rgb(var(--c-text-4));
+  }
+
+  .glass-field:hover {
+    background: rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+
+  .glass-field:focus,
+  .glass-field:focus-visible {
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: inset 0 0 0 1px rgba(139, 141, 247, 0.55);
+  }
+
+  /* ---- Buttons ---- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--r-row);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    color: rgb(var(--c-text-1));
+    letter-spacing: -0.005em;
+    transition:
+      background 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 100%),
+      rgb(118, 120, 240);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.2) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.15) inset;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 100%),
+      rgb(139, 141, 247);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.25) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.15) inset;
+  }
+
+  .btn-ghost {
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  }
+
+  .btn-danger {
+    background: rgba(248, 113, 113, 0.12);
+    color: rgb(var(--c-danger));
+    box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.3);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.5);
+  }
+
+  .btn-quiet {
+    padding: 0.35rem 0.65rem;
+    background: transparent;
+    color: rgb(var(--c-text-3));
+    font-size: 11px;
+  }
+
+  .btn-quiet:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgb(var(--c-text-1));
+  }
+
+  /* ---- Keyboard hint ---- */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 0.3rem;
+    font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 9px;
+    font-weight: 500;
+    line-height: 1;
+    color: rgb(var(--c-text-2));
+    border-radius: var(--r-chip);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  }
+
+  /* ---- Row hover states (list items) ---- */
+  .row-interactive {
+    position: relative;
+    transition:
+      background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .row-interactive:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .row-interactive[data-selected='true'] {
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+
+  /* ---- Sliding selection highlight (travels between rows) ----
+     Mirrors the pinned-button style: neutral 1px white border +
+     subtle white fill, nothing accent-colored. */
+  .glide-highlight {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    border-radius: var(--r-row);
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    transition:
+      transform 100ms cubic-bezier(0.16, 1, 0.3, 1),
+      height 100ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 80ms ease-out;
+    will-change: transform, height;
+    z-index: 0;
+  }
+
+  /* ---- Status dots (animated "connected") ---- */
+  .status-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .status-dots > span {
+    width: 5px;
+    height: 5px;
+    border-radius: 9999px;
+    background: rgb(var(--c-success));
+    animation: tezbar-conn-pulse 1.2s ease-in-out infinite;
+  }
+
+  .status-dots > span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .status-dots > span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  /* ---- Divider ---- */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.08) 12%,
+      rgba(255, 255, 255, 0.08) 88%,
+      transparent
+    );
+  }
+}
+
+/* =========================================================================
+   Animations
+   ========================================================================= */
+@keyframes tezbar-conn-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tezbar-thinking {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes tezbar-rolling-hint {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(2px);
+  }
+
+  12%,
+  82% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(2px);
+  }
+}
+
+.tezbar-thinking {
+  animation: tezbar-thinking 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rolling-command-hint__item {
+    animation: none;
+  }
+}
+
+/* Stagger helpers — applied to list items for on-mount cascade */
+.stagger > * {
+  opacity: 0;
+  animation: tezbar-fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stagger > *:nth-child(1) {
+  animation-delay: 20ms;
+}
+
+.stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.stagger > *:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.stagger > *:nth-child(4) {
+  animation-delay: 80ms;
+}
+
+.stagger > *:nth-child(5) {
+  animation-delay: 100ms;
+}
+
+.stagger > *:nth-child(6) {
+  animation-delay: 120ms;
+}
+
+.stagger > *:nth-child(7) {
+  animation-delay: 140ms;
+}
+
+.stagger > *:nth-child(8) {
+  animation-delay: 160ms;
+}
+
+.stagger > *:nth-child(n + 9) {
+  animation-delay: 180ms;
+}
+
+@keyframes tezbar-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tezbar-pin-rail-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* =========================================================================
+   Onboarding — first-run setup. Motion only answers what the person did
+   (a step change, a check landing, a key being recorded).
+   ========================================================================= */
+.onboarding-step-forward {
+  animation: tezbar-step-in-forward 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.onboarding-step-back {
+  animation: tezbar-step-in-back 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tezbar-step-in-forward {
+  0% {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes tezbar-step-in-back {
+  0% {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Drifting glow behind the app icon on the welcome splash. */
+.onboarding-orb {
+  animation: tezbar-orb-drift 7s ease-in-out infinite;
+}
+
+@keyframes tezbar-orb-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: translate(6px, -6px) scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+.onboarding-splash-exit {
+  animation: tezbar-splash-exit 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tezbar-splash-exit {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+.onboarding-splash-hint {
+  opacity: 0;
+  animation: tezbar-fade-up 400ms cubic-bezier(0.22, 1, 0.36, 1) 900ms both;
+}
+
+/* Content that swaps in as the practice bar's response changes. */
+.onboarding-cycle-in {
+  animation: tezbar-fade-up 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* A check landing on a finished step or task. */
+.onboarding-chip-pop {
+  animation: tezbar-chip-pop 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tezbar-chip-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Large physical-looking key caps for the global shortcut. */
+.onboarding-keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 52px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 3px 0 rgba(0, 0, 0, 0.35),
+    0 6px 16px rgba(0, 0, 0, 0.25);
+  font-size: 20px;
+  font-weight: 500;
+  color: rgb(var(--c-text-1));
+  animation: tezbar-chip-pop 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.onboarding-keystage.is-recording {
+  box-shadow: 0 0 0 4px rgb(var(--c-accent) / 0.08);
+}
+
+:root[data-theme='white'] .onboarding-keycap {
+  background: linear-gradient(180deg, #fff, rgba(241, 245, 251, 0.95));
+  box-shadow:
+    inset 0 0 0 1px rgba(76, 94, 125, 0.2),
+    0 3px 0 rgba(76, 94, 125, 0.18),
+    0 6px 14px rgba(34, 48, 76, 0.08);
+}
+
+/* Inline path / command inside practice-bar explanations. */
+.onboarding-code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  color: rgb(var(--c-text-1));
+}
+
+/* Practice bar. One border, tinted by mode like the real bar's icon colour.
+   The only motion is a single puff when the mode switches. */
+.onboarding-bar-surface {
+  background: rgb(var(--c-shell));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: box-shadow 250ms ease;
+}
+
+.onboarding-bar.is-ai .onboarding-bar-surface {
+  box-shadow: inset 0 0 0 1px rgb(167 139 250 / 0.45);
+}
+
+.onboarding-bar.is-terminal .onboarding-bar-surface {
+  box-shadow: inset 0 0 0 1px rgb(52 211 153 / 0.45);
+}
+
+.onboarding-puff-burst {
+  position: absolute;
+  top: 50%;
+  left: 24px;
+  pointer-events: none;
+}
+
+.onboarding-puff {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 9999px;
+  filter: blur(6px);
+  opacity: 0;
+  animation: onboarding-puff 700ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+@keyframes onboarding-puff {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+
+  25% {
+    opacity: 0.45;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--puff-x)), calc(-50% + var(--puff-y))) scale(1.4);
+  }
+}
+
+:root[data-theme='white'] .onboarding-bar-surface {
+  background: rgb(var(--c-panel));
+  box-shadow: inset 0 0 0 1px rgba(76, 94, 125, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-orb,
+  .onboarding-step-forward,
+  .onboarding-step-back,
+  .onboarding-keycap,
+  .onboarding-chip-pop,
+  .onboarding-cycle-in {
+    animation: none;
+  }
+
+  .onboarding-puff-burst {
+    display: none;
+  }
+}
+
+/* =========================================================================
+   Markdown — `.tezbar-md` is the wrapper produced by <Markdown /> and holds
+   every rich-text rule used by agent / answer streams. Kept tight (no big
+   vertical margins) to fit the HUD, but supports code, tables, lists,
+   blockquotes and task checkboxes.
+   ========================================================================= */
+.tezbar-md {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-1, #f3efff);
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.tezbar-md button,
+.tezbar-md .tezbar-md-code-header,
+.tezbar-md .tezbar-md-code-copy {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tezbar-md > *:first-child {
+  margin-top: 0;
+}
+
+.tezbar-md > *:last-child {
+  margin-bottom: 0;
+}
+
+.tezbar-md p {
+  margin: 0.4em 0;
+}
+
+.tezbar-md h1,
+.tezbar-md h2,
+.tezbar-md h3,
+.tezbar-md h4,
+.tezbar-md h5,
+.tezbar-md h6 {
+  font-weight: 600;
+  margin: 0.9em 0 0.4em;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--ink-0, #ffffff);
+}
+
+.tezbar-md h1 {
+  font-size: 1.35em;
+}
+
+.tezbar-md h2 {
+  font-size: 1.2em;
+}
+
+.tezbar-md h3 {
+  font-size: 1.08em;
+}
+
+.tezbar-md h4,
+.tezbar-md h5,
+.tezbar-md h6 {
+  font-size: 1em;
+  color: var(--ink-2, #d9d3ee);
+}
+
+.tezbar-md a {
+  color: #b8a8ff;
+  text-decoration: underline;
+  text-decoration-color: rgba(184, 168, 255, 0.45);
+  text-underline-offset: 2px;
+  transition: color 0.12s ease;
+}
+
+.tezbar-md a:hover {
+  color: #d7ccff;
+}
+
+.tezbar-md strong {
+  font-weight: 600;
+  color: var(--ink-0, #ffffff);
+}
+
+.tezbar-md em {
+  font-style: italic;
+}
+
+.tezbar-md del {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.tezbar-md ul,
+.tezbar-md ol {
+  margin: 0.35em 0 0.5em;
+  padding-left: 1.35em;
+}
+
+.tezbar-md ul {
+  list-style: disc;
+}
+
+.tezbar-md ol {
+  list-style: decimal;
+}
+
+.tezbar-md li {
+  margin: 0.2em 0;
+}
+
+.tezbar-md li > p {
+  margin: 0.15em 0;
+}
+
+.tezbar-md li::marker {
+  color: rgba(216, 205, 255, 0.55);
+}
+
+.tezbar-md input[type='checkbox'] {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  margin-right: 0.4em;
+  position: relative;
+  vertical-align: -1px;
+}
+
+.tezbar-md input[type='checkbox']:checked {
+  background: #8a74ff;
+  border-color: #8a74ff;
+}
+
+.tezbar-md input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 3.5px;
+  width: 3px;
+  height: 6px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.tezbar-md blockquote {
+  margin: 0.6em 0;
+  padding: 0.25em 0.8em;
+  border-left: 2px solid rgba(184, 168, 255, 0.45);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0 6px 6px 0;
+  color: var(--ink-2, #d9d3ee);
+}
+
+.tezbar-md blockquote > *:first-child {
+  margin-top: 0;
+}
+
+.tezbar-md blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+.tezbar-md hr {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0.9em 0;
+}
+
+.tezbar-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 12.5px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tezbar-md thead {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tezbar-md th,
+.tezbar-md td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: top;
+}
+
+.tezbar-md tr:last-child td {
+  border-bottom: 0;
+}
+
+.tezbar-md th {
+  font-weight: 600;
+  color: var(--ink-1, #f3efff);
+  letter-spacing: 0.01em;
+}
+
+.tezbar-md img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 0.4em 0;
+}
+
+/* Inline code */
+.tezbar-md code:not(pre code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #ffd7f5;
+  white-space: break-spaces;
+}
+
+/* Code block shell (highlight.js theme paints the <code> interior) */
+.tezbar-md pre {
+  position: relative;
+  margin: 0.6em 0;
+  padding: 0;
+  background: #1b1725;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.tezbar-md pre code,
+.tezbar-md pre code.hljs {
+  display: block;
+  padding: 0.75em 0.9em;
+  background: transparent;
+  border: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  color: #e8e2ff;
+  overflow-x: auto;
+  white-space: pre;
+  border-radius: 0;
+}
+
+.tezbar-md-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px 5px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 10.5px;
+}
+
+.tezbar-md-code-lang {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(233, 226, 255, 0.55);
+}
+
+.tezbar-md-code-copy {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(233, 226, 255, 0.7);
+  padding: 1px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.tezbar-md-code-copy:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Rich text and code blocks adapt cleanly to light mode */
+:root[data-theme='white'] .tezbar-md,
+:root[data-theme='white'] .tezbar-md th {
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .tezbar-md :is(h1, h2, h3, h4, h5, h6, strong) {
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .tezbar-md a {
+  color: rgb(var(--c-accent));
+  text-decoration-color: rgb(var(--c-accent) / 0.42);
+}
+
+:root[data-theme='white'] .tezbar-md a:hover {
+  color: rgb(var(--c-accent-strong));
+}
+
+:root[data-theme='white'] .tezbar-md blockquote {
+  color: rgb(var(--c-text-2));
+}
+
+:root[data-theme='white'] .tezbar-md :is(blockquote, thead, code:not(pre code)) {
+  background: rgba(78, 98, 136, 0.07);
+}
+
+:root[data-theme='white'] .tezbar-md :is(hr, table, th, td, input[type='checkbox']) {
+  border-color: rgba(76, 94, 125, 0.18);
+}
+
+:root[data-theme='white'] .tezbar-md code:not(pre code) {
+  color: rgb(var(--c-accent-strong));
+}
+
+:root[data-theme='white'] .tezbar-md li::marker {
+  color: rgb(var(--c-text-3));
+}
+
+/* Code block shell in light mode */
+:root[data-theme='white'] .tezbar-md pre {
+  background: #f4f6fb;
+  border-color: rgba(76, 94, 125, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 3px rgba(34, 48, 76, 0.04);
+}
+
+:root[data-theme='white'] .tezbar-md pre code,
+:root[data-theme='white'] .tezbar-md pre code.hljs {
+  color: #24292f;
+}
+
+:root[data-theme='white'] .tezbar-md-code-header {
+  background: rgba(78, 98, 136, 0.05);
+  border-bottom-color: rgba(76, 94, 125, 0.14);
+}
+
+:root[data-theme='white'] .tezbar-md-code-lang {
+  color: rgb(var(--c-text-3));
+}
+
+:root[data-theme='white'] .tezbar-md-code-copy {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(76, 94, 125, 0.22);
+  color: rgb(var(--c-text-2));
+}
+
+:root[data-theme='white'] .tezbar-md-code-copy:hover {
+  background: #ffffff;
+  border-color: rgba(76, 94, 125, 0.35);
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .tezbar-md-code-copy.is-copied {
+  border-color: rgba(5, 150, 105, 0.4);
+  color: #059669;
+  background: rgba(5, 150, 105, 0.08);
+}
+
+/* Atom One Light syntax highlighting tokens for light mode */
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-comment,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-quote {
+  color: #8c95a5;
+  font-style: italic;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-doctag,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-keyword,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-formula {
+  color: #a626a4;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-section,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-name,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-tag,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-deletion,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-subst {
+  color: #e45649;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-literal {
+  color: #0184bb;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-string,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-regexp,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-addition,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-attribute,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-meta .hljs-string {
+  color: #50a14f;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-attr,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-variable,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-template-variable,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-type,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-class,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-attr,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-pseudo,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-number {
+  color: #986801;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-symbol,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-bullet,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-link,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-meta,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-selector-id,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-title {
+  color: #4078f2;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-built_in,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-title.class_,
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-class .hljs-title {
+  color: #c18401;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-emphasis {
+  font-style: italic;
+}
+
+:root[data-theme='white'] :is(.tezbar-md pre, pre code) .hljs-strong {
+  font-weight: bold;
+}
+
+:root[data-theme='white'] .terminal-session-command {
+  color: #176b4c;
+}
+
+:root[data-theme='white'] .snippet-preview-text {
+  background-color: #fff;
+}
+
+:root[data-theme='white'] .command-argument-chip {
+  border-color: #9edabd;
+  background-color: #e9f8f0;
+  color: #0b7651;
+}
+
+:root[data-theme='white'] .command-argument-chip > span {
+  background-color: #0b7651;
+  color: #fff;
+}
+
+:root[data-theme='white'] :is(.terminal-config-dialog, .command-modal, .command-tooltip) {
+  border-color: rgba(76, 94, 125, 0.2);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 20px 52px rgba(34, 48, 76, 0.18);
+}
+
+:root[data-theme='white'] .command-tooltip__arrow {
+  border-color: rgba(76, 94, 125, 0.2);
+  background: #fff;
+}
+
+/* Native service status also renders before the main application chunk loads. */
+.backend-connection {
+  position: fixed;
+  inset: 8px;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: rgb(var(--c-panel));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--r-panel);
+}
+
+.backend-connection--banner {
+  top: auto;
+  padding: 12px 16px;
+}
+
+.backend-connection__retry {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: inherit;
+  font-size: 12px;
+}
+
+.backend-connection__retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.backend-connection__retry:disabled {
+  opacity: 0.5;
+}
+
+:root[data-theme='white'] .backend-connection {
+  border-color: rgba(76, 94, 125, 0.2);
+  color: rgb(var(--c-text-1));
+}
+
+:root[data-theme='white'] .backend-connection__retry {
+  background: rgba(78, 98, 136, 0.1);
+}
+
+/* Tauri's hidden WebView2 window remains document-visible on Windows. Remove
+   the launcher from layout until the native host shows it again so animated
+   indicators and transparent compositing do not run while idle. */
+html.tezbar-window-hidden body {
+  display: none;
+}
+/* =========================================================================
+   Design system v2 — flat sheets
+   -------------------------------------------------------------------------
+   Shared by every surface. Flat, frosted sheets with 1px hairlines instead
+   of gradients and glow; solid color squircle icons; a solid accent for the
+   primary selection. Tokens are theme-aware, so each rule below is written
+   once and paired with its light-theme selector only to outrank the older
+   theme rules above. Reusable pieces live in `ui/primitives.tsx`
+   (ListRow, ListRowTag, SectionLabel, Hint) and `launcherIcons.tsx`
+   (Squircle).
+   ========================================================================= */
+:root {
+  --r-panel: 10px;
+  --r-card: 10px;
+  --r-row: 8px;
+  --r-field: 7px;
+  --r-chip: 5px;
+  --r-window: 18px;
+
+  --ln-accent: #4f52d9;
+  --ln-accent-strong: #5b5ef0;
+  --ln-accent-hover: #6a6df4;
+  --ln-sheet: rgba(28, 29, 33, 0.95);
+  --ln-rim: rgba(255, 255, 255, 0.08);
+  --ln-panel: rgba(255, 255, 255, 0.025);
+  --ln-field: rgba(0, 0, 0, 0.22);
+  --ln-popover: rgba(32, 33, 38, 0.98);
+  --ln-popover-solid: rgb(32, 33, 38);
+  --ln-hairline: rgba(255, 255, 255, 0.065);
+  --ln-hover: rgba(255, 255, 255, 0.05);
+  --ln-selected: rgba(255, 255, 255, 0.07);
+  --ln-bar: rgba(0, 0, 0, 0.16);
+  --ln-pill: rgba(255, 255, 255, 0.06);
+  --ln-pill-strong: rgba(255, 255, 255, 0.09);
+  --ln-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --ln-bar-float: rgba(22, 23, 27, 0.78);
+}
+
+:root[data-theme='white'] {
+  --ln-sheet: rgba(250, 250, 251, 0.96);
+  --ln-rim: rgba(15, 23, 42, 0.2);
+  --ln-panel: rgba(255, 255, 255, 0.7);
+  --ln-field: rgba(255, 255, 255, 0.9);
+  --ln-popover: rgba(255, 255, 255, 0.98);
+  --ln-popover-solid: rgb(255, 255, 255);
+  --ln-hairline: rgba(15, 23, 42, 0.1);
+  --ln-hover: rgba(15, 23, 42, 0.045);
+  --ln-selected: rgba(15, 23, 42, 0.06);
+  --ln-bar: rgba(15, 23, 42, 0.025);
+  --ln-pill: rgba(15, 23, 42, 0.05);
+  --ln-pill-strong: rgba(15, 23, 42, 0.07);
+  --ln-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+  --ln-bar-float: rgba(247, 247, 249, 0.82);
+}
+
+/* ---- Surfaces ---- */
+.glass-shell,
+.glass-shell.glass-shell--terminal,
+:root[data-theme='white'] .glass-shell,
+:root[data-theme='white'] .glass-shell.glass-shell--terminal {
+  border: 0;
+  border-radius: var(--r-window);
+  background: var(--ln-sheet);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: none;
+}
+
+/* The window has no native shadow, so the rim is its only edge. Paint it
+   above the content: header, footer and rows have their own backgrounds and
+   would otherwise cover an inset shadow on the shell itself. */
+.glass-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--ln-rim);
+  pointer-events: none;
+}
+
+.glass-card,
+.glass-panel,
+:root[data-theme='white'] .glass-card,
+:root[data-theme='white'] .glass-panel {
+  border-radius: var(--r-card);
+  background: var(--ln-panel);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.glass-inset,
+:root[data-theme='white'] .glass-inset {
+  background: var(--ln-pill);
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.agent-chat-shell,
+:root[data-theme='white'] .agent-chat-shell {
+  border-color: var(--ln-hairline);
+  background: var(--ln-panel);
+  box-shadow: none;
+}
+
+.tezbar-settings-window,
+:root[data-theme='white'] .tezbar-settings-window {
+  border-color: var(--ln-rim);
+  background: var(--ln-sheet);
+  box-shadow: var(--ln-shadow);
+}
+
+.cleanmymac-sidebar {
+  background: var(--ln-bar);
+}
+
+.tezbar-popover,
+:root[data-theme='white'] .tezbar-popover {
+  border-color: var(--ln-rim);
+  background: var(--ln-popover);
+  box-shadow: var(--ln-shadow);
+}
+
+/* Terminal glyphs must not bleed through the session picker. Keep it out of
+   the translucent glass-card surface rules and opaque in both themes. */
+.tezbar-popover.terminal-sessions-menu,
+:root[data-theme='white'] .tezbar-popover.terminal-sessions-menu {
+  background: var(--ln-popover-solid);
+}
+
+.hairline,
+:root[data-theme='white'] .hairline {
+  background: var(--ln-hairline);
+}
+
+/* ---- Fields and buttons ---- */
+.glass-field,
+:root[data-theme='white'] .glass-field {
+  background: var(--ln-field);
+  color: rgb(var(--c-text-1));
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.glass-field:hover,
+:root[data-theme='white'] .glass-field:hover {
+  background: var(--ln-field);
+  box-shadow: inset 0 0 0 1px var(--ln-rim);
+}
+
+.glass-field:focus,
+.glass-field:focus-visible,
+:root[data-theme='white'] .glass-field:focus,
+:root[data-theme='white'] .glass-field:focus-visible {
+  background: var(--ln-field);
+  box-shadow: inset 0 0 0 1px var(--ln-accent-strong);
+}
+
+.btn-primary,
+:root[data-theme='white'] .btn-primary {
+  color: #fff;
+  background: var(--ln-accent-strong);
+  box-shadow: none;
+}
+
+.btn-primary:hover:not(:disabled),
+:root[data-theme='white'] .btn-primary:hover:not(:disabled) {
+  background: var(--ln-accent-hover);
+  box-shadow: none;
+}
+
+.btn-ghost,
+:root[data-theme='white'] .btn-ghost {
+  background: var(--ln-pill);
+  box-shadow: inset 0 0 0 1px var(--ln-hairline);
+}
+
+.btn-ghost:hover:not(:disabled),
+.btn-quiet:hover:not(:disabled),
+:root[data-theme='white'] .btn-ghost:hover:not(:disabled),
+:root[data-theme='white'] .btn-quiet:hover:not(:disabled) {
+  background: var(--ln-pill-strong);
+}
+
+/* ---- Keys ---- */
+.kbd,
+:root[data-theme='white'] .kbd {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  font-size: 9.5px;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill-strong);
+  box-shadow: none;
+}
+
+/* A key combination reads as one pill: "⌘K". */
+.kbd-group {
+  display: inline-flex;
+  height: 16px;
+  align-items: center;
+  gap: 1px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--ln-pill-strong);
+}
+
+.kbd-group .kbd,
+:root[data-theme='white'] .kbd-group .kbd {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  font-family: inherit;
+  font-size: 10px;
+  color: rgb(var(--c-text-2));
+  background: none;
+}
+
+/* ---- Selection ---- */
+.row-interactive:hover,
+:root[data-theme='white'] .row-interactive:hover {
+  background: var(--ln-hover);
+}
+
+.row-interactive[data-selected='true'],
+.glide-highlight,
+:root[data-theme='white'] .row-interactive[data-selected='true'],
+:root[data-theme='white'] .glide-highlight {
+  background: var(--ln-selected);
+  box-shadow: none;
+}
+
+.glide-highlight.glide-highlight--accent,
+:root[data-theme='white'] .glide-highlight.glide-highlight--accent {
+  background: var(--ln-accent);
+}
+
+/* ---- Section label ---- */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgb(var(--c-text-3));
+}
+
+.section-label__count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--c-text-4));
+}
+
+/* ---- List row ---- */
+.list-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--r-row);
+  text-align: left;
+}
+
+.list-row__text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.list-row__title {
+  min-width: 0;
+  max-width: 70%;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgb(var(--c-text-1));
+}
+
+.list-row__subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: rgb(var(--c-text-4));
+}
+
+.list-row__accessory {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: rgb(var(--c-text-4));
+}
+
+.list-row__tag {
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill);
+}
+
+.list-row__tag[data-tone='success'] {
+  color: rgb(52, 211, 153);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.list-row :is(.list-row__title, .list-row__subtitle, .list-row__tag) {
+  transition:
+    color 90ms ease,
+    background 90ms ease;
+}
+
+.list-row[data-tone='accent'][data-selected='true'] :is(.text-ink-1, .text-ink-2, .list-row__title) {
+  color: #fff;
+}
+
+.list-row[data-tone='accent'][data-selected='true']
+  :is(.text-ink-3, .text-ink-4, .list-row__subtitle, .list-row__accessory) {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.list-row[data-tone='accent'][data-selected='true'] :is(.list-row__tag, .kbd) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Update status row: its status tints are pastel for dark glass, which
+   washes out on the light sheet. Use darker inks with the same hues. */
+:root[data-theme='white'] .update-status :is(.text-emerald-200, .text-emerald-300) {
+  color: rgb(4, 120, 87);
+}
+
+:root[data-theme='white'] .update-status [class*='border-emerald-'] {
+  border-color: rgba(4, 120, 87, 0.28);
+  background-color: rgba(4, 120, 87, 0.09);
+}
+
+:root[data-theme='white'] .update-status :is(.text-sky-200, .text-sky-300) {
+  color: rgb(3, 105, 161);
+}
+
+:root[data-theme='white'] .update-status [class*='border-sky-'] {
+  border-color: rgba(3, 105, 161, 0.26);
+  background-color: rgba(3, 105, 161, 0.08);
+}
+
+:root[data-theme='white'] .update-status .text-teal-300 {
+  color: rgb(15, 118, 110);
+}
+
+:root[data-theme='white'] .update-status [class*='border-teal-'] {
+  border-color: rgba(15, 118, 110, 0.28);
+  background-color: rgba(15, 118, 110, 0.09);
+}
+
+/* On the accent selection the status tints give way to white, like every
+   other row. */
+.list-row[data-selected='true']
+  .update-status
+  :is(.text-emerald-200, .text-emerald-300, .text-sky-200, .text-sky-300, .text-teal-300) {
+  color: #fff;
+}
+
+.list-row[data-selected='true']
+  .update-status
+  :is([class*='border-emerald-'], [class*='border-sky-'], [class*='border-teal-']) {
+  border-color: transparent;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+/* ---- Icons ---- */
+.squircle {
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+}
+
+/* ---- View sheet ----
+   Every full-window view stacks its cards (header, body, status bar) in a
+   `.view-sheet` root. Inside it the cards become flat sections of one sheet
+   divided by hairlines, matching the launcher. */
+.view-sheet {
+  gap: 0;
+}
+
+.view-sheet > .glass-card,
+.view-sheet > .agent-chat-shell,
+:root[data-theme='white'] .view-sheet > .glass-card,
+:root[data-theme='white'] .view-sheet > .agent-chat-shell {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: none;
+}
+
+.view-sheet > * + * {
+  border-top: 1px solid var(--ln-hairline);
+}
+
+/* The shared header owns the single hairline above the body. */
+.view-sheet > [data-command-surface-header] + * {
+  border-top: 0;
+}
+
+/* Shared compact header rhythm. Avoid stacking header padding, control
+   margins and the next section's padding into large empty bands. Scoped to
+   sheets so settings dialogs and other card layouts keep their own spacing. */
+/* Header inset matches the launcher: the same 14px from the top as from
+   the left edge, tighter below so the controls sit close to the list. */
+.view-sheet > .glass-card:has(> .view-header) {
+  padding: 14px 14px 8px;
+}
+
+.view-sheet > .glass-card > .view-header {
+  padding-bottom: 0;
+}
+
+.view-sheet > .glass-card:has(> .view-header) > * + * {
+  margin-top: 4px;
+}
+
+.view-sheet > .glass-card:has(> .view-header) + .glass-card {
+  padding-top: 6px;
+}
+
+/* ---- Floating status bar ----
+   The bottom bar with shortcut hints floats over the content as frosted
+   glass. Lists run to the window's bottom edge and scroll underneath it;
+   their scroll padding keeps the last row reachable above the bar. */
+.view-sheet,
+.tezbar-launcher {
+  position: relative;
+  --sheet-bar-h: 36px;
+}
+
+.tezbar-launcher,
+.view-sheet:has(> .command-surface-body):has(> .launcher-footer) {
+  --sheet-bar-h: 32px;
+}
+
+.view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
+:root[data-theme='white'] .view-sheet > .glass-card:last-child:not(:first-child):has(.kbd-group),
+.view-sheet:has(> .command-surface-body) > .launcher-footer,
+:root[data-theme='white'] .view-sheet:has(> .command-surface-body) > .launcher-footer,
+.tezbar-launcher > .launcher-footer,
+:root[data-theme='white'] .tezbar-launcher > .launcher-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  background: var(--ln-bar-float);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+}
+
+/* The body above a floating bar loses its bottom inset … */
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2):not(.sheet-above-bar) {
+  padding-bottom: 0;
+}
+
+.view-sheet:has(> .launcher-footer) > .command-surface-body {
+  padding-bottom: 0;
+}
+
+/* … and its scroll areas pad their end so the last row clears the bar. */
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2)
+  :is([class~='overflow-y-auto'], [class~='overflow-auto']),
+.view-sheet:has(> .glass-card:last-child:not(:first-child) .kbd-group)
+  > .glass-card:nth-last-child(2):is([class~='overflow-y-auto'], [class~='overflow-auto']):not(.sheet-above-bar),
+.view-sheet:has(> .launcher-footer) > .command-surface-body :is([class~='overflow-y-auto'], [class~='overflow-auto']),
+.view-sheet:has(> .launcher-footer) > .command-surface-body:is([class~='overflow-y-auto'], [class~='overflow-auto']),
+.tezbar-launcher .launcher-body :is([class~='overflow-y-auto'], [class~='overflow-auto']) {
+  padding-bottom: calc(var(--sheet-bar-h) + 6px);
+  scroll-padding-bottom: calc(var(--sheet-bar-h) + 6px);
+}
+
+/* Fixed (non-scrolling) panels in the body stop above the bar. */
+.view-sheet .sheet-above-bar {
+  margin-bottom: calc(var(--sheet-bar-h) + 8px);
+}
+
+/* ---- Onboarding keycaps lose their gradient too ---- */
+.onboarding-keycap,
+:root[data-theme='white'] .onboarding-keycap {
+  background: var(--ln-pill-strong);
+  box-shadow:
+    inset 0 0 0 1px var(--ln-hairline),
+    0 2px 0 var(--ln-hairline);
+}
+
+/* =========================================================================
+   Launcher — single sheet
+   -------------------------------------------------------------------------
+   The main command surface: one sheet with no inner cards. A compact search
+   row, a dense list and a status bar, separated by hairlines.
+   ========================================================================= */
+.tezbar-launcher .glass-card,
+:root[data-theme='white'] .tezbar-launcher .glass-card {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tezbar-launcher .launcher-body > * + * {
+  border-top: 1px solid var(--ln-hairline);
+}
+
+.tezbar-launcher .tezbar-pin-rail {
+  border-right: 1px solid var(--ln-hairline);
+  /* The footer floats over the body; pins and the drop target must clear it. */
+  margin-bottom: var(--sheet-bar-h);
+}
+
+/* Reversed wrapping row: the chip nearest the query wraps onto the hidden
+   second line first, so chips disappear one by one as the text grows. */
+.tezbar-launcher .launcher-mode-chips {
+  display: flex;
+  min-width: 0;
+  height: 20px;
+  flex: 0 1 auto;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow: hidden;
+}
+
+:is(.tezbar-launcher, [data-command-surface-header]) .launcher-mode-chip,
+[data-command-surface-header] .command-surface-select {
+  display: inline-flex;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: rgb(var(--c-text-3));
+  background: var(--ln-pill);
+}
+
+[data-command-surface-header] .launcher-mode-chip:hover,
+[data-command-surface-header] .command-surface-back:hover {
+  background: var(--ln-hover);
+}
+
+[data-command-surface-header] .launcher-mode-chip[aria-pressed='true'] {
+  color: rgb(var(--c-text-1));
+  background: var(--ln-pill-strong);
+}
+
+[data-command-surface-header] .command-surface-chips {
+  display: flex;
+  min-width: 0;
+  max-width: 55%;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+[data-command-surface-header] .command-surface-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.tezbar-launcher .rolling-command-hint__shortcut,
+:root[data-theme='white'] .tezbar-launcher .rolling-command-hint__shortcut {
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 6px;
+  font-weight: 500;
+  color: rgb(var(--c-text-2));
+  background: var(--ln-pill-strong);
+}
+
+.tezbar-launcher .launcher-arg-chip {
+  background: var(--ln-pill-strong);
+}
+
+/* Shared header and status bar actions. */
+:is(.tezbar-launcher, [data-command-surface-header]) .launcher-action {
+  border-radius: 6px;
+  font-size: 11px;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+:is(.tezbar-launcher, [data-command-surface-header]) .launcher-action:hover,
+:is(.tezbar-launcher, [data-command-surface-header]) .launcher-action[aria-expanded='true'] {
+  background: var(--ln-hover);
+}
+
+:root[data-theme='white'] :is(.tezbar-launcher, [data-command-surface-header]) .launcher-action {
+  color: rgb(var(--c-text-2));
+}
+
+.tezbar-launcher .launcher-pin-slot {
+  color: rgb(var(--c-text-3));
+  background: var(--ln-popover);
+  box-shadow: inset 0 0 0 1px var(--ln-rim);
+}
+
+.tezbar-launcher .launcher-popover {
+  border-radius: 12px;
+  border-color: var(--ln-rim);
+  background: var(--ln-popover);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: var(--ln-shadow);
+}
+
+/* Store follows the clipboard's flat split-pane layout, not nested cards. */
+.extensions-store-body {
+  grid-template-columns: minmax(160px, 34%) minmax(0, 1fr);
+}
+
+.extensions-store-detail {
+  container-type: inline-size;
+  border-color: var(--ln-hairline);
+  background: var(--ln-panel);
+}
+
+.extensions-store .extension-detail-footer {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+.extensions-store-body > aside [class~='overflow-y-auto'] {
+  padding-bottom: calc(var(--sheet-bar-h, 0px) + 6px);
+  scroll-padding-bottom: calc(var(--sheet-bar-h, 0px) + 6px);
+}
+
+.extensions-store-message {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+:root[data-theme='white'] .extensions-store .extension-detail-footer {
+  border-color: var(--ln-hairline);
+  background: var(--ln-bar);
+}
+
+@container (max-width: 340px) {
+  .extension-screenshots {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* One set of chrome dimensions for search, AI history and an open chat. */
+[data-command-surface-header] {
+  border: 0;
+  border-bottom: 1px solid var(--ln-hairline);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-command-surface-header] .launcher-header-row {
+  height: 44px;
+}
+
+[data-command-surface-header] .launcher-search-badge,
+:root[data-theme='white'] [data-command-surface-header] .launcher-search-badge {
+  color: #fff;
+}
+
+[data-command-surface-header] .launcher-search-badge.command-ai-icon {
+  background: #8b5cf6;
+}
+
+[data-command-surface-header] .launcher-search-badge.command-terminal-icon {
+  background: #059669;
+}
+
+[data-command-surface-header] .launcher-search-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-command-surface-header] .launcher-search-badge.bg-transparent svg {
+  width: 22px;
+  height: 22px;
+}
+
+[data-command-surface-footer] {
+  position: relative;
+  border-top: 1px solid var(--ln-hairline);
+  background: var(--ln-bar-float);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+}
+
+[data-command-surface-footer] .launcher-footer-row {
+  height: 32px;
+}
+
+.view-sheet > [data-command-surface-footer] {
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-tool-step .animate-spin {
+    animation: none;
+  }
+}
+
+.ai-extension-error { color: #fda4af; }
+:root[data-theme="white"] .ai-extension-error { color: #9f1239; }

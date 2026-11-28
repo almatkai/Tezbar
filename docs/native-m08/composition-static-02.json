@@ -1,0 +1,72 @@
+{
+  "freeze": "composition-source-freeze-02.json",
+  "scope": "New owned files and edited chat/shared-UI modules. Protected parent files were typechecked; unrelated pre-existing formatting was not rewritten.",
+  "checks": [
+    {
+      "gate": "scoped-fmt-app",
+      "command": [
+        "rustfmt",
+        "+1.98.1",
+        "--check",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "apps/tezbar/src/app/m8.rs",
+        "apps/tezbar/src/app/m8_tests.rs",
+        "apps/tezbar/src/asset_transport.rs",
+        "apps/tezbar/src/asset_transport_tests.rs",
+        "apps/tezbar/src/surfaces/command_bar/chat_integration.rs",
+        "apps/tezbar/src/surfaces/command_bar/chat_integration_tests.rs",
+        "apps/tezbar/src/surfaces/ai_chat/mod.rs",
+        "apps/tezbar/src/surfaces/ai_chat/references.rs",
+        "apps/tezbar/src/surfaces/ai_chat/runtime.rs",
+        "apps/tezbar/src/surfaces/ai_chat/view.rs",
+        "apps/tezbar/src/surfaces/command_bar/task_indicator.rs",
+        "crates/tezbar-ui/src/markdown.rs"
+      ],
+      "exit_code": 0,
+      "log": "docs/native-m08/composition-logs/scoped-fmt-app-02.log"
+    },
+    {
+      "gate": "scoped-fmt-core",
+      "command": [
+        "rustfmt",
+        "+1.98.1",
+        "--check",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "crates/tezbar-core/src/assets.rs",
+        "crates/tezbar-core/src/extensions/asset_scope.rs"
+      ],
+      "exit_code": 0,
+      "log": "docs/native-m08/composition-logs/scoped-fmt-core-02.log"
+    },
+    {
+      "gate": "typescript-typecheck",
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "exit_code": 0,
+      "log": "docs/native-m08/composition-logs/ts-typecheck-01.log",
+      "changed_ts_inputs": []
+    },
+    {
+      "gate": "typescript-tests",
+      "command": [
+        "pnpm",
+        "test",
+        "--maxWorkers=2"
+      ],
+      "exit_code": 0,
+      "log": "docs/native-m08/composition-logs/ts-tests-01.log",
+      "summaries": [
+        "81 passed files, 1 skipped file; 745 passed tests, 7 existing skipped"
+      ],
+      "changed_ts_inputs": []
+    }
+  ]
+}

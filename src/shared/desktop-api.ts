@@ -6,6 +6,12 @@ import type {
 } from './agent'
 import type { ChatSession, ChatSessionSummary, ChatTurn } from './chat'
 import type { BackgroundTask } from './backgroundTasks'
+import type {
+  LauncherLayout,
+  LauncherLayoutPatch,
+  LauncherViewport,
+  ResizeEdge,
+} from './windowLayout'
 import type { Intent } from './intent'
 import type { ClipboardEntry, ClipboardImagePayload } from './clipboard'
 import type { ExtensionIntegrityReport, ExtensionManifest, InstalledExtension } from './extensions'
@@ -21,6 +27,7 @@ import type {
 } from './extensionRuntime'
 import type { LlmConfigRecord, ProviderId } from './llmConfig'
 import type {
+  EmbeddingVariantId,
   KnowledgeDepth,
   KnowledgeIndexingSpeed,
   KnowledgeRootDepth,
@@ -33,11 +40,16 @@ import type { AppUpdateStatus, ReleaseChannel, UpdateChannelInfo } from './updat
 import type { SystemStatsSnapshot } from './systemStats'
 import type { PermissionId, PermissionStatus, PermissionsSnapshot } from './permissions'
 import type { SafetyDescriptor, SafetyLogEntry } from './safety'
-import type { NamedPortEntry } from './portManager'
 import type { QuickNoteEntry } from './quickNotes'
 import type { SnippetListRow, SnippetWritePayload } from './snippets'
 import type {
-  OpenPortProcess,
+  VaultItem,
+  VaultItemHeader,
+  VaultSaveInput,
+  VaultStatus,
+  VaultUnlockResult,
+} from './vault'
+import type {
   PathCompletionItem,
   SearchAction,
   SearchBenchmarkReport,
@@ -73,7 +85,7 @@ export type GithubPollResult =
   | { status: 'slow_down' }
   | {
       status: 'success'
-      access_token: string
+      access_token?: string
       refresh_token?: string
       expires_in?: number
       client_id: string
@@ -116,6 +128,7 @@ export type RaymesApi = {
   openSettingsWindow: () => Promise<void>
   hideLauncherForSettings: () => Promise<void>
   closeCurrentWindow: () => Promise<void>
+  onWindowCloseRequested?: (beforeClose: () => Promise<void>) => () => void
   query: (text: string) => Promise<Intent>
   cancel: () => Promise<unknown>
   getExtensions: () => Promise<InstalledExtension[]>
@@ -129,7 +142,7 @@ export type RaymesApi = {
   extensionList: () => Promise<InstalledRegistryExtension[]>
   extensionSearchStore: (
     query: string,
-    options?: ExtensionCatalogQueryOptions,
+    options?: ExtensionCatalogQueryOptions
   ) => Promise<ExtensionStorePage>
   extensionInstall: (extensionId: string) => Promise<InstalledRegistryExtension>
   extensionUninstall: (extensionId: string) => Promise<boolean>
@@ -150,6 +163,9 @@ export type RaymesApi = {
   extensionRefreshSession: (
     payload: ExtensionRefreshSessionRequest
   ) => Promise<ExtensionRefreshSessionResult>
+  onExtensionSessionInvalidated?: (
+    listener: (event: import('./extensionRuntime').ExtensionSessionInvalidation) => void
+  ) => () => void
   extensionDisposeSession: (payload: ExtensionDisposeSessionRequest) => Promise<boolean>
   extensionLoadMore: (
     payload: ExtensionLoadMoreSessionRequest
@@ -191,6 +207,16 @@ export type RaymesApi = {
     commandName?: string
     values: Record<string, unknown>
   }) => Promise<Record<string, unknown>>
+  extensionLauncherSearch?: (payload: {
+    text: string
+    surface: 'argument'
+    extensionId: string
+    commandName: string
+    argumentName: string
+  }) => Promise<SearchResult[]>
+  onLauncherInvalidated?: (
+    listener: (event: { text?: string; queryId?: string }) => void
+  ) => () => void
   searchAll: (query: string) => Promise<SearchResult[]>
   listSearchCandidates: () => Promise<SearchResult[]>
   completePath: (query: string) => Promise<PathCompletionItem[]>
@@ -198,10 +224,6 @@ export type RaymesApi = {
   recordDirectoryVisit: (path: string) => Promise<void>
   runSearchBenchmark: () => Promise<SearchBenchmarkReport>
   getSearchBenchmarkHistory: () => Promise<SearchBenchmarkReport[]>
-  listOpenPorts: () => Promise<OpenPortProcess[]>
-  listNamedPorts: () => Promise<NamedPortEntry[]>
-  addNamedPort: (payload: { name: string; port: number }) => Promise<NamedPortEntry | null>
-  removeNamedPort: (id: string) => Promise<boolean>
   quickLookFiles: (paths: string[]) => Promise<SearchExecuteResult>
   executeSearchAction: (
     action: SearchAction,
@@ -234,7 +256,7 @@ export type RaymesApi = {
   onStreamToken: (listener: (token: string) => void) => () => void
   onStreamDone: (listener: () => void) => () => void
   onStreamError: (listener: (message: string) => void) => () => void
-  getLlmConfig: () => Promise<LlmConfigRecord>
+  getLlmConfig: (cwd?: string) => Promise<LlmConfigRecord>
   setLlmConfig: (patch: LlmConfigRecord) => Promise<void | HotkeyUpdateResult>
   getLlmProviderStatuses: () => Promise<ProviderConnectionStatuses>
   listPiExtensions: () => Promise<PiExtensionItem[]>
@@ -244,6 +266,11 @@ export type RaymesApi = {
     apiKeyOverride?: string
   ) => Promise<string[]>
   getWindowZoomFactor: () => number
+  getLauncherLayout: () => Promise<LauncherLayout>
+  setLauncherLayout: (patch: LauncherLayoutPatch) => Promise<LauncherLayout>
+  onLauncherLayoutChanged: (listener: (layout: LauncherLayout) => void) => () => void
+  onLauncherViewportChanged: (listener: (viewport: LauncherViewport) => void) => () => void
+  startLauncherResize: (edge: ResizeEdge) => Promise<void>
   setWindowContentHeight: (height: number, zoomFactor: number) => Promise<void>
   openExternalUrl: (url: string) => Promise<void>
   githubDeviceStart: (clientId?: string) => Promise<{
@@ -298,6 +325,7 @@ export type RaymesApi = {
   revealClipboardEntry: (id: string) => Promise<boolean>
   readClipboardImage: (id: string) => Promise<ClipboardImagePayload | null>
   clearClipboardHistory: () => Promise<void>
+  onClipboardChanged: (listener: () => void) => () => void
   listSnippets: () => Promise<SnippetListRow[]>
   copySnippet: (id: string) => Promise<{ ok: boolean; message: string }>
   addSnippet: (
@@ -314,6 +342,17 @@ export type RaymesApi = {
   appendQuickNote: (text: string) => Promise<QuickNoteEntry | null>
   updateQuickNote: (createdAt: number, text: string) => Promise<boolean>
   deleteQuickNote: (createdAt: number) => Promise<boolean>
+  vaultStatus: () => Promise<VaultStatus>
+  /** Asks for Touch ID or the Mac password, then opens the vault. */
+  vaultUnlock: () => Promise<VaultUnlockResult>
+  vaultLock: () => Promise<{ ok: boolean }>
+  vaultList: () => Promise<VaultItemHeader[]>
+  vaultGet: (id: string) => Promise<VaultItem>
+  vaultSave: (item: VaultSaveInput) => Promise<VaultItemHeader>
+  vaultDelete: (id: string) => Promise<{ ok: boolean }>
+  /** Copies the value marked concealed; it is cleared after 30 s. */
+  vaultCopy: (id: string) => Promise<{ ok: boolean }>
+  vaultReset: () => Promise<VaultUnlockResult>
   terminalCreate: (request: TerminalCreateRequest) => Promise<TerminalCreateResult>
   terminalAttach: (request: TerminalAttachRequest) => Promise<TerminalAttachResult | null>
   terminalDetach: (sessionId: string) => Promise<boolean>
@@ -330,6 +369,7 @@ export type RaymesApi = {
   terminalSessionsSync: () => Promise<void>
   terminalSessionsAction: (action: TerminalSessionsAction) => Promise<void>
   onTerminalSessionsAction: (listener: (action: TerminalSessionsAction) => void) => () => void
+  onTerminalSessionsChanged: (listener: () => void) => () => void
   onTerminalData: (listener: (event: TerminalDataEvent) => void) => () => void
   onTerminalExit: (listener: (event: TerminalExitEvent) => void) => () => void
   getStorageBreakdown: () => Promise<{
@@ -356,10 +396,13 @@ export type RaymesApi = {
   clearChromiumCache: () => Promise<{ ok: boolean }>
   listBackgroundTasks: () => Promise<BackgroundTask[]>
   getKnowledgeSnapshot: () => Promise<KnowledgeSnapshot>
-  setKnowledgeEmbeddingModel: (model: 'built-in' | 'embeddinggemma-2') => Promise<KnowledgeSnapshot>
-  downloadKnowledgeEmbeddingModel: () => Promise<KnowledgeSnapshot>
-  cancelKnowledgeEmbeddingDownload: () => Promise<KnowledgeSnapshot>
-  removeKnowledgeEmbeddingModel: () => Promise<KnowledgeSnapshot>
+  setKnowledgeEmbeddingModel: (
+    model: 'built-in' | 'embeddinggemma-2',
+    variant?: EmbeddingVariantId
+  ) => Promise<KnowledgeSnapshot>
+  downloadKnowledgeEmbeddingModel: (variant?: EmbeddingVariantId) => Promise<KnowledgeSnapshot>
+  cancelKnowledgeEmbeddingDownload: (variant?: EmbeddingVariantId) => Promise<KnowledgeSnapshot>
+  removeKnowledgeEmbeddingModel: (variant?: EmbeddingVariantId) => Promise<KnowledgeSnapshot>
   listKnowledgeSources: (input?: {
     query?: string
     offset?: number
@@ -381,16 +424,38 @@ export type RaymesApi = {
   onQuickNoteSaveShortcut: (listener: () => void) => () => void
   /** Fired from the top-bar tray menu to open a built-in Tezbar surface. */
   onAppSurfaceOpen: (
-    listener: (surface: 'command' | 'settings' | 'clipboard' | 'extensions') => void
+    listener: (
+      surface:
+        | 'command'
+        | 'settings'
+        | 'settings-extensions'
+        | 'settings-ai'
+        | 'settings-voice'
+        | 'settings-knowledge'
+        | 'settings-permissions'
+        | 'settings-storage'
+        | 'settings-advanced'
+        | 'clipboard'
+        | 'extensions'
+        | 'indexing'
+        | 'snippets'
+        | 'notes'
+        | 'emoji-picker'
+        | 'system-monitor'
+        | 'onboarding'
+    ) => void
   ) => () => void
   /** Kick off a pi-backed agent run. Events stream via `onAgentEvent`. */
+  aiAccounts: (action: string, ...args: unknown[]) => Promise<unknown>
+  onAiExtensionsChanged: (listener: () => void) => () => void
+  aiExtensions: (action: string, ...args: unknown[]) => Promise<unknown>
   agentRun: (
     request: string | AgentRunRequest
   ) => Promise<{ ok: boolean; runId?: string; error?: string }>
   /** Capture the display under the pointer while temporarily hiding the Raymes window. */
   captureActiveScreen: () => Promise<AgentInputImage>
   /** Abort the currently running agent task, if any. */
-  agentCancel: () => Promise<{ ok: boolean }>
+  agentCancel: (runId?: string) => Promise<{ ok: boolean }>
   /** Resolve an in-chat command approval prompt. */
   agentApprove: (response: AgentApprovalResponse) => Promise<{ ok: boolean; error?: string }>
   /** Subscribe to agent run events (stages, message deltas, answers, errors). */
@@ -399,6 +464,8 @@ export type RaymesApi = {
   onExtensionInstallProgress: (
     listener: (payload: { id: string; progress: number }) => void
   ) => () => void
+  /** Fired when the background extension catalog download completes. */
+  onExtensionCatalogUpdated: (listener: () => void) => () => void
   /** Fired on every successful `setLlmConfig` write — views caching config should re-fetch. */
   onLlmConfigChanged: (listener: () => void) => () => void
   /** Chat session history (AI-mode multi-turn conversations). */
@@ -408,11 +475,21 @@ export type RaymesApi = {
   chatAppend: (payload: {
     session: Pick<
       ChatSession,
-      'id' | 'title' | 'createdAt' | 'updatedAt' | 'workingDirectory'
+      'id' | 'title' | 'icon' | 'createdAt' | 'updatedAt' | 'workingDirectory' | 'agentProfileId'
     >
     turn: ChatTurn
   }) => Promise<{ ok: boolean; error?: string }>
-  chatUpdateTitle: (id: string, title: string) => Promise<{ ok: boolean }>
+  chatUpdateTitle: (
+    id: string,
+    title: string,
+    icon?: string,
+    agentProfileId?: string
+  ) => Promise<{ ok: boolean }>
+  chatGenerateMeta: (payload: {
+    id: string
+    prompt: string
+    answer?: string
+  }) => Promise<{ title: string; icon: string } | null>
   chatDeleteTurn: (sessionId: string, turnId: string) => Promise<{ ok: boolean; error?: string }>
   chatDelete: (id: string) => Promise<{ ok: boolean }>
   chatClear: () => Promise<{ ok: boolean }>

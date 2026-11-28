@@ -1,0 +1,15 @@
+M11 source-only lane. No tests or parsing fixture experiments were executed.
+Do not interpret syntax checking or generated fixture SOURCE as a passed test.
+
+Preserved source-lookup failures:
+- scripts/embedding-runtime-manifest.json absent; correct pin is src-tauri/runtime/embedding-macos-arm64.json.
+- scripts/lib/embedding-runtime.mjs absent; correct policy is scripts/lib/embedding-runtime-policy.mjs.
+- apps/tezbar/src/profile.rs and preview.rs absent; actual guard is apps/tezbar/src/cli.rs.
+- crates/tezbar-core/src/context.rs absent; actual CorePaths is common.rs.
+- rusqlite registry .cargo-checksum.json absent at the queried source path; locked Cargo checksum used.
+- Upstream Apache license first URL and WebCorePersistentCoders first URL returned 404.
+  See upstream/fetch-failures.txt; successful corrected source bytes are retained separately.
+- Several broad read outputs were truncated; smaller targeted reads followed.
+
+XERJ: exactly one bounded availability/search check, server available; no reindex/recovery.
+No parsing failure, SDK acceptance, NSIS acceptance, SQLite acceptance or runtime pass is fabricated.

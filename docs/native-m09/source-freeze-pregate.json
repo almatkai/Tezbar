@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "kind": "M9 unexported source snapshot; NOT acceptance/final compile freeze",
+  "head_observed": "9d0c910fa1bf4b1ab50d04cae8a5a93dd01907fe",
+  "branch": "feat/native-gpui-app",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "combined_sha256": "4504a570dfa9b22274b5845dbc0c6c336246cf5c753422092e7a1d59b332efab",
+  "files": [
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/images.rs",
+      "sha256": "6c73e01b0e5a3d0934c9076e15d1a39381fa7f2c2334904642f2d4533630de7c",
+      "bytes": 11232
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/mod.rs",
+      "sha256": "8ae44c6bab7e5fc5033fc2543b1f0bbdf81973d43aaf9b6900b156f38e1611af",
+      "bytes": 32647
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/preferences.rs",
+      "sha256": "b28f3f8ac29b54ffad9ced5f902b252ef80edc4b5723da98368222c231b403b0",
+      "bytes": 7762
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/real_sdk.rs",
+      "sha256": "7f53104631f6cd8f526a1bcf01cb5da5dec2c38354a3f182c80fc2d7c196f689",
+      "bytes": 12055
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/tests.rs",
+      "sha256": "5e644b465d777472d442d3c9657c9a7ae45776fb60f0945fa726ddca53842031",
+      "bytes": 8435
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extension_runtime/view.rs",
+      "sha256": "b4a5b732fb66f66a6c3a23d1afe616d43cc576381f8bf38e289257a47f5d912e",
+      "bytes": 48331
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/artwork.rs",
+      "sha256": "5baaffcfb6637a768776d41562f01f26fc1a9bc72efecfdbf38b5f9a551dde16",
+      "bytes": 4701
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/mod.rs",
+      "sha256": "f67abfd31e84336f923927b0b9a7f14cfee14ba9a80a13765b6d61a4273f10c7",
+      "bytes": 17780
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/request.rs",
+      "sha256": "55caf8b7715d9d219e16f460b8316ae8c463bb3573a2f03d2228737ef8d0aea0",
+      "bytes": 4491
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/tests.rs",
+      "sha256": "4c5f39934f049c8eaa3068c3ffd3245f7030f2818a8d4d06d64cc4e62d8cfa5b",
+      "bytes": 3208
+    },
+    {
+      "path": "apps/tezbar/src/surfaces/extensions_store/view.rs",
+      "sha256": "2a4274d5eb4709d4c32a7901d52ff35ff51c1511172d9c6823a0e71eac0131e6",
+      "bytes": 17107
+    },
+    {
+      "path": "docs/native-m09/failed-experiments.txt",
+      "sha256": "2d3e68404f3abb0ccba363b54496d2dd708e1d1d418b9ef32b079ff055bfbad1",
+      "bytes": 1370
+    },
+    {
+      "path": "docs/native-m09/integration.md",
+      "sha256": "42f72000e22e0fc4f2a673a91ba638db5e9042b06b43dd4cb22de228941e8fdb",
+      "bytes": 11253
+    },
+    {
+      "path": "docs/native-m09/source-audit.json",
+      "sha256": "0474d05dc85a3cc3fcc6927fd79149b6f6e376ef5204046556fcb1c894d8ddb0",
+      "bytes": 517
+    },
+    {
+      "path": "docs/native-m09/source-case-map.json",
+      "sha256": "b1ea1a8752d00a321af6dc9c5d60f5bbccb5ab731837d82e7d47d941b8b9ed48",
+      "bytes": 123935
+    },
+    {
+      "path": "docs/native-m09/verification.md",
+      "sha256": "fb653437bab12cf99dfdd13074d646b4a62312ffd713548697f78204eac1f0b2",
+      "bytes": 6537
+    },
+    {
+      "path": "tests/fixtures/extensions/native_harness.rs",
+      "sha256": "0c3ef77c604ce7245722964acc56d537e143e28db2f14349d42fdb4ed1a74079",
+      "bytes": 8570
+    },
+    {
+      "path": "tests/fixtures/extensions/package.json",
+      "sha256": "f77c2f0820be6096b5dba043116d06ff8150bf20817e21e9911ed488b179f7d5",
+      "bytes": 1238
+    },
+    {
+      "path": "tests/fixtures/extensions/prepare.mjs",
+      "sha256": "69a68fcfbd530185c98f412aeef52281591613dba3113137fed97fa25a1c67f4",
+      "bytes": 3569
+    },
+    {
+      "path": "tests/fixtures/extensions/src/actions.tsx",
+      "sha256": "135c57048e46b915f4261162be27499bd8859bd946d0bd9d4ec447deeabd3ef6",
+      "bytes": 1374
+    },
+    {
+      "path": "tests/fixtures/extensions/src/detail.tsx",
+      "sha256": "77ea511378f8fed47c8e06678203912b9fc07daaeea4efcde1833193f09db61a",
+      "bytes": 920
+    },
+    {
+      "path": "tests/fixtures/extensions/src/feedback.tsx",
+      "sha256": "a6a53cd96fb0fe3fc8d3e0de4b92046184e99c192a6f81371f855a5587a94876",
+      "bytes": 746
+    },
+    {
+      "path": "tests/fixtures/extensions/src/form.tsx",
+      "sha256": "5091178efd86bac5404d37176b87ce2a7d4baef351d0d1ec1b705bb05b235a56",
+      "bytes": 1611
+    },
+    {
+      "path": "tests/fixtures/extensions/src/grid.tsx",
+      "sha256": "6166ef4c94474e418533370c2113044e5b75a4f716c0e17df0920d586671687a",
+      "bytes": 886
+    },
+    {
+      "path": "tests/fixtures/extensions/src/invalidation.tsx",
+      "sha256": "3d9be49bd26da595e50f76151e075c141ea888780b6282a845b30306f1c9c0d7",
+      "bytes": 564
+    },
+    {
+      "path": "tests/fixtures/extensions/src/list.tsx",
+      "sha256": "adae7fc47912a0311fc1441edde970b6e5bf2b8292cfe62d967d83aa213b87a6",
+      "bytes": 2431
+    },
+    {
+      "path": "tests/fixtures/extensions/src/menubar.tsx",
+      "sha256": "399671f0c015cad1feec62d8c466c68cc7ab9fde7f0eb25fbd7b1104536be19c",
+      "bytes": 738
+    },
+    {
+      "path": "tests/fixtures/extensions/src/prompts.tsx",
+      "sha256": "9e76ab79a2891c2274e0c44e38c40fbf8d12df3838176cdadef649bef31dea67",
+      "bytes": 612
+    }
+  ],
+  "external_parent_owned_dependencies": [
+    "apps/tezbar/src/surfaces/extension_runtime/assets.rs",
+    "docs/native-m09/parent-contracts.md"
+  ],
+  "tests_executed": 0,
+  "builds_executed": 0
+}

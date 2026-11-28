@@ -1,0 +1,11 @@
+{
+  "com.tezbar.native.port-manager": "local-import-only",
+  "com.tezbar.native.json-editor": "local-import-only",
+  "com.tezbar.native.emoji": "local-import-only",
+  "com.tezbar.native.random-data-generator": "local-import-only",
+  "com.tezbar.native.dictionary": "local-import-only",
+  "com.tezbar.native.one-time-password": "local-import-only",
+  "com.tezbar.native.language-tool": "local-import-only",
+  "com.tezbar.native.image-search": "local-import-only",
+  "com.tezbar.native.image-host": "local-import-only"
+}

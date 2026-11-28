@@ -1,0 +1,319 @@
+{
+  "version": "0.1.1",
+  "description": "Control VS Code and compatible editors directly from Raycast",
+  "author": "thomas",
+  "contributors": [
+    "iainsimmons",
+    "macbookandrew",
+    "cy-98",
+    "immint023",
+    "pernielsentikaer",
+    "vimtor",
+    "tonka3000",
+    "fazle_rabbi",
+    "oilbeater",
+    "QIanGua",
+    "hakob_nersesian",
+    "erics118",
+    "tm.wrnr",
+    "tleo19",
+    "lin",
+    "yug2005",
+    "vatsalsanjay",
+    "Tarocch1",
+    "jonas_list",
+    "xilopaint",
+    "lachero",
+    "pascal_burkhard",
+    "roberto.cinetto",
+    "emiliocantuc",
+    "raxityo",
+    "yusifaliyevpro",
+    "jkker",
+    "sillashead",
+    "KamilDev",
+    "muhammadrizo",
+    "Tambouil"
+  ],
+  "preferences": [
+    {
+      "name": "build",
+      "type": "dropdown",
+      "required": false,
+      "title": "Build",
+      "default": "Code",
+      "description": "Select which build of Visual Studio Code to use when searching for recent projects",
+      "data": [
+        {
+          "title": "Antigravity",
+          "value": "Antigravity"
+        },
+        {
+          "title": "Cursor",
+          "value": "Cursor"
+        },
+        {
+          "title": "IBM Bob",
+          "value": "IBM Bob"
+        },
+        {
+          "title": "Kiro",
+          "value": "Kiro"
+        },
+        {
+          "title": "Positron",
+          "value": "Positron"
+        },
+        {
+          "title": "Qoder",
+          "value": "Qoder"
+        },
+        {
+          "title": "Trae",
+          "value": "Trae"
+        },
+        {
+          "title": "Trae CN",
+          "value": "Trae CN"
+        },
+        {
+          "title": "VSCodium",
+          "value": "VSCodium"
+        },
+        {
+          "title": "VSCodium - Insiders",
+          "value": "VSCodium - Insiders"
+        },
+        {
+          "title": "Visual Studio Code",
+          "value": "Code"
+        },
+        {
+          "title": "Visual Studio Code - Insiders",
+          "value": "Code - Insiders"
+        },
+        {
+          "title": "Devin",
+          "value": "Devin"
+        },
+        {
+          "title": "Windsurf",
+          "value": "Windsurf"
+        },
+        {
+          "title": "Lingma",
+          "value": "Lingma"
+        }
+      ]
+    },
+    {
+      "name": "layout",
+      "title": "View Layout",
+      "type": "dropdown",
+      "required": false,
+      "default": "list",
+      "description": "Select the layout of the view",
+      "data": [
+        {
+          "value": "list",
+          "title": "List"
+        },
+        {
+          "value": "grid",
+          "title": "Grid"
+        }
+      ]
+    },
+    {
+      "name": "keepSectionOrder",
+      "type": "checkbox",
+      "title": "Advanced",
+      "required": false,
+      "label": "Keep Section Order",
+      "default": false,
+      "description": "Keep the order of the sections while searching folders, files, etc."
+    },
+    {
+      "name": "closeOtherWindows",
+      "type": "checkbox",
+      "title": "Usability",
+      "required": false,
+      "label": "Close Other VS Code Windows",
+      "default": false,
+      "description": "Close other VS Code windows when opening a project"
+    },
+    {
+      "name": "terminalApp",
+      "type": "appPicker",
+      "default": "com.apple.Terminal",
+      "required": false,
+      "title": "Terminal App",
+      "description": "Select which Terminal App to use when opening with a terminal"
+    },
+    {
+      "name": "showGitBranch",
+      "type": "checkbox",
+      "title": "Git Integration",
+      "required": false,
+      "label": "Show Git Branch",
+      "default": true,
+      "description": "Display the current Git branch for files and folders in Git repositories"
+    },
+    {
+      "name": "gitBranchColor",
+      "type": "textfield",
+      "title": "Git Integration Color",
+      "required": false,
+      "label": "Git Branch Color",
+      "default": "",
+      "description": "Hexadecimal color code for Git branch tag (e.g., #00FF00). Leave empty to use default green"
+    }
+  ],
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "schemaVersion": 3,
+  "id": "com.tezbar.native.visual-studio-code",
+  "slug": "visual-studio-code",
+  "name": "Visual Studio Code",
+  "runtime": "rust",
+  "execution": "process",
+  "protocolVersion": 1,
+  "repository": "https://github.com/almatkai/visual-studio-code",
+  "icon": "resources/icon.png",
+  "commands": [
+    {
+      "name": "index",
+      "title": "Search Recent Projects",
+      "description": "Search and open recent projects from VS Code",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "timeoutMs": 30000
+    },
+    {
+      "name": "open-with-vscode",
+      "title": "Open with Visual Studio Code",
+      "description": "Open the currently selected file manager item with VS Code",
+      "mode": "no-view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "timeoutMs": 30000
+    },
+    {
+      "name": "open-new-window",
+      "title": "Open New Window",
+      "description": "Open a new VS Code window",
+      "mode": "no-view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "timeoutMs": 30000
+    },
+    {
+      "name": "extensions",
+      "title": "Show Installed Extensions",
+      "description": "Manage installed extensions",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "timeoutMs": 30000
+    },
+    {
+      "name": "install-extension",
+      "title": "Install Extension",
+      "description": "Install extensions from Visual Studio Marketplace",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "timeoutMs": 30000
+    },
+    {
+      "name": "commandpalette",
+      "title": "Commands",
+      "description": "Show commands of the VS Code Command Palette",
+      "disabledByDefault": true,
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "timeoutMs": 30000
+    },
+    {
+      "name": "open-agents-window",
+      "title": "Open Agents Window",
+      "description": "Open the Agents Window",
+      "mode": "no-view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "serialize",
+      "timeoutMs": 30000
+    }
+  ],
+  "capabilities": [
+    "clipboard.write",
+    "shell",
+    "selection",
+    "window.visibility",
+    "settings.open",
+    "host.quicklinks.create",
+    "apps"
+  ],
+  "replaces": [
+    "com.tezbar.visual-studio-code",
+    "raycast.visual-studio-code"
+  ],
+  "files": {},
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/visual-studio-code/releases/download/v0.1.1/visual-studio-code-aarch64-apple-darwin.zip",
+      "sha256": "cecdfbec7f0943f29bdf980d1d6d1eb578be6cd86813bd0c77971798d1679ead",
+      "executable": "bin/tezbar-visual-studio-code",
+      "executableSha256": "69a66a5cc9fb4f0e4af079d490d7c97db516486402efe9a9ca70e1330aab67cc"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/visual-studio-code/releases/download/v0.1.1/visual-studio-code-x86_64-pc-windows-msvc.zip",
+      "sha256": "c8c48938f8ca210378c4e5108b152cb2a25d92fbd8854068b6c1db994eb57f8a",
+      "executable": "bin/tezbar-visual-studio-code.exe",
+      "executableSha256": "e1f70268a4a3338a61c55700dfc239a727f0b636137f03760395b8a77703f6c5"
+    }
+  },
+  "migrationPaths": {
+    "legacy-cache-0": "extensions/packages/com.tezbar.visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-1": "extensions/packages/raycast.visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-2": "extensions/packages/visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-3": "extension-registry/packages/com.tezbar.visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-4": "extension-registry/packages/raycast.visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-5": "extension-registry/packages/visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-6": "extensions/com.tezbar.visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-7": "extensions/raycast.visual-studio-code/.tezbar-support/cache/shared.json",
+    "legacy-cache-8": "extensions/visual-studio-code/.tezbar-support/cache/shared.json"
+  },
+  "minHostVersion": "0.3.0-beta.12"
+}

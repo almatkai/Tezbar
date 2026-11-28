@@ -34,7 +34,9 @@ vi.mock('@tezbar/desktop-runtime', () => ({
   },
 }))
 
-vi.mock('./llm/extensionAI', () => ({
+vi.mock('./extensionWorker/windowState', () => ({ setSuppressBlurHide: vi.fn() }))
+vi.mock('./extensionWorker/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./extensionWorker/services')>()),
   askExtensionAI: async (prompt: string) => `AI:${prompt}`,
 }))
 
@@ -512,11 +514,16 @@ describe('extension runtime list pagination', () => {
       if (!initial.ok || initial.mode !== 'view') return
       expect(initial.root.props.markdown).toBe('initial:loading')
 
-      await new Promise((resolve) => setTimeout(resolve, 40))
-      const refreshed = await refreshExtensionSession({ sessionId: initial.sessionId })
-      expect(refreshed.ok, JSON.stringify(refreshed)).toBe(true)
-      if (!refreshed.ok || refreshed.mode !== 'view') return
-      expect(refreshed.root.props.markdown).toBe('changed:remote-ready:remote-ready')
+      // An unchanged poll means the HTTP effects are still in flight, not success.
+      // Keep the server alive until both Axios calls have reached the view.
+      await vi.waitFor(async () => {
+        const refreshed = await refreshExtensionSession({ sessionId: initial.sessionId })
+        expect(refreshed.ok, JSON.stringify(refreshed)).toBe(true)
+        expect(refreshed.mode).toBe('view')
+        if (refreshed.ok && refreshed.mode === 'view') {
+          expect(refreshed.root.props.markdown).toBe('changed:remote-ready:remote-ready')
+        }
+      })
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
       rmSync(extensionRoot, { recursive: true, force: true })
@@ -1213,7 +1220,9 @@ describe('extension runtime list pagination', () => {
   // This fixture reads the port file created by registerWindowsOAuthProtocols;
   // that OS bridge intentionally does not register or write a port on macOS.
   // The cross-platform loopback OAuth flow is exercised by the preceding test.
-  it.skipIf(process.platform !== 'win32')('supports com.raycast:/oauth custom protocol redirect and bridge for Google OAuth services', async () => {
+  it.runIf(process.platform === 'win32')(
+    'supports com.raycast:/oauth custom protocol redirect and bridge for Google OAuth services',
+    async () => {
     const extensionRoot = mkdtempSync(join(tmpdir(), 'raymes-google-custom-oauth-'))
     mkdirSync(join(extensionRoot, '.sc-build'))
     let tokenRequests = 0

@@ -1,0 +1,1245 @@
+//! End-to-end fixtures cross the same agent:run / agent:event seam as the UI.
+//! All profiles, files, HTTP endpoints and Pi overrides are local test resources.
+use super::tests::{fixture, next_event};
+use super::*;
+use std::collections::VecDeque;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    sync::mpsc,
+};
+struct Reply {
+    body: String,
+    status: u16,
+    hold_headers: bool,
+    hold_body: bool,
+}
+impl Reply {
+    fn sse(body: String) -> Self {
+        Self {
+            body,
+            status: 200,
+            hold_headers: false,
+            hold_body: false,
+        }
+    }
+    fn hold(headers: bool, body: String) -> Self {
+        Self {
+            body,
+            status: 200,
+            hold_headers: headers,
+            hold_body: !headers,
+        }
+    }
+}
+struct Server {
+    url: String,
+    requests: mpsc::UnboundedReceiver<Value>,
+    raw_requests: mpsc::UnboundedReceiver<Vec<u8>>,
+    task: tokio::task::JoinHandle<()>,
+}
+impl Drop for Server {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+async fn server(replies: Vec<Reply>) -> Server {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/v1", listener.local_addr().unwrap());
+    let (tx, rx) = mpsc::unbounded_channel();
+    let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+    let task = tokio::spawn(async move {
+        let mut queue: VecDeque<_> = replies.into();
+        let mut clients = tokio::task::JoinSet::new();
+        // Keep accepting after the scripted replies to detect unintended retries.
+        loop {
+            tokio::select! {
+                accepted=listener.accept()=>{
+                    let Ok((mut socket,_))=accepted else{break};
+                    let reply=queue.pop_front().unwrap_or(Reply{body:String::new(),status:500,hold_headers:false,hold_body:false});
+                    let tx=tx.clone();let raw_tx=raw_tx.clone();
+                    clients.spawn(async move {
+                        let mut data=Vec::new();let end;
+                        loop {
+                            let mut b=[0;4096];let n=socket.read(&mut b).await.unwrap_or(0);if n==0{return;}
+                            data.extend_from_slice(&b[..n]);
+                            if let Some(i)=data.windows(4).position(|w|w==b"\r\n\r\n"){end=i+4;break;}
+                            assert!(data.len()<16384);
+                        }
+                        let header=String::from_utf8_lossy(&data[..end]);
+                        assert!(header.starts_with("POST /v1/chat/completions "));
+                        let length=header.lines().find_map(|l|l.to_lowercase().strip_prefix("content-length:").map(|v|v.trim().parse::<usize>().unwrap())).unwrap();
+                        while data.len()-end<length {let mut b=[0;4096];let n=socket.read(&mut b).await.unwrap_or(0);if n==0{return;}data.extend_from_slice(&b[..n]);}
+                        raw_tx.send(data[end..end+length].to_vec()).unwrap();
+                        tx.send(serde_json::from_slice(&data[end..end+length]).unwrap()).unwrap();
+                        if reply.hold_headers {std::future::pending::<()>().await;}
+                        let length=if reply.hold_body{reply.body.len()+100}else{reply.body.len()};
+                        let h=format!("HTTP/1.1 {} Fixture\r\nContent-Type: text/event-stream\r\nContent-Length: {length}\r\nRetry-After: 2\r\nConnection: close\r\n\r\n",reply.status);
+                        let _=socket.write_all(h.as_bytes()).await;
+                        let _=socket.write_all(reply.body.as_bytes()).await;
+                        if reply.hold_body {std::future::pending::<()>().await;}
+                    });
+                },Some(_)=clients.join_next(),if !clients.is_empty()=>{}
+            }
+        }
+    });
+    Server {
+        url,
+        requests: rx,
+        raw_requests: raw_rx,
+        task,
+    }
+}
+fn data(v: Value) -> String {
+    format!("data: {v}\n\n")
+}
+fn text(t: &str) -> String {
+    format!(
+        "{}{}data: [DONE]\n\n",
+        data(json!({"choices":[{"index":0,"delta":{"content":t}}]})),
+        data(json!({"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}))
+    )
+}
+fn call(id: &str, name: &str, args: Value) -> Value {
+    json!({"id":id,"type":"function","function":{"name":if cfg!(windows)&&name=="bash"{"powershell"}else{name},"arguments":args.to_string()}})
+}
+fn calls(calls: Vec<Value>) -> String {
+    let indexed: Vec<_> = calls
+        .into_iter()
+        .enumerate()
+        .map(|(i, mut c)| {
+            c["index"] = json!(i);
+            c
+        })
+        .collect();
+    format!(
+        "{}{}data: [DONE]\n\n",
+        data(json!({"choices":[{"index":0,"delta":{"tool_calls":indexed}}]})),
+        data(json!({"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}))
+    )
+}
+async fn configure(core: &AiCore, url: &str, patch: Value) {
+    let mut cfg = json!({"provider":"openai-compatible","model":"fixture-model","openaiCompatibleBaseURL":url,"agentRuntime":"native","headerTimeoutSeconds":30});
+    for (k, v) in patch.as_object().unwrap() {
+        cfg[k] = v.clone();
+    }
+    core.handle("llm-config-set", &[cfg])
+        .await
+        .unwrap()
+        .unwrap();
+    *core.inner.pi_override.lock().unwrap() =
+        Some(core.inner.ctx.paths.temp_dir.join("PI-MUST-NOT-BE-INVOKED"));
+}
+async fn start(core: &AiCore, id: &str, cwd: &std::path::Path) {
+    let result=core.handle("agent:run",&[json!({"runId":id,"task":"Prior conversation: User: remember 🦀\nNew user message: perform fixture task","cwd":cwd})]).await.unwrap().unwrap();
+    assert_eq!(result["ok"], true);
+}
+async fn approve(core: &AiCore, event: &Value, decision: &str) -> Value {
+    core.handle(
+        "agent:approve",
+        &[json!({"runId":event["runId"],"approvalId":event["approvalId"],"decision":decision})],
+    )
+    .await
+    .unwrap()
+    .unwrap()
+}
+async fn request(s: &mut Server) -> Value {
+    tokio::time::timeout(Duration::from_secs(5), s.requests.recv())
+        .await
+        .unwrap()
+        .unwrap()
+}
+async fn no_extra(s: &mut Server) {
+    assert!(
+        tokio::time::timeout(Duration::from_millis(80), s.requests.recv())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn native_write_read_answer_preserves_ids_schema_history_and_never_needs_pi() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "write_1",
+            "write",
+            json!({"path":"note.txt","content":"hello 🦀"}),
+        )])),
+        Reply::sse(calls(vec![call(
+            "read_2",
+            "read",
+            json!({"path":"note.txt"}),
+        )])),
+        Reply::sse(text("Saved and verified 🦀")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({"agentRuntime":"auto"})).await;
+    start(&core, "agent-roundtrip", &root).await;
+    let first = request(&mut http).await;
+    assert_eq!(first["model"], "fixture-model");
+    assert_eq!(first["stream"], true);
+    assert!(s(&first["messages"][1]["content"]).contains("remember 🦀"));
+    for t in first["tools"].as_array().unwrap() {
+        assert_eq!(t["type"], "function");
+        assert_eq!(t["function"]["parameters"]["additionalProperties"], false);
+        assert!(t["function"]["parameters"]["required"].is_array());
+    }
+    let approval = next_event(&mut events, "approval").await;
+    assert!(!root.join("note.txt").exists());
+    assert_eq!(approve(&core, &approval, "once").await["ok"], true);
+    let second = request(&mut http).await;
+    assert_eq!(second["messages"][2]["role"], "assistant");
+    assert_eq!(second["messages"][2]["tool_calls"][0]["id"], "write_1");
+    assert_eq!(second["messages"][3]["tool_call_id"], "write_1");
+    let third = request(&mut http).await;
+    assert_eq!(third["messages"][4]["tool_calls"][0]["id"], "read_2");
+    assert_eq!(third["messages"][5]["tool_call_id"], "read_2");
+    assert!(s(&third["messages"][5]["content"]).contains("hello 🦀"));
+    assert_eq!(
+        next_event(&mut events, "answer").await["text"],
+        "Saved and verified 🦀"
+    );
+    next_event(&mut events, "done").await;
+    assert_eq!(
+        std::fs::read_to_string(root.join("note.txt")).unwrap(),
+        "hello 🦀"
+    );
+
+    no_extra(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn completed_effect_stays_once_across_byte_identical_turn_retry() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let outage = || Reply {
+        body: String::new(),
+        status: 503,
+        hold_headers: false,
+        hold_body: false,
+    };
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "counter",
+            "bash",
+            json!({"command":"printf x >> counter"}),
+        )])),
+        outage(),
+        Reply::sse(text("recovered")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({})).await;
+    start(&core, "agent-retry", &root).await;
+    let a = next_event(&mut events, "approval").await;
+    approve(&core, &a, "once").await;
+    assert_eq!(next_event(&mut events, "answer").await["text"], "recovered");
+    next_event(&mut events, "done").await;
+    assert_eq!(std::fs::read_to_string(root.join("counter")).unwrap(), "x");
+    request(&mut http).await;
+    let first = request(&mut http).await;
+    let retry = request(&mut http).await;
+    assert_eq!(first, retry);
+    http.raw_requests.recv().await.unwrap();
+    let first_bytes = http.raw_requests.recv().await.unwrap();
+    let retry_bytes = http.raw_requests.recv().await.unwrap();
+    assert_eq!(first_bytes, retry_bytes);
+    no_extra(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_rejects_whole_malformed_batches_before_any_approval_or_effect() {
+    let good = call(
+        "good",
+        "write",
+        json!({"path":"must-not-exist","content":"bad"}),
+    );
+    let mut invalid_json = call("bad", "write", json!({}));
+    invalid_json["function"]["arguments"] = json!("{\"path\":");
+    let mut oversize = call("bad", "write", json!({}));
+    oversize["function"]["arguments"] = json!("x".repeat(65537));
+    let valid = calls(vec![good.clone()]);
+    let cases = vec![
+        calls(vec![good.clone(), call("bad", "unknown", json!({}))]),
+        calls(vec![good.clone(), invalid_json]),
+        calls(vec![good.clone(), oversize]),
+        calls(vec![good.clone(), good.clone()]),
+        calls(vec![
+            good.clone(),
+            call(
+                "bad",
+                "write",
+                json!({"path":"b","content":"b","extra":true}),
+            ),
+        ]),
+        valid.replace(
+            "data: [DONE]\n\n",
+            &data(json!({"error":{"message":"failure"}})),
+        ),
+        format!(
+            "{}data: [DONE]\n\n",
+            data(
+                json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"x","function":{"name":"write","arguments":"{}"}}]}}]})
+            )
+        ),
+        data(
+            json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"x","function":{"name":"write","arguments":"{"}}]}}]}),
+        ),
+    ];
+    for body in cases {
+        let (_dir, core, mut events) = fixture();
+        let root = core.inner.ctx.paths.home_dir.clone();
+        let mut http = server(vec![Reply::sse(body)]).await;
+        configure(&core, &http.url, json!({})).await;
+        start(&core, "agent-malformed", &root).await;
+        let mut error = false;
+        loop {
+            let (_, e) = tokio::time::timeout(Duration::from_secs(5), events.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_ne!(e["type"], "approval");
+            if e["type"] == "error" {
+                error = true;
+            }
+            if e["type"] == "done" {
+                break;
+            }
+        }
+        assert!(error);
+        assert!(!root.join("must-not-exist").exists());
+        request(&mut http).await;
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn native_edit_ambiguity_rejects_an_earlier_write_in_same_batch() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    std::fs::write(root.join("ambiguous"), "aaa").unwrap();
+    let mut _http = server(vec![
+        Reply::sse(calls(vec![
+            call("w", "write", json!({"path":"new","content":"bad"})),
+            call(
+                "e",
+                "edit",
+                json!({"path":"ambiguous","oldText":"aa","newText":"b"}),
+            ),
+        ])),
+        Reply::sse(text("corrected")),
+    ])
+    .await;
+    configure(&core, &_http.url, json!({})).await;
+    start(&core, "agent-edit", &root).await;
+    next_event(&mut events, "answer").await;
+    next_event(&mut events, "done").await;
+    request(&mut _http).await;
+    let corrected = request(&mut _http).await;
+    assert!(corrected.to_string().contains("ambiguous"));
+    assert!(!root.join("new").exists());
+    assert_eq!(
+        std::fs::read_to_string(root.join("ambiguous")).unwrap(),
+        "aaa"
+    );
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_review_remembered_destructive_and_complex_commands_cannot_bypass_prompts() {
+    for (mode, command) in [
+        ("review", "pwd"),
+        ("turbo", "rm -f victim"),
+        ("auto", "pwd && rm -f victim"),
+        ("default", "printf $(pwd)"),
+        ("turbo", "pwd; printf complex"),
+    ] {
+        let (_dir, core, mut events) = fixture();
+        let root = core.inner.ctx.paths.home_dir.clone();
+        std::fs::write(root.join("victim"), "keep").unwrap();
+        let mut http = server(vec![
+            Reply::sse(calls(vec![call("p", "bash", json!({"command":command}))])),
+            Reply::sse(text("Denied")),
+        ])
+        .await;
+        configure(&core,&http.url,json!({"agentApprovalMode":mode,"agentAlwaysAllowedExactCommands":[command],"agentAlwaysAllowedCommands":["pwd","rm","printf"]})).await;
+        start(&core, "agent-policy", &root).await;
+        let a = next_event(&mut events, "approval").await;
+        assert_eq!(a["command"], command);
+        approve(&core, &a, "deny").await;
+        next_event(&mut events, "answer").await;
+        next_event(&mut events, "done").await;
+        request(&mut http).await;
+        let r = request(&mut http).await;
+        assert!(s(&r["messages"][3]["content"]).contains("Native permission"));
+        assert!(root.join("victim").exists());
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn native_concurrent_approval_ownership_cancel_and_stale_responses() {
+    let (_dir, core, mut events) = fixture();
+    let aroot = core.inner.ctx.paths.home_dir.join("a");
+    let broot = core.inner.ctx.paths.home_dir.join("b");
+    std::fs::create_dir_all(&aroot).unwrap();
+    std::fs::create_dir_all(&broot).unwrap();
+    let c = calls(vec![call(
+        "shared",
+        "write",
+        json!({"path":"owned","content":"second"}),
+    )]);
+    let mut http = server(vec![
+        Reply::sse(c.clone()),
+        Reply::sse(c),
+        Reply::sse(text("second complete")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({})).await;
+    start(&core, "agent-owner-a", &aroot).await;
+    let a = next_event(&mut events, "approval").await;
+    start(&core, "agent-owner-b", &broot).await;
+    let b = next_event(&mut events, "approval").await;
+    let mut wrong = a.clone();
+    wrong["runId"] = b["runId"].clone();
+    assert_eq!(approve(&core, &wrong, "once").await["ok"], false);
+    core.handle("agent:cancel", &[json!("agent-owner-a")])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(approve(&core, &a, "always").await["ok"], false);
+    assert_eq!(approve(&core, &b, "once").await["ok"], true);
+    let answer = next_event(&mut events, "answer").await;
+    assert_eq!(answer["runId"], "agent-owner-b");
+    next_event(&mut events, "done").await;
+    assert!(!aroot.join("owned").exists());
+    assert!(broot.join("owned").exists());
+    request(&mut http).await;
+    request(&mut http).await;
+    request(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_cancellation_during_headers_body_and_pending_tools_has_zero_effects() {
+    for headers in [true, false] {
+        let (_dir, core, mut events) = fixture();
+        let root = core.inner.ctx.paths.home_dir.clone();
+        let partial = calls(vec![call(
+            "x",
+            "write",
+            json!({"path":"cancelled","content":"bad"}),
+        )])
+        .replace("data: [DONE]\n\n", "");
+        let mut http = server(vec![Reply::hold(headers, partial)]).await;
+        configure(&core, &http.url, json!({})).await;
+        start(&core, "agent-cancel", &root).await;
+        request(&mut http).await;
+        core.handle("agent:cancel", &[json!("agent-cancel")])
+            .await
+            .unwrap()
+            .unwrap();
+        next_event(&mut events, "done").await;
+        assert!(!root.join("cancelled").exists());
+        no_extra(&mut http).await;
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn native_cancel_kills_shell_descendants_and_prevents_late_mutation() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let mut _http = server(vec![Reply::sse(calls(vec![call(
+        "child",
+        "bash",
+        json!({"command":"(sleep 1; printf late > late) & printf started > started; wait"}),
+    )]))])
+    .await;
+    configure(&core, &_http.url, json!({})).await;
+    start(&core, "agent-child", &root).await;
+    let a = next_event(&mut events, "approval").await;
+    approve(&core, &a, "once").await;
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while !root.join("started").exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    core.handle("agent:cancel", &[json!("agent-child")])
+        .await
+        .unwrap()
+        .unwrap();
+    next_event(&mut events, "done").await;
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    assert!(!root.join("late").exists());
+    core.shutdown().await;
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn native_output_is_unicode_bounded_and_reported_to_model_and_stage() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "large",
+            "bash",
+            json!({"command":"i=0; while [ $i -lt 9000 ]; do printf '🦀'; i=$((i+1)); done"}),
+        )])),
+        Reply::sse(text("bounded")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({})).await;
+    start(&core, "agent-output", &root).await;
+    let a = next_event(&mut events, "approval").await;
+    approve(&core, &a, "once").await;
+    let stage = next_event(&mut events, "stage").await;
+    assert_eq!(stage["stage"]["outputTruncated"], true);
+    assert_eq!(s(&stage["stage"]["output"]).chars().count(), 8000);
+    assert!(stage["stage"]["durationMs"].is_number());
+    request(&mut http).await;
+    let r = request(&mut http).await;
+    assert!(s(&r["messages"][3]["content"]).contains("Exit status: 0"));
+    assert_eq!(s(&r["messages"][3]["content"]).matches("🦀").count(), 9000);
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_routes_search_in_process_and_rejects_images_explicitly() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let routes = Arc::new(Mutex::new(Vec::new()));
+    let captured = routes.clone();
+    core.inner
+        .ctx
+        .set_router(Arc::new(move |route, args| {
+            captured.lock().unwrap().push((route.clone(), args));
+            let value=if route=="search:all" {json!([{"id":"fixture","title":"Fixture","icon":"data:image/png;base64,SHOULD_NOT_LEAK","action":{"type":"open-file","path":"fixture.txt"}}])}else{json!({"hit":"fixture-indexed-source"})};
+            Box::pin(async move { Ok(value) })
+        }))
+        .unwrap();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![
+            call("search", "pc_search", json!({"query":"needle"})),
+            call("read", "pc_read", json!({"resultId":"result-1"})),
+            call("launcher", "launcher_search", json!({"query":"note"})),
+        ])),
+        Reply::sse(text("Indexed result")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({})).await;
+    start(&core, "agent-search", &root).await;
+    next_event(&mut events, "done").await;
+    let calls = routes.lock().unwrap().clone();
+    assert_eq!(
+        calls.iter().map(|c| c.0.as_str()).collect::<Vec<_>>(),
+        vec!["core:knowledge:search", "core:knowledge:read", "search:all"]
+    );
+
+    request(&mut http).await;
+    let followup = request(&mut http).await;
+    assert!(followup.to_string().contains("fixture.txt"));
+    assert!(!followup.to_string().contains("SHOULD_NOT_LEAK"));
+    let rejected=core.handle("agent:run",&[json!({"runId":"agent-image","task":"image","images":[{"mimeType":"image/png","data":"aGVsbG8="}]})]).await.unwrap().unwrap();
+    assert_eq!(rejected["ok"], false);
+    assert!(s(&rejected["error"]).contains("image"));
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn legacy_pi_runtime_setting_executes_native_http() {
+    let (_dir, core, mut events) = fixture();
+    let mut fake = server(vec![Reply::sse(text("native"))]).await;
+    configure(&core, &fake.url, json!({"agentRuntime":"pi"})).await;
+    start(&core, "agent-legacy", &core.inner.ctx.paths.home_dir).await;
+    request(&mut fake).await;
+    assert_eq!(next_event(&mut events, "answer").await["text"], "native");
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_review_applies_to_reads_and_always_decision_never_persists_file_content() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    std::fs::write(root.join("read"), "secret fixture").unwrap();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call("r", "read", json!({"path":"read"}))])),
+        Reply::sse(calls(vec![call(
+            "w",
+            "write",
+            json!({"path":"written","content":"private fixture content"}),
+        )])),
+        Reply::sse(text("complete")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({"agentApprovalMode":"review"})).await;
+    start(&core, "agent-review", &root).await;
+    let a = next_event(&mut events, "approval").await;
+    assert!(s(&a["command"]).contains("read"));
+    assert_eq!(a["canRemember"], false);
+    approve(&core, &a, "once").await;
+    let b = next_event(&mut events, "approval").await;
+    assert!(core
+        .handle(
+            "agent:approve",
+            &[json!({"runId":b["runId"],"approvalId":b["approvalId"],"decision":"always"})]
+        )
+        .await
+        .unwrap()
+        .unwrap_err()
+        .contains("requires review"));
+    next_event(&mut events, "done").await;
+    assert!(core
+        .read_config()
+        .await
+        .unwrap()
+        .get("agentAlwaysAllowedExactCommands")
+        .is_none());
+    request(&mut http).await;
+    request(&mut http).await;
+    request(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_permission_mode_changes_apply_to_later_tools_in_the_same_run() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "first",
+            "write",
+            json!({"path":"live-mode","content":"fixture"}),
+        )])),
+        Reply::sse(calls(vec![call(
+            "second",
+            "read",
+            json!({"path":"live-mode"}),
+        )])),
+        Reply::sse(text("complete")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({"agentApprovalMode":"default"})).await;
+    start(&core, "agent-live-mode", &root).await;
+    let write = next_event(&mut events, "approval").await;
+    core.handle("llm-config-set", &[json!({"agentApprovalMode":"review"})])
+        .await
+        .unwrap()
+        .unwrap();
+    approve(&core, &write, "once").await;
+    let read = next_event(&mut events, "approval").await;
+    assert!(s(&read["command"]).contains("read"));
+    approve(&core, &read, "once").await;
+    next_event(&mut events, "answer").await;
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_context_limit_duplicate_live_run_and_literal_project_search() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    std::fs::write(root.join("code.rs"), "literal.* 🦀\nelse").unwrap();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "s",
+            "project_search",
+            json!({"query":"literal.*"}),
+        )])),
+        Reply::sse(text("found")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({})).await;
+    start(&core, "agent-literal", &root).await;
+    next_event(&mut events, "done").await;
+    request(&mut http).await;
+    let next = request(&mut http).await;
+    assert!(s(&next["messages"][3]["content"]).contains("code.rs:1: literal.* 🦀"));
+    core.handle("agent:run",&[json!({"runId":"agent-limit","task":"x".repeat(runtime::limits::CONTEXT_BYTES+1),"cwd":root})]).await.unwrap().unwrap();
+    assert!(s(&next_event(&mut events, "error").await["message"]).contains("context exceeds"));
+    next_event(&mut events, "done").await;
+    no_extra(&mut http).await;
+    let mut held = server(vec![Reply::hold(true, String::new())]).await;
+    configure(&core, &held.url, json!({})).await;
+    start(&core, "agent-live", &root).await;
+    request(&mut held).await;
+    assert!(core
+        .handle(
+            "agent:run",
+            &[json!({"runId":"agent-live","task":"duplicate"})]
+        )
+        .await
+        .unwrap()
+        .unwrap_err()
+        .contains("already active"));
+    core.handle("agent:cancel", &[json!("agent-live")])
+        .await
+        .unwrap()
+        .unwrap();
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn native_next_header_deadline_never_replays_completed_effects() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "one",
+            "bash",
+            json!({"command":"printf x >> counter"}),
+        )])),
+        Reply::hold(true, String::new()),
+    ])
+    .await;
+    configure(&core, &http.url, json!({})).await;
+    start(&core, "agent-deadline", &root).await;
+    let a = next_event(&mut events, "approval").await;
+    approve(&core, &a, "once").await;
+    request(&mut http).await;
+    request(&mut http).await;
+    let error = tokio::time::timeout(Duration::from_secs(35), async {
+        loop {
+            let (_, e) = events.recv().await.unwrap();
+            if e["type"] == "error" {
+                return e;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert!(s(&error["message"]).contains("Native HTTP: status 500"));
+    next_event(&mut events, "done").await;
+    assert_eq!(std::fs::read_to_string(root.join("counter")).unwrap(), "x");
+    let retry1 = request(&mut http).await;
+    let retry2 = request(&mut http).await;
+    assert_eq!(retry1, retry2);
+    no_extra(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_429_is_reported_without_replay_and_invalid_urls_are_configuration_errors() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let mut http = server(
+        (0..3)
+            .map(|_| Reply {
+                body: String::new(),
+                status: 429,
+                hold_headers: false,
+                hold_body: false,
+            })
+            .collect(),
+    )
+    .await;
+    configure(&core, &http.url, json!({})).await;
+    start(&core, "agent-rate-limit", &root).await;
+    assert!(s(&next_event(&mut events, "error").await["message"]).contains("status 429"));
+    next_event(&mut events, "done").await;
+    request(&mut http).await;
+    request(&mut http).await;
+    request(&mut http).await;
+    no_extra(&mut http).await;
+    configure(&core, "file:///fixture", json!({})).await;
+    start(&core, "agent-bad-url", &root).await;
+    assert!(s(&next_event(&mut events, "error").await["message"]).contains("Native configuration"));
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn shell_failure_stderr_success_and_timeout_keep_both_streams() {
+    let (_dir, core, mut events) = fixture();
+    let commands = if cfg!(windows) {
+        vec![("Write-Output 'failure stdout'; [Console]::Error.WriteLine('failure stderr'); exit 7",120),("Write-Output 'success stdout'; [Console]::Error.WriteLine('success stderr')",120),("Write-Output 'partial stdout'; [Console]::Error.WriteLine('partial stderr'); Start-Sleep 10",1)]
+    } else {
+        vec![
+            (
+                "printf 'failure stdout'; printf 'failure stderr' >&2; exit 7",
+                120,
+            ),
+            ("printf 'success stdout'; printf 'success stderr' >&2", 120),
+            (
+                "printf 'partial stdout'; printf 'partial stderr' >&2; sleep 10",
+                1,
+            ),
+        ]
+    };
+    let mut http = server(
+        commands
+            .iter()
+            .flat_map(|(c, t)| {
+                vec![
+                    Reply::sse(calls(vec![call(
+                        "capture",
+                        "bash",
+                        json!({"command":c,"timeoutSeconds":t}),
+                    )])),
+                    Reply::sse(text("done")),
+                ]
+            })
+            .collect(),
+    )
+    .await;
+    configure(&core, &http.url, json!({"agentApprovalMode":"turbo"})).await;
+    for (i, _) in commands.iter().enumerate() {
+        start(
+            &core,
+            &format!("agent-capture-{i}"),
+            &core.inner.ctx.paths.home_dir,
+        )
+        .await;
+        let approval = next_event(&mut events, "approval").await;
+        approve(&core, &approval, "once").await;
+        next_event(&mut events, "answer").await;
+        next_event(&mut events, "done").await;
+        request(&mut http).await;
+        let wire = request(&mut http).await.to_string();
+        let label = ["failure", "success", "partial"][i];
+        assert!(wire.contains(&format!("{label} stdout")), "{wire}");
+        assert!(wire.contains(&format!("{label} stderr")), "{wire}");
+        assert!(
+            wire.contains(if i == 0 {
+                "Exit status: 7"
+            } else if i == 1 {
+                "Exit status: 0"
+            } else {
+                "timed out"
+            }),
+            "{wire}"
+        );
+    }
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn active_delete_and_clear_cannot_resurrect_transcript_files() {
+    for clear in [false, true] {
+        let (_dir, core, mut events) = fixture();
+        let mut http = server(vec![Reply::hold(false, String::new())]).await;
+        configure(&core, &http.url, json!({})).await;
+        core.handle("agent:run",&[json!({"runId":"agent-delete-live","task":"hold","sessionId":"delete-live","userTurnId":"user","assistantTurnId":"answer"})]).await.unwrap().unwrap();
+        request(&mut http).await;
+        core.handle(
+            if clear { "chat:clear" } else { "chat:delete" },
+            &[json!("delete-live")],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        next_event(&mut events, "done").await;
+        for id in ["user", "answer"] {
+            assert!(
+                runtime::store::load(&core.inner.ctx.paths.data_dir, "delete-live", id)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        let payload = json!({"session":{"id":"delete-live","title":"Deleted","createdAt":1,"updatedAt":2},"turn":{"id":"late","role":"assistant","text":"late done","createdAt":2}});
+        let late = core
+            .handle("chat:append", &[payload])
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(late["ok"], false, "{late}");
+        assert!(late["error"].as_str().unwrap().contains("deleted"));
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn missing_profile_fails_closed_before_provider_request() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server(vec![Reply::sse(text("must not answer"))]).await;
+    configure(&core, &http.url, json!({})).await;
+    core.handle("agent:run",&[json!({"runId":"agent-missing-profile","task":"fixture","agentProfileId":"removed::reviewer"})]).await.unwrap().unwrap();
+    assert!(next_event(&mut events, "error")
+        .await
+        .to_string()
+        .contains("profile is unavailable"));
+    next_event(&mut events, "done").await;
+    assert!(http.requests.try_recv().is_err());
+    core.shutdown().await;
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn manual_retry_keeps_actual_completed_shell_effect_once() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let partial = data(json!({"choices":[{"delta":{"content":"partial after effect"}}]}));
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "effect",
+            "bash",
+            json!({"command":"printf x >> manual-counter"}),
+        )])),
+        Reply::sse(partial),
+        Reply::sse(text("continued without repeating effect")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({"agentApprovalMode":"turbo"})).await;
+    let options = json!({"runId":"agent-manual-first","task":"do fixture","sessionId":"manual","userTurnId":"user","assistantTurnId":"answer","cwd":root});
+    core.handle("agent:run", &[options.clone()])
+        .await
+        .unwrap()
+        .unwrap();
+    let approval = next_event(&mut events, "approval").await;
+    approve(&core, &approval, "once").await;
+    next_event(&mut events, "error").await;
+    next_event(&mut events, "done").await;
+    assert_eq!(
+        std::fs::read_to_string(root.join("manual-counter")).unwrap(),
+        "x"
+    );
+    request(&mut http).await;
+    request(&mut http).await;
+    let mut retry = options;
+    retry["runId"] = json!("agent-manual-retry");
+    retry["retry"] = json!(true);
+    core.handle("agent:run", &[retry]).await.unwrap().unwrap();
+    next_event(&mut events, "answer").await;
+    next_event(&mut events, "done").await;
+    let replay = request(&mut http).await.to_string();
+    assert!(replay.contains("manual-counter"));
+    assert!(replay.contains("Exit status: 0"));
+    assert!(replay.contains("Completed effects must not be repeated"));
+    assert_eq!(
+        std::fs::read_to_string(root.join("manual-counter")).unwrap(),
+        "x"
+    );
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn deleted_sessions_refuse_send_and_retry_before_any_work_even_after_restart() {
+    for clear in [false, true] {
+        let (_dir, core, _events) = fixture();
+        let mut http = server(vec![Reply::sse(text("must not run"))]).await;
+        configure(&core, &http.url, json!({})).await;
+        let payload = json!({"session":{"id":"gone","title":"Private","createdAt":1,"updatedAt":2},"turn":{"id":"u1","role":"user","text":"private","createdAt":1}});
+        assert_eq!(
+            core.handle("chat:append", &[payload])
+                .await
+                .unwrap()
+                .unwrap()["ok"],
+            true
+        );
+        assert_eq!(
+            core.handle(
+                if clear { "chat:clear" } else { "chat:delete" },
+                &[json!("gone")]
+            )
+            .await
+            .unwrap()
+            .unwrap()["ok"],
+            true
+        );
+        // A fresh core has no in-memory generations or run registry. The
+        // persistent tombstone must still refuse before retry's pre-run write.
+        let restarted = AiCore::new(core.inner.ctx.clone());
+        for retry in [false, true] {
+            let result = restarted.handle("agent:run", &[json!({"runId":"agent-after-delete","task":"private follow-up","sessionId":"gone","userTurnId":"u1","assistantTurnId":"a1","retry":retry})]).await.unwrap().unwrap();
+            assert_eq!(result["ok"], false, "{result}");
+            assert!(s(&result["error"]).contains("deleted"));
+            assert!(restarted.inner.state.lock().unwrap().agents.is_empty());
+            for id in ["u1", "a1"] {
+                assert!(
+                    runtime::store::load(&core.inner.ctx.paths.data_dir, "gone", id)
+                        .unwrap()
+                        .is_none()
+                );
+            }
+        }
+        assert!(http.requests.try_recv().is_err());
+        restarted.shutdown().await;
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn delete_or_clear_between_registration_and_first_image_save_cannot_resurrect() {
+    for clear in [false, true] {
+        let (_dir, core, mut events) = fixture();
+        let mut http = server(vec![Reply::sse(text("must not run"))]).await;
+        configure(&core, &http.url, json!({})).await;
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let barrier = entered.clone();
+        core.inner
+            .ctx
+            .set_router(Arc::new(move |route, _| {
+                assert_eq!(route, "core:platform:ocr-images");
+                barrier.notify_one();
+                Box::pin(std::future::pending())
+            }))
+            .unwrap();
+        let waiting = entered.notified();
+        core.handle("agent:run", &[json!({"runId":"agent-before-save","task":"image","sessionId":"pending","userTurnId":"u","assistantTurnId":"a","images":[{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII="}]})]).await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_secs(5), waiting)
+            .await
+            .unwrap();
+        core.handle(
+            if clear { "chat:clear" } else { "chat:delete" },
+            &[json!("pending")],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        next_event(&mut events, "done").await;
+        for id in ["u", "a"] {
+            assert!(
+                runtime::store::load(&core.inner.ctx.paths.data_dir, "pending", id)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        assert!(http.requests.try_recv().is_err());
+        // clear must also tombstone a registered session absent from SQLite.
+        let late = core
+            .handle("agent:run", &[json!({"task":"late","sessionId":"pending"})])
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(late["ok"], false);
+        core.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn nonvision_ocr_uses_canonical_images_on_send_and_reopened_retry_only_in_wire_view() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server((0..5).map(|_| Reply::sse(text("answer"))).collect()).await;
+    configure(&core, &http.url, json!({})).await;
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let captured = seen.clone();
+    core.inner
+        .ctx
+        .set_router(Arc::new(move |route, args| {
+            assert_eq!(route, "core:platform:ocr-images");
+            captured.lock().unwrap().push(args);
+            Box::pin(async { Ok(json!("OCR fixture: invoice total 42")) })
+        }))
+        .unwrap();
+    for (index, images, retry, user) in [
+        (
+            0,
+            json!([{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII="}]),
+            false,
+            "u",
+        ),
+        (
+            1,
+            json!([{"mimeType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII="}]),
+            true,
+            "u",
+        ),
+        (2, json!([]), true, "u"), // reopened renderer has no image bytes
+        (3, json!([]), false, "new-task"),
+    ] {
+        core.handle("agent:run", &[json!({"runId":format!("agent-ocr-{index}"),"task":"read invoice","sessionId":"ocr","userTurnId":user,"assistantTurnId":"a","images":images,"retry":retry})]).await.unwrap().unwrap();
+        next_event(&mut events, "done").await;
+        let body = request(&mut http).await.to_string();
+        assert_eq!(
+            body.contains("OCR fixture: invoice total 42"),
+            index != 3,
+            "{body}"
+        );
+        let stored = runtime::store::load(&core.inner.ctx.paths.data_dir, "ocr", "u")
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(&stored[0].blocks[1],runtime::transcript::Block::Image{data,..} if data=="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII=")
+        );
+        assert!(!serde_json::to_string(&stored)
+            .unwrap()
+            .contains("OCR fixture"));
+    }
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    for args in seen.lock().unwrap().iter() {
+        assert_eq!(args[0][0]["data"],"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0l8AAAAASUVORK5CYII=");
+    }
+    // Lost blobs are explicit placeholders and never trigger OCR with fake bytes.
+    let transcripts = core.inner.ctx.paths.data_dir.join("llm/transcripts");
+    for folder in std::fs::read_dir(transcripts).unwrap() {
+        let blobs = folder.unwrap().path().join("blobs");
+        if blobs.exists() {
+            std::fs::remove_dir_all(blobs).unwrap();
+        }
+    }
+    assert!(runtime::transcript::missing_images(
+        &runtime::store::load(&core.inner.ctx.paths.data_dir, "ocr", "u")
+            .unwrap()
+            .unwrap()
+    ));
+    core.handle("agent:run", &[json!({"runId":"agent-ocr-missing","task":"read invoice","sessionId":"ocr","userTurnId":"u","assistantTurnId":"a","retry":true})]).await.unwrap().unwrap();
+    next_event(&mut events, "done").await;
+    let missing_body = request(&mut http).await.to_string();
+    assert!(!missing_body.contains("OCR fixture"));
+    assert!(missing_body.contains("image"));
+    assert_eq!(seen.lock().unwrap().len(), 3);
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn verbose_failed_shell_summary_reaches_actual_model_tool_result() {
+    let (_dir, core, mut events) = fixture();
+    let root = core.inner.ctx.paths.home_dir.clone();
+    let command = if cfg!(windows) {
+        "[Console]::WriteLine('stdout beginning'); [Console]::Error.WriteLine('stderr beginning'); for($i=0;$i -lt 7000;$i++){[Console]::WriteLine('passing 1234567890'); [Console]::Error.WriteLine('diagnostic 1234567890')}; [Console]::WriteLine('FAILED summary'); [Console]::Error.WriteLine('final error'); exit 7"
+    } else {
+        "printf 'stdout beginning\\n'; printf 'stderr beginning\\n' >&2; i=0; while [ $i -lt 7000 ]; do printf 'passing 1234567890\\n'; printf 'diagnostic 1234567890\\n' >&2; i=$((i+1)); done; printf 'FAILED summary\\n'; printf 'final error\\n' >&2; exit 7"
+    };
+    let mut http = server(vec![
+        Reply::sse(calls(vec![call(
+            "verbose",
+            "bash",
+            json!({"command":command}),
+        )])),
+        Reply::sse(text("test failed")),
+    ])
+    .await;
+    configure(&core, &http.url, json!({"agentApprovalMode":"review"})).await;
+    start(&core, "agent-verbose", &root).await;
+    let approval = next_event(&mut events, "approval").await;
+    approve(&core, &approval, "once").await;
+    next_event(&mut events, "done").await;
+    request(&mut http).await;
+    let body = request(&mut http).await;
+    let messages = body["messages"].as_array().unwrap();
+    let result = messages.iter().find(|m| m["role"] == "tool").unwrap();
+    let text = s(&result["content"]);
+    for marker in [
+        "stdout beginning",
+        "stderr beginning",
+        "FAILED summary",
+        "final error",
+        "bytes omitted",
+        "Exit status: 7",
+    ] {
+        assert!(text.contains(marker), "Missing {marker}");
+    }
+    assert!(text.len() < 64 * 1024);
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_run_selection_routes_actual_request_and_rejects_bad_snapshot_before_start() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server(vec![Reply::sse(text("frozen answer"))]).await;
+    configure(
+        &core,
+        &http.url,
+        json!({"model":"global-after-picker",
+        "taskModelOverrides":{"chat":"global-after-picker"}}),
+    )
+    .await;
+    let result = core
+        .handle(
+            "agent:run",
+            &[json!({"runId":"agent-frozen-selection","task":"fixture",
+        "runSelection":{"provider":"openai-compatible","model":"frozen-before-picker"}})],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result["ok"], true);
+    assert_eq!(request(&mut http).await["model"], "frozen-before-picker");
+    assert_eq!(
+        next_event(&mut events, "answer").await["text"],
+        "frozen answer"
+    );
+    next_event(&mut events, "done").await;
+    assert_eq!(
+        core.read_config().await.unwrap()["model"],
+        "global-after-picker"
+    );
+    let result = core
+        .handle(
+            "agent:run",
+            &[json!({"runId":"agent-invalid-selection","task":"fixture",
+        "runSelection":{"provider":"openai-compatible","model":"frozen","apiKey":"injected"}})],
+        )
+        .await
+        .unwrap();
+    assert!(result.is_err());
+    assert!(
+        !core
+            .inner
+            .state
+            .lock()
+            .unwrap()
+            .agents
+            .contains_key("agent-invalid-selection")
+    );
+    no_extra(&mut http).await;
+    core.shutdown().await;
+}
+
+#[tokio::test]
+async fn native_legacy_context_is_session_scoped_minimal_and_canonical_first() {
+    let (_dir, core, mut events) = fixture();
+    let mut http = server(vec![Reply::sse(text("continued"))]).await;
+    configure(&core, &http.url, json!({})).await;
+    for (session, id, role, text) in [
+        ("legacy", "u1", "user", "legacy canonical duplicate"),
+        ("legacy", "a1", "assistant", "legacy saved answer"),
+        ("foreign", "foreign-turn", "user", "foreign private content"),
+    ] {
+        let reply=core.handle("chat:append",&[json!({"session":{"id":session,"title":"fixture","createdAt":1,"updatedAt":1},"turn":{"id":id,"role":role,"text":text,"createdAt":1,"error":if id=="a1" {Some("previous failure")} else {None},"attachments":if id=="a1" {json!([{"kind":"image","name":"earlier","mimeType":"image/png"}])} else {json!([])}}})]).await.unwrap().unwrap();
+        assert_eq!(reply["ok"], true);
+    }
+    // Legacy UI payloads may be huge or from an old schema. Context never reads them.
+    let db =
+        rusqlite::Connection::open(core.inner.ctx.paths.data_dir.join("chat/sessions.sqlite3"))
+            .unwrap();
+    db.execute(
+        "UPDATE chat_turns SET stages_json=? WHERE id='a1'",
+        ["not presentation JSON".repeat(100000)],
+    )
+    .unwrap();
+    runtime::store::save(
+        &core.inner.ctx.paths.data_dir,
+        "legacy",
+        "u1",
+        &[runtime::transcript::Message::text(
+            "user",
+            "canonical original",
+        )],
+    )
+    .unwrap();
+    core.handle("agent:run",&[json!({"runId":"agent-legacy-fallback","task":"continue","sessionId":"legacy","priorTurnIds":["u1","a1","foreign-turn","unsaved"],"priorTurns":[{"id":"a1","role":"assistant","text":"forged stale answer"},{"id":"unsaved","role":"assistant","text":"dirty unsaved fallback"}]})]).await.unwrap().unwrap();
+    let request = request(&mut http).await;
+    let messages = request["messages"].to_string();
+    for expected in [
+        "canonical original",
+        "legacy saved answer",
+        "previous failure",
+        "Earlier image is no longer available",
+        "dirty unsaved fallback",
+    ] {
+        assert!(messages.contains(expected), "missing {expected}");
+    }
+    for excluded in [
+        "legacy canonical duplicate",
+        "foreign private content",
+        "forged stale answer",
+        "not presentation JSON",
+    ] {
+        assert!(!messages.contains(excluded), "included {excluded}");
+    }
+    assert_eq!(next_event(&mut events, "answer").await["text"], "continued");
+    next_event(&mut events, "done").await;
+    core.shutdown().await;
+}

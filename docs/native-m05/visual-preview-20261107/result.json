@@ -1,0 +1,223 @@
+{
+  "base": "8fc0f6735ea6445a4a4fc5301bf20d1fa3cca988",
+  "dirty": true,
+  "source_hashes": {
+    "apps/tezbar/src/surfaces/command_bar/icons.rs": "51e13b330e09d8ec8beadcdc508dfb0215fa0d62fc083988c4b3700f48c0d361",
+    "apps/tezbar/src/surfaces/command_bar/mod.rs": "b4780b63cac256af8bde37012ae587fc734f5b2130647c5157e370f99467eb46",
+    "apps/tezbar/src/surfaces/command_bar/presentation.rs": "aed41b6af7d5270e79be3048961df8413fa221e64f4e0d749ffa12acf262445b",
+    "apps/tezbar/src/surfaces/command_bar/view.rs": "70e076e408345c61b4e9a9644332a02a13451964c141ca9393b6596c7828f114",
+    "apps/tezbar/src/surfaces/command_bar/tests.rs": "b7cfbd64bb636d095fcd3685e85a8000e2fce2601a01e7ddbdbc171b2a133c58",
+    "crates/tezbar-ui/src/virtual_list.rs": "c95ec40f97277d3a1c4e6f9cdfedb17fd521ee449d59f5fb2b8a452eccf6e64e"
+  },
+  "gates": {
+    "visual-row-red": {
+      "exit": 101,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "launcher_rows_fill_the_viewport",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-row-red.log",
+      "log_sha256": "ca662b8d4105766d342dcfd3b1887b7bbc9132829e03e48ecd1bee047e17028f"
+    },
+    "visual-row-red2": {
+      "exit": 101,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "launcher_rows_fill_the_viewport",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-row-red2.log",
+      "log_sha256": "5189c90243a0ffa56ecadbc6f59b631010c675eba84858a3f70159bda5fdda96"
+    },
+    "visual-row-green": {
+      "exit": 0,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "launcher_rows_fill_the_viewport",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-row-green.log",
+      "log_sha256": "a8f98e526f0b6e2c2fc23fee2e07a7b1d6793bad698ca1badb5c4dcefe27be88"
+    },
+    "visual-command-bar-suite": {
+      "exit": 0,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "surfaces::command_bar::",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-command-bar-suite.log",
+      "log_sha256": "0f5bd0c80697e2469c8afbe68abf6c0d39ca58ebca2ee0aab4de17d518079951"
+    },
+    "visual-shared-ui-suite": {
+      "exit": 101,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-shared-ui-suite.log",
+      "log_sha256": "f6fd7d83cb9c7fb71d94a3aa5e5c0af62652185d7326b22d76d58b57e4ec9012"
+    },
+    "visual-shared-ui-suite2": {
+      "exit": 101,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--features",
+        "gpui/runtime_shaders",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-shared-ui-suite2.log",
+      "log_sha256": "e98bcc8bef5bdbc7760cf55aa4403964fa0f92796e92c5a2638898ec57e49981"
+    },
+    "visual-shared-ui-suite3": {
+      "exit": 0,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-ui",
+        "--lib",
+        "--",
+        "--test-threads=2"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-shared-ui-suite3.log",
+      "log_sha256": "80d1803a1836eca10491a64ee83b9cf0b8430f3823cea0f42f13006ff8ab45cc"
+    },
+    "visual-preview-build": {
+      "exit": 0,
+      "stable": true,
+      "command": [
+        "cargo",
+        "+1.98.1",
+        "build",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--bin",
+        "tezbar",
+        "--features",
+        "runtime-shaders"
+      ],
+      "log": "/tmp/tezbar-m810-root-repair-20261107/visual-preview-build.log",
+      "log_sha256": "abae2abba2ea72e045f710328df73d0d7b11731b9c2defbfa7e34921db81348b"
+    }
+  },
+  "preview": {
+    "pid": 46193,
+    "app": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app",
+    "profile": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/profile",
+    "resources": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app/Contents/Resources",
+    "command": [
+      "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app/Contents/MacOS/tezbar",
+      "--profile",
+      "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/profile",
+      "--resources",
+      "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Tezbar GPUI Preview.app/Contents/Resources",
+      "--show"
+    ],
+    "metadata": {
+      "version": "0.3.0-beta.7",
+      "source": "8fc0f6735ea6445a4a4fc5301bf20d1fa3cca988",
+      "dirty": "true",
+      "rustc_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "preview": true,
+      "gpui_rev": "c84af5b99cbc366d675064e52b23664a015b6e35",
+      "runtime_shaders": true,
+      "bench_control": false
+    },
+    "binary_sha256": "984917f7e03c114a69e0370da1cf2268c05cf153312f29eeae597f3343275de8",
+    "installed_app_changed": false,
+    "open_command": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/Open Tezbar GPUI.command",
+    "visual_fix": true,
+    "stdout": "/private/var/folders/7v/_tm0w_59693180wdf89zpwmh0000gn/T/tezbar-gpui-user-9ejn_r_b/visual-fix-stdout.log"
+  },
+  "running_preview_pids": [
+    46193
+  ],
+  "screenshot": "/tmp/tezbar-gpui-visual-fix-dark.png",
+  "reopened_screenshot": "/tmp/tezbar-gpui-visual-fix-reopened.png",
+  "independent_review": false,
+  "full_visual_parity": false,
+  "ram_measured": false
+}

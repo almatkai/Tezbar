@@ -1,0 +1,456 @@
+{
+  "schemaVersion": 3,
+  "id": "com.tezbar.native.linear",
+  "slug": "linear",
+  "name": "Linear",
+  "description": "Create, search and update Linear issues, browse projects, cycles, documents and custom views, and see Linear notifications in the menu bar.",
+  "version": "0.1.0",
+  "author": "thomaslombart",
+  "runtime": "rust",
+  "execution": "process",
+  "protocolVersion": 1,
+  "repository": "https://github.com/almatkai/linear",
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "icon": "resources/linear-app-icon.png",
+  "replaces": [
+    "com.tezbar.linear",
+    "raycast.linear"
+  ],
+  "preferences": [
+    {
+      "name": "primaryAction",
+      "type": "dropdown",
+      "title": "Primary Action",
+      "description": "Select the action that runs when pressing Enter on an issue, project, document, or view in a list.",
+      "default": "showDetails",
+      "required": false,
+      "data": [
+        {
+          "title": "Show Details",
+          "value": "showDetails"
+        },
+        {
+          "title": "Open in Linear",
+          "value": "openInLinear"
+        }
+      ]
+    },
+    {
+      "name": "issueCustomCopyAction",
+      "type": "textfield",
+      "title": "Issue Custom Copy Action",
+      "description": "Add a custom copy action to the issue's actions following the format you want.\nAvailable keys: {ISSUE_TITLE}, {ISSUE_ID}, {ISSUE_URL}, {ISSUE_BRANCH_NAME}\nExample: '{ISSUE_ID}: {ISSUE_TITLE} ({ISSUE_URL})'",
+      "required": false
+    },
+    {
+      "name": "limit",
+      "title": "API Issue Limit",
+      "description": "The maximum number of issues to fetch from the Linear API at once. Be careful when changing this, as too large a number can cause you to exceed your API rate limit and/or cause heap memory errors.",
+      "type": "textfield",
+      "default": "50",
+      "required": false
+    },
+    {
+      "name": "labelsLimit",
+      "title": "API Label Limit",
+      "description": "The maximum number of labels to fetch from the Linear API per team. Increase this value if some labels are missing when creating or editing issues.",
+      "type": "textfield",
+      "default": "100",
+      "required": false
+    },
+    {
+      "name": "shouldHideRedundantIssues",
+      "type": "checkbox",
+      "title": "Advanced",
+      "label": "Hide Redundant Issues",
+      "description": "When enabled, the issues that are marked as Done, Canceled or Duplicate will not show up in search results.",
+      "default": false,
+      "required": false
+    },
+    {
+      "name": "linearApiKey",
+      "type": "password",
+      "required": false,
+      "title": "Linear Personal API Key",
+      "description": "Create a personal API key in Linear Settings under Security & Access. The key controls which teams and actions are available."
+    }
+  ],
+  "capabilities": [
+    "shell.open",
+    "clipboard.write",
+    "window.visibility",
+    "settings.open",
+    "dialog.confirm",
+    "host.tray.set",
+    "host.tray.remove",
+    "host.background.retain",
+    "host.background.release"
+  ],
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/almatkai/linear/releases/download/v0.1.0/linear-aarch64-apple-darwin.zip",
+      "sha256": "f2638f67164548fa16aa7783e8cf8362e34aef85be29c5d1cbe79f6c5288d414",
+      "executable": "bin/tezbar-linear",
+      "executableSha256": "83cf3ade0ea2bac4300ce58adb05397398b890918242e8c27a0a346c62a9fbef"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/almatkai/linear/releases/download/v0.1.0/linear-x86_64-pc-windows-msvc.zip",
+      "sha256": "acf8c90c064841b343fa98ac980ee5e43035280a74e14751a0d7086634ba56ca",
+      "executable": "bin/tezbar-linear.exe",
+      "executableSha256": "634843c90027c8521cd4d9195b14771f6cda4194cd38f815d3ae4b2b4dcb4373"
+    }
+  },
+  "files": {},
+  "verification": [
+    {
+      "platform": "macOS",
+      "state": "not-run",
+      "note": "Native macOS and Windows synthetic tests/package checks passed; live desktop and real service/account acceptance remain pending. Requires the beta.12 host contracts."
+    },
+    {
+      "platform": "Windows",
+      "state": "not-run",
+      "note": "Native macOS and Windows synthetic tests/package checks passed; live desktop and real service/account acceptance remain pending. Requires the beta.12 host contracts."
+    }
+  ],
+  "commands": [
+    {
+      "name": "create-issue",
+      "title": "Create Issue",
+      "description": "Create and assign new issues.",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "autofocusField",
+          "title": "Autofocus Field",
+          "type": "dropdown",
+          "required": false,
+          "description": "Select the field to focus automatically once the form is rendered",
+          "default": "title",
+          "data": [
+            {
+              "title": "Team",
+              "value": "teamId"
+            },
+            {
+              "title": "Title",
+              "value": "title"
+            }
+          ]
+        },
+        {
+          "name": "copyToastAction",
+          "title": "Toast Copy Action",
+          "type": "dropdown",
+          "required": false,
+          "description": "Select the copy action for the toast secondary action",
+          "default": "id",
+          "data": [
+            {
+              "title": "Copy Issue ID",
+              "value": "id"
+            },
+            {
+              "title": "Copy Issue ID as Link",
+              "value": "id-as-link"
+            },
+            {
+              "title": "Copy Issue URL",
+              "value": "url"
+            },
+            {
+              "title": "Copy Issue Title",
+              "value": "title"
+            },
+            {
+              "title": "Copy Issue Title as Link",
+              "value": "title-as-link"
+            }
+          ]
+        }
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "search-issues",
+      "title": "Search Issues",
+      "description": "Search issues globally in all projects.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "assigned-issues",
+      "title": "My Issues",
+      "description": "View and modify issues that are assigned to you.",
+      "mode": "view",
+      "keywords": [
+        "assigned"
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "created-issues",
+      "title": "Created Issues",
+      "description": "View and modify issues that you have created.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "active-cycle",
+      "title": "Active Cycle",
+      "description": "View and modify issues that are in the active cycle.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "search-projects",
+      "title": "Search Projects",
+      "description": "Explore projects for your Linear team.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "search-custom-views",
+      "title": "Search Custom Views",
+      "description": "Browse custom views and their issues.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "search-documents",
+      "title": "Search Documents",
+      "description": "Explore documents for your Linear team.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "create-project",
+      "title": "Create Project",
+      "description": "Create projects for your Linear team.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "notifications",
+      "title": "Notifications",
+      "description": "Read your latest Linear notifications.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "unread-notifications",
+      "title": "Unread Notifications",
+      "description": "Show unread notifications in the Menu Bar.",
+      "mode": "menu-bar",
+      "subtitle": "Linear",
+      "interval": "15m",
+      "preferences": [
+        {
+          "type": "checkbox",
+          "label": "Group notifications like Linear",
+          "name": "groupNotifications",
+          "description": "Show and count notification groups from your Linear inbox. Opening or marking a group as read applies to the whole group.",
+          "default": false,
+          "required": false
+        },
+        {
+          "type": "checkbox",
+          "label": "Always Show",
+          "name": "alwaysShow",
+          "description": "Show the menu bar extra even when you don't have any unread notifications.",
+          "default": true,
+          "required": false
+        }
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "create-issue-for-myself",
+      "title": "Create Issue for Myself",
+      "description": "Create and assign a new issue to yourself.",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "preferredTeamKey",
+          "type": "textfield",
+          "title": "Preferred Team",
+          "placeholder": "RAY",
+          "description": "Specify the Key (e.g. RAY) of the preferred team. If not specified, the first team is used.",
+          "required": false
+        },
+        {
+          "name": "preferredStatusName",
+          "type": "textfield",
+          "title": "Preferred Status",
+          "placeholder": "Todo",
+          "description": "Specify the name of the preferred status for new issues (e.g. Todo, Backlog). If not specified, uses Linear's default.",
+          "required": false
+        },
+        {
+          "name": "shouldCloseMainWindow",
+          "type": "checkbox",
+          "title": "Advanced",
+          "label": "Close window immediately",
+          "description": "When enabled, the Raycast window is closed immediately, allowing you to carry on with other work.",
+          "default": false,
+          "required": false
+        }
+      ],
+      "arguments": [
+        {
+          "name": "title",
+          "placeholder": "Title",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "description",
+          "placeholder": "Description",
+          "type": "text"
+        }
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "quick-add-comment-to-issue",
+      "title": "Quick Add Comment to Issue",
+      "description": "Quickly add a comment to an issue using its ID.",
+      "mode": "no-view",
+      "preferences": [
+        {
+          "name": "shouldCloseMainWindow",
+          "type": "checkbox",
+          "title": "Advanced",
+          "label": "Close window immediately",
+          "description": "When enabled, the Raycast window is closed immediately, allowing you to carry on with other work.",
+          "default": false,
+          "required": false
+        }
+      ],
+      "arguments": [
+        {
+          "name": "comment",
+          "placeholder": "Comment",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "issueId",
+          "placeholder": "Issue ID",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    },
+    {
+      "name": "favorites",
+      "title": "Favorites",
+      "description": "Browse through your Linear favorites.",
+      "mode": "view",
+      "platforms": [
+        "macOS",
+        "Windows"
+      ],
+      "runtime": "rust",
+      "concurrency": "reject-while-busy",
+      "timeoutMs": 45000,
+      "refreshMs": null
+    }
+  ],
+  "minHostVersion": "0.3.0-beta.12"
+}

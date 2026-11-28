@@ -21,11 +21,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { listApplications } from '../search/providers/appsProvider'
+import { listApplications, readSelectedText } from '../extensionWorker/services'
 import { confirmExtensionAlert, type ExtensionAlertOptions } from '../extension-confirm-alert'
-import { readSelectedText } from '../selected-text'
 import { runPowerShellScript } from '../powershell-script'
 import { executeExtensionSQL } from '../extension-sql'
+import { copyClipboardContent, pasteClipboardContent } from '../extensionWorker/clipboard'
 
 export type RuntimeFeedback = {
   kind: 'toast' | 'hud'
@@ -154,30 +154,14 @@ function readPreferences(packageRoot: string): Record<string, unknown> {
 
 function createClipboardShim(): Record<string, unknown> {
   return {
-    copy: async (value: unknown): Promise<void> => {
-      if (value && typeof value === 'object' && 'text' in value) {
-        const v = (value as { text?: unknown }).text
-        if (typeof v === 'string') {
-          clipboard.writeText(v)
-          return
-        }
-      }
-      if (typeof value === 'string') clipboard.writeText(value)
-      else clipboard.writeText(String(value))
-    },
+    copy: copyClipboardContent,
     paste: async (value: unknown): Promise<void> => {
-      if (typeof value === 'string') clipboard.writeText(value)
-      else if (value && typeof value === 'object' && 'text' in value) {
-        const v = (value as { text?: unknown }).text
-        if (typeof v === 'string') clipboard.writeText(v)
-      }
-      // Raycast's `paste` also types the content into the frontmost app.
-      // We can't do that safely without Accessibility wiring, so we just
-      // copy — extensions tend to show a toast right after either way.
+      await copyClipboardContent(value)
+      await pasteClipboardContent()
     },
     readText: async (): Promise<string> => clipboard.readText(),
     read: async (): Promise<Record<string, string | undefined>> => ({
-      text: clipboard.readText() || undefined,
+      text: (await clipboard.readText()) || undefined,
     }),
     clear: async (): Promise<void> => clipboard.clear(),
   }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isAiProviderConfigured, normalizeProviderModelList } from './aiProviders'
+import {
+  inferCapabilities,
+  isAiProviderConfigured,
+  normalizeProviderModelList,
+} from './aiProviders'
 import type { AiProviderModel, LlmConfigRecord } from './llmConfig'
 
 describe('isAiProviderConfigured', () => {
@@ -41,6 +45,23 @@ describe('isAiProviderConfigured', () => {
   })
 })
 
+it('does not infer Antigravity or OpenCode authentication from a model list', () => {
+  const config: LlmConfigRecord = {
+    providerModels: {
+      antigravity: [{ id: 'fixture', capabilities: ['tools'] }],
+      opencode: [{ id: 'fixture', capabilities: ['tools'] }],
+    },
+  }
+  expect(isAiProviderConfigured(config, 'antigravity')).toBe(false)
+  expect(isAiProviderConfigured(config, 'opencode')).toBe(false)
+  config.nativeProviderCredentials = {
+    antigravity: { hasValue: true, source: 'accounts' },
+    opencode: { hasValue: true, source: 'opencode' },
+  }
+  expect(isAiProviderConfigured(config, 'antigravity')).toBe(true)
+  expect(isAiProviderConfigured(config, 'opencode')).toBe(true)
+})
+
 describe('normalizeProviderModelList', () => {
   it('removes legacy context capability while preserving context window size', () => {
     const models = normalizeProviderModelList('deepseek', [
@@ -70,12 +91,7 @@ describe('normalizeProviderModelList', () => {
       { id: 'gpt-4.1', capabilities: ['tools'] },
     ])
 
-    expect(models.map((m) => m.id)).toEqual([
-      'gpt-5-mini',
-      'auto',
-      'claude-opus-4.5',
-      'gpt-4.1',
-    ])
+    expect(models.map((m) => m.id)).toEqual(['gpt-5-mini', 'auto', 'claude-opus-4.5', 'gpt-4.1'])
   })
 
   it('does not resurrect a recommended model the user removed', () => {
@@ -91,4 +107,10 @@ describe('normalizeProviderModelList', () => {
     ])
     expect(models.map((m) => m.id)).toEqual(['gpt-4o'])
   })
+})
+
+it('infers both vision and thinking for GPT 6 families', () => {
+  for (const id of ['gpt-6-sol', 'opencode/gpt-6.1-sol']) {
+    expect(inferCapabilities(id)).toEqual(expect.arrayContaining(['vision', 'thinking', 'tools']))
+  }
 })

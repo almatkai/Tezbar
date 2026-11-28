@@ -1,0 +1,19 @@
+[
+  {
+    "id": "com.tezbar.native.lorem-ipsum",
+    "archive": "C:\\Users\\alikh\\Tezbar-rust-ports\\lorem-ipsum\\dist\\store-v0.1.1-final\\lorem-ipsum-x86_64-pc-windows-msvc.zip",
+    "target": "x86_64-pc-windows-msvc",
+    "commands": [
+      "ai-generate",
+      "html",
+      "markdown",
+      "paragraphs",
+      "sentences",
+      "words"
+    ],
+    "sha256": "36cc617556f2fe6c31f464acf2e1b3014805305538f9dd5b01d4c8a44c32918c",
+    "import": "passed",
+    "protocolInfo": "passed",
+    "desktopUI": "not-run"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "executable": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/target/debug/deps/tezbar_native-89ad3a0758dc3d53",
+  "sha256": "6170c29b1bdb0eead77edd00254a1eb771da93c0a73ecc0632dfde9b467158e8",
+  "args": [
+    "app::m11::prequit_update_tests",
+    "app::production_launch::",
+    "app::update_integration::",
+    "app::quit_budget::",
+    "app::m11_deadline_tests::",
+    "asset_transport::tests::review_css_bound",
+    "--test-threads=2",
+    "--nocapture"
+  ],
+  "exit": 0,
+  "own_inputs_stable": true
+}

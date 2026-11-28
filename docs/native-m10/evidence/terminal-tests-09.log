@@ -1,0 +1,187 @@
+warning: variable does not need to be mutable
+  --> crates/tezbar-core/src/assets.rs:97:21
+   |
+97 |                 let mut response = self
+   |                     ----^^^^^^^^
+   |                     |
+   |                     help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/providers/antigravity.rs:713:13
+    |
+713 |         let mut bases = if cfg["_explicitBaseURL"] == true {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/tezbar-core/src/ai/process.rs:124:13
+    |
+124 |         let mut child = cmd.spawn().map_err(err)?;
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: function `validate_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:16:8
+   |
+16 | pub fn validate_images(
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `project_images` is never used
+  --> crates/tezbar-core/src/ai/runtime/limits.rs:86:8
+   |
+86 | pub fn project_images(
+   |        ^^^^^^^^^^^^^^
+
+warning: function `save` is never used
+  --> crates/tezbar-core/src/ai/runtime/store.rs:52:8
+   |
+52 | pub fn save(root: &Path, session: &str, turn: &str, messages: &[Message]) -> Result<(), String> {
+   |        ^^^^
+
+warning: methods `gemma_pending`, `gemma_save`, `gemma_clear`, `gemma_has`, `gemma_counts`, and `vector_backfill` are never used
+    --> crates/tezbar-core/src/knowledge/db.rs:1219:12
+     |
+ 236 | impl Store {
+     | ---------- methods in this implementation
+...
+1219 |     pub fn gemma_pending(&self, roots: &[String], limit: usize) -> Result<Vec<Value>, String> {
+     |            ^^^^^^^^^^^^^
+...
+1246 |     pub fn gemma_save(&mut self, chunks: &[Value], vectors: &[Vec<f64>]) -> Result<usize, String> {
+     |            ^^^^^^^^^^
+...
+1301 |     pub fn gemma_clear(&self) -> Result<(), String> {
+     |            ^^^^^^^^^^^
+...
+1322 |     pub fn gemma_has(&self, roots: &[String]) -> Result<bool, String> {
+     |            ^^^^^^^^^
+...
+1336 |     pub fn gemma_counts(&self, roots: &[String]) -> Result<(u64, u64), String> {
+     |            ^^^^^^^^^^^^
+...
+1354 |     pub fn vector_backfill(&self) -> Result<bool, String> {
+     |            ^^^^^^^^^^^^^^^
+
+warning: constant `REVISION` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:32:7
+   |
+32 | const REVISION: &str = runtime_models::Q8.revision;
+   |       ^^^^^^^^
+
+warning: constant `MODEL_FILE` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:33:7
+   |
+33 | const MODEL_FILE: &str = runtime_models::Q8.file;
+   |       ^^^^^^^^^^
+
+warning: constant `MODEL_SHA` is never used
+  --> crates/tezbar-core/src/knowledge/runtime.rs:34:7
+   |
+34 | const MODEL_SHA: &str = runtime_models::Q8.sha256;
+   |       ^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/tezbar-core/src/knowledge/runtime.rs:217:12
+    |
+216 | impl Runtime {
+    | ------------ associated function in this implementation
+217 |     pub fn new(ctx: CoreContext) -> Self {
+    |            ^^^
+
+warning: function `output` is never used
+  --> crates/tezbar-core/src/launcher/providers.rs:17:14
+   |
+17 | pub async fn output(program: &str, args: &[&str], timeout: u64) -> Result<String, String> {
+   |              ^^^^^^
+
+warning: `tezbar-core` (lib) generated 12 warnings (run `cargo fix --lib -p tezbar-core` to apply 3 suggestions)
+   Compiling tezbar-native v0.3.0-beta.7 (/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent/apps/tezbar)
+warning: variant `Open` is never constructed
+  --> apps/tezbar/src/surfaces/ai_chat/mod.rs:85:5
+   |
+49 | pub(crate) enum Action {
+   |                 ------ variant in this enum
+...
+85 |     Open(String),
+   |     ^^^^
+   |
+   = note: `Action` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `scroll` is never read
+   --> apps/tezbar/src/surfaces/ai_chat/mod.rs:161:5
+    |
+ 97 | pub struct ChatView {
+    |            -------- field in this struct
+...
+161 |     scroll: ScrollHandle,
+    |     ^^^^^^
+
+warning: method `snapshot_summary` is never used
+   --> apps/tezbar/src/surfaces/terminal/state.rs:830:12
+    |
+103 | impl State {
+    | ---------- method in this implementation
+...
+830 |     pub fn snapshot_summary(&self) -> Value {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: `tezbar-native` (lib test) generated 3 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.36s
+     Running unittests src/lib.rs (target/debug/deps/tezbar_native-8efd02da09664ef9)
+
+running 45 tests
+test surfaces::command_bar::terminal_integration::tests::quit_refusal_retains_exact_entity_and_cleanup_can_retry ... ok
+test surfaces::command_bar::tests::directory_terminal_sentinel_prompt_and_ai_escape_preserve_native_payload ... ok
+test surfaces::command_bar::tests::inline_argument_ime_escape_and_terminal_defaults_enter_keep_their_owners ... ok
+test surfaces::command_bar::tests::terminal_session_controls_use_core_channels_and_persist_defaults ... ok
+test surfaces::command_bar::terminal_integration::tests::retained_launcher_actual_navigation_events_panel_and_back ... ok
+test surfaces::terminal::tests::arrow_down_is_explicit_and_clamps ... ok
+test surfaces::terminal::tests::both_listeners_before_create_with_metadata_once ... ok
+test surfaces::terminal::tests::bounded_pre_attach_overflow_recovers_from_durable_snapshot ... ok
+test surfaces::terminal::tests::command_control_numbers_select_through_controller ... ok
+test surfaces::terminal::tests::compact_macos_home_preserves_path_tail ... ok
+test surfaces::terminal::tests::compact_non_user_paths_unchanged ... ok
+test surfaces::terminal::tests::compact_windows_home_matches_display_format ... ok
+test surfaces::terminal::tests::data_exit_before_attach_is_not_lost_or_reordered ... ok
+test surfaces::terminal::tests::defaults_validate_without_creating_another_settings_owner ... ok
+test surfaces::terminal::tests::detach_is_not_delete_and_pin_persistence_is_typed ... ok
+test surfaces::terminal::tests::disappearance_clears_selection ... ok
+test surfaces::terminal::tests::explicit_cwd_accepts_posix_drive_and_unc ... ok
+test surfaces::terminal::tests::explicit_cwd_rejects_relative_paths ... ok
+test surfaces::terminal::tests::explicit_selection_no_implicit_first ... ok
+test surfaces::terminal::tests::actual_gpui_focus_key_dispatch_resize_and_key_up_do_not_duplicate ... ok
+test surfaces::terminal::tests::gpui_key_interception_uses_terminal_owner ... ok
+test surfaces::terminal::tests::gpui_hide_settings_retains_grid_selection_and_stops_blink ... ok
+test surfaces::terminal::tests::gpui_readonly_render_never_starts_transport ... ok
+test surfaces::terminal::tests::key_sequences_app_interception_and_bracketed_paste ... ok
+test surfaces::terminal::tests::labels_directory_and_separator ... ok
+test surfaces::terminal::tests::labels_use_directory_tail ... ok
+test surfaces::terminal::tests::labels_use_shell_autocomplete_not_typed_prefix ... ok
+test surfaces::terminal::tests::large_unicode_paste_is_atomically_admitted_in_core_sized_chunks ... ok
+test surfaces::terminal::tests::null_attach_has_no_summary_write ... ok
+test surfaces::terminal::tests::option_symbols_and_bare_numbers_are_text ... ok
+test surfaces::terminal::tests::ordered_stream_repeated_bytes_slow_replay_utf8_vt_and_generation_fences ... ok
+test surfaces::terminal::tests::raw_mouse_bytes_and_atomic_whole_paste_no_prefix ... ok
+test surfaces::terminal::tests::replay_historical_queries_suppressed_live_queries_answered_and_expiry_recovers ... ok
+test surfaces::terminal::tests::replay_preserves_after_snapshot ... ok
+test surfaces::terminal::tests::replay_preserves_unrelated ... ok
+test surfaces::terminal::tests::replay_startup_deduplicates ... ok
+test surfaces::terminal::tests::restore_same_identity_no_legacy_command_execution ... ok
+test surfaces::terminal::tests::sgr_mouse_motion_release_and_modifier_table ... ok
+test surfaces::terminal::tests::stale_attach_cwd_and_config_cannot_transfer_selection ... ok
+test surfaces::terminal::tests::stale_create_and_dispose_detach_without_delete ... ok
+test surfaces::terminal::tests::stale_paste_fence_does_not_write_to_new_session ... ok
+test surfaces::terminal::tests::windows_directory_label_relative_to_home ... ok
+test surfaces::terminal::tests::zoom_domains_and_escape_sentinel ... ok
+test windows::terminal_sessions::tests::panel_tracks_parent_and_minimum ... ok
+test surfaces::terminal::tests::gpui_native_ime_commit_copy_url_and_dispose_use_fake_host ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 251 filtered out; finished in 0.26s
+

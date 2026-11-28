@@ -1,0 +1,22 @@
+{
+  "scope": "M7 409dbf3 review repairs only; not full parity",
+  "new_tests": [
+    "review_closure_alias_racing_pump_exit_is_durable_for_both_owners",
+    "review_closure_settings_rejection_during_inflight_save_is_reported_and_does_not_cancel_next_action",
+    "review_closure_rejected_shortcut_does_not_discard_an_already_queued_signin",
+    "review_closure_dropped_barrier_releases_its_shortcut_rejection_claim",
+    "review_m7_queued_zoom_is_applied_before_settings_refresh",
+    "review_closure_confirmation_sheet_occludes_footer_controls",
+    "review_closure_validation_error_is_not_a_retryable_durable_save",
+    "review_m7_failed_core_start_delivers_pending_settings_once",
+    "review_closure_field_labels_preserve_familiar_acronyms"
+  ],
+  "owned_sources": {
+    "apps/tezbar/src/surfaces/settings/store.rs": "fd4f40a3391559c0f63a67130d01c2cc77b1e0f449f06d69992c14aa3d394c00",
+    "apps/tezbar/src/surfaces/settings/mod.rs": "f68cd607cb1344820c884042bf4aca482874b95bc2dbcdca17737433fa30979a",
+    "apps/tezbar/src/surfaces/settings/view.rs": "684f73744dc2ef5fd51f34886b1b744e8fe38a9c90453bd247df1fc6b5de5cd9",
+    "apps/tezbar/src/surfaces/settings/tests.rs": "50c449e63bef6f6cec61a5e3597e12180462a1afdef6998767f16effeef04992",
+    "apps/tezbar/src/app/m7.rs": "48ace5e69dc63562a703737b3fd43f056181348fc0f807ea666c412cc1e46b8a",
+    "apps/tezbar/src/app/m8_tests.rs": "b7dddd29a700ba06a9fad2be7869669ba4f88e4552d60fcf6e4b49f76550eabe"
+  }
+}

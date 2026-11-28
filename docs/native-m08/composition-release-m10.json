@@ -1,0 +1,17 @@
+{
+  "utc": "2026-11-06T22:55:17.952478+00:00",
+  "after": "composition-receipt.json; 18 final gates passed, 327 hashes unchanged at checkpoint",
+  "m8_freeze": "composition-source-freeze-02.json",
+  "released_to_parent_M10": [
+    "crates/tezbar-core/src/terminal/pty.rs",
+    "one new internal module under crates/tezbar-core/src/terminal/, declared from pty.rs",
+    "crates/tezbar-core/src/terminal_bridge.rs"
+  ],
+  "not_released_by_this_signal": [
+    "Cargo manifests/lock",
+    "App/Launcher/Settings/other shared exports",
+    "legacy Tauri routes"
+  ],
+  "next_window_owner_offer": "M8 can own app+UI alacritty_terminal =0.26.0, default-features=false, finite lock delta and exports after separate release. No such edits in current M8 checkpoint.",
+  "acceptance": "Subsequent M10 work requires its own freeze/gates; does not change historical M8 results."
+}

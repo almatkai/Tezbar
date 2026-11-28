@@ -1,0 +1,316 @@
+{
+  "schema": 1,
+  "status": "UNRUN_BUILD_AND_RUNTIME_GATES",
+  "task": "M9 F4 status-icon source follow-up",
+  "recorded_utc": "2026-11-07T16:09:30.759661+00:00",
+  "base_pin": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+  "worktree": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+  "branch": "feat/native-gpui-app",
+  "head_observed": "6ffa4e50fc0a45927319f9d791677ed40f78a948",
+  "whole_tree_freeze": false,
+  "reason": "Parent explicitly holds Cargo/Bun and baseline restores while disjoint M11 lane edits shared compiled graph.",
+  "source_candidate": {
+    "manifest": "source-hashes.json",
+    "manifest_sha256": "13c009e861343488dcd2879efa441c51ce878ccb84212e2d474c20b9cd418fff",
+    "owned_source_aggregate_sha256": "e6974d9e84629100861c06d06fa4f1395430a2a08a9da14a9c065d9cddb29f80",
+    "owned_stable_during_source_only_checks": true,
+    "handoff_sha256": "523e8ca75002e9b303e91c6e6be16911ce1b5623f368f26d34c364ac7113d90b"
+  },
+  "parent_findings": [
+    {
+      "id": "per-icon-fresh-CoreClient-owners",
+      "disposition": "SOURCE_CORRECTED_UNRUN",
+      "details": "Resolver/tests now use shared installed_scope/load_asset/decode_admitted helpers on existing NativeCore; no CoreClient constructor on status path; optional existing shared adapter only for UI application-icon effects."
+    },
+    {
+      "id": "Windows-blank-title-only-or-refused-icon",
+      "disposition": "SOURCE_CORRECTED_UNRUN",
+      "details": "Windows absent declaration gets fixed neutral circle; refused declaration gets distinct exclamation marker and explicit tooltip; successful pixels and macOS icon-only title behavior preserved. Portable true/false policy tests and actual scripted TestHost source assertions added; no Windows execution."
+    },
+    {
+      "id": "promised-documents-absent",
+      "disposition": "DOCUMENTED_WITH_UNRUN_GATES"
+    },
+    {
+      "id": "optional-menu-only-icon-cache",
+      "disposition": "DEFERRED",
+      "details": "No new bitmap cache/revocation state. Menu changes can re-fetch/re-decode unchanged declarations."
+    }
+  ],
+  "actual_source_only_checks": [
+    {
+      "record": "/tmp/tezbar-status-icons-followup-20261107-0krdj070/corrected-01-core-format.json",
+      "command": [
+        "rustup",
+        "run",
+        "1.98.1",
+        "rustfmt",
+        "--edition",
+        "2021",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "crates/tezbar-core/src/host.rs",
+        "crates/tezbar-core/src/extension_worker.rs",
+        "crates/tezbar-core/src/extension_worker_status_icon_tests.rs",
+        "crates/tezbar-core/src/extensions/process_host.rs"
+      ],
+      "cwd": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+      "exit": 0,
+      "seconds": 0.153,
+      "kind": "SOURCE_ONLY_NOT_COMPILE_OR_RUNTIME",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "record": "/tmp/tezbar-status-icons-followup-20261107-0krdj070/corrected-01-app-format.json",
+      "command": [
+        "rustup",
+        "run",
+        "1.98.1",
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "--check",
+        "apps/tezbar/src/host_adapter.rs",
+        "apps/tezbar/src/asset_transport.rs",
+        "apps/tezbar/src/asset_transport/status_icons.rs",
+        "apps/tezbar/src/asset_transport/status_icons_tests.rs",
+        "tests/fixtures/extensions/native_harness.rs"
+      ],
+      "cwd": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+      "exit": 0,
+      "seconds": 0.029,
+      "kind": "SOURCE_ONLY_NOT_COMPILE_OR_RUNTIME",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "record": "/tmp/tezbar-status-icons-followup-20261107-0krdj070/corrected-01-owned-whitespace.json",
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "crates/tezbar-core/src/host.rs",
+        "crates/tezbar-core/src/extension_worker.rs",
+        "crates/tezbar-core/src/extension_worker_status_icon_tests.rs",
+        "crates/tezbar-core/src/extensions/process_host.rs",
+        "apps/tezbar/src/host_adapter.rs",
+        "apps/tezbar/src/asset_transport.rs",
+        "apps/tezbar/src/asset_transport/status_icons.rs",
+        "apps/tezbar/src/asset_transport/status_icons_tests.rs",
+        "tests/fixtures/extensions/native_harness.rs",
+        "tests/fixtures/extensions/src/probe-status-icons.tsx"
+      ],
+      "cwd": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+      "exit": 0,
+      "seconds": 0.01,
+      "kind": "SOURCE_ONLY_NOT_COMPILE_OR_RUNTIME",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "record": "/tmp/tezbar-status-icons-followup-20261107-0krdj070/corrected-01-no-fresh-client.json",
+      "command": [
+        "python3",
+        "-c",
+        "from pathlib import Path; paths=['apps/tezbar/src/asset_transport/status_icons.rs','apps/tezbar/src/asset_transport/status_icons_tests.rs']; assert all('CoreClient::new' not in Path(p).read_text() for p in paths); s=Path('apps/tezbar/src/asset_transport.rs').read_text(); assert s.count('fn installed_scope(')==1 and s.count('async fn decode_admitted(')==1; print('Source-only check: status resolver/tests create no CoreClient owners; shared scope/decode helpers are singular. Not a build/runtime gate.')"
+      ],
+      "cwd": "/Users/almat/Desktop/code/Tezbar APP/Tezbar-native-rust-agent",
+      "exit": 0,
+      "seconds": 0.018,
+      "kind": "SOURCE_ONLY_NOT_COMPILE_OR_RUNTIME",
+      "log_sha256": "e0ddb18092cbb6a9668aae0cbdbf5c6c87de3d6a539f14267e47c1accffa2221"
+    }
+  ],
+  "gates": [
+    {
+      "name": "baseline-red-exact",
+      "state": "UNRUN",
+      "command_proposal_not_executed": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "asset_transport::status_icons::tests::status_icons_real_bun_declared_builtin_and_custom_pixels_cross_core_host",
+        "--",
+        "--exact",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit": null,
+      "counts": null
+    },
+    {
+      "name": "native-status-icons",
+      "state": "UNRUN",
+      "command_proposal_not_executed": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "status_icons_",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "exit": null,
+      "counts": null
+    },
+    {
+      "name": "native-nine-real-sdk",
+      "state": "UNRUN",
+      "command_proposal_not_executed": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "surfaces::extension_runtime::real_sdk::sdk_",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "exit": null,
+      "counts": null
+    },
+    {
+      "name": "native-shared-assets-svg",
+      "state": "UNRUN",
+      "command_proposal_not_executed": [
+        "cargo",
+        "+1.98.1",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-native",
+        "--lib",
+        "--features",
+        "runtime-shaders",
+        "asset_transport::tests::",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "exit": null,
+      "counts": null
+    },
+    {
+      "name": "core-msrv-check",
+      "state": "UNRUN",
+      "command_proposal_not_executed": [
+        "cargo",
+        "+1.85.0",
+        "check",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib"
+      ],
+      "exit": null,
+      "counts": null
+    },
+    {
+      "name": "core-scripted-status",
+      "state": "UNRUN",
+      "command_proposal_not_executed": [
+        "cargo",
+        "+1.85.0",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extension_worker::status_icon_tests::",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "exit": null,
+      "counts": null
+    },
+    {
+      "name": "core-native-status-port",
+      "state": "UNRUN",
+      "command_proposal_not_executed": [
+        "cargo",
+        "+1.85.0",
+        "test",
+        "--locked",
+        "--offline",
+        "-j2",
+        "-p",
+        "tezbar-core",
+        "--lib",
+        "extensions::process_host::status_port_tests::",
+        "--",
+        "--test-threads=2",
+        "--nocapture"
+      ],
+      "exit": null,
+      "counts": null
+    }
+  ],
+  "baseline": {
+    "restored_pin_sources": false,
+    "failure_before_evidence": "UNRUN_NOT_PRODUCED",
+    "restoration_authorized": false,
+    "requirement": "Explicit whole-tree freeze plus separate baseline permission; parent-supervised try/finally restores exact saved two-file implementation bytes with independent hash proofs on all exits before green gates. No baseline wrapper has run."
+  },
+  "constraints": {
+    "dependency_or_lock_changes_by_this_lane": false,
+    "cargo_or_bun_started_by_this_lane": false,
+    "owned_fixture_processes_started": 0,
+    "owned_fixture_shutdown": "NOT_APPLICABLE_NO_FIXTURES_STARTED",
+    "user_preview_pid_79164": "NOT_TOUCHED",
+    "staged_or_committed_by_this_lane": false,
+    "push_merge_release_install_signing": false,
+    "tauri_sdk_status_items_capability": "REMAINS_OFF"
+  },
+  "preserved_references": {
+    "historical_input_hashes": {
+      "docs/native-m10/followup-20261107/README.md": "f6d0943c9cdced9122264b5d5cb5d028358f9db8314a2b5ee22b174559749a2a",
+      "docs/native-m10/followup-20261107/receipt.json": "f96cfd26a8e53b07f6ab670bcd0a62a3ccca5d803cc9d6bb04de71df24e3fce7",
+      "docs/native-m10/followup-20261107/tezbar-gpui-m9-d1-d15-opus-fec3257.md": "ab7c879e95543b14cae2662cce9264ba1ba02890def1489c808481a9d5477e6f"
+    },
+    "clean_pin_receipt": "/tmp/tezbar-m810-root-repair-20261107/clean-6ffa4e5-receipt.json",
+    "preserved_clean_binary": "/tmp/tezbar-m810-root-repair-20261107/tezbar-clean-6ffa4e5",
+    "prepared_seed_pointer": "/tmp/tezbar-followup-prepared-20261107.txt",
+    "earlier_candidate_and_baseline_copies": "/tmp/tezbar-status-icons-followup-20261107-0krdj070",
+    "corrected_source_copy": "/tmp/tezbar-status-icons-followup-20261107-0krdj070/corrected-candidate-01"
+  },
+  "limitations": [
+    "Rust type-checking and all new/old runtime gates remain unrun on this candidate.",
+    "All nine real SDK scenarios are still registered but have not been rerun for these sources.",
+    "No real-network HTTPS success/pixel test; HTTPS policy reuse is source-traced only.",
+    "Builtin support is the explicit finite match set, not the full Raycast catalog. Glyph/blob/application/fileIcon/mask and unrecognized tint syntax are explicitly unsupported for status icons.",
+    "No Windows build/execution, OS tray launch, physical UI/manual, RAM/GPU, full migration or release acceptance.",
+    "Shared M11 graph continues changing; this is owned-source stability, not a whole-tree compiled-input freeze."
+  ]
+}

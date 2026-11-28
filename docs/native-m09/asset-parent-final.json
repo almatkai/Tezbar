@@ -1,0 +1,27 @@
+{
+  "status": "linked M8 asset API; final native/core/MSRV gate results in ../native-m08/composition-gates-02.json; M9 remains unexported",
+  "freeze": "../native-m08/composition-source-freeze-02.json",
+  "aggregate_sha256": "36d27bb8c6798a1850eaea51fe535093bfcb08f70a64b4e70c2dd7bd309282b3",
+  "files": {
+    "apps/tezbar/src/asset_transport.rs": "27fb31caf02843d13c92d160e55defdfecc64f4d84b244f6829eb38e27c3ac1f",
+    "apps/tezbar/src/asset_transport_tests.rs": "2190909275b6e4c500dfc4ad6abaa4a4709c7b3cc2fdf8a9ebca2874d93d8ae1",
+    "apps/tezbar/src/surfaces/extension_runtime/assets.rs": "fe33523eecc29791fb6d980e1de9ff318404ac164a0f21271764f95337b3dd7a",
+    "crates/tezbar-core/src/assets.rs": "50afe712e065624c71b06d4c6b70a112d75f34bc718c7cff3042b03a9a73b6f9",
+    "crates/tezbar-core/src/extensions/asset_scope.rs": "94556156599f73f65231b7165ecfe4e1143621a9a2c6e051d7b1658adaa40ea4",
+    "crates/tezbar-core/src/lib.rs": "b6846e1235bf9dbdbe2f406ad00960d3d5e1e28e5458077d7a7f9f39cae8e61e"
+  },
+  "manifest_lock_delta": {
+    "app_resvg": "=0.46.0 (already locked)",
+    "app_image_features": [
+      "png",
+      "jpeg",
+      "webp",
+      "gif",
+      "tiff"
+    ],
+    "lockfile": "Only app -> resvg edge; no version/checksum drift"
+  },
+  "msrv_core": "1.85 retained",
+  "other_m9_edits": false,
+  "m10_exports": false
+}
