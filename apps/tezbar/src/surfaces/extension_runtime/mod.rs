@@ -77,6 +77,9 @@ pub struct RuntimeView {
     documents: BTreeMap<String, DocumentEntry>,
     fields: BTreeMap<String, FieldEntry>,
     pub(super) rows: Vec<view::Row>,
+    /// The tree and search text `rows` was built from. Holding the Arc keeps its
+    /// address from being reused, so pointer equality means "same tree".
+    rows_source: Option<(Arc<Node>, String)>,
     pub(super) list_scroll: UniformListScrollHandle,
     viewport: std::ops::Range<usize>,
     viewport_pending: bool,
@@ -214,6 +217,7 @@ impl RuntimeView {
             documents: BTreeMap::new(),
             fields: BTreeMap::new(),
             rows: vec![],
+            rows_source: None,
             list_scroll,
             viewport: 0..48,
             viewport_pending: false,
@@ -483,6 +487,7 @@ impl RuntimeView {
         self.action_form_focus = None;
         self.documents.clear();
         self.rows.clear();
+        self.rows_source = None;
         self.preference = Default::default();
         let retained_background = std::mem::take(&mut self.retained_background);
         if let Some(mut s) = self.session.take() {
@@ -955,7 +960,17 @@ impl RuntimeView {
             self.action_index = 0;
             self.action_scroll.scroll_to_item(0, ScrollStrategy::Top);
         }
-        self.rows = view::rows(s);
+        // Rows depend only on the tree and the search text. Selection, focus and
+        // action-panel events (every arrow key) reuse them instead of re-walking
+        // and deep-copying every row node.
+        let current = self
+            .rows_source
+            .as_ref()
+            .is_some_and(|(root, search)| Arc::ptr_eq(root, &s.root) && *search == s.search_text);
+        if !current {
+            self.rows = view::rows(s);
+            self.rows_source = Some((s.root.clone(), s.search_text.clone()));
+        }
         let root = s.root.clone();
         self.search.update(cx, |f, _| {
             f.configure(FieldOptions {

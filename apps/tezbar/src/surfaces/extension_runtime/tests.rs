@@ -415,6 +415,44 @@ fn actual_search_keys_filter_rows_and_actions_without_render_requests(cx: &mut T
 }
 
 #[gpui::test]
+fn large_lists_reuse_rows_on_selection_and_rebuild_on_search(cx: &mut TestAppContext) {
+    let rt = runtime(cx);
+    let fake = Arc::new(Fake::default());
+    let (view, cx) =
+        cx.add_window_view(|w, cx| RuntimeView::new(fake.clone(), Arc::new(NoAssets), w, cx));
+    let items: Vec<Value> = (0..1500)
+        .map(|i| json!({"type":"List.Item","props":{"id":format!("r{i}"),"title":format!("Row {i}")}}))
+        .collect();
+    cx.update(|w, cx| {
+        view.update(cx, |v, cx| {
+            let root = json!({"type":"List","children":[{"type":"List.Section","props":{"title":"All"},"children":items}]});
+            v.activate(reply(root), 1, w, cx).unwrap()
+        })
+    });
+    settle(&rt, cx);
+    let built = cx.read(|cx| view.read(cx).rows.as_ptr());
+    cx.update(|w, cx| view.update(cx, |v, cx| v.event(UiEvent::Select("r7".into()), w, cx)));
+    cx.simulate_keystrokes("down down");
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let v = view.read(cx);
+        assert_eq!(v.rows.len(), 1500);
+        assert_eq!(v.rows.as_ptr(), built, "moving the selection must not rebuild rows");
+        assert_eq!(v.session.as_ref().unwrap().selection.as_deref(), Some("r9"));
+        assert_eq!(v.rows[0].section.as_deref(), Some("All"));
+    });
+    cx.simulate_input("Row 149");
+    cx.run_until_parked();
+    cx.read(|cx| {
+        let v = view.read(cx);
+        let ids: Vec<_> = v.rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids.len(), 11, "Row 149 and Row 1490..1499");
+        assert_eq!(ids[0], "r149");
+    });
+    assert!(fake.calls.lock().unwrap().is_empty());
+}
+
+#[gpui::test]
 fn hidden_runtime_releases_owned_images_and_has_no_event_driven_timer(cx: &mut TestAppContext) {
     let rt = runtime(cx);
     let fake = Arc::new(Fake::default());

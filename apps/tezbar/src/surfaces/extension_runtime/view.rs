@@ -10,10 +10,12 @@ pub(super) struct Row {
     pub section: Option<String>,
 }
 pub(super) fn rows(s: &RuntimeSession) -> Vec<Row> {
-    let ids = s.filtered_ids();
+    use std::collections::{HashMap, HashSet};
+    // Hash lookups: a linear `contains` per row made large lists quadratic.
+    let ids: HashSet<String> = s.filtered_ids().into_iter().collect();
     let mut all = vec![];
     s.root.visit(&mut all);
-    let indices: BTreeMap<usize, usize> = all
+    let indices: HashMap<usize, usize> = all
         .iter()
         .enumerate()
         .map(|(i, n)| (*n as *const Node as usize, i))
@@ -21,8 +23,8 @@ pub(super) fn rows(s: &RuntimeSession) -> Vec<Row> {
     fn walk(
         n: &Node,
         section: Option<String>,
-        indices: &BTreeMap<usize, usize>,
-        ids: &[String],
+        indices: &HashMap<usize, usize>,
+        ids: &HashSet<String>,
         out: &mut Vec<Row>,
     ) {
         let section = if matches!(
@@ -313,7 +315,8 @@ impl RuntimeView {
             .child(glyph)
             .into_any_element()
     }
-    fn row_view(&self, row: &Row, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+    fn row_view(&self, index: usize, t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+        let row = &self.rows[index];
         let selected = self.session.as_ref().and_then(|s| s.selection.as_ref()) == Some(&row.id);
         let id = row.id.clone();
         let owner = cx.entity().downgrade();
@@ -325,7 +328,7 @@ impl RuntimeView {
             })
             .role(Role::ListBoxOption)
             .aria_selected(selected)
-            .aria_position_in_set(self.rows.iter().position(|r| r.id == row.id).unwrap_or(0) + 1)
+            .aria_position_in_set(index + 1)
             .aria_size_of_set(self.rows.len())
             .tab_index(0)
             .w_full()
@@ -391,11 +394,7 @@ impl RuntimeView {
         div()
             .when(
                 row.section.is_some()
-                    && self
-                        .rows
-                        .iter()
-                        .position(|r| r.id == row.id)
-                        .is_some_and(|i| i == 0 || self.rows[i - 1].section != row.section),
+                    && (index == 0 || self.rows[index - 1].section != row.section),
                 |d| {
                     d.child(
                         div()
@@ -408,7 +407,14 @@ impl RuntimeView {
             .child(d)
             .into_any_element()
     }
-    fn grid_row(&self, rows: &[Row], t: Tokens, cx: &mut Context<Self>) -> AnyElement {
+    fn grid_row(
+        &self,
+        range: std::ops::Range<usize>,
+        t: Tokens,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let start = range.start;
+        let rows = &self.rows[range];
         let mut d = div().flex().gap(px(12. * t.zoom)).h(px(156. * t.zoom));
         for row in rows {
             let id = row.id.clone();
@@ -465,12 +471,7 @@ impl RuntimeView {
         }
         let heading = rows
             .first()
-            .filter(|row| {
-                self.rows
-                    .iter()
-                    .position(|r| r.id == row.id)
-                    .is_some_and(|i| i == 0 || self.rows[i - 1].section != row.section)
-            })
+            .filter(|row| start == 0 || self.rows[start - 1].section != row.section)
             .and_then(|r| r.section.clone());
         div()
             .flex()
@@ -1915,20 +1916,16 @@ impl Render for RuntimeView {
                                 "extension-items",
                                 count,
                                 cx.processor(move |v, range: std::ops::Range<usize>, _w, cx| {
+                                    // Lay the grid out once per pass, not once per visible row.
+                                    let grid = v
+                                        .session
+                                        .as_ref()
+                                        .is_some_and(|s| s.root.kind == NodeKind::Grid)
+                                        .then(|| v.grid_ranges());
                                     range
-                                        .map(|i| {
-                                            if v.session
-                                                .as_ref()
-                                                .is_some_and(|s| s.root.kind == NodeKind::Grid)
-                                            {
-                                                v.grid_row(
-                                                    &v.rows[v.grid_ranges()[i].clone()],
-                                                    t,
-                                                    cx,
-                                                )
-                                            } else {
-                                                v.row_view(&v.rows[i], t, cx)
-                                            }
+                                        .map(|i| match &grid {
+                                            Some(ranges) => v.grid_row(ranges[i].clone(), t, cx),
+                                            None => v.row_view(i, t, cx),
                                         })
                                         .collect()
                                 }),

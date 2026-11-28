@@ -175,9 +175,20 @@ impl Node {
         if depth > 64 || *count > 20_000 {
             return Err("Extension tree exceeds limits");
         }
-        *bytes += serde_json::to_vec(&self.props)
-            .map_err(|_| "Invalid props")?
-            .len();
+        // Count the serialized size without building the bytes.
+        struct Count(usize);
+        impl std::io::Write for Count {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0 += buf.len();
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut size = Count(0);
+        serde_json::to_writer(&mut size, &self.props).map_err(|_| "Invalid props")?;
+        *bytes += size.0;
         if *bytes > 2 * 1024 * 1024 {
             return Err("Extension props exceed limits");
         }
@@ -297,24 +308,19 @@ pub struct TreeReply {
     pub effect_sequence: Option<u64>,
 }
 impl TreeReply {
-    pub fn from_wire(value: Value) -> Result<Self, &'static str> {
+    pub fn from_wire(mut value: Value) -> Result<Self, &'static str> {
         if value["ok"] != true || value["mode"] != "view" {
             return Err("Expected view reply");
         }
-        let string = |k: &str| {
-            value[k]
-                .as_str()
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned)
-                .ok_or("Missing session identity")
-        };
         let refresh = match value.get("refreshMs") {
             None => PollPolicy::Legacy,
             Some(Value::Null) => PollPolicy::EventDriven,
             Some(v) => PollPolicy::Interval(v.as_u64().ok_or("Invalid refresh interval")?),
         };
+        // The reply is owned: move the tree, actions and effects out instead of
+        // deep-copying them (a large list is most of the reply).
         let mut root: Node =
-            serde_json::from_value(value["root"].clone()).map_err(|_| "Invalid extension node")?;
+            serde_json::from_value(value["root"].take()).map_err(|_| "Invalid extension node")?;
         // Some native lists advertise pagination on the reply itself.
         if let Some(more) = value["hasMore"].as_bool() {
             if matches!(root.kind, NodeKind::List | NodeKind::Grid)
@@ -334,7 +340,18 @@ impl TreeReply {
         }
         root.validate()?;
         let actions =
-            serde_json::from_value(value["actions"].clone()).map_err(|_| "Invalid actions")?;
+            serde_json::from_value(value["actions"].take()).map_err(|_| "Invalid actions")?;
+        let effects = match value.get_mut("effects") {
+            Some(v) => serde_json::from_value(v.take()).map_err(|_| "Invalid effects")?,
+            None => vec![],
+        };
+        let string = |k: &str| {
+            value[k]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .ok_or("Missing session identity")
+        };
         Ok(Self {
             view_revision: value["viewRevision"].as_u64().unwrap_or(0),
             key: SessionKey {
@@ -347,10 +364,7 @@ impl TreeReply {
             root,
             actions,
             refresh,
-            effects: serde_json::from_value(
-                value.get("effects").cloned().unwrap_or_else(|| json!([])),
-            )
-            .map_err(|_| "Invalid effects")?,
+            effects,
         })
     }
 }
@@ -527,11 +541,17 @@ impl RuntimeSession {
             }
         }
         self.form.reconcile(&self.root);
-        let rows = self.filtered_ids();
-        if !self.selection.as_ref().is_some_and(|id| rows.contains(id)) {
-            self.selection = rows
-                .get(previous_index.min(rows.len().saturating_sub(1)))
+        let kept = self
+            .selection
+            .as_ref()
+            .is_some_and(|id| self.visible_ids().any(|r| r == id));
+        if !kept {
+            let count = self.visible_ids().count();
+            let next = self
+                .visible_ids()
+                .nth(previous_index.min(count.saturating_sub(1)))
                 .cloned();
+            self.selection = next;
         }
     }
     fn token(&mut self) -> RequestToken {
@@ -720,25 +740,36 @@ impl RuntimeSession {
                 text: self.search_text.clone(),
             })
         } else {
-            self.selection = self.filtered_ids().first().cloned();
+            let first = self.visible_ids().next().cloned();
+            self.selection = first;
             None
         }
     }
     pub fn filtered_ids(&self) -> Vec<String> {
+        self.visible_ids().cloned().collect()
+    }
+    /// Row ids that pass the current search, in order, without copying them.
+    fn visible_ids(&self) -> impl Iterator<Item = &String> + '_ {
         let server = self.root.props.get("__hasServerSearch") == Some(&Value::Bool(true));
         let filtering = self.root.props.get("filtering") != Some(&Value::Bool(false));
         let needle = self.search_text.trim().to_lowercase();
         self.rows
             .iter()
-            .filter(|(_, s)| server || !filtering || s.contains(&needle))
-            .map(|(id, _)| id.clone())
-            .collect()
+            .filter(move |(_, s)| server || !filtering || s.contains(&needle))
+            .map(|(id, _)| id)
     }
     pub fn select(&mut self, id: String) -> Option<Effect> {
-        let rows = self.filtered_ids();
-        let index = rows.iter().position(|r| *r == id)?;
+        let mut index = None;
+        let mut count = 0;
+        for (i, row) in self.visible_ids().enumerate() {
+            if index.is_none() && *row == id {
+                index = Some(i);
+            }
+            count += 1;
+        }
+        let index = index?;
         self.selection = Some(id);
-        if index + 3 >= rows.len() {
+        if index + 3 >= count {
             return self.load_more();
         }
         None
